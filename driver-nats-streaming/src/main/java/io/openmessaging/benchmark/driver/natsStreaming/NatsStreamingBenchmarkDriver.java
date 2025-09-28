@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.io.BaseEncoding;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.nats.streaming.AckHandler;
 import io.nats.streaming.Message;
 import io.nats.streaming.MessageHandler;
@@ -35,7 +36,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.LoggerFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
@@ -47,7 +47,8 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private Options.Builder optsBuilder = new Options.Builder();
 
     @Override
-    public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
+    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+            throws IOException {
         config = mapper.readValue(configurationFile, NatsStreamingClientConfig.class);
         log.info("read config file," + config.toString());
         if (config.clusterId != null) {

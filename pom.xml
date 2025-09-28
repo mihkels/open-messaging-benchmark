@@ -15,7 +15,7 @@
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.openmessaging.benchmark</groupId>
@@ -48,7 +48,6 @@
         <module>driver-kafka</module>
         <module>driver-rabbitmq</module>
         <module>driver-artemis</module>
-        <module>driver-bookkeeper</module>
         <module>driver-rocketmq</module>
         <module>driver-nats</module>
         <module>driver-nats-streaming</module>
@@ -62,7 +61,7 @@
     </modules>
 
     <properties>
-        <revision>0.0.3-SNAPSHOT</revision>
+        <revision>0.0.4-SNAPSHOT</revision>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>24</maven.compiler.source>
@@ -80,8 +79,7 @@
 
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <jackson.version>2.16.1</jackson.version>
-        <!--        <netty.version>4.2.4.Final</netty.version>-->
-        <netty.version>4.1.121.Final</netty.version>
+        <netty.version>4.1.127.Final</netty.version>
         <log4j.version>2.25.1</log4j.version>
 
         <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
@@ -91,11 +89,20 @@
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
         <spotbugs.plugin.version>4.9.3.2</spotbugs.plugin.version>
-        <spotless.plugin.version>2.41.1</spotless.plugin.version>
+        <spotless.plugin.version>3.0.0</spotless.plugin.version>
+        <micrometer.version>1.15.4</micrometer.version>
+        <prometheus.metrics.version>1.4.1</prometheus.metrics.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-bom</artifactId>
+                <version>${micrometer.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-bom</artifactId>
@@ -103,6 +110,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
@@ -126,12 +134,24 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>29.0-jre</version>
+                <version>33.5.0-jre</version>
             </dependency>
+
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-all</artifactId>
                 <version>${netty.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>prometheus-metrics-exposition-formats</artifactId>
+                <version>${prometheus.metrics.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>prometheus-metrics-model</artifactId>
+                <version>${prometheus.metrics.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>

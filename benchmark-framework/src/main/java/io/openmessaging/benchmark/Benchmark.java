@@ -149,55 +149,55 @@ public class Benchmark {
         }
 
         workloads.forEach(
-                (workloadName, workload) -> {
-                    arguments.drivers.forEach(
-                            driverConfig -> {
-                                try {
-                                    DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-                                    File driverConfigFile = new File(driverConfig);
-                                    DriverConfiguration driverConfiguration =
-                                            mapper.readValue(driverConfigFile, DriverConfiguration.class);
-                                    log.info(
-                                            "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
-                                            workload.name,
-                                            driverConfiguration.name);
+                (workloadName, workload) ->
+                        arguments.drivers.forEach(
+                                driverConfig -> {
+                                    try {
+                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+                                        File driverConfigFile = new File(driverConfig);
+                                        DriverConfiguration driverConfiguration =
+                                                mapper.readValue(driverConfigFile, DriverConfiguration.class);
+                                        log.info(
+                                                "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
+                                                workload.name,
+                                                driverConfiguration.name);
 
-                                    // Stop any left over workload
-                                    worker.stopAll();
+                                        // Stop any left over workload
+                                        worker.stopAll();
 
-                                    worker.initializeDriver(new File(driverConfig));
+                                        worker.initializeDriver(new File(driverConfig));
 
-                                    WorkloadGenerator generator =
-                                            new WorkloadGenerator(driverConfiguration.name, workload, worker);
+                                        WorkloadGenerator generator =
+                                                new WorkloadGenerator(driverConfiguration.name, workload, worker);
 
-                                    TestResult result = generator.run();
+                                        TestResult result = generator.run();
 
-                                    boolean useOutput = (arguments.output != null) && (arguments.output.length() > 0);
+                                        boolean useOutput =
+                                                (arguments.output != null) && (arguments.output.length() > 0);
 
-                                    String fileName =
-                                            useOutput
-                                                    ? arguments.output
-                                                    : String.format(
-                                                            "%s-%s-%s.json",
-                                                            workloadName,
-                                                            driverConfiguration.name,
-                                                            dateFormat.format(new Date()));
+                                        String fileName =
+                                                useOutput
+                                                        ? arguments.output
+                                                        : String.format(
+                                                                "%s-%s-%s.json",
+                                                                workloadName,
+                                                                driverConfiguration.name,
+                                                                dateFormat.format(new Date()));
 
-                                    log.info("Writing test result into {}", fileName);
-                                    writer.writeValue(new File(fileName), result);
+                                        log.info("Writing test result into {}", fileName);
+                                        writer.writeValue(new File(fileName), result);
 
-                                    generator.close();
-                                } catch (Exception e) {
-                                    log.error(
-                                            "Failed to run the workload '{}' for driver '{}'",
-                                            workload.name,
-                                            driverConfig,
-                                            e);
-                                } finally {
-                                    worker.stopAll();
-                                }
-                            });
-                });
+                                        generator.close();
+                                    } catch (Exception e) {
+                                        log.error(
+                                                "Failed to run the workload '{}' for driver '{}'",
+                                                workload.name,
+                                                driverConfig,
+                                                e);
+                                    } finally {
+                                        worker.stopAll();
+                                    }
+                                }));
 
         worker.close();
     }

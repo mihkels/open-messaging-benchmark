@@ -68,12 +68,12 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
                                             consumer.poll(Duration.ofMillis(pollTimeoutMs));
 
                                     Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-                                    for (ConsumerRecord<String, byte[]> record : records) {
-                                        callback.messageReceived(record.value(), record.timestamp());
+                                    for (ConsumerRecord<String, byte[]> consumerRecord : records) {
+                                        callback.messageReceived(consumerRecord.value(), consumerRecord.timestamp());
 
                                         offsetMap.put(
-                                                new TopicPartition(record.topic(), record.partition()),
-                                                new OffsetAndMetadata(record.offset() + 1));
+                                                new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
+                                                new OffsetAndMetadata(consumerRecord.offset() + 1));
                                     }
 
                                     if (!autoCommit && !offsetMap.isEmpty()) {

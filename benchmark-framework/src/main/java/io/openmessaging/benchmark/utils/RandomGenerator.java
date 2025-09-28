@@ -13,16 +13,18 @@
  */
 package io.openmessaging.benchmark.utils;
 
-import com.google.common.io.BaseEncoding;
+import java.util.Base64;
 import java.util.Random;
 
-public class RandomGenerator {
+public final class RandomGenerator {
 
     private static final Random random = new Random();
 
-    public static final String getRandomString() {
+    private RandomGenerator() {}
+
+    public static String getRandomString() {
         byte[] buffer = new byte[5];
         random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
+        return Base64.getEncoder().withoutPadding().encodeToString(buffer);
     }
 }

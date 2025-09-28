@@ -16,7 +16,9 @@ package io.openmessaging.benchmark.utils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ListPartition {
+public final class ListPartition {
+
+    private ListPartition() {}
 
     /**
      * partition a list to specified size.
@@ -29,7 +31,7 @@ public class ListPartition {
     public static <T> List<List<T>> partitionList(List<T> originList, int size) {
 
         List<List<T>> resultList = new ArrayList<>();
-        if (null == originList || 0 == originList.size() || size <= 0) {
+        if (null == originList || originList.isEmpty() || size <= 0) {
             return resultList;
         }
         if (originList.size() <= size) {

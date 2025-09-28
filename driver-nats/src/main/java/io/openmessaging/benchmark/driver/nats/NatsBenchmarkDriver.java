@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.nats;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 import io.nats.client.ErrorListener;
@@ -38,7 +39,6 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +49,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     private JetStreamManagement jetStreamManagement;
 
     @Override
-    public void initialize(File configurationFile, StatsLogger statsLogger)
+    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = mapper.readValue(configurationFile, NatsConfig.class);
         log.info("read config file," + config.toString());

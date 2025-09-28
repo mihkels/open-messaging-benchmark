@@ -23,17 +23,20 @@ import org.apache.commons.text.StringSubstitutor;
  * form {@code ${variableName}}, where {@code variableName} is the name of a public member in {@link
  * Workload}. Note that the set of variables is statically assigned. Numeric values will typically
  * be in a form that includes an SI suffix.
+ *
+ * @param format the template string used to build workload names
  */
-class WorkloadNameFormat {
+record WorkloadNameFormat(String format) {
 
     private static final long MAX_PRODUCER_RATE = 10_000_000;
 
-    private final String format;
-
-    WorkloadNameFormat(String format) {
-        this.format = format;
-    }
-
+    /**
+     * Generates a name for the given workload. If the workload has a non-null name, that is simply
+     * returned. Otherwise, the format string is used to generate a name.
+     *
+     * @param workload the workload
+     * @return the name of the workload
+     */
     String from(Workload workload) {
         if (workload.name != null) {
             return workload.name;

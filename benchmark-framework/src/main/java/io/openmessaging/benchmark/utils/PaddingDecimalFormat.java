@@ -16,10 +16,10 @@ package io.openmessaging.benchmark.utils;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.FieldPosition;
+import java.util.Objects;
 
-@SuppressWarnings("serial")
 public class PaddingDecimalFormat extends DecimalFormat {
-    private int minimumLength;
+    private final int minimumLength;
 
     /**
      * Creates a PaddingDecimalFormat using the given pattern and minimum minimumLength and the
@@ -70,5 +70,22 @@ public class PaddingDecimalFormat extends DecimalFormat {
             toAppendTo.insert(initLength, pad);
         }
         return toAppendTo;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+        PaddingDecimalFormat that = (PaddingDecimalFormat) o;
+        return minimumLength == that.minimumLength;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), minimumLength);
     }
 }

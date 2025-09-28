@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Preconditions;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import io.openmessaging.benchmark.DriverConfiguration;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -53,8 +54,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
-import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,10 +70,10 @@ public class LocalWorker implements Worker, ConsumerCallback {
     private volatile boolean consumersArePaused = false;
 
     public LocalWorker() {
-        this(NullStatsLogger.INSTANCE);
+        this(new PrometheusMeterRegistry(l -> null));
     }
 
-    public LocalWorker(StatsLogger statsLogger) {
+    public LocalWorker(PrometheusMeterRegistry statsLogger) {
         stats = new WorkerStats(statsLogger);
         updateMessageProducer(1.0);
     }
@@ -92,7 +91,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
         try {
             benchmarkDriver =
                     (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
-            benchmarkDriver.initialize(driverConfigFile, stats.getStatsLogger());
+            benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());
         } catch (InstantiationException
                 | IllegalAccessException
                 | ClassNotFoundException

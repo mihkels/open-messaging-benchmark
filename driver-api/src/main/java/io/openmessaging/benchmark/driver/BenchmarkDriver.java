@@ -13,11 +13,11 @@
  */
 package io.openmessaging.benchmark.driver;
 
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import org.apache.bookkeeper.stats.StatsLogger;
 
 /** Base driver interface. */
 public interface BenchmarkDriver extends AutoCloseable {
@@ -32,7 +32,7 @@ public interface BenchmarkDriver extends AutoCloseable {
      * @throws IOException if configuration file cannot be read
      * @throws InterruptedException if initialization is interrupted
      */
-    void initialize(File configurationFile, StatsLogger statsLogger)
+    void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException, InterruptedException;
 
     /**

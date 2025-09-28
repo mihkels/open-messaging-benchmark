@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.io.Files;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
@@ -26,7 +27,6 @@ import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +49,7 @@ public class WorkerHandler {
     public static final String RESET_STATS = "/reset-stats";
     private final Worker localWorker;
 
-    public WorkerHandler(Javalin app, StatsLogger statsLogger) {
+    public WorkerHandler(Javalin app, PrometheusMeterRegistry statsLogger) {
         this.localWorker = new LocalWorker(statsLogger);
 
         app.post(INITIALIZE_DRIVER, this::handleInitializeDriver);

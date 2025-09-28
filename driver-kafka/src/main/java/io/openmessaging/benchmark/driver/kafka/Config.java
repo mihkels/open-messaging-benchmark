@@ -28,6 +28,7 @@ public record Config(
     }
 
     // Default constructor for Jackson deserialization when no arguments are provided
+    @SuppressWarnings("unused")
     public Config() {
         this((short) 0, null, null, null, null);
     }

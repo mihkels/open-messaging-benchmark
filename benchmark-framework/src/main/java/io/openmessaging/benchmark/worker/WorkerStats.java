@@ -13,70 +13,89 @@
  */
 package io.openmessaging.benchmark.worker;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import org.HdrHistogram.Recorder;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.OpStatsLogger;
-import org.apache.bookkeeper.stats.StatsLogger;
 
 public class WorkerStats {
 
-    private final StatsLogger statsLogger;
+    // Micrometer registry
+    private final PrometheusMeterRegistry registry;
 
-    private final OpStatsLogger publishDelayLatencyStats;
+    // HDR histograms (kept for detailed latency exports)
+    private static final long highestTrackableValue = TimeUnit.SECONDS.toMicros(60);
+    private final Recorder publishLatencyRecorder = new Recorder(highestTrackableValue, 5);
+    private final Recorder cumulativePublishLatencyRecorder = new Recorder(highestTrackableValue, 5);
+    private final Recorder publishDelayLatencyRecorder = new Recorder(highestTrackableValue, 5);
+    private final Recorder cumulativePublishDelayLatencyRecorder =
+            new Recorder(highestTrackableValue, 5);
 
     private final Recorder endToEndLatencyRecorder = new Recorder(TimeUnit.HOURS.toMicros(12), 5);
     private final Recorder endToEndCumulativeLatencyRecorder =
             new Recorder(TimeUnit.HOURS.toMicros(12), 5);
-    private final OpStatsLogger endToEndLatencyStats;
 
+    // Micrometer counters
+    private final Counter messagesSentCounter;
+    private final Counter messageSendErrorCounter;
+    private final Counter bytesSentCounter;
+    private final Counter messagesReceivedCounter;
+    private final Counter bytesReceivedCounter;
+
+    // Micrometer timers
+    private final Timer publishLatencyTimer;
+    private final Timer publishDelayLatencyTimer;
+    private final Timer endToEndLatencyTimer;
+
+    // Local accumulators used for periodic snapshots
     private final LongAdder messagesSent = new LongAdder();
     private final LongAdder messageSendErrors = new LongAdder();
     private final LongAdder bytesSent = new LongAdder();
-    private final Counter messageSendErrorCounter;
-    private final Counter messagesSentCounter;
-    private final Counter bytesSentCounter;
 
     private final LongAdder messagesReceived = new LongAdder();
     private final LongAdder bytesReceived = new LongAdder();
-    private final Counter messagesReceivedCounter;
-    private final Counter bytesReceivedCounter;
 
     private final LongAdder totalMessagesSent = new LongAdder();
     private final LongAdder totalMessageSendErrors = new LongAdder();
     private final LongAdder totalMessagesReceived = new LongAdder();
 
-    private static final long highestTrackableValue = TimeUnit.SECONDS.toMicros(60);
-    private final Recorder publishLatencyRecorder = new Recorder(highestTrackableValue, 5);
-    private final Recorder cumulativePublishLatencyRecorder = new Recorder(highestTrackableValue, 5);
-    private final OpStatsLogger publishLatencyStats;
+    WorkerStats(PrometheusMeterRegistry registry) {
+        this.registry = registry;
 
-    private final Recorder publishDelayLatencyRecorder = new Recorder(highestTrackableValue, 5);
-    private final Recorder cumulativePublishDelayLatencyRecorder =
-            new Recorder(highestTrackableValue, 5);
+        // Counters
+        this.messagesSentCounter =
+                Counter.builder("messages_sent").description("Producer messages sent").register(registry);
+        this.messageSendErrorCounter =
+                Counter.builder("message_send_errors")
+                        .description("Producer send errors")
+                        .register(registry);
+        this.bytesSentCounter =
+                Counter.builder("bytes_sent").description("Producer bytes sent").register(registry);
+        this.messagesReceivedCounter =
+                Counter.builder("messages_recv")
+                        .description("Consumer messages received")
+                        .register(registry);
+        this.bytesReceivedCounter =
+                Counter.builder("bytes_recv").description("Consumer bytes received").register(registry);
 
-    WorkerStats(StatsLogger statsLogger) {
-        this.statsLogger = statsLogger;
-
-        StatsLogger producerStatsLogger = statsLogger.scope("producer");
-        this.messagesSentCounter = producerStatsLogger.getCounter("messages_sent");
-        this.messageSendErrorCounter = producerStatsLogger.getCounter("message_send_errors");
-        this.bytesSentCounter = producerStatsLogger.getCounter("bytes_sent");
-        this.publishDelayLatencyStats = producerStatsLogger.getOpStatsLogger("producer_delay_latency");
-        this.publishLatencyStats = producerStatsLogger.getOpStatsLogger("produce_latency");
-
-        StatsLogger consumerStatsLogger = statsLogger.scope("consumer");
-        this.messagesReceivedCounter = consumerStatsLogger.getCounter("messages_recv");
-        this.bytesReceivedCounter = consumerStatsLogger.getCounter("bytes_recv");
-        this.endToEndLatencyStats = consumerStatsLogger.getOpStatsLogger("e2e_latency");
+        // Timers
+        this.publishLatencyTimer =
+                Timer.builder("produce_latency").description("Publish latency (micros)").register(registry);
+        this.publishDelayLatencyTimer =
+                Timer.builder("producer_delay_latency")
+                        .description("Delay between intended and actual send (micros)")
+                        .register(registry);
+        this.endToEndLatencyTimer =
+                Timer.builder("e2e_latency").description("End to end latency (micros)").register(registry);
     }
 
-    public StatsLogger getStatsLogger() {
-        return statsLogger;
+    public PrometheusMeterRegistry getMeterRegistry() {
+        return registry;
     }
 
     public void recordMessageSent() {
@@ -86,14 +105,14 @@ public class WorkerStats {
     public void recordMessageReceived(long payloadLength, long endToEndLatencyMicros) {
         messagesReceived.increment();
         totalMessagesReceived.increment();
-        messagesReceivedCounter.inc();
+        messagesReceivedCounter.increment();
         bytesReceived.add(payloadLength);
-        bytesReceivedCounter.addCount(payloadLength);
+        bytesReceivedCounter.increment(payloadLength);
 
         if (endToEndLatencyMicros > 0) {
             endToEndCumulativeLatencyRecorder.recordValue(endToEndLatencyMicros);
             endToEndLatencyRecorder.recordValue(endToEndLatencyMicros);
-            endToEndLatencyStats.registerSuccessfulEvent(endToEndLatencyMicros, TimeUnit.MICROSECONDS);
+            endToEndLatencyTimer.record(endToEndLatencyMicros, TimeUnit.MICROSECONDS);
         }
     }
 
@@ -136,7 +155,6 @@ public class WorkerStats {
 
     public void reset() {
         resetLatencies();
-
         messagesSent.reset();
         messageSendErrors.reset();
         bytesSent.reset();
@@ -148,7 +166,7 @@ public class WorkerStats {
 
     public void recordProducerFailure() {
         messageSendErrors.increment();
-        messageSendErrorCounter.inc();
+        messageSendErrorCounter.increment();
         totalMessageSendErrors.increment();
     }
 
@@ -156,21 +174,21 @@ public class WorkerStats {
             long payloadLength, long intendedSendTimeNs, long sendTimeNs, long nowNs) {
         messagesSent.increment();
         totalMessagesSent.increment();
-        messagesSentCounter.inc();
+        messagesSentCounter.increment();
         bytesSent.add(payloadLength);
-        bytesSentCounter.addCount(payloadLength);
+        bytesSentCounter.increment(payloadLength);
 
         final long latencyMicros =
                 Math.min(highestTrackableValue, TimeUnit.NANOSECONDS.toMicros(nowNs - sendTimeNs));
         publishLatencyRecorder.recordValue(latencyMicros);
         cumulativePublishLatencyRecorder.recordValue(latencyMicros);
-        publishLatencyStats.registerSuccessfulEvent(latencyMicros, TimeUnit.MICROSECONDS);
+        publishLatencyTimer.record(latencyMicros, TimeUnit.MICROSECONDS);
 
         final long sendDelayMicros =
                 Math.min(
                         highestTrackableValue, TimeUnit.NANOSECONDS.toMicros(sendTimeNs - intendedSendTimeNs));
         publishDelayLatencyRecorder.recordValue(sendDelayMicros);
         cumulativePublishDelayLatencyRecorder.recordValue(sendDelayMicros);
-        publishDelayLatencyStats.registerSuccessfulEvent(sendDelayMicros, TimeUnit.MICROSECONDS);
+        publishDelayLatencyTimer.record(sendDelayMicros, TimeUnit.MICROSECONDS);
     }
 }

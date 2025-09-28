@@ -25,6 +25,7 @@ import com.rabbitmq.client.BuiltinExchangeType;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -45,7 +46,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +61,8 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
     private final Map<String, Connection> connections = new ConcurrentHashMap<>();
 
     @Override
-    public void initialize(File configurationFile, StatsLogger statsLogger) throws IOException {
+    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+            throws IOException {
         config = mapper.readValue(configurationFile, RabbitMqConfig.class);
     }
 

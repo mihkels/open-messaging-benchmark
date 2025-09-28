@@ -19,13 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.MessageFormat;
 
-public class FilePayloadReader implements PayloadReader {
-
-    private final int expectedLength;
-
-    public FilePayloadReader(int expectedLength) {
-        this.expectedLength = expectedLength;
-    }
+public record FilePayloadReader(int expectedLength) implements PayloadReader {
 
     @Override
     public byte[] load(String resourceName) {

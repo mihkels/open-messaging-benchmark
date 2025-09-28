@@ -19,34 +19,44 @@ import com.beust.jcommander.ParameterException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import io.javalin.Javalin;
-import org.apache.bookkeeper.stats.Stats;
-import org.apache.bookkeeper.stats.StatsProvider;
-import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
-import org.apache.commons.configuration2.CompositeConfiguration;
-import org.apache.commons.configuration2.Configuration;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** A benchmark worker that listen for tasks to perform. */
 public class BenchmarkWorker {
 
+    @SuppressWarnings("unused")
     static class Arguments {
 
         @Parameter(
                 names = {"-h", "--help"},
                 description = "Help message",
                 help = true)
-        boolean help;
+        private boolean help;
 
         @Parameter(
                 names = {"-p", "--port"},
                 description = "HTTP port to listen on")
-        public int httpPort = 8080;
+        private int httpPort = 8080;
 
         @Parameter(
                 names = {"-sp", "--stats-port"},
                 description = "Stats port to listen on")
-        public int statsPort = 8081;
+        private int statsPort = 8081;
+
+        public boolean isHelp() {
+            return help;
+        }
+
+        public int getHttpPort() {
+            return httpPort;
+        }
+
+        public int getStatsPort() {
+            return statsPort;
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -67,22 +77,30 @@ public class BenchmarkWorker {
             System.exit(-1);
         }
 
-        Configuration conf = new CompositeConfiguration();
-        conf.setProperty(Stats.STATS_PROVIDER_CLASS, PrometheusMetricsProvider.class.getName());
-        conf.setProperty("prometheusStatsHttpPort", arguments.statsPort);
-        Stats.loadStatsProvider(conf);
-        StatsProvider provider = Stats.get();
-        provider.start(conf);
+        if (arguments.statsPort == arguments.httpPort) {
+            System.err.println("Stats port must be different from HTTP port");
+            jc.usage();
+            System.exit(-1);
+        }
 
-        Runtime.getRuntime()
-                .addShutdownHook(new Thread(provider::stop, "benchmark-worker-shutdown-thread"));
+        // Replace BookKeeper stats with Micrometer
+        PrometheusMeterRegistry prometheusRegistry =
+                new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
 
-        // Start web server
-        Javalin app = Javalin.create().start(arguments.httpPort);
-        new WorkerHandler(app, provider.getStatsLogger("benchmark"));
+        // Start web server (no try-with-resources)
+        Javalin app = Javalin.create().start(arguments.getHttpPort());
+
+        // Add Prometheus metrics endpoint
+        app.get("/metrics", ctx -> ctx.result(prometheusRegistry.scrape()));
+
+        new WorkerHandler(app, prometheusRegistry);
+
+        // Stop server on JVM shutdown and keep process alive
+        Runtime.getRuntime().addShutdownHook(new Thread(app::stop, "benchmark-worker-shutdown"));
+        Thread.currentThread().join();
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

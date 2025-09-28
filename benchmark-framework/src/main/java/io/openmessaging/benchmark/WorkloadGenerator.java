@@ -20,7 +20,6 @@ import io.openmessaging.benchmark.utils.PaddingDecimalFormat;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.payload.FilePayloadReader;
-import io.openmessaging.benchmark.utils.payload.PayloadReader;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -68,7 +67,7 @@ public class WorkloadGenerator implements AutoCloseable {
                     "Cannot probe producer sustainable rate when building backlog");
         }
 
-        Timer timer = new Timer();
+        var timer = new Timer();
         List<String> topics =
                 worker.createTopics(new TopicsInfo(workload.topics, workload.partitionsPerTopic));
         log.info("Created {} topics in {} ms", topics.size(), timer.elapsedMillis());
@@ -95,10 +94,10 @@ public class WorkloadGenerator implements AutoCloseable {
                     });
         }
 
-        final PayloadReader payloadReader = new FilePayloadReader(workload.messageSize);
+        final var payloadReader = new FilePayloadReader(workload.messageSize);
         List<byte[]> payloads = new ArrayList<>();
         if (workload.useRandomizedPayloads) {
-            Random r = new Random();
+            var r = new Random();
             int randomBytes = (int) (workload.messageSize * workload.randomBytesRatio);
             int zerodBytes = workload.messageSize - randomBytes;
             for (int i = 0; i < workload.randomizedPayloadPoolSize; i++) {
@@ -223,7 +222,7 @@ public class WorkloadGenerator implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         worker.stopAll();
         executor.shutdownNow();
     }

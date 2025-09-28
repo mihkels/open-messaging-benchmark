@@ -47,7 +47,7 @@ public class WorkloadGenerationTool {
         try {
             jc.parse(args);
         } catch (ParameterException e) {
-            System.err.println(e.getMessage());
+            log.error(e.getMessage());
             jc.usage();
             System.exit(-1);
         }

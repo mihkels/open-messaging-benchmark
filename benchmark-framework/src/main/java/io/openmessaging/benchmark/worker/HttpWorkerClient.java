@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.Dsl;
@@ -58,7 +59,12 @@ public class HttpWorkerClient implements Worker {
     private final String host;
 
     public HttpWorkerClient(String host) {
-        this(asyncHttpClient(Dsl.config().setReadTimeout(600000).setRequestTimeout(600000)), host);
+        this(
+                asyncHttpClient(
+                        Dsl.config()
+                                .setReadTimeout(Duration.ofMillis(600000))
+                                .setRequestTimeout(Duration.ofMillis(600000))),
+                host);
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host) {
@@ -96,7 +102,8 @@ public class HttpWorkerClient implements Worker {
     @Override
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) throws IOException {
         log.debug(
-                "Setting worker assigned publish rate to {} msgs/sec", producerWorkAssignment.publishRate);
+                "Setting worker assigned publish rate to {} msgs/sec",
+                producerWorkAssignment.publishRate());
         sendPost(START_LOAD, writer.writeValueAsBytes(producerWorkAssignment));
     }
 
@@ -170,7 +177,9 @@ public class HttpWorkerClient implements Worker {
                                         path,
                                         response.getStatusCode());
                             }
-                            Preconditions.checkArgument(response.getStatusCode() == HTTP_OK);
+                            Preconditions.checkArgument(
+                                    response.getStatusCode() == HTTP_OK,
+                                    "Failed to do HTTP post request to -- code:");
                             return (Void) null;
                         })
                 .join();

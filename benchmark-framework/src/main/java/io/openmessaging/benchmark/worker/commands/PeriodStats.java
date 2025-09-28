@@ -13,54 +13,97 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
-import static java.util.concurrent.TimeUnit.HOURS;
-import static java.util.concurrent.TimeUnit.SECONDS;
-
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.HdrHistogram.Histogram;
 
-public class PeriodStats {
-    public long messagesSent = 0;
-    public long messageSendErrors = 0;
-    public long bytesSent = 0;
+public record PeriodStats(
+        @JsonProperty("messagesSent") long messagesSent,
+        @JsonProperty("messageSendErrors") long messageSendErrors,
+        @JsonProperty("bytesSent") long bytesSent,
+        @JsonProperty("messagesReceived") long messagesReceived,
+        @JsonProperty("bytesReceived") long bytesReceived,
+        @JsonProperty("totalMessagesSent") long totalMessagesSent,
+        @JsonProperty("totalMessageSendErrors") long totalMessageSendErrors,
+        @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
+        @JsonProperty("publishLatency") Histogram publishLatency,
+        @JsonProperty("publishDelayLatency") Histogram publishDelayLatency,
+        @JsonProperty("endToEndLatency") Histogram endToEndLatency) {
 
-    public long messagesReceived = 0;
-    public long bytesReceived = 0;
+    // Defensive copy constructor
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PeriodStats(
+            long messagesSent,
+            long messageSendErrors,
+            long bytesSent,
+            long messagesReceived,
+            long bytesReceived,
+            long totalMessagesSent,
+            long totalMessageSendErrors,
+            long totalMessagesReceived,
+            Histogram publishLatency,
+            Histogram publishDelayLatency,
+            Histogram endToEndLatency) {
+        this.messagesSent = messagesSent;
+        this.messageSendErrors = messageSendErrors;
+        this.bytesSent = bytesSent;
+        this.messagesReceived = messagesReceived;
+        this.bytesReceived = bytesReceived;
+        this.totalMessagesSent = totalMessagesSent;
+        this.totalMessageSendErrors = totalMessageSendErrors;
+        this.totalMessagesReceived = totalMessagesReceived;
+        this.publishLatency = publishLatency != null ? publishLatency.copy() : new Histogram(5);
+        this.publishDelayLatency =
+                publishDelayLatency != null ? publishDelayLatency.copy() : new Histogram(5);
+        this.endToEndLatency = endToEndLatency != null ? endToEndLatency.copy() : new Histogram(5);
+    }
 
-    public long totalMessagesSent = 0;
-    public long totalMessageSendErrors = 0;
-    public long totalMessagesReceived = 0;
+    public PeriodStats() {
+        this(0, 0, 0, 0, 0, 0, 0, 0, new Histogram(5), new Histogram(5), new Histogram(5));
+    }
 
-    public Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 5);
+    // Return defensive copies in getters
+    public Histogram publishLatency() {
+        return publishLatency.copy();
+    }
 
-    public PeriodStats plus(PeriodStats toAdd) {
-        PeriodStats result = new PeriodStats();
+    public Histogram publishDelayLatency() {
+        return publishDelayLatency.copy();
+    }
 
-        result.messagesSent += this.messagesSent;
-        result.messageSendErrors += this.messageSendErrors;
-        result.bytesSent += this.bytesSent;
-        result.messagesReceived += this.messagesReceived;
-        result.bytesReceived += this.bytesReceived;
-        result.totalMessagesSent += this.totalMessagesSent;
-        result.totalMessageSendErrors += this.totalMessageSendErrors;
-        result.totalMessagesReceived += this.totalMessagesReceived;
-        result.publishLatency.add(this.publishLatency);
-        result.publishDelayLatency.add(this.publishDelayLatency);
-        result.endToEndLatency.add(this.endToEndLatency);
+    public Histogram endToEndLatency() {
+        return endToEndLatency.copy();
+    }
 
-        result.messagesSent += toAdd.messagesSent;
-        result.messageSendErrors += toAdd.messageSendErrors;
-        result.bytesSent += toAdd.bytesSent;
-        result.messagesReceived += toAdd.messagesReceived;
-        result.bytesReceived += toAdd.bytesReceived;
-        result.totalMessagesSent += toAdd.totalMessagesSent;
-        result.totalMessageSendErrors += toAdd.totalMessageSendErrors;
-        result.totalMessagesReceived += toAdd.totalMessagesReceived;
-        result.publishLatency.add(toAdd.publishLatency);
-        result.publishDelayLatency.add(toAdd.publishDelayLatency);
-        result.endToEndLatency.add(toAdd.endToEndLatency);
+    /**
+     * Combines this PeriodStats with another, returning a new record with the summed values.
+     *
+     * @param other The other PeriodStats to add.
+     * @return A new PeriodStats instance with the combined values.
+     */
+    public PeriodStats plus(PeriodStats other) {
+        Histogram combinedPublishLatency = new Histogram(5);
+        combinedPublishLatency.add(this.publishLatency);
+        combinedPublishLatency.add(other.publishLatency);
 
-        return result;
+        Histogram combinedPublishDelayLatency = new Histogram(5);
+        combinedPublishDelayLatency.add(this.publishDelayLatency);
+        combinedPublishDelayLatency.add(other.publishDelayLatency);
+
+        Histogram combinedEndToEndLatency = new Histogram(5);
+        combinedEndToEndLatency.add(this.endToEndLatency);
+        combinedEndToEndLatency.add(other.endToEndLatency);
+
+        return new PeriodStats(
+                this.messagesSent + other.messagesSent,
+                this.messageSendErrors + other.messageSendErrors,
+                this.bytesSent + other.bytesSent,
+                this.messagesReceived + other.messagesReceived,
+                this.bytesReceived + other.bytesReceived,
+                this.totalMessagesSent + other.totalMessagesSent,
+                this.totalMessageSendErrors + other.totalMessageSendErrors,
+                this.totalMessagesReceived + other.totalMessagesReceived,
+                combinedPublishLatency,
+                combinedPublishDelayLatency,
+                combinedEndToEndLatency);
     }
 }

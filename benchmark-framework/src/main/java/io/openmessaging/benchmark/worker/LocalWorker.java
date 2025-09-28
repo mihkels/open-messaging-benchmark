@@ -68,7 +68,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
             Executors.newCachedThreadPool(new DefaultThreadFactory("local-worker"));
     private final WorkerStats stats;
     private boolean testCompleted = false;
-    private boolean consumersArePaused = false;
+    private volatile boolean consumersArePaused = false;
 
     public LocalWorker() {
         this(NullStatsLogger.INSTANCE);
@@ -109,11 +109,11 @@ public class LocalWorker implements Worker, ConsumerCallback {
                 IntStream.range(0, topicsInfo.numberOfTopics)
                         .mapToObj(
                                 i -> new TopicInfo(generateTopicName(i), topicsInfo.numberOfPartitionsPerTopic))
-                        .collect(toList());
+                        .toList();
 
         benchmarkDriver.createTopics(topicInfos).join();
 
-        List<String> topics = topicInfos.stream().map(TopicInfo::getTopic).collect(toList());
+        List<String> topics = topicInfos.stream().map(TopicInfo::topic).collect(toList());
 
         log.info("Created {} topics in {} ms", topics.size(), timer.elapsedMillis());
         return topics;
@@ -132,9 +132,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
         producers.addAll(
                 benchmarkDriver
                         .createProducers(
-                                topics.stream()
-                                        .map(t -> new ProducerInfo(index.getAndIncrement(), t))
-                                        .collect(toList()))
+                                topics.stream().map(t -> new ProducerInfo(index.getAndIncrement(), t)).toList())
                         .join());
 
         log.info("Created {} producers in {} ms", producers.size(), timer.elapsedMillis());
@@ -153,7 +151,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
                                                 c ->
                                                         new ConsumerInfo(
                                                                 index.getAndIncrement(), c.topic, c.subscription, this))
-                                        .collect(toList()))
+                                        .toList())
                         .join());
 
         log.info("Created {} consumers in {} ms", consumers.size(), timer.elapsedMillis());
@@ -163,7 +161,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         int processors = Runtime.getRuntime().availableProcessors();
 
-        updateMessageProducer(producerWorkAssignment.publishRate);
+        updateMessageProducer(producerWorkAssignment.publishRate());
 
         Map<Integer, List<BenchmarkProducer>> processorAssignment = new TreeMap<>();
 
@@ -182,8 +180,8 @@ public class LocalWorker implements Worker, ConsumerCallback {
                         producers ->
                                 submitProducersToExecutor(
                                         producers,
-                                        KeyDistributor.build(producerWorkAssignment.keyDistributorType),
-                                        producerWorkAssignment.payloadData));
+                                        KeyDistributor.build(producerWorkAssignment.keyDistributorType()),
+                                        producerWorkAssignment.payloadData()));
     }
 
     @Override
@@ -261,7 +259,9 @@ public class LocalWorker implements Worker, ConsumerCallback {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Thread.currentThread().interrupt(); // Restore interrupt status
+                log.warn("Thread interrupted while consumers paused", e);
+                break; // Exit the loop if interrupted
             }
         }
     }

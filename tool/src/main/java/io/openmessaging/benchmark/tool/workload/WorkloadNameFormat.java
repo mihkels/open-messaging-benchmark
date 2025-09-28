@@ -13,12 +13,10 @@
  */
 package io.openmessaging.benchmark.tool.workload;
 
-
 import io.openmessaging.benchmark.Workload;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang.text.StrSubstitutor;
+import org.apache.commons.text.StringSubstitutor;
 
 /**
  * Generates {@link Workload} names based on a template. Substitutes template place-holders of the
@@ -26,12 +24,15 @@ import org.apache.commons.lang.text.StrSubstitutor;
  * Workload}. Note that the set of variables is statically assigned. Numeric values will typically
  * be in a form that includes an SI suffix.
  */
-@RequiredArgsConstructor
 class WorkloadNameFormat {
 
     private static final long MAX_PRODUCER_RATE = 10_000_000;
 
     private final String format;
+
+    WorkloadNameFormat(String format) {
+        this.format = format;
+    }
 
     String from(Workload workload) {
         if (workload.name != null) {
@@ -57,7 +58,7 @@ class WorkloadNameFormat {
         params.put("consumerBacklogSizeGB", countToDisplaySize(workload.consumerBacklogSizeGB));
         params.put("testDurationMinutes", workload.testDurationMinutes);
         params.put("warmupDurationMinutes", workload.warmupDurationMinutes);
-        return StrSubstitutor.replace(format, params, "${", "}");
+        return StringSubstitutor.replace(format, params, "${", "}");
     }
 
     private static String countToDisplaySize(long size) {

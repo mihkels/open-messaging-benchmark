@@ -13,7 +13,7 @@
 #
 
 # Build the Project
-FROM maven:3.9.11-amazoncorretto-24-alpine AS build
+FROM maven:3.9.11-amazoncorretto-25-alpine AS build
 
 # Copy only pom files to cache dependencies
 COPY . /benchmark/
@@ -25,17 +25,11 @@ RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve -B -Dexcludes="io
 RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve-plugins -B || true
 RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve-sources -B -Dexcludes="io.openmessaging.benchmark:*" -DincludeScope=test || true
 
-#RUN mvn dependency:go-offline -B -Dexcludes="io.openmessaging.benchmark:*" || true
-#RUN mvn dependency:resolve -B -Dexcludes="io.openmessaging.benchmark:*" -DincludeScope=test || true
-#RUN mvn dependency:resolve-plugins -B || true
-#RUN mvn dependency:resolve-sources -B -Dexcludes="io.openmessaging.benchmark:*" -DincludeScope=test || true
-
 # Now do the actual build
 RUN --mount=type=cache,target=/root/.m2 mvn install
-# RUN mvn install
 
 # Create the benchmark image
-FROM amazoncorretto:24-alpine
+FROM amazoncorretto:25-alpine
 
 RUN apk add --no-cache bash
 

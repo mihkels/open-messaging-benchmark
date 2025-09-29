@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 
+KAFKA_VERSION="3.9"
+JAVA_VERSION="25"
 
 REPOSITORY="mihkels/open-messaging-benchmark"
 VERSION=${1:-latest}
@@ -84,7 +86,7 @@ export DOCKER_BUILDKIT=1
 docker buildx build  --progress=plain \
   --attest type=sbom \
   --platform "${PLATFORMS}" \
-  -t "${REPOSITORY}:${VERSION}-kafka-3.9-java24" . \
+  -t "${REPOSITORY}:${VERSION}-kafka-${KAFKA_VERSION}-java${JAVA_VERSION}" . \
   -f docker/Dockerfile.build  \
   --build-context host-m2=$HOME/.m2 \
   --cache-to type=registry,ref=mihkels/open-messaging-benchmark:cache \

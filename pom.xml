@@ -61,12 +61,12 @@
     </modules>
 
     <properties>
-        <revision>0.0.4-SNAPSHOT</revision>
+        <revision>0.0.5-SNAPSHOT</revision>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>24</maven.compiler.source>
-        <maven.compiler.target>24</maven.compiler.target>
-        <maven.compiler.release>24</maven.compiler.release>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <guava.version>33.4.8-jre</guava.version>
 
         <assertj.version>3.25.1</assertj.version>
@@ -79,13 +79,13 @@
 
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <jackson.version>2.16.1</jackson.version>
-        <netty.version>4.1.127.Final</netty.version>
+        <netty.version>4.2.6.Final</netty.version>
         <log4j.version>2.25.1</log4j.version>
 
         <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.11</jacoco.plugin.version>
         <license.plugin.version>4.3</license.plugin.version>
-        <maven.compiler.plugin.version>3.12.1</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
         <spotbugs.plugin.version>4.9.3.2</spotbugs.plugin.version>
@@ -489,9 +489,9 @@
                             <artifactId>maven-compiler-plugin</artifactId>
                             <version>${maven.compiler.plugin.version}</version>
                             <configuration>
-                                <source>24</source>
-                                <target>24</target>
-                                <release>24</release>
+                                <source>25</source>
+                                <target>25</target>
+                                <release>25</release>
                                 <encoding>${project.build.sourceEncoding}</encoding>
                                 <showDeprecation>true</showDeprecation>
                                 <showWarnings>true</showWarnings>

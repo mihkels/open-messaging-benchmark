@@ -26,7 +26,7 @@
     <artifactId>driver-redis</artifactId>
 
     <properties>
-        <redis.version>6.1.0</redis.version>
+        <redis.version>6.2.0</redis.version>
     </properties>
 
     <dependencies>

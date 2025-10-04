@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
+@SuppressWarnings("unused")
 public class RedisBenchmarkDriver implements BenchmarkDriver {
     JedisPool jedisPool;
     private RedisClientConfig clientConfig;
@@ -69,9 +70,32 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
             setupJedisConn();
         }
         try (Jedis jedis = this.jedisPool.getResource()) {
-            jedis.xgroupCreate(topic, subscriptionName, null, true);
+            try {
+                jedis.xgroupCreate(topic, subscriptionName, null, true);
+                log.info("Created consumer group '{}' for topic '{}'", subscriptionName, topic);
+            } catch (redis.clients.jedis.exceptions.JedisDataException e) {
+                // Check if the error is because the consumer group already exists
+                if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
+                    log.info(
+                            "Consumer group '{}' already exists for topic '{}', reusing it",
+                            subscriptionName,
+                            topic);
+                } else {
+                    // Re-throw if it's a different error
+                    log.error(
+                            "Failed to create consumer group '{}' for topic '{}'", subscriptionName, topic, e);
+                    throw e;
+                }
+            }
         } catch (Exception e) {
-            log.info("Failed to create consumer instance.", e);
+            log.error(
+                    "Failed to create consumer instance for topic '{}' and subscription '{}'",
+                    topic,
+                    subscriptionName,
+                    e);
+            CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
         }
         return CompletableFuture.completedFuture(
                 new RedisBenchmarkConsumer(

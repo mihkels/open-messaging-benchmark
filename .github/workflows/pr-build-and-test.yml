@@ -26,7 +26,7 @@ jobs:
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
-          distribution: amazoncorretto
+          distribution: oracle
           java-version: 25
 
       - name: Build and Verify

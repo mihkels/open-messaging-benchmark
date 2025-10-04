@@ -40,6 +40,10 @@ class KafkaTopicCreator {
     private static final Logger log = LoggerFactory.getLogger(KafkaTopicCreator.class);
 
     private static final int MAX_BATCH_SIZE = 500;
+    private static final int MAX_CREATION_ATTEMPTS =
+            6; // Number of times to retry entire creation process
+    private static final long ATTEMPT_TIMEOUT_MS = 60_000; // 1 minute per attempt
+
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private final AdminClient admin;
     private final Map<String, String> topicConfigs;
@@ -62,13 +66,67 @@ class KafkaTopicCreator {
     }
 
     CompletableFuture<Void> create(List<TopicInfo> topicInfos) {
-        return CompletableFuture.runAsync(() -> createBlocking(topicInfos));
+        return CompletableFuture.runAsync(() -> createWithRetry(topicInfos));
+    }
+
+    private void createWithRetry(List<TopicInfo> topicInfos) {
+        RuntimeException lastException = null;
+
+        for (int attempt = 1; attempt <= MAX_CREATION_ATTEMPTS; attempt++) {
+            try {
+                log.info("Topic creation attempt {}/{}", attempt, MAX_CREATION_ATTEMPTS);
+                createBlocking(topicInfos);
+                log.info("Successfully created all {} topics", topicInfos.size());
+                return; // Success!
+            } catch (RuntimeException e) {
+                lastException = e;
+                log.warn(
+                        "Topic creation attempt {}/{} failed: {}",
+                        attempt,
+                        MAX_CREATION_ATTEMPTS,
+                        e.getMessage());
+
+                if (attempt < MAX_CREATION_ATTEMPTS) {
+                    // Before retrying, check if topics were actually created
+                    List<String> topicNames = topicInfos.stream().map(TopicInfo::topic).toList();
+                    try {
+                        var existingTopics =
+                                admin.listTopics().names().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                        long alreadyCreated = topicNames.stream().filter(existingTopics::contains).count();
+                        if (alreadyCreated == topicNames.size()) {
+                            log.info("All topics already exist, considering creation successful");
+                            return;
+                        }
+                        log.info("{}/{} topics already exist", alreadyCreated, topicNames.size());
+                    } catch (Exception checkException) {
+                        log.warn("Failed to check existing topics: {}", checkException.getMessage());
+                    }
+
+                    long backoffMs = 2000 * attempt;
+                    log.info("Waiting {}ms before retrying topic creation", backoffMs);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Topic creation interrupted", ie);
+                    }
+                }
+            }
+        }
+
+        throw new RuntimeException(
+                String.format(
+                        "Failed to create topics after %d attempts. Last error: %s",
+                        MAX_CREATION_ATTEMPTS, lastException != null ? lastException.getMessage() : "unknown"),
+                lastException);
     }
 
     private void createBlocking(List<TopicInfo> topicInfos) {
         BlockingQueue<TopicInfo> queue = new ArrayBlockingQueue<>(topicInfos.size(), true, topicInfos);
         List<TopicInfo> batch = new ArrayList<>();
         AtomicInteger succeeded = new AtomicInteger();
+
+        long startTime = System.currentTimeMillis();
 
         ScheduledFuture<?> loggingFuture =
                 executor.scheduleAtFixedRate(
@@ -79,6 +137,14 @@ class KafkaTopicCreator {
 
         try {
             while (succeeded.get() < topicInfos.size()) {
+                // Check timeout for this attempt
+                if (System.currentTimeMillis() - startTime > ATTEMPT_TIMEOUT_MS) {
+                    throw new RuntimeException(
+                            String.format(
+                                    "Topic creation attempt timed out after %d ms. Created %d/%d topics",
+                                    ATTEMPT_TIMEOUT_MS, succeeded.get(), topicInfos.size()));
+                }
+
                 int batchSize = queue.drainTo(batch, maxBatchSize);
                 if (batchSize > 0) {
                     executeBatch(batch)
@@ -87,11 +153,21 @@ class KafkaTopicCreator {
                                         if (success) {
                                             succeeded.incrementAndGet();
                                         } else {
-                                            //noinspection ResultOfMethodCallIgnored
-                                            queue.offer(topicInfo);
+                                            log.warn("Topic creation failed for: {}, will retry", topicInfo.topic());
+                                            if (!queue.offer(topicInfo)) {
+                                                log.error("Failed to re-queue topic for retry: {}", topicInfo.topic());
+                                            }
                                         }
                                     });
                     batch.clear();
+                } else {
+                    // Avoid busy-waiting
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Topic creation interrupted", e);
+                    }
                 }
             }
         } finally {
@@ -103,8 +179,18 @@ class KafkaTopicCreator {
         log.debug("Executing batch, size: {}", batch.size());
         var lookup = batch.stream().collect(toMap(TopicInfo::topic, identity()));
         var newTopics = batch.stream().map(this::newTopic).toList();
-        return admin.createTopics(newTopics).values().entrySet().stream()
-                .collect(toMap(e -> lookup.get(e.getKey()), e -> isSuccess(e.getValue())));
+
+        try {
+            return admin.createTopics(newTopics).values().entrySet().stream()
+                    .collect(toMap(e -> lookup.get(e.getKey()), e -> isSuccess(e.getValue())));
+        } catch (Exception e) {
+            log.error(
+                    "Failed to execute batch creation for topics: {}",
+                    batch.stream().map(TopicInfo::topic).toList(),
+                    e);
+            // Return all as failures
+            return batch.stream().collect(toMap(t -> t, t -> false));
+        }
     }
 
     private NewTopic newTopic(TopicInfo topicInfo) {
@@ -120,7 +206,9 @@ class KafkaTopicCreator {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         } catch (ExecutionException e) {
-            log.debug(e.getMessage());
+            log.warn(
+                    "Topic creation failed: {}",
+                    e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
             return e.getCause() instanceof TopicExistsException;
         }
         return true;

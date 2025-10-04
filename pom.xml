@@ -17,20 +17,16 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>io.openmessaging.benchmark</groupId>
     <artifactId>messaging-benchmark</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
     <name>Messaging Benchmark</name>
-
     <inceptionYear>2017</inceptionYear>
-
     <organization>
         <name>OpenMessaging Project</name>
         <url>https://openmessaging.cloud</url>
     </organization>
-
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
@@ -38,11 +34,9 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
-
     <modules>
         <module>benchmark-framework</module>
         <module>driver-api</module>
-
         <module>driver-pravega</module>
         <module>driver-pulsar</module>
         <module>driver-kafka</module>
@@ -58,8 +52,8 @@
         <module>docker</module>
         <module>driver-kop</module>
         <module>tool</module>
+        <module>e2e-tests</module>
     </modules>
-
     <properties>
         <revision>0.0.5-SNAPSHOT</revision>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -68,7 +62,6 @@
         <maven.compiler.target>25</maven.compiler.target>
         <maven.compiler.release>25</maven.compiler.release>
         <guava.version>33.4.8-jre</guava.version>
-
         <assertj.version>3.25.1</assertj.version>
         <bookkeeper.version>4.17.2</bookkeeper.version>
         <checkstyle.version>10.12.4</checkstyle.version>
@@ -76,14 +69,12 @@
         <junit.jupiter.version>5.13.4</junit.jupiter.version>
         <mockito.junit.jupiter.version>5.18.0</mockito.junit.jupiter.version>
         <bytebuddy.version>1.17.6</bytebuddy.version>
-
         <commons.lang3.version>3.18.0</commons.lang3.version>
         <jackson.version>2.16.1</jackson.version>
         <netty.version>4.2.6.Final</netty.version>
         <log4j.version>2.25.1</log4j.version>
-
         <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
-        <jacoco.plugin.version>0.8.11</jacoco.plugin.version>
+        <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
         <license.plugin.version>4.3</license.plugin.version>
         <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
@@ -93,7 +84,6 @@
         <micrometer.version>1.15.4</micrometer.version>
         <prometheus.metrics.version>1.4.1</prometheus.metrics.version>
     </properties>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -110,7 +100,6 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
@@ -136,13 +125,11 @@
                 <artifactId>guava</artifactId>
                 <version>33.5.0-jre</version>
             </dependency>
-
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-all</artifactId>
                 <version>${netty.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>io.prometheus</groupId>
                 <artifactId>prometheus-metrics-exposition-formats</artifactId>
@@ -158,13 +145,11 @@
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons.lang3.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-core</artifactId>
                 <version>${log4j.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-slf4j2-impl</artifactId>
@@ -175,7 +160,6 @@
                 <artifactId>jcommander</artifactId>
                 <version>${jcommander.version}</version>
             </dependency>
-
             <!-- Force SLF4J API 2.x across the build -->
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -188,7 +172,6 @@
                 <version>${bytebuddy.version}</version>
                 <scope>test</scope>
             </dependency>
-
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy-agent</artifactId>
@@ -208,6 +191,18 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-params</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
                 <groupId>org.mockito</groupId>
                 <artifactId>mockito-core</artifactId>
                 <version>${mockito.junit.jupiter.version}</version>
@@ -219,10 +214,8 @@
                 <version>${mockito.junit.jupiter.version}</version>
                 <scope>test</scope>
             </dependency>
-
         </dependencies>
     </dependencyManagement>
-
     <build>
         <plugins>
             <plugin>
@@ -474,7 +467,6 @@
             </plugin>
         </plugins>
     </build>
-
     <profiles>
         <profile>
             <id>modern-java-compile</id>

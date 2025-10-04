@@ -82,7 +82,7 @@ public class Benchmark {
         public String output;
     }
 
-    public static void main(String[] args) throws Exception {
+    static void main(String[] args) throws Exception {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("messaging-benchmark");

@@ -13,18 +13,22 @@
  */
 package io.openmessaging.benchmark.utils;
 
-import java.util.Base64;
 import java.util.Random;
 
 public final class RandomGenerator {
 
     private static final Random random = new Random();
+    private static final String KAFKA_SAFE_CHARS =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
 
     private RandomGenerator() {}
 
     public static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return Base64.getEncoder().withoutPadding().encodeToString(buffer);
+        // Generate a Kafka-safe random string (only alphanumerics, underscore, and hyphen)
+        StringBuilder sb = new StringBuilder(7);
+        for (int i = 0; i < 7; i++) {
+            sb.append(KAFKA_SAFE_CHARS.charAt(random.nextInt(KAFKA_SAFE_CHARS.length())));
+        }
+        return sb.toString();
     }
 }

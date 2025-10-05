@@ -241,7 +241,8 @@ public class LocalWorker implements Worker, ConsumerCallback {
                     } catch (Throwable t) {
                         log.error("Producer thread failed", t);
                     }
-                    log.info("Producer thread exiting after {} iterations", getCountersStats().messagesSent());
+                    log.info(
+                            "Producer thread exiting after {} iterations", getCountersStats().messagesSent());
                 });
     }
 

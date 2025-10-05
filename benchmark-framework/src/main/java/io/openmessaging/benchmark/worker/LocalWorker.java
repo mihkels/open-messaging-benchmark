@@ -96,10 +96,9 @@ public class LocalWorker implements Worker, ConsumerCallback {
             }
 
             // Check if this driver should be loaded in isolation
-            boolean shouldIsolate =
-                    isolatedDriverHome != null && driverConfiguration.driverClass.contains("pravega");
-
+            var shouldIsolate = isolatedDriverHome != null;
             if (shouldIsolate) {
+                log.info("Using isolated driver home {}", isolatedDriverHome);
                 log.info(
                         "Loading driver {} with isolated classloader from {}",
                         driverConfiguration.driverClass,
@@ -108,6 +107,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
                 benchmarkDriver =
                         IsolatedDriverLoader.newInstance(isolatedCL, driverConfiguration.driverClass);
             } else {
+                log.info("Loading driver {} from classpath", driverConfiguration.driverClass);
                 // Standard loading for non-isolated drivers
                 benchmarkDriver =
                         (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
@@ -181,6 +181,12 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     @Override
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
+        log.info(
+                "Starting load with {} producers, publish rate: {}",
+                producers.size(),
+                producerWorkAssignment.publishRate());
+
+        testCompleted = false;
         int processors = Runtime.getRuntime().availableProcessors();
 
         updateMessageProducer(producerWorkAssignment.publishRate());
@@ -215,10 +221,14 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     private void submitProducersToExecutor(
             List<BenchmarkProducer> producers, KeyDistributor keyDistributor, List<byte[]> payloads) {
+        log.info(
+                "Submitting {} producers to executor, testCompleted: {}", producers.size(), testCompleted);
+
         ThreadLocalRandom r = ThreadLocalRandom.current();
         int payloadCount = payloads.size();
         executor.submit(
                 () -> {
+                    log.info("Producer thread started for {} producers", producers.size());
                     try {
                         while (!testCompleted) {
                             producers.forEach(
@@ -229,8 +239,9 @@ public class LocalWorker implements Worker, ConsumerCallback {
                                                     payloads.get(r.nextInt(payloadCount))));
                         }
                     } catch (Throwable t) {
-                        log.error("Got error", t);
+                        log.error("Producer thread failed", t);
                     }
+                    log.info("Producer thread exiting after {} iterations", getCountersStats().messagesSent());
                 });
     }
 
@@ -258,7 +269,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
+    public CountersStats getCountersStats() {
         return stats.toCountersStats();
     }
 

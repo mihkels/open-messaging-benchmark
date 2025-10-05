@@ -81,7 +81,7 @@ public class HttpWorkerClient implements Worker {
     @SuppressWarnings("unchecked")
     @Override
     public List<String> createTopics(TopicsInfo topicsInfo) throws IOException {
-        return (List<String>) post(CREATE_TOPICS, writer.writeValueAsBytes(topicsInfo), List.class);
+        return post(CREATE_TOPICS, writer.writeValueAsBytes(topicsInfo), List.class);
     }
 
     @Override
@@ -115,11 +115,13 @@ public class HttpWorkerClient implements Worker {
 
     @Override
     public void pauseConsumers() throws IOException {
+        log.info("Pausing consumers");
         sendPost(PAUSE_CONSUMERS);
     }
 
     @Override
     public void resumeConsumers() throws IOException {
+        log.info("Resuming consumers");
         sendPost(RESUME_CONSUMERS);
     }
 
@@ -191,18 +193,21 @@ public class HttpWorkerClient implements Worker {
                 .execute()
                 .toCompletableFuture()
                 .thenApply(
-                        response -> {
+                        r -> {
                             try {
-                                if (response.getStatusCode() != HTTP_OK) {
+                                if (r.getStatusCode() != HTTP_OK) {
                                     log.error(
                                             "Failed to do HTTP get request to {}{} -- code: {}",
                                             host,
                                             path,
-                                            response.getStatusCode());
+                                            r.getStatusCode());
                                 }
-                                Preconditions.checkArgument(response.getStatusCode() == HTTP_OK);
-                                return mapper.readValue(response.getResponseBody(), clazz);
+                                Preconditions.checkArgument(r.getStatusCode() == HTTP_OK);
+                                var value = mapper.readValue(r.getResponseBody(), clazz);
+                                log.debug("Received response: {}", value);
+                                return value;
                             } catch (IOException e) {
+                                log.error("Failed to do HTTP get request to {}{}", host, path, e);
                                 throw new RuntimeException(e);
                             }
                         })

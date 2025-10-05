@@ -78,6 +78,7 @@
 			<excludes>
 				<!-- Exclude isolated drivers from main lib -->
 				<exclude>io.openmessaging.benchmark:driver-pravega</exclude>
+                <exclude>io.openmessaging.benchmark:driver-bookkeeper</exclude>
 				<!-- Add more isolated drivers here -->
 				<exclude>ch.qos.logback:*</exclude>
 			</excludes>
@@ -91,6 +92,7 @@
 			<useAllReactorProjects>true</useAllReactorProjects>
 			<includes>
 				<include>io.openmessaging.benchmark:driver-pravega</include>
+                <include>io.openmessaging.benchmark:driver-bookkeeper</include>
 			</includes>
 			<binaries>
 				<outputDirectory>drivers/${module.artifactId}</outputDirectory>
@@ -104,6 +106,7 @@
 			<useAllReactorProjects>true</useAllReactorProjects>
 			<includes>
 				<include>io.openmessaging.benchmark:driver-pravega</include>
+                <include>io.openmessaging.benchmark:driver-bookkeeper</include>
 			</includes>
 			<sources>
 				<includeModuleDirectory>false</includeModuleDirectory>

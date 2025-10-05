@@ -98,8 +98,8 @@ public class WorkloadGenerator implements AutoCloseable {
         List<byte[]> payloads = new ArrayList<>();
         if (workload.useRandomizedPayloads) {
             var r = new Random();
-            int randomBytes = (int) (workload.messageSize * workload.randomBytesRatio);
-            int zerodBytes = workload.messageSize - randomBytes;
+            var randomBytes = (int) (workload.messageSize * workload.randomBytesRatio);
+            var zerodBytes = workload.messageSize - randomBytes;
             for (int i = 0; i < workload.randomizedPayloadPoolSize; i++) {
                 byte[] randArray = new byte[randomBytes];
                 r.nextBytes(randArray);
@@ -111,9 +111,8 @@ public class WorkloadGenerator implements AutoCloseable {
             payloads.add(payloadReader.load(workload.payloadFile));
         }
 
-        ProducerWorkAssignment producerWorkAssignment =
+        var producerWorkAssignment =
                 new ProducerWorkAssignment(payloads, targetPublishRate, workload.keyDistributor);
-
         log.info(
                 "Loaded {} payloads from file {} in {} ms",
                 producerWorkAssignment.payloadData().size(),
@@ -140,7 +139,7 @@ public class WorkloadGenerator implements AutoCloseable {
         worker.resetStats();
         log.info("----- Starting benchmark traffic ({}m)------", workload.testDurationMinutes);
 
-        TestResult result = printAndCollectStats(workload.testDurationMinutes, TimeUnit.MINUTES);
+        var result = printAndCollectStats(workload.testDurationMinutes, TimeUnit.MINUTES);
         runCompleted = true;
 
         worker.stopAll();

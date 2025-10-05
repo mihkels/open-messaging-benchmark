@@ -148,9 +148,11 @@ public class Benchmark {
             List<Worker> workers =
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
             worker = new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
+            log.info("Using distributed workers ensemble");
         } else {
             // Use local worker implementation
             worker = new LocalWorker();
+            log.info("Using local worker");
         }
 
         workloads.forEach(
@@ -175,21 +177,12 @@ public class Benchmark {
                                                         ? new File(arguments.legacyDriverName)
                                                         : null;
 
-                                        if (worker instanceof LocalWorker) {
-                                            worker.initializeDriver(new File(driverConfig), legacyDriverFile);
-                                        } else {
-                                            worker.initializeDriver(new File(driverConfig));
-                                        }
-
-                                        WorkloadGenerator generator =
+                                        worker.initializeDriver(new File(driverConfig), legacyDriverFile);
+                                        var generator =
                                                 new WorkloadGenerator(driverConfiguration.name, workload, worker);
-
-                                        TestResult result = generator.run();
-
-                                        boolean useOutput =
-                                                (arguments.output != null) && (arguments.output.length() > 0);
-
-                                        String fileName =
+                                        var result = generator.run();
+                                        var useOutput = (arguments.output != null) && (!arguments.output.isEmpty());
+                                        var fileName =
                                                 useOutput
                                                         ? arguments.output
                                                         : String.format(

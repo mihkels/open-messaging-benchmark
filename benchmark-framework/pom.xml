@@ -175,6 +175,12 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>io.openmessaging.benchmark</groupId>
+            <artifactId>driver-bookkeeper</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>com.github.stefanbirkner</groupId>
             <artifactId>system-lambda</artifactId>
             <version>1.2.1</version>

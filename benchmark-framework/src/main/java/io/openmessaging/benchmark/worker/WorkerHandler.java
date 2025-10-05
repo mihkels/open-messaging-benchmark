@@ -148,7 +148,13 @@ public class WorkerHandler {
     }
 
     private void handleCountersStats(Context ctx) throws Exception {
-        ctx.result(writer.writeValueAsString(localWorker.getCountersStats()));
+        var stats = localWorker.getCountersStats();
+        log.info(
+                "Worker returning stats - sent: {}, errors: {}, received: {}",
+                stats.messagesSent(),
+                stats.messageSendErrors(),
+                stats.messagesReceived());
+        ctx.result(writer.writeValueAsString(stats));
     }
 
     private void handleResetStats(Context ctx) throws Exception {

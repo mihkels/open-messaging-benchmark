@@ -47,7 +47,7 @@ public class DistributedWorkersEnsemble implements Worker {
     public DistributedWorkersEnsemble(List<Worker> workers, boolean extraConsumerWorkers) {
         Preconditions.checkArgument(workers.size() > 1);
         this.workers = unmodifiableList(workers);
-        leader = workers.get(0);
+        leader = workers.getFirst();
         int numberOfProducerWorkers = getNumberOfProducerWorkers(workers, extraConsumerWorkers);
         List<List<Worker>> partitions =
                 Lists.partition(Lists.reverse(workers), workers.size() - numberOfProducerWorkers);

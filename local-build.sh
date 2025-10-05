@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 
+set -e
+
 KAFKA_VERSION="3.9"
 JAVA_VERSION="25"
 
@@ -53,6 +55,15 @@ if ! docker buildx ls >/dev/null 2>&1; then
 fi
 if ! docker buildx ls | grep -q '\*'; then
   docker buildx create --use >/dev/null
+fi
+
+# Run mvn build before docker build and exit on failure
+mvn license:format
+mvn -Pformat spotless:apply
+mvn clean install -pl package -am
+if [[ $? -ne 0 ]]; then
+  echo "Maven build failed"
+  exit 1
 fi
 
 echo "Building for platforms: ${PLATFORMS}"

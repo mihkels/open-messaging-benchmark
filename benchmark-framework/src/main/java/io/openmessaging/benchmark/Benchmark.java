@@ -72,6 +72,11 @@ public class Benchmark {
                 description = "Allocate extra consumer workers when your backlog builds.")
         boolean extraConsumers;
 
+        @Parameter(
+                names = {"--legacy-driver-name"},
+                description = "Path to legacy driver with conflicting or not maintained dependencies")
+        public String legacyDriverName;
+
         @Parameter(description = "Workloads") // , required = true)
         public List<String> workloads;
 
@@ -165,7 +170,16 @@ public class Benchmark {
                                         // Stop any left over workload
                                         worker.stopAll();
 
-                                        worker.initializeDriver(new File(driverConfig));
+                                        File legacyDriverFile =
+                                                arguments.legacyDriverName != null
+                                                        ? new File(arguments.legacyDriverName)
+                                                        : null;
+
+                                        if (worker instanceof LocalWorker) {
+                                            worker.initializeDriver(new File(driverConfig), legacyDriverFile);
+                                        } else {
+                                            worker.initializeDriver(new File(driverConfig));
+                                        }
 
                                         WorkloadGenerator generator =
                                                 new WorkloadGenerator(driverConfiguration.name, workload, worker);

@@ -55,7 +55,7 @@
         <module>e2e-tests</module>
     </modules>
     <properties>
-        <revision>0.0.5-SNAPSHOT</revision>
+        <revision>0.0.6-SNAPSHOT</revision>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>25</maven.compiler.source>
@@ -79,6 +79,7 @@
         <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
+        <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
         <spotbugs.plugin.version>4.9.3.2</spotbugs.plugin.version>
         <spotless.plugin.version>3.0.0</spotless.plugin.version>
         <micrometer.version>1.15.4</micrometer.version>
@@ -216,6 +217,7 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
     <build>
         <plugins>
             <plugin>
@@ -375,7 +377,7 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>[3.8.6,)</version>
+                                    <version>[3.9.0,)</version>
                                 </requireMavenVersion>
                             </rules>
                             <fail>true</fail>
@@ -471,7 +473,7 @@
         <profile>
             <id>modern-java-compile</id>
             <activation>
-                <jdk>[21,)</jdk>
+                <jdk>[24,)</jdk>
             </activation>
             <build>
                 <pluginManagement>

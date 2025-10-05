@@ -25,7 +25,12 @@ import java.util.List;
 
 public interface Worker extends AutoCloseable {
 
-    void initializeDriver(File configurationFile) throws IOException;
+    void initializeDriver(File driverConfigFile) throws Exception;
+
+    // New method to support isolated driver loading
+    default void initializeDriver(File driverConfigFile, File isolatedDriverHome) throws Exception {
+        initializeDriver(driverConfigFile);
+    }
 
     List<String> createTopics(TopicsInfo topicsInfo) throws IOException;
 

@@ -19,7 +19,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.google.common.base.Preconditions;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import io.openmessaging.benchmark.DriverConfiguration;
@@ -30,6 +29,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.utils.IsolatedDriverLoader;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
@@ -79,19 +79,42 @@ public class LocalWorker implements Worker, ConsumerCallback {
     }
 
     @Override
-    public void initializeDriver(File driverConfigFile) throws IOException {
-        Preconditions.checkArgument(benchmarkDriver == null);
-        testCompleted = false;
+    public void initializeDriver(File driverConfigFile) throws Exception {
+        initializeDriver(driverConfigFile, null);
+    }
 
+    @Override
+    public void initializeDriver(File driverConfigFile, File isolatedDriverHome) throws Exception {
         DriverConfiguration driverConfiguration =
                 mapper.readValue(driverConfigFile, DriverConfiguration.class);
-
-        log.info("Driver: {}", writer.writeValueAsString(driverConfiguration));
+        log.info("Initializing driver: {}", writer.writeValueAsString(driverConfiguration));
 
         try {
-            benchmarkDriver =
-                    (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
+            // Validate driver class is present
+            if (driverConfiguration.driverClass == null || driverConfiguration.driverClass.isEmpty()) {
+                throw new IllegalArgumentException("Driver configuration must specify a driverClass");
+            }
+
+            // Check if this driver should be loaded in isolation
+            boolean shouldIsolate =
+                    isolatedDriverHome != null && driverConfiguration.driverClass.contains("pravega");
+
+            if (shouldIsolate) {
+                log.info(
+                        "Loading driver {} with isolated classloader from {}",
+                        driverConfiguration.driverClass,
+                        isolatedDriverHome);
+                ClassLoader isolatedCL = IsolatedDriverLoader.forDriverFolder(isolatedDriverHome);
+                benchmarkDriver =
+                        IsolatedDriverLoader.newInstance(isolatedCL, driverConfiguration.driverClass);
+            } else {
+                // Standard loading for non-isolated drivers
+                benchmarkDriver =
+                        (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
+            }
+
             benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());
+
         } catch (InstantiationException
                 | IllegalAccessException
                 | ClassNotFoundException

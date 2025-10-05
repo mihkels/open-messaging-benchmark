@@ -74,20 +74,19 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void initializeDriver(File configurationFile) throws IOException {
+    public void initializeDriver(File configurationFile) throws Exception {
         workers.parallelStream()
                 .forEach(
                         w -> {
                             try {
                                 w.initializeDriver(configurationFile);
-                            } catch (IOException e) {
+                            } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
                         });
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<String> createTopics(TopicsInfo topicsInfo) throws IOException {
         return leader.createTopics(topicsInfo);
     }

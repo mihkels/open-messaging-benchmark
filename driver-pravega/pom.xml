@@ -25,11 +25,12 @@
     <artifactId>driver-pravega</artifactId>
 
     <properties>
-        <!--Specify pravegaVersion in properties or use default: 0.10.0-->
         <!--Provide Pravega version for build: mvn clean install  "-DpravegaVersion=0.9.0-2766.2515791-SNAPSHOT" -DskipTests=true -Dlicense.skip=true-->
         <pravegaVersion>0.13.0</pravegaVersion>
         <protobuf.version>4.31.1</protobuf.version>
         <grpc.version>1.75.0</grpc.version>
+
+        <driver.isolated>true</driver.isolated>
     </properties>
 
     <dependencies>
@@ -84,5 +85,29 @@
             <url>https://oss.jfrog.org/jfrog-dependencies</url>
         </repository>
     </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.9.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                            <excludeArtifactIds>driver-api</excludeArtifactIds>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

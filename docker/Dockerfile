@@ -12,8 +12,7 @@
 # limitations under the License.
 #
 
-FROM eclipse-temurin:17
-
+FROM amazoncorretto:25-alpine
 ARG BENCHMARK_TARBALL
 
 # Using ADD instead of COPY because ${BENCHMARK_TARBALL} is an archive that needs to be extracted
@@ -24,8 +23,8 @@ RUN mv openmessaging-benchmark-* /benchmark
 WORKDIR /benchmark
 
 # Install vim
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y vim tzdata && rm -rf /var/lib/apt/lists/*
+#ENV DEBIAN_FRONTEND=noninteractive
+#RUN apt-get update && apt-get install -y vim tzdata && rm -rf /var/lib/apt/lists/*
 
 # Start a shell by default
 CMD ["/bin/bash"]

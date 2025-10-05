@@ -25,7 +25,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** A benchmark worker that listen for tasks to perform. */
-public class BenchmarkWorker {
+public final class BenchmarkWorker {
+
+    private BenchmarkWorker() {
+        throw new UnsupportedOperationException(
+                "BenchmarkWorker is a CLI utility and cannot be instantiated");
+    }
 
     @SuppressWarnings("unused")
     static class Arguments {
@@ -44,6 +49,7 @@ public class BenchmarkWorker {
         @Parameter(
                 names = {"-sp", "--stats-port"},
                 description = "Stats port to listen on")
+        @Deprecated(since = "0.0.3", forRemoval = true)
         private int statsPort = 8081;
 
         public boolean isHelp() {
@@ -59,7 +65,7 @@ public class BenchmarkWorker {
         }
     }
 
-    public static void main(String[] args) throws Exception {
+    static void main(String[] args) throws Exception {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("benchmark-worker");

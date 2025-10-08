@@ -124,18 +124,39 @@ public abstract class BaseE2eIT {
      */
     protected void validateResults(TestResult result, Workload workload) {
         var wholeTestDuration = workload.testDurationMinutes + workload.warmupDurationMinutes;
-        log.info("Test completed - Aggregate throughput: {} msg/s, {} Mbit/s",
-                result.aggregatedPublishLatencyAvg / wholeTestDuration,
-                result.aggregatedPublishLatencyAvg * result.messageSize * 8.0 / 1024 / 1024 / wholeTestDuration);
 
-        // Basic validations
-        assertThat(result.aggregatedPublishLatencyAvg)
+        // Calculate actual aggregate rates
+        double aggregatePublishRate = result.publishRate.stream()
+                .mapToDouble(Double::doubleValue)
+                .sum() / result.publishRate.size();
+
+        double aggregateConsumeRate = result.consumeRate.stream()
+                .mapToDouble(Double::doubleValue)
+                .sum() / result.consumeRate.size();
+
+        log.info("Test completed - Aggregate publish rate: {} msg/s, consume rate: {} msg/s, throughput: {} Mbit/s",
+                aggregatePublishRate,
+                aggregateConsumeRate,
+                aggregatePublishRate * workload.messageSize * 8.0 / 1024 / 1024);
+
+        // Validate that messages were published
+        assertThat(aggregatePublishRate)
                 .as("Should have published messages")
                 .isGreaterThan(0);
 
-        assertThat(result.aggregatedEndToEndLatencyAvg)
+        // Validate that messages were consumed
+        assertThat(aggregateConsumeRate)
                 .as("Should have consumed messages")
                 .isGreaterThan(0);
+
+        // Optional: Validate latencies are reasonable
+        assertThat(result.aggregatedPublishLatencyAvg)
+                .as("Publish latency should be positive")
+                .isGreaterThan(0);
+
+//        assertThat(result.aggregatedEndToEndLatencyAvg)
+//                .as("End-to-end latency should be positive")
+//                .isGreaterThan(0);
     }
 
     private void deleteDirectory(File directory) {

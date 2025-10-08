@@ -51,13 +51,13 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(File configurationFile, PrometheusMeterRegistry prometheusRegistry)
-            throws IOException, InterruptedException {
+            throws IOException {
         config = mapper.readValue(configurationFile, Config.class);
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         try {
-            PropertiesConfiguration propsConf =
-                    new Configurations().properties(new StringReader(config.dlogConf).toString());
+            PropertiesConfiguration propsConf = new PropertiesConfiguration();
+            propsConf.read(new StringReader(config.dlogConf));
             conf.loadConf(propsConf);
         } catch (ConfigurationException e) {
             log.error("Failed to load dlog configuration : \n{}\n", config.dlogConf, e);

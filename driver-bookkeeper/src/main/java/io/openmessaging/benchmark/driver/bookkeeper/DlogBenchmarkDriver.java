@@ -33,7 +33,6 @@ import java.io.StringReader;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.configuration2.PropertiesConfiguration;
-import org.apache.commons.configuration2.builder.fluent.Configurations;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

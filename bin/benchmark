@@ -27,4 +27,11 @@ fi
 JVM_MEM="${HEAP_OPTS} -XX:+UseG1GC"
 JVM_GC_LOG=" -XX:+PrintGCDetails -XX:+PrintGCApplicationStoppedTime  -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=64m  -Xloggc:/dev/shm/benchmark-client-gc_%p.log"
 
-java -server -cp $CLASSPATH $JVM_MEM io.openmessaging.benchmark.Benchmark "$@"
+# Add these lines to fix the warnings
+JVM_OPTS="--enable-native-access=ALL-UNNAMED"
+JVM_OPTS="$JVM_OPTS --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
+JVM_OPTS="$JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true"
+JVM_OPTS="$JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
+
+# Update the final execution line to include $JVM_OPTS
+java -server -cp $CLASSPATH $JVM_MEM $JVM_OPTS io.openmessaging.benchmark.Benchmark "$@"

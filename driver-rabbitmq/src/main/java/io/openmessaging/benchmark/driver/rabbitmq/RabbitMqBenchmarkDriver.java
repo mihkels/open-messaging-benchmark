@@ -33,10 +33,11 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.ResourceCreator.CreationResult;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -61,9 +62,9 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
     private final Map<String, Connection> connections = new ConcurrentHashMap<>();
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config = mapper.readValue(configurationFile, RabbitMqConfig.class);
+        config = mapper.readValue(Files.newInputStream(configurationFile), RabbitMqConfig.class);
     }
 
     @Override

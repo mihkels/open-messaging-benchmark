@@ -39,9 +39,9 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -51,9 +51,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class HttpWorkerClient implements Worker {
+    private static final Logger log = LoggerFactory.getLogger(HttpWorkerClient.class);
 
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int HTTP_OK = 200;
+    private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+    private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
 
     private final AsyncHttpClient httpClient;
     private final String host;
@@ -73,7 +76,7 @@ public class HttpWorkerClient implements Worker {
     }
 
     @Override
-    public void initializeDriver(File configurationFile) throws IOException {
+    public void initializeDriver(Path configurationFile) throws IOException {
         byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
         sendPost(INITIALIZE_DRIVER, confFileContent);
     }
@@ -182,7 +185,7 @@ public class HttpWorkerClient implements Worker {
                             Preconditions.checkArgument(
                                     response.getStatusCode() == HTTP_OK,
                                     "Failed to do HTTP post request to -- code:");
-                            return (Void) null;
+                            return null;
                         })
                 .join();
     }
@@ -238,8 +241,4 @@ public class HttpWorkerClient implements Worker {
                         })
                 .join();
     }
-
-    private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
-    private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
-    private static final Logger log = LoggerFactory.getLogger(HttpWorkerClient.class);
 }

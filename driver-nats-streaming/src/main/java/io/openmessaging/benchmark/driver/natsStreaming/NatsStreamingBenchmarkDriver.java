@@ -32,8 +32,9 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.LoggerFactory;
@@ -47,9 +48,10 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private Options.Builder optsBuilder = new Options.Builder();
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config = mapper.readValue(configurationFile, NatsStreamingClientConfig.class);
+        config =
+                mapper.readValue(Files.newInputStream(configurationFile), NatsStreamingClientConfig.class);
         log.info("read config file," + config.toString());
         if (config.clusterId != null) {
             clusterId = config.clusterId;

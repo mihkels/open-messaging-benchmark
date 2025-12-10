@@ -27,10 +27,11 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.bookkeeper.stats.StatsLoggerAdaptor;
-import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
@@ -49,9 +50,9 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     private Namespace namespace;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry prometheusRegistry)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry prometheusRegistry)
             throws IOException {
-        config = mapper.readValue(configurationFile, Config.class);
+        config = mapper.readValue(Files.newInputStream(configurationFile), Config.class);
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         try {

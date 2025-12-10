@@ -29,9 +29,10 @@ import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -52,7 +53,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private final List<String> createdTopics = new ArrayList<>();
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
             throws IOException {
         config = readConfig(configurationFile);
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
@@ -69,8 +70,8 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static PravegaConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, PravegaConfig.class);
+    private static PravegaConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), PravegaConfig.class);
     }
 
     private String cleanName(String name) {

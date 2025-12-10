@@ -23,8 +23,9 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.redis.client.RedisClientConfig;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
@@ -39,7 +40,7 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     private RedisClientConfig clientConfig;
 
     @Override
-    public void initialize(final File configurationFile, final PrometheusMeterRegistry statsLogger)
+    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
             throws IOException {
         this.clientConfig = readConfig(configurationFile);
     }
@@ -142,8 +143,8 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static RedisClientConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, RedisClientConfig.class);
+    private static RedisClientConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), RedisClientConfig.class);
     }
 
     private static final Random random = new Random();

@@ -23,13 +23,13 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
-import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
@@ -48,7 +48,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     private BenchmarkDriver delegateForAdminOperations;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
         this.config = readConfig(configurationFile);
         log.info("JMS driver configuration: {}", writer.writeValueAsString(config));
@@ -201,11 +201,9 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static JMSConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, JMSConfig.class);
+    private static JMSConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), JMSConfig.class);
     }
-
-    private static final Random random = new Random();
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Logger log = LoggerFactory.getLogger(JMSBenchmarkDriver.class);

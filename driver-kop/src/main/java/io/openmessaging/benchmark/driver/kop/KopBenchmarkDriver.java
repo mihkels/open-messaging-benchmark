@@ -29,9 +29,10 @@ import io.openmessaging.benchmark.driver.kop.config.PulsarConfig;
 import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkConsumer;
 import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkProducer;
 import io.streamnative.pulsar.handlers.kop.KafkaPayloadProcessor;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -78,12 +79,12 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     private ProducerBuilder<byte[]> producerBuilder = null;
     private ConsumerBuilder<ByteBuffer> consumerBuilder = null;
 
-    public static Config loadConfig(File file) throws IOException {
-        return mapper.readValue(file, Config.class);
+    public static Config loadConfig(Path file) throws IOException {
+        return mapper.readValue(Files.newInputStream(file), Config.class);
     }
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
         config = loadConfig(configurationFile);
         final Properties commonProperties = config.getKafkaProperties();

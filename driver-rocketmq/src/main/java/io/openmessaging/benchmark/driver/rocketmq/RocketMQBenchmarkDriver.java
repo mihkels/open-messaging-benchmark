@@ -24,8 +24,9 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClientConfig;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -61,7 +62,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     private RPCHook rpcHook;
 
     @Override
-    public void initialize(final File configurationFile, final PrometheusMeterRegistry statsLogger)
+    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
         if (isAclEnabled()) {
@@ -249,8 +250,8 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static RocketMQClientConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, RocketMQClientConfig.class);
+    private static RocketMQClientConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), RocketMQClientConfig.class);
     }
 
     private static final Random random = new Random();

@@ -22,8 +22,9 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
@@ -43,7 +44,7 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ClientSession session;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
         this.config = readConfig(configurationFile);
         log.info("ActiveMQ Artemis driver configuration: {}", writer.writeValueAsString(config));
@@ -146,8 +147,8 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static ArtemisConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, ArtemisConfig.class);
+    private static ArtemisConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), ArtemisConfig.class);
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

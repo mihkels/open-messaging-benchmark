@@ -21,9 +21,10 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -61,9 +62,9 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private AdminClient admin;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config = mapper.readValue(configurationFile, Config.class);
+        config = mapper.readValue(Files.newInputStream(configurationFile), Config.class);
 
         Properties commonProperties = new Properties();
         commonProperties.load(new StringReader(config.commonConfig()));

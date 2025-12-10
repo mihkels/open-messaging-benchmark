@@ -35,8 +35,9 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -49,9 +50,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     private JetStreamManagement jetStreamManagement;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException, InterruptedException {
-        config = mapper.readValue(configurationFile, NatsConfig.class);
+        config = mapper.readValue(Files.newInputStream(configurationFile), NatsConfig.class);
         log.info("read config file," + config.toString());
         this.connection =
                 Nats.connect(

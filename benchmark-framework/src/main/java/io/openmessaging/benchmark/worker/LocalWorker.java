@@ -40,9 +40,10 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -79,14 +80,14 @@ public class LocalWorker implements Worker, ConsumerCallback {
     }
 
     @Override
-    public void initializeDriver(File driverConfigFile) throws Exception {
+    public void initializeDriver(Path driverConfigFile) throws Exception {
         initializeDriver(driverConfigFile, null);
     }
 
     @Override
-    public void initializeDriver(File driverConfigFile, File isolatedDriverHome) throws Exception {
+    public void initializeDriver(Path driverConfigFile, Path isolatedDriverHome) throws Exception {
         DriverConfiguration driverConfiguration =
-                mapper.readValue(driverConfigFile, DriverConfiguration.class);
+                mapper.readValue(Files.newInputStream(driverConfigFile), DriverConfiguration.class);
         log.info("Initializing driver: {}", writer.writeValueAsString(driverConfiguration));
 
         try {

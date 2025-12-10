@@ -27,6 +27,8 @@ import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.LocalWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -36,7 +38,7 @@ import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Benchmark {
+public final class Benchmark {
 
     static class Arguments {
 
@@ -87,9 +89,14 @@ public class Benchmark {
         public String output;
     }
 
+    private Benchmark() {
+        throw new UnsupportedOperationException(
+                "Benchmark constructor is private and should not be called directly");
+    }
+
     static void main(String[] args) throws Exception {
         final Arguments arguments = new Arguments();
-        JCommander jc = new JCommander(arguments);
+        var jc = new JCommander(arguments);
         jc.setProgramName("messaging-benchmark");
 
         try {
@@ -117,7 +124,7 @@ public class Benchmark {
         }
 
         if (arguments.workers == null && arguments.workersFile == null) {
-            File defaultFile = new File("workers.yaml");
+            var defaultFile = new File("workers.yaml");
             if (defaultFile.exists()) {
                 log.info("Using default worker file workers.yaml");
                 arguments.workersFile = defaultFile;
@@ -169,15 +176,16 @@ public class Benchmark {
                                                 workload.name,
                                                 driverConfiguration.name);
 
-                                        // Stop any left over workload
+                                        // Stop any leftover workload
                                         worker.stopAll();
 
-                                        File legacyDriverFile =
+                                        var legacyDriverFile =
                                                 arguments.legacyDriverName != null
-                                                        ? new File(arguments.legacyDriverName)
+                                                        ? Files.createFile(Path.of(arguments.legacyDriverName))
                                                         : null;
 
-                                        worker.initializeDriver(new File(driverConfig), legacyDriverFile);
+                                        worker.initializeDriver(
+                                                Files.createFile(Path.of(driverConfig)), legacyDriverFile);
                                         var generator =
                                                 new WorkloadGenerator(driverConfiguration.name, workload, worker);
                                         var result = generator.run();

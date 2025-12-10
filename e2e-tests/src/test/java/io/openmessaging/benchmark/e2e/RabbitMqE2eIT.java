@@ -27,6 +27,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -44,7 +45,7 @@ class RabbitMqE2eIT extends BaseE2eIT {
     @Container
     static RabbitMQContainer rabbitmq = new RabbitMQContainer(RABBITMQ_IMAGE);
 
-    private static File driverConfigFile;
+    private static Path driverConfigFile;
 
     @BeforeAll
     static void setupDriver() throws Exception {
@@ -83,10 +84,10 @@ class RabbitMqE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("rabbitmq-driver-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath.toFile();
-        driverConfigFile.deleteOnExit();
+        driverConfigFile = configPath;
+        driverConfigFile.toFile().deleteOnExit();
 
-        log.info("Created driver config at: {}", driverConfigFile.getAbsolutePath());
+        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
 
         // Verify RabbitMQ is responsive
         verifyRabbitMqConnection();
@@ -109,8 +110,13 @@ class RabbitMqE2eIT extends BaseE2eIT {
 
     @AfterAll
     static void tearDownDriver() {
-        if (driverConfigFile != null && driverConfigFile.exists()) {
-            driverConfigFile.delete();
+        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
+            try {
+                Files.deleteIfExists(driverConfigFile);
+            } catch (IOException e) {
+                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -202,8 +208,8 @@ class RabbitMqE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("rabbitmq-driver-persistence-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        File persistenceConfigFile = configPath.toFile();
-        persistenceConfigFile.deleteOnExit();
+        Path persistenceConfigFile = configPath;
+        persistenceConfigFile.toFile().deleteOnExit();
 
         Workload workload = createSimpleWorkload();
         workload.topics = 1;
@@ -230,7 +236,7 @@ class RabbitMqE2eIT extends BaseE2eIT {
         return runBenchmarkWithConfig(workload, driverConfigFile);
     }
 
-    private TestResult runBenchmarkWithConfig(Workload workload, File configFile) throws Exception {
+    private TestResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
         // Create a new LocalWorker for each test
         LocalWorker worker = new LocalWorker(statsLogger);
 

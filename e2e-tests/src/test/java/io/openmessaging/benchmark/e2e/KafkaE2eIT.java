@@ -27,6 +27,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
@@ -45,7 +46,7 @@ class KafkaE2eIT extends BaseE2eIT {
     @Container
     static KafkaContainer kafka = new KafkaContainer(KAFKA_IMAGE);
 
-    private static File driverConfigFile;
+    private static Path driverConfigFile;
 
     @BeforeAll
     static void setupDriver() throws Exception {
@@ -86,10 +87,10 @@ class KafkaE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("kafka-driver-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath.toFile();
-        driverConfigFile.deleteOnExit();
+        driverConfigFile = configPath;
+        driverConfigFile.toFile().deleteOnExit();
 
-        log.info("Created driver config at: {}", driverConfigFile.getAbsolutePath());
+        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
 
         // Verify Kafka is responsive by creating a test AdminClient
         verifyKafkaConnection();
@@ -109,8 +110,13 @@ class KafkaE2eIT extends BaseE2eIT {
 
     @AfterAll
     static void tearDownDriver() {
-        if (driverConfigFile != null && driverConfigFile.exists()) {
-            driverConfigFile.delete();
+        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
+            try {
+                Files.deleteIfExists(driverConfigFile);
+            } catch (IOException e) {
+                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
+                throw new RuntimeException(e);
+            }
         }
     }
 

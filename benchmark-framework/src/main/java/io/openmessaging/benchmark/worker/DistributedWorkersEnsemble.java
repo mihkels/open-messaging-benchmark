@@ -28,8 +28,8 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -75,7 +75,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void initializeDriver(File configurationFile) throws Exception {
+    public void initializeDriver(Path configurationFile) throws Exception {
         workers.parallelStream()
                 .forEach(
                         w -> {
@@ -119,7 +119,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void startLoad(ProducerWorkAssignment producerWorkAssignment) throws IOException {
+    public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         // Reduce the publish rate across all the brokers
         double newRate = producerWorkAssignment.publishRate() / numberOfUsedProducerWorkers;
         log.debug("Setting worker assigned publish rate to {} msgs/sec", newRate);
@@ -136,7 +136,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         producerWorkers.parallelStream()
                 .forEach(
                         w -> {
@@ -149,7 +149,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void adjustPublishRate(double publishRate) throws IOException {
+    public void adjustPublishRate(double publishRate) {
         double newRate = publishRate / numberOfUsedProducerWorkers;
         log.debug("Adjusting producer publish rate to {} msgs/sec", newRate);
         producerWorkers.parallelStream()
@@ -174,7 +174,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         consumerWorkers.parallelStream()
                 .forEach(
                         w -> {

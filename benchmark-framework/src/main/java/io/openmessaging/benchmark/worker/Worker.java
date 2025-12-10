@@ -19,16 +19,16 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 public interface Worker extends AutoCloseable {
 
-    void initializeDriver(File driverConfigFile) throws Exception;
+    void initializeDriver(Path driverConfigFile) throws Exception;
 
     // New method to support isolated driver loading
-    default void initializeDriver(File driverConfigFile, File isolatedDriverHome) throws Exception {
+    default void initializeDriver(Path driverConfigFile, Path isolatedDriverHome) throws Exception {
         initializeDriver(driverConfigFile);
     }
 

@@ -22,10 +22,10 @@ import static org.testng.Assert.fail;
 import io.openmessaging.benchmark.driver.kop.config.ClientType;
 import io.openmessaging.benchmark.driver.kop.config.Config;
 import io.openmessaging.benchmark.driver.kop.config.PulsarConfig;
-import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.Properties;
 import org.testng.annotations.Test;
 
@@ -36,7 +36,7 @@ public class KopBenchmarkDriverTest {
         final URL url = getClass().getClassLoader().getResource("kop_required.yaml");
         assertNotNull(url);
 
-        final Config config = KopBenchmarkDriver.loadConfig(new File(url.toURI()));
+        final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
         assertEquals(config.producerType(), ClientType.PULSAR);
         assertEquals(config.consumerType(), ClientType.KAFKA);
         assertEquals(config.pollTimeoutMs(), 100);
@@ -60,7 +60,7 @@ public class KopBenchmarkDriverTest {
         final URL url = this.getClass().getClassLoader().getResource("kop_custom.yaml");
         assertNotNull(url);
 
-        final Config config = KopBenchmarkDriver.loadConfig(new File(url.toURI()));
+        final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
         assertEquals(config.producerType(), ClientType.KAFKA);
         assertEquals(config.consumerType(), ClientType.PULSAR);
         assertEquals(config.pollTimeoutMs(), 1000);
@@ -88,7 +88,7 @@ public class KopBenchmarkDriverTest {
         final URL url = this.getClass().getClassLoader().getResource("kop_wrong_kafka_config.yaml");
         assertNotNull(url);
 
-        final Config config = KopBenchmarkDriver.loadConfig(new File(url.toURI()));
+        final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
         try {
             config.getKafkaProperties();
             fail();

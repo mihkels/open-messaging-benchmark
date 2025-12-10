@@ -96,7 +96,7 @@ public final class BenchmarkWorker {
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
 
-        // Start web server (no try-with-resources)
+        // Start the web server (no try-with-resources)
         Javalin app = Javalin.create().start(arguments.getHttpPort());
 
         // Add Prometheus metrics endpoint
@@ -104,7 +104,7 @@ public final class BenchmarkWorker {
 
         new WorkerHandler(app, prometheusRegistry);
 
-        // Stop server on JVM shutdown and keep process alive
+        // Stop server on JVM shutdown and keep the process alive
         Runtime.getRuntime().addShutdownHook(new Thread(app::stop, "benchmark-worker-shutdown"));
         Thread.currentThread().join();
     }

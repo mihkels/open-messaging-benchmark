@@ -18,13 +18,19 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
+import java.io.Serial;
 import java.nio.ByteBuffer;
 import org.HdrHistogram.Histogram;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HistogramSerializer extends StdSerializer<Histogram> {
+    @Serial private static final long serialVersionUID = 1L;
 
-    private final ThreadLocal<ByteBuffer> threadBuffer =
-            ThreadLocal.withInitial(() -> ByteBuffer.allocate(8 * 1024 * 1024));
+    private static final Logger log = LoggerFactory.getLogger(HistogramSerializer.class);
+    private static final int INITIAL_BUFFER_SIZE = 8 * 1024 * 1024;
+    private final transient ThreadLocal<ByteBuffer> threadBuffer =
+            ThreadLocal.withInitial(() -> ByteBuffer.allocate(INITIAL_BUFFER_SIZE));
 
     public HistogramSerializer() {
         super(Histogram.class);
@@ -40,7 +46,18 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
         buffer.clear();
         while (true) {
             final int outBytes = histo.encodeIntoCompressedByteBuffer(buffer);
-            Preconditions.checkState(outBytes == buffer.position());
+            try {
+                Preconditions.checkState(outBytes == buffer.position());
+            } catch (IllegalStateException e) {
+                log.error(
+                        "HdrHistogram encoding produced inconsistent results: outBytes={}, buffer.position()={}",
+                        outBytes,
+                        buffer.position(),
+                        e);
+                throw new IllegalArgumentException(
+                        "HdrHistogram encoding produced inconsistent results", e);
+            }
+
             final int capacity = buffer.capacity();
             if (outBytes < capacity) {
                 // encoding succesful
@@ -65,5 +82,6 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
             threadBuffer.set(newBuffer);
         }
         jsonGenerator.writeBinary(toByteArray(newBuffer));
+        threadBuffer.remove();
     }
 }

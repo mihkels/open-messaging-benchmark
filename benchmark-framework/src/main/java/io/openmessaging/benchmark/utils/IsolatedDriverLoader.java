@@ -13,10 +13,12 @@
  */
 package io.openmessaging.benchmark.utils;
 
-import java.io.File;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -66,34 +68,35 @@ public final class IsolatedDriverLoader extends URLClassLoader {
      * @return The classloader for the driver.
      * @throws Exception If the driver name is invalid.
      */
-    public static ClassLoader forDriverFolder(File driverName) throws Exception {
+    public static ClassLoader forDriverFolder(Path driverName) throws Exception {
         List<URL> urls = new ArrayList<>();
 
-        if (driverName.isFile() && driverName.getName().endsWith(".jar")) {
+        Path fileName = driverName.getFileName();
+        if (Files.isRegularFile(driverName)
+                && fileName != null
+                && fileName.toString().endsWith(".jar")) {
             // Single jar
-            urls.add(driverName.toURI().toURL());
-        } else if (driverName.isDirectory()) {
+            urls.add(driverName.toUri().toURL());
+        } else if (Files.isDirectory(driverName)) {
             // Maven module layout: target/classes or a distribution folder
-            File classesDir = new File(driverName, "target/classes");
-            if (classesDir.exists()) {
-                urls.add(classesDir.toURI().toURL());
+            Path classesDir = driverName.resolve("target/classes");
+            if (Files.exists(classesDir)) {
+                urls.add(classesDir.toUri().toURL());
             }
 
             // Add all jars in root
-            File[] rootJars = driverName.listFiles((d, n) -> n.endsWith(".jar"));
-            if (rootJars != null) {
-                for (File f : rootJars) {
-                    urls.add(f.toURI().toURL());
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(driverName, "*.jar")) {
+                for (Path p : stream) {
+                    urls.add(p.toUri().toURL());
                 }
             }
 
             // Add all jars in lib/
-            File libDir = new File(driverName, "lib");
-            if (libDir.exists()) {
-                File[] libJars = libDir.listFiles((d, n) -> n.endsWith(".jar"));
-                if (libJars != null) {
-                    for (File f : libJars) {
-                        urls.add(f.toURI().toURL());
+            Path libDir = driverName.resolve("lib");
+            if (Files.exists(libDir) && Files.isDirectory(libDir)) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDir, "*.jar")) {
+                    for (Path p : stream) {
+                        urls.add(p.toUri().toURL());
                     }
                 }
             }
@@ -101,7 +104,7 @@ public final class IsolatedDriverLoader extends URLClassLoader {
 
         if (urls.isEmpty()) {
             throw new IllegalArgumentException(
-                    "No jars found in driver home: " + driverName.getAbsolutePath());
+                    "No jars found in driver home: " + driverName.toAbsolutePath());
         }
 
         log.info("Creating isolated classloader with {} URLs for {}", urls.size(), driverName);

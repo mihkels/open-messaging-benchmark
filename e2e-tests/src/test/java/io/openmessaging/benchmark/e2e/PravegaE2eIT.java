@@ -29,6 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +54,7 @@ class PravegaE2eIT extends BaseE2eIT {
                             .withStartupTimeout(Duration.ofMinutes(5))
             );
 
-    private static File driverConfigFile;
+    private static Path driverConfigFile;
 
     @BeforeAll
     static void setupDriver() throws Exception {
@@ -82,10 +83,10 @@ class PravegaE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("pravega-driver-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath.toFile();
-        driverConfigFile.deleteOnExit();
+        driverConfigFile = configPath;
+        driverConfigFile.toFile().deleteOnExit();
 
-        log.info("Created Pravega driver config at: {}", driverConfigFile.getAbsolutePath());
+        log.info("Created Pravega driver config at: {}", driverConfigFile.toAbsolutePath());
         log.info("Config content:\n{}", driverConfig);
     }
 
@@ -102,8 +103,13 @@ class PravegaE2eIT extends BaseE2eIT {
 
     @AfterAll
     static void tearDownDriver() {
-        if (driverConfigFile != null && driverConfigFile.exists()) {
-            driverConfigFile.delete();
+        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
+            try {
+                Files.deleteIfExists(driverConfigFile);
+            } catch (IOException e) {
+                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
+                throw new RuntimeException(e);
+            }
         }
     }
 

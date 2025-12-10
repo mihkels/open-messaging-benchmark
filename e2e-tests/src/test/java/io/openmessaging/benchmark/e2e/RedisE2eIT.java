@@ -30,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -49,7 +50,7 @@ class RedisE2eIT extends BaseE2eIT {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
             .withExposedPorts(REDIS_PORT);
 
-    private static File driverConfigFile;
+    private static Path driverConfigFile;
 
     @BeforeAll
     static void setupDriver() throws Exception {
@@ -77,10 +78,10 @@ class RedisE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("redis-driver-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath.toFile();
-        driverConfigFile.deleteOnExit();
+        driverConfigFile = configPath;
+        driverConfigFile.toFile().deleteOnExit();
 
-        log.info("Created driver config at: {}", driverConfigFile.getAbsolutePath());
+        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
 
         // Verify Redis is responsive
         verifyRedisConnection();
@@ -97,8 +98,13 @@ class RedisE2eIT extends BaseE2eIT {
 
     @AfterAll
     static void tearDownDriver() {
-        if (driverConfigFile != null && driverConfigFile.exists()) {
-            driverConfigFile.delete();
+        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
+            try {
+                Files.deleteIfExists(driverConfigFile);
+            } catch (IOException e) {
+                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -227,8 +233,8 @@ class RedisE2eIT extends BaseE2eIT {
 
         Path configPath = Files.createTempFile("redis-driver-large-pool-", ".yaml");
         Files.writeString(configPath, driverConfig);
-        File largePoolConfigFile = configPath.toFile();
-        largePoolConfigFile.deleteOnExit();
+        Path largePoolConfigFile = configPath;
+        largePoolConfigFile.toFile().deleteOnExit();
 
         Workload workload = createSimpleWorkload();
         workload.topics = 1;
@@ -255,7 +261,7 @@ class RedisE2eIT extends BaseE2eIT {
         return runBenchmarkWithConfig(workload, driverConfigFile);
     }
 
-    private TestResult runBenchmarkWithConfig(Workload workload, File configFile) throws Exception {
+    private TestResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
         // Create a new LocalWorker for each test
         LocalWorker worker = new LocalWorker(statsLogger);
 

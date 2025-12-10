@@ -26,9 +26,10 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig.PersistenceConfiguration;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarConfig;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -65,7 +66,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     private ProducerBuilder<byte[]> producerBuilder;
 
     @Override
-    public void initialize(File configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
         this.config = readConfig(configurationFile);
         log.info("Pulsar driver configuration: {}", writer.writeValueAsString(config));
@@ -258,8 +259,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    private static PulsarConfig readConfig(File configurationFile) throws IOException {
-        return mapper.readValue(configurationFile, PulsarConfig.class);
+    private static PulsarConfig readConfig(Path configurationFile) throws IOException {
+        return mapper.readValue(Files.newInputStream(configurationFile), PulsarConfig.class);
     }
 
     private static final Random random = new Random();

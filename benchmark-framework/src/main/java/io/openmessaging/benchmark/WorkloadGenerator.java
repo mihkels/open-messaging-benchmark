@@ -131,7 +131,7 @@ public class WorkloadGenerator implements AutoCloseable {
                         try {
                             buildAndDrainBacklog(workload.testDurationMinutes);
                         } catch (IOException e) {
-                            e.printStackTrace();
+                            log.error("Error building and draining backlog: {}", e.getMessage(), e);
                         }
                     });
         }

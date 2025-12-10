@@ -14,9 +14,9 @@
 package io.openmessaging.benchmark.worker;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import com.google.common.io.Files;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -24,14 +24,17 @@ import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("unchecked")
 public class WorkerHandler {
+    private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
+
+    private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+    private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
 
     public static final String INITIALIZE_DRIVER = "/initialize-driver";
     public static final String CREATE_TOPICS = "/create-topics";
@@ -69,44 +72,44 @@ public class WorkerHandler {
     }
 
     private void handleInitializeDriver(Context ctx) throws Exception {
-        // Save config to temp file
-        File tempFile = File.createTempFile("driver-configuration", "conf");
-        Files.write(ctx.bodyAsBytes(), tempFile);
+        // Save config to the temp file
+        var tempFile = Files.createTempFile("driver-configuration", "conf");
+        Files.write(tempFile, ctx.bodyAsBytes());
 
         localWorker.initializeDriver(tempFile);
-        tempFile.delete();
+        Files.delete(tempFile);
     }
 
-    private void handleCreateTopics(Context ctx) throws Exception {
+    private void handleCreateTopics(Context ctx) throws IOException {
         TopicsInfo topicsInfo = mapper.readValue(ctx.body(), TopicsInfo.class);
         log.info("Received create topics request for topics: {}", ctx.body());
         List<String> topics = localWorker.createTopics(topicsInfo);
         ctx.result(writer.writeValueAsString(topics));
     }
 
-    private void handleCreateProducers(Context ctx) throws Exception {
-        List<String> topics = (List<String>) mapper.readValue(ctx.body(), List.class);
+    private void handleCreateProducers(Context ctx) throws IOException {
+        var topics = mapper.readValue(ctx.body(), new TypeReference<List<String>>() {});
         log.info("Received create producers request for topics: {}", topics);
         localWorker.createProducers(topics);
     }
 
-    private void handleProbeProducers(Context ctx) throws Exception {
+    private void handleProbeProducers(Context ctx) throws IOException {
         localWorker.probeProducers();
     }
 
-    private void handleCreateConsumers(Context ctx) throws Exception {
-        ConsumerAssignment consumerAssignment = mapper.readValue(ctx.body(), ConsumerAssignment.class);
+    private void handleCreateConsumers(Context ctx) throws IOException {
+        var consumerAssignment = mapper.readValue(ctx.body(), ConsumerAssignment.class);
 
         log.info(
                 "Received create consumers request for topics: {}", consumerAssignment.topicsSubscriptions);
         localWorker.createConsumers(consumerAssignment);
     }
 
-    private void handlePauseConsumers(Context ctx) throws Exception {
+    private void handlePauseConsumers(Context ctx) throws IOException {
         localWorker.pauseConsumers();
     }
 
-    private void handleResumeConsumers(Context ctx) throws Exception {
+    private void handleResumeConsumers(Context ctx) throws IOException {
         localWorker.resumeConsumers();
     }
 
@@ -128,26 +131,26 @@ public class WorkerHandler {
         localWorker.startLoad(producerWorkAssignment);
     }
 
-    private void handleAdjustPublishRate(Context ctx) throws Exception {
+    private void handleAdjustPublishRate(Context ctx) throws IOException {
         Double publishRate = mapper.readValue(ctx.body(), Double.class);
         log.info("Adjust publish-rate: {} msg/s", publishRate);
         localWorker.adjustPublishRate(publishRate);
     }
 
-    private void handleStopAll(Context ctx) throws Exception {
+    private void handleStopAll(Context ctx) {
         log.info("Stop All");
         localWorker.stopAll();
     }
 
-    private void handlePeriodStats(Context ctx) throws Exception {
+    private void handlePeriodStats(Context ctx) throws IOException {
         ctx.result(writer.writeValueAsString(localWorker.getPeriodStats()));
     }
 
-    private void handleCumulativeLatencies(Context ctx) throws Exception {
+    private void handleCumulativeLatencies(Context ctx) throws IOException {
         ctx.result(writer.writeValueAsString(localWorker.getCumulativeLatencies()));
     }
 
-    private void handleCountersStats(Context ctx) throws Exception {
+    private void handleCountersStats(Context ctx) throws IOException {
         var stats = localWorker.getCountersStats();
         log.info(
                 "Worker returning stats - sent: {}, errors: {}, received: {}",
@@ -157,13 +160,8 @@ public class WorkerHandler {
         ctx.result(writer.writeValueAsString(stats));
     }
 
-    private void handleResetStats(Context ctx) throws Exception {
+    private void handleResetStats(Context ctx) throws IOException {
         log.info("Reset stats");
         localWorker.resetStats();
     }
-
-    private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
-
-    private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
-    private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
 }

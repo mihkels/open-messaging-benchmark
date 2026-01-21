@@ -13,56 +13,105 @@
  */
 package io.openmessaging.benchmark;
 
-import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.commons.text.StringSubstitutor;
 
-public class Workload {
-    public String name;
+public record Workload(
+        WorkloadSetTemplate template,
+        String name,
+        int topics,
+        int partitionsPerTopic,
+        int messageSize,
+        int subscriptionsPerTopic,
+        int producersPerTopic,
+        int consumerPerSubscription,
+        int producerRate,
+        double backlogDrainRatio) {
 
-    /** Number of topics to create in the test. */
-    public int topics;
+    private static final long MAX_PRODUCER_RATE = 10_000_000;
 
-    /** Number of partitions each topic will contain. */
-    public int partitionsPerTopic;
+    public Workload {
+        if (template == null) {
+            throw new IllegalArgumentException("template cannot be null");
+        }
 
-    public KeyDistributorType keyDistributor = KeyDistributorType.NO_KEY;
+        if (name == null || name.isBlank()) {
+            name =
+                    loadWorkloadName(
+                            name,
+                            template,
+                            topics,
+                            partitionsPerTopic,
+                            messageSize,
+                            subscriptionsPerTopic,
+                            producersPerTopic,
+                            consumerPerSubscription,
+                            producerRate);
+        }
 
-    public int messageSize;
+        if (backlogDrainRatio < 0.0 || backlogDrainRatio > 1.0) {
+            throw new IllegalArgumentException("backlogDrainRatio must be between 0.0 and 1.0");
+        }
+    }
 
-    public boolean useRandomizedPayloads;
-    public double randomBytesRatio;
-    public int randomizedPayloadPoolSize;
-
-    public String payloadFile;
-
-    public int subscriptionsPerTopic;
-
-    public int producersPerTopic;
-
-    public int consumerPerSubscription;
-
-    public int producerRate;
+    public Workload() {
+        this(new WorkloadSetTemplate(), null, 0, 0, 0, 0, 0, 0, 0, 1.0);
+    }
 
     /**
-     * If the consumer backlog is > 0, the generator will accumulate messages until the requested
-     * amount of storage is retained and then it will start the consumers to drain it.
+     * Generates a name for the given workload. If the workload has a non-null name, that is simply
+     * returned. Otherwise, the format string is used to generate a name.
      *
-     * <p>The testDurationMinutes will be overruled to allow the test to complete when the consumer
-     * has drained all the backlog and it's on par with the producer
+     * @return the name of the workload
      */
-    public long consumerBacklogSizeGB = 0;
+    private static String loadWorkloadName(
+            String name,
+            WorkloadSetTemplate template,
+            int topics,
+            int partitionsPerTopic,
+            int messageSize,
+            int subscriptionsPerTopic,
+            int producersPerTopic,
+            int consumerPerSubscription,
+            int producerRate) {
+        if (name != null) {
+            return name;
+        }
 
-    /**
-     * The ratio of the backlog that can remain and yet the backlog still be considered empty, and
-     * thus the workload can complete at the end of the configured duration. In some systems it is not
-     * feasible for the backlog to be drained fully and thus the workload will run indefinitely. In
-     * such circumstances, one may be content to achieve a partial drain such as 99% of the backlog.
-     * The value should be on somewhere between 0.0 and 1.0, where 1.0 indicates that the backlog
-     * should be fully drained, and 0.0 indicates a best effort, where the workload will complete
-     * after the specified time irrespective of how much of the backlog has been drained.
-     */
-    public double backlogDrainRatio = 1.0;
+        Map<String, Object> params = new HashMap<>();
+        params.put("topics", countToDisplaySize(topics));
+        params.put("partitionsPerTopic", countToDisplaySize(partitionsPerTopic));
+        params.put("messageSize", countToDisplaySize(messageSize));
+        params.put("subscriptionsPerTopic", countToDisplaySize(subscriptionsPerTopic));
+        params.put("producersPerTopic", countToDisplaySize(producersPerTopic));
+        params.put("consumerPerSubscription", countToDisplaySize(consumerPerSubscription));
+        params.put(
+                "producerRate",
+                (producerRate >= MAX_PRODUCER_RATE) ? "max-rate" : countToDisplaySize(producerRate));
+        params.put("keyDistributor", template.keyDistributor());
+        params.put("payloadFile", template.payloadFile());
+        params.put("useRandomizedPayloads", template.useRandomizedPayloads());
+        params.put("randomBytesRatio", template.randomBytesRatio());
+        params.put(
+                "randomizedPayloadPoolSize", countToDisplaySize(template.randomizedPayloadPoolSize()));
+        params.put("consumerBacklogSizeGB", countToDisplaySize(template.consumerBacklogSizeGB()));
+        params.put("testDurationMinutes", template.testDurationMinutes());
+        params.put("warmupDurationMinutes", template.warmupDurationMinutes());
+        return StringSubstitutor.replace(template.nameFormat(), params, "${", "}");
+    }
 
-    public int testDurationMinutes;
-
-    public int warmupDurationMinutes = 1;
+    private static String countToDisplaySize(long size) {
+        String displaySize;
+        if (size / 1_000_000_000L > 0L) {
+            displaySize = size / 1_000_000_000L + "g";
+        } else if (size / 1_000_000L > 0L) {
+            displaySize = size / 1_000_000L + "m";
+        } else if (size / 1_000L > 0L) {
+            displaySize = size / 1_000 + "k";
+        } else {
+            displaySize = size + "";
+        }
+        return displaySize;
+    }
 }

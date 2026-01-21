@@ -133,9 +133,10 @@ public class WorkerStats {
 
     public CumulativeLatencies toCumulativeLatencies() {
         CumulativeLatencies latencies = new CumulativeLatencies();
-        latencies.publishLatency = cumulativePublishLatencyRecorder.getIntervalHistogram();
-        latencies.publishDelayLatency = cumulativePublishDelayLatencyRecorder.getIntervalHistogram();
-        latencies.endToEndLatency = endToEndCumulativeLatencyRecorder.getIntervalHistogram();
+        latencies.init(
+                cumulativePublishLatencyRecorder.getIntervalHistogram(),
+                cumulativePublishDelayLatencyRecorder.getIntervalHistogram(),
+                endToEndCumulativeLatencyRecorder.getIntervalHistogram());
         return latencies;
     }
 

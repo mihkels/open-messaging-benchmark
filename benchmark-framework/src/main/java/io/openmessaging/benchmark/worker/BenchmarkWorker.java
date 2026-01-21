@@ -26,6 +26,8 @@ import org.slf4j.LoggerFactory;
 
 /** A benchmark worker that listen for tasks to perform. */
 public final class BenchmarkWorker {
+    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
+    private static final Logger log = LoggerFactory.getLogger(BenchmarkWorker.class);
 
     private BenchmarkWorker() {
         throw new UnsupportedOperationException(
@@ -97,7 +99,7 @@ public final class BenchmarkWorker {
         log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
 
         // Start the web server (no try-with-resources)
-        Javalin app = Javalin.create().start(arguments.getHttpPort());
+        var app = Javalin.create().start(arguments.getHttpPort());
 
         // Add Prometheus metrics endpoint
         app.get("/metrics", ctx -> ctx.result(prometheusRegistry.scrape()));
@@ -108,8 +110,4 @@ public final class BenchmarkWorker {
         Runtime.getRuntime().addShutdownHook(new Thread(app::stop, "benchmark-worker-shutdown"));
         Thread.currentThread().join();
     }
-
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
-
-    private static final Logger log = LoggerFactory.getLogger(BenchmarkWorker.class);
 }

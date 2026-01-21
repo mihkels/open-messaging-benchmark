@@ -16,7 +16,6 @@ package io.openmessaging.benchmark.driver.redis;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.google.common.io.BaseEncoding;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -26,6 +25,7 @@ import io.openmessaging.benchmark.driver.redis.client.RedisClientConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
@@ -152,7 +152,7 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     private static String getRandomString() {
         byte[] buffer = new byte[5];
         random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkDriver.class);

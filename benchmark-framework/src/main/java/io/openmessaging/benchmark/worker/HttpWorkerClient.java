@@ -98,7 +98,7 @@ public class HttpWorkerClient implements Worker {
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         sendPost(PROBE_PRODUCERS);
     }
 
@@ -117,34 +117,34 @@ public class HttpWorkerClient implements Worker {
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         log.info("Pausing consumers");
         sendPost(PAUSE_CONSUMERS);
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         log.info("Resuming consumers");
         sendPost(RESUME_CONSUMERS);
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
+    public CountersStats getCountersStats() {
         return get(COUNTERS_STATS, CountersStats.class);
     }
 
     @Override
-    public PeriodStats getPeriodStats() throws IOException {
+    public PeriodStats getPeriodStats() {
         return get(PERIOD_STATS, PeriodStats.class);
     }
 
     @Override
-    public CumulativeLatencies getCumulativeLatencies() throws IOException {
+    public CumulativeLatencies getCumulativeLatencies() {
         return get(CUMULATIVE_LATENCIES, CumulativeLatencies.class);
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         sendPost(RESET_STATS);
     }
 

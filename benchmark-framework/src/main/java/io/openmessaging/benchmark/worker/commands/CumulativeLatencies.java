@@ -20,9 +20,20 @@ import org.HdrHistogram.Histogram;
 
 public class CumulativeLatencies {
 
-    public Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 5);
+    private Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 5);
+    private Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 5);
+    private Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 5);
+
+    private static Histogram defensiveCopy(Histogram histogram) {
+        return histogram == null ? null : histogram.copy();
+    }
+
+    public void init(
+            Histogram publishLatency, Histogram publishDelayLatency, Histogram endToEndLatency) {
+        this.publishLatency = defensiveCopy(publishLatency);
+        this.publishDelayLatency = defensiveCopy(publishDelayLatency);
+        this.endToEndLatency = defensiveCopy(endToEndLatency);
+    }
 
     public CumulativeLatencies plus(CumulativeLatencies toAdd) {
         CumulativeLatencies result = new CumulativeLatencies();
@@ -36,5 +47,17 @@ public class CumulativeLatencies {
         result.endToEndLatency.add(toAdd.endToEndLatency);
 
         return result;
+    }
+
+    public Histogram getPublishLatency() {
+        return defensiveCopy(publishLatency);
+    }
+
+    public Histogram getPublishDelayLatency() {
+        return defensiveCopy(publishDelayLatency);
+    }
+
+    public Histogram getEndToEndLatency() {
+        return defensiveCopy(endToEndLatency);
     }
 }

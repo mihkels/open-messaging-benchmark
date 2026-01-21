@@ -27,7 +27,10 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Generates a set of {@link Workload} definition files from a {@link WorkloadSetTemplate} file. */
+/**
+ * Generates a set of {@link Workload} definition files from a {@link
+ * io.openmessaging.benchmark.WorkloadSetTemplate} file.
+ */
 public class WorkloadGenerationTool {
     public static final Logger log = LoggerFactory.getLogger(WorkloadGenerationTool.class);
     private static final ObjectMapper mapper =
@@ -39,7 +42,11 @@ public class WorkloadGenerationTool {
         mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
     }
 
-    public static void main(String[] args) throws IOException {
+    private WorkloadGenerationTool() {
+        throw new IllegalStateException("CLI application and cannot be instantiated");
+    }
+
+    static void main(String[] args) throws IOException {
         final WorkloadGenerationTool.Arguments arguments = new WorkloadGenerationTool.Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("workload-generator");
@@ -60,13 +67,14 @@ public class WorkloadGenerationTool {
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", mapper.writeValueAsString(arguments));
 
-        WorkloadSetTemplate template =
-                mapper.readValue(arguments.templateFile, WorkloadSetTemplate.class);
+        io.openmessaging.benchmark.WorkloadSetTemplate template =
+                mapper.readValue(
+                        arguments.templateFile, io.openmessaging.benchmark.WorkloadSetTemplate.class);
         List<Workload> workloads = new WorkloadGenerator(template).generate();
         for (Workload w : workloads) {
             File outputFile = null;
             try {
-                outputFile = new File(arguments.outputFolder, w.name + ".yaml");
+                outputFile = new File(arguments.outputFolder, w.name() + ".yaml");
                 mapper.writeValue(outputFile, w);
             } catch (IOException e) {
                 log.error("Could not write file: {}", outputFile, e);

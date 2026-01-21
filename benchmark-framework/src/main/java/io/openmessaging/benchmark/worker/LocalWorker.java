@@ -13,8 +13,6 @@
  */
 package io.openmessaging.benchmark.worker;
 
-import static java.util.stream.Collectors.toList;
-
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -40,7 +38,6 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -111,7 +108,10 @@ public class LocalWorker implements Worker, ConsumerCallback {
                 log.info("Loading driver {} from classpath", driverConfiguration.driverClass);
                 // Standard loading for non-isolated drivers
                 benchmarkDriver =
-                        (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
+                        (BenchmarkDriver)
+                                Class.forName(driverConfiguration.driverClass)
+                                        .getDeclaredConstructor()
+                                        .newInstance();
             }
 
             benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());
@@ -126,7 +126,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     @Override
     public List<String> createTopics(TopicsInfo topicsInfo) {
-        Timer timer = new Timer();
+        var timer = new Timer();
 
         List<TopicInfo> topicInfos =
                 IntStream.range(0, topicsInfo.numberOfTopics)
@@ -136,7 +136,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
         benchmarkDriver.createTopics(topicInfos).join();
 
-        List<String> topics = topicInfos.stream().map(TopicInfo::topic).collect(toList());
+        List<String> topics = topicInfos.stream().map(TopicInfo::topic).toList();
 
         log.info("Created {} topics in {} ms", topics.size(), timer.elapsedMillis());
         return topics;
@@ -163,8 +163,8 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     @Override
     public void createConsumers(ConsumerAssignment consumerAssignment) {
-        Timer timer = new Timer();
-        AtomicInteger index = new AtomicInteger();
+        var timer = new Timer();
+        var index = new AtomicInteger();
 
         consumers.addAll(
                 benchmarkDriver
@@ -196,9 +196,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
         int processorIdx = 0;
         for (BenchmarkProducer p : producers) {
-            processorAssignment
-                    .computeIfAbsent(processorIdx, x -> new ArrayList<BenchmarkProducer>())
-                    .add(p);
+            processorAssignment.computeIfAbsent(processorIdx, x -> new ArrayList<>()).add(p);
 
             processorIdx = (processorIdx + 1) % processors;
         }
@@ -206,15 +204,15 @@ public class LocalWorker implements Worker, ConsumerCallback {
         processorAssignment
                 .values()
                 .forEach(
-                        producers ->
+                        benchmarkProducers ->
                                 submitProducersToExecutor(
-                                        producers,
+                                        benchmarkProducers,
                                         KeyDistributor.build(producerWorkAssignment.keyDistributorType()),
                                         producerWorkAssignment.payloadData()));
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         producers.forEach(
                 producer ->
                         producer.sendAsync(Optional.of("key"), new byte[10]).thenRun(stats::recordMessageSent));
@@ -302,19 +300,19 @@ public class LocalWorker implements Worker, ConsumerCallback {
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         consumersArePaused = true;
         log.info("Pausing consumers");
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         consumersArePaused = false;
         log.info("Resuming consumers");
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         stats.resetLatencies();
     }
 

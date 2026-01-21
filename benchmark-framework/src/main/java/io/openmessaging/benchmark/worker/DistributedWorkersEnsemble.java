@@ -187,7 +187,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         consumerWorkers.parallelStream()
                 .forEach(
                         w -> {
@@ -251,7 +251,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
+    public CountersStats getCountersStats() {
         return workers.parallelStream()
                 .map(
                         w -> {
@@ -265,7 +265,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         workers.parallelStream()
                 .forEach(
                         w -> {

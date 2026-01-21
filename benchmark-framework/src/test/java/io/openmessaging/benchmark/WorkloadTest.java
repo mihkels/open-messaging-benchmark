@@ -11,37 +11,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.openmessaging.benchmark.tool.workload;
+package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.openmessaging.benchmark.Workload;
 import org.junit.jupiter.api.Test;
 
-class WorkloadNameFormatTest {
-
+class WorkloadTest {
     public String nameFormat =
             "${topics}-topics-${partitionsPerTopic}-partitions-${messageSize}b"
                     + "-${producersPerTopic}p-${consumerPerSubscription}c-${producerRate}";
 
     @Test
     void nameOverride() {
-        Workload workload = new Workload();
-        workload.name = "x";
-        String name = new WorkloadNameFormat(nameFormat).from(workload);
-        assertThat(name).isEqualTo("x");
+        var template = new WorkloadSetTemplate(nameFormat);
+        Workload workload = new Workload(template, "x", 0, 0, 0, 0, 0, 0, 0, 1.0);
+        assertThat(workload.name()).isEqualTo("x");
     }
 
     @Test
     void from() {
-        Workload workload = new Workload();
-        workload.topics = 1456;
-        workload.partitionsPerTopic = 2123;
-        workload.messageSize = 617890;
-        workload.producersPerTopic = 45;
-        workload.consumerPerSubscription = 541;
-        workload.producerRate = 1000000;
-        String name = new WorkloadNameFormat(nameFormat).from(workload);
-        assertThat(name).isEqualTo("1k-topics-2k-partitions-617kb-45p-541c-1m");
+        var template = new WorkloadSetTemplate(nameFormat);
+        Workload workload = new Workload(template, null, 1456, 2123, 617890, 0, 45, 541, 1000000, 1.0);
+        assertThat(workload.name()).isEqualTo("1k-topics-2k-partitions-617kb-45p-541c-1m");
     }
 }

@@ -101,16 +101,16 @@ public abstract class BaseE2eIT {
                 consumerBacklogSizeGB: %d
                 testDurationMinutes: %d
                 """,
-                workload.name,
-                workload.topics,
-                workload.partitionsPerTopic,
-                workload.messageSize,
-                workload.subscriptionsPerTopic,
-                workload.consumerPerSubscription,
-                workload.producersPerTopic,
-                workload.producerRate,
-                workload.consumerBacklogSizeGB,
-                workload.testDurationMinutes
+                workload.name(),
+                workload.topics(),
+                workload.partitionsPerTopic(),
+                workload.messageSize(),
+                workload.subscriptionsPerTopic(),
+                workload.consumerPerSubscription(),
+                workload.producersPerTopic(),
+                workload.producerRate(),
+                workload.template().consumerBacklogSizeGB(),
+                workload.template().testDurationMinutes()
         );
         Files.writeString(workloadPath, yaml);
         return workloadPath.toFile();
@@ -123,7 +123,7 @@ public abstract class BaseE2eIT {
      * @param workload the workload configuration
      */
     protected void validateResults(TestResult result, Workload workload) {
-        var wholeTestDuration = workload.testDurationMinutes + workload.warmupDurationMinutes;
+        var wholeTestDuration = workload.template().testDurationMinutes() + workload.template().warmupDurationMinutes();
 
         // Calculate actual aggregate rates
         double aggregatePublishRate = result.publishRate.stream()
@@ -137,7 +137,7 @@ public abstract class BaseE2eIT {
         log.info("Test completed - Aggregate publish rate: {} msg/s, consume rate: {} msg/s, throughput: {} Mbit/s",
                 aggregatePublishRate,
                 aggregateConsumeRate,
-                aggregatePublishRate * workload.messageSize * 8.0 / 1024 / 1024);
+                aggregatePublishRate * workload.messageSize() * 8.0 / 1024 / 1024);
 
         // Validate that messages were published
         assertThat(aggregatePublishRate)

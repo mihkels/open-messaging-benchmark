@@ -29,7 +29,6 @@ import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -39,6 +38,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class Benchmark {
+
+    private static final ObjectMapper mapper =
+            new ObjectMapper(new YAMLFactory())
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
+    private static final Logger log = LoggerFactory.getLogger(Benchmark.class);
+
+    static {
+        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
+    }
 
     static class Arguments {
 
@@ -150,7 +159,6 @@ public final class Benchmark {
         log.info("Workloads: {}", writer.writeValueAsString(workloads));
 
         Worker worker;
-
         if (arguments.workers != null && !arguments.workers.isEmpty()) {
             List<Worker> workers =
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
@@ -167,13 +175,13 @@ public final class Benchmark {
                         arguments.drivers.forEach(
                                 driverConfig -> {
                                     try {
-                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-                                        File driverConfigFile = new File(driverConfig);
-                                        DriverConfiguration driverConfiguration =
+                                        var dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+                                        var driverConfigFile = new File(driverConfig);
+                                        var driverConfiguration =
                                                 mapper.readValue(driverConfigFile, DriverConfiguration.class);
                                         log.info(
                                                 "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
-                                                workload.name,
+                                                workload.name(),
                                                 driverConfiguration.name);
 
                                         // Stop any leftover workload
@@ -206,7 +214,7 @@ public final class Benchmark {
                                     } catch (Exception e) {
                                         log.error(
                                                 "Failed to run the workload '{}' for driver '{}'",
-                                                workload.name,
+                                                workload.name(),
                                                 driverConfig,
                                                 e);
                                     } finally {
@@ -216,16 +224,4 @@ public final class Benchmark {
 
         worker.close();
     }
-
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-    static {
-        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
-    }
-
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
-
-    private static final Logger log = LoggerFactory.getLogger(Benchmark.class);
 }

@@ -18,10 +18,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.google.common.io.BaseEncoding;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.nats.streaming.AckHandler;
-import io.nats.streaming.Message;
 import io.nats.streaming.MessageHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
@@ -35,6 +33,7 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.LoggerFactory;
@@ -100,7 +99,6 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        Subscription sub;
         StreamingConnection streamingConnection;
         String clientId = "ConsumerInstance" + getRandomString();
         try {
@@ -108,12 +106,9 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
             streamingConnection.subscribe(
                     topic,
                     subscriptionName,
-                    new MessageHandler() {
-                        @Override
-                        public void onMessage(Message message) {
-                            consumerCallback.messageReceived(message.getData(), message.getTimestamp());
-                        }
-                    },
+                    (MessageHandler)
+                            message ->
+                                    consumerCallback.messageReceived(message.getData(), message.getTimestamp()),
                     subBuilder.build());
         } catch (Exception e) {
             log.warn("nats streaming create consumer exception", e);
@@ -143,10 +138,10 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private static String getRandomString() {
         byte[] buffer = new byte[5];
         random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
-    public static void main(String[] args) throws Exception {
+    static void main(String[] args) {
         try {
             Options opts = new Options.Builder().natsUrl("nats://0.0.0.0:4222").build();
             SubscriptionOptions.Builder builder = new SubscriptionOptions.Builder();
@@ -156,26 +151,18 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
                     streamingConnection.subscribe(
                             "topicTest",
                             "subscription",
-                            new MessageHandler() {
-                                @Override
-                                public void onMessage(Message message) {
-                                    System.out.println(message.toString());
-                                }
-                            },
+                            message -> System.out.println(message.toString()),
                             builder.build());
             StreamingConnection natsStreamingPublisher =
                     NatsStreaming.connect("mycluster", "benchmark-pub", opts);
 
             final String[] guid = new String[1];
             AckHandler acb =
-                    new AckHandler() {
-                        @Override
-                        public void onAck(String s, Exception e) {
-                            if ((e != null) || !guid[0].equals(s)) {
-                                System.out.println("pub error");
-                            } else {
-                                System.out.println("pub success");
-                            }
+                    (s, e) -> {
+                        if ((e != null) || !guid[0].equals(s)) {
+                            System.out.println("pub error");
+                        } else {
+                            System.out.println("pub success");
                         }
                     };
 

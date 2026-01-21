@@ -42,10 +42,10 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
         return encodedBuffer;
     }
 
-    static ByteBuffer serializeHistogram(Histogram histo, ByteBuffer buffer) {
+    static ByteBuffer serializeHistogram(Histogram histogram, ByteBuffer buffer) {
         buffer.clear();
         while (true) {
-            final int outBytes = histo.encodeIntoCompressedByteBuffer(buffer);
+            final int outBytes = histogram.encodeIntoCompressedByteBuffer(buffer);
             try {
                 Preconditions.checkState(outBytes == buffer.position());
             } catch (IllegalStateException e) {

@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.openmessaging.benchmark.tool.workload;
+package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.Collections;
@@ -91,14 +91,35 @@ public record WorkloadSetTemplate(
         this.consumerPerSubscription =
                 consumerPerSubscription != null ? List.copyOf(consumerPerSubscription) : List.of();
         this.producerRate = producerRate != null ? List.copyOf(producerRate) : List.of();
-        this.keyDistributor = keyDistributor;
-        this.payloadFile = payloadFile;
+        this.payloadFile = payloadFile != null ? payloadFile : "";
         this.useRandomizedPayloads = useRandomizedPayloads;
         this.randomBytesRatio = randomBytesRatio;
         this.randomizedPayloadPoolSize = randomizedPayloadPoolSize;
         this.consumerBacklogSizeGB = consumerBacklogSizeGB;
         this.testDurationMinutes = testDurationMinutes;
-        this.warmupDurationMinutes = warmupDurationMinutes;
+
+        this.keyDistributor = keyDistributor != null ? keyDistributor : KeyDistributorType.NO_KEY;
+        this.warmupDurationMinutes = warmupDurationMinutes > 0 ? warmupDurationMinutes : 1;
+    }
+
+    public WorkloadSetTemplate(String nameFormat) {
+        this(
+                nameFormat,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                KeyDistributorType.NO_KEY,
+                null,
+                false,
+                0.0,
+                0,
+                0,
+                5,
+                1);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")

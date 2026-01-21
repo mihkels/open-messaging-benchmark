@@ -27,9 +27,12 @@ class CumulativeLatenciesTest {
         assertThat(result)
                 .satisfies(
                         r -> {
-                            assertThat(r.publishLatency).isEqualTo(two.publishLatency);
-                            assertThat(r.publishDelayLatency).isEqualTo(two.publishDelayLatency);
-                            assertThat(r.endToEndLatency).isEqualTo(two.endToEndLatency);
+                            assertThat(r.getPublishLatency().getTotalCount())
+                                    .isEqualTo(two.getPublishLatency().getTotalCount());
+                            assertThat(r.getPublishDelayLatency().getTotalCount())
+                                    .isEqualTo(two.getPublishDelayLatency().getTotalCount());
+                            assertThat(r.getEndToEndLatency().getTotalCount())
+                                    .isEqualTo(two.getEndToEndLatency().getTotalCount());
                         });
     }
 }

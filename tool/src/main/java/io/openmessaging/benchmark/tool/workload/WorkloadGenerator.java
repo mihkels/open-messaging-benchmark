@@ -16,11 +16,15 @@ package io.openmessaging.benchmark.tool.workload;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.WorkloadSetTemplate;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,17 +33,15 @@ class WorkloadGenerator {
     private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
 
     private final WorkloadSetTemplate template;
-    private final WorkloadNameFormat nameFormat;
 
     /**
      * Creates a new WorkloadGenerator with the specified template.
      *
      * @param template the workload set template to use for generation
-     * @throws IllegalArgumentException if template is null
+     * @throws IllegalArgumentException if the template is null
      */
     WorkloadGenerator(WorkloadSetTemplate template) {
         this.template = Objects.requireNonNull(template, "Template cannot be null");
-        this.nameFormat = new WorkloadNameFormat(template.nameFormat());
     }
 
     /**
@@ -47,14 +49,12 @@ class WorkloadGenerator {
      * the parameter lists defined in the template.
      *
      * @return a list of generated workloads
-     * @throws IOException if there's an error during workload generation
      */
-    List<Workload> generate() throws IOException {
+    List<Workload> generate() {
         log.info("Generating workloads from template with name format: {}", template.nameFormat());
 
         List<Workload> workloads = new ArrayList<>();
 
-        // Get parameter lists, using defaults if empty
         List<Integer> topics = getOrDefault(template.topics(), List.of(1));
         List<Integer> partitionsPerTopic = getOrDefault(template.partitionsPerTopic(), List.of(1));
         List<Integer> messageSize = getOrDefault(template.messageSize(), List.of(1024));
@@ -65,30 +65,27 @@ class WorkloadGenerator {
                 getOrDefault(template.consumerPerSubscription(), List.of(1));
         List<Integer> producerRate = getOrDefault(template.producerRate(), List.of(10000));
 
-        // Generate all combinations
-        for (int topicCount : topics) {
-            for (int partitions : partitionsPerTopic) {
-                for (int msgSize : messageSize) {
-                    for (int subscriptions : subscriptionsPerTopic) {
-                        for (int producers : producersPerTopic) {
-                            for (int consumers : consumerPerSubscription) {
-                                for (int rate : producerRate) {
-                                    Workload workload =
-                                            createWorkload(
-                                                    topicCount,
-                                                    partitions,
-                                                    msgSize,
-                                                    subscriptions,
-                                                    producers,
-                                                    consumers,
-                                                    rate);
-                                    workloads.add(workload);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        Set<List<Integer>> product =
+                Sets.cartesianProduct(
+                        ImmutableSet.copyOf(topics),
+                        ImmutableSet.copyOf(partitionsPerTopic),
+                        ImmutableSet.copyOf(messageSize),
+                        ImmutableSet.copyOf(subscriptionsPerTopic),
+                        ImmutableSet.copyOf(producersPerTopic),
+                        ImmutableSet.copyOf(consumerPerSubscription),
+                        ImmutableSet.copyOf(producerRate));
+
+        for (var combo : product) {
+            var workload =
+                    createWorkload(
+                            combo.get(0),
+                            combo.get(1),
+                            combo.get(2),
+                            combo.get(3),
+                            combo.get(4),
+                            combo.get(5),
+                            combo.get(6));
+            workloads.add(workload);
         }
 
         log.info("Generated {} workloads", workloads.size());
@@ -116,29 +113,17 @@ class WorkloadGenerator {
             int consumerPerSubscription,
             int producerRate) {
 
-        Workload workload = new Workload();
-
-        // Set workload parameters
-        workload.topics = topics;
-        workload.partitionsPerTopic = partitionsPerTopic;
-        workload.messageSize = messageSize;
-        workload.subscriptionsPerTopic = subscriptionsPerTopic;
-        workload.producersPerTopic = producersPerTopic;
-        workload.consumerPerSubscription = consumerPerSubscription;
-        workload.producerRate = producerRate;
-
-        // Set template-level parameters
-        workload.keyDistributor = template.keyDistributor();
-        workload.payloadFile = template.payloadFile();
-        workload.useRandomizedPayloads = template.useRandomizedPayloads();
-        workload.randomBytesRatio = template.randomBytesRatio();
-        workload.randomizedPayloadPoolSize = template.randomizedPayloadPoolSize();
-        workload.consumerBacklogSizeGB = template.consumerBacklogSizeGB();
-        workload.testDurationMinutes = template.testDurationMinutes();
-        workload.warmupDurationMinutes = template.warmupDurationMinutes();
-        workload.name = nameFormat.from(workload);
-
-        return workload;
+        return new Workload(
+                null,
+                topics,
+                partitionsPerTopic,
+                messageSize,
+                template,
+                subscriptionsPerTopic,
+                producersPerTopic,
+                consumerPerSubscription,
+                producerRate,
+                1.0);
     }
 
     /**

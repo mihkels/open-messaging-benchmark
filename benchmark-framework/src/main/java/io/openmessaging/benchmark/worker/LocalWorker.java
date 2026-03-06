@@ -15,12 +15,7 @@ package io.openmessaging.benchmark.worker;
 
 import static java.util.stream.Collectors.toList;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import io.openmessaging.benchmark.DriverConfiguration;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -57,6 +52,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class LocalWorker implements Worker, ConsumerCallback {
 
@@ -65,7 +65,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
     private final List<BenchmarkConsumer> consumers = new ArrayList<>();
     private volatile MessageProducer messageProducer;
     private final ExecutorService executor =
-            Executors.newCachedThreadPool(new DefaultThreadFactory("local-worker"));
+            Executors.newCachedThreadPool(Thread.ofVirtual().name("local-worker-", 0).factory());
     private final WorkerStats stats;
     private boolean testCompleted = false;
     private volatile boolean consumersArePaused = false;
@@ -87,7 +87,7 @@ public class LocalWorker implements Worker, ConsumerCallback {
     @Override
     public void initializeDriver(Path driverConfigFile, Path isolatedDriverHome) throws Exception {
         DriverConfiguration driverConfiguration =
-                mapper.readValue(Files.newInputStream(driverConfigFile), DriverConfiguration.class);
+                reader.readValue(Files.newInputStream(driverConfigFile));
         log.info("Initializing driver: {}", writer.writeValueAsString(driverConfiguration));
 
         try {
@@ -209,9 +209,9 @@ public class LocalWorker implements Worker, ConsumerCallback {
         processorAssignment
                 .values()
                 .forEach(
-                        producers ->
+                        benchmarkProducers ->
                                 submitProducersToExecutor(
-                                        producers,
+                                        benchmarkProducers,
                                         KeyDistributor.build(producerWorkAssignment.keyDistributorType()),
                                         producerWorkAssignment.payloadData()));
     }
@@ -230,24 +230,21 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
         ThreadLocalRandom r = ThreadLocalRandom.current();
         int payloadCount = payloads.size();
-        executor.submit(
-                () -> {
-                    log.info("Producer thread started for {} producers", producers.size());
-                    try {
-                        while (!testCompleted) {
-                            producers.forEach(
-                                    p ->
-                                            messageProducer.sendMessage(
-                                                    p,
-                                                    Optional.ofNullable(keyDistributor.next()),
-                                                    payloads.get(r.nextInt(payloadCount))));
+        for (BenchmarkProducer p : producers) {
+            executor.submit(
+                    () -> {
+                        try {
+                            while (!testCompleted) {
+                                messageProducer.sendMessage(
+                                        p,
+                                        Optional.ofNullable(keyDistributor.next()),
+                                        payloads.get(r.nextInt(payloadCount)));
+                            }
+                        } catch (Throwable t) {
+                            log.error("Producer thread failed", t);
                         }
-                    } catch (Throwable t) {
-                        log.error("Producer thread failed", t);
-                    }
-                    log.info(
-                            "Producer thread exiting after {} iterations", getCountersStats().messagesSent());
-                });
+                    });
+        }
     }
 
     @Override
@@ -357,17 +354,28 @@ public class LocalWorker implements Worker, ConsumerCallback {
     @Override
     public void close() throws Exception {
         executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("Executor did not terminate in time, forcing shutdown");
+                executor.shutdownNow();
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.warn("Executor did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for executor shutdown");
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-    static {
-        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
-    }
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(DriverConfiguration.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static final Logger log = LoggerFactory.getLogger(LocalWorker.class);
 }

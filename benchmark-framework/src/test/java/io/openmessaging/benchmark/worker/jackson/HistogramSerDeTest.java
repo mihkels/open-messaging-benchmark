@@ -15,28 +15,28 @@ package io.openmessaging.benchmark.worker.jackson;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.module.SimpleModule;
 
 class HistogramSerDeTest {
 
     @Test
-    void deserialize() throws IOException {
+    void deserialize() {
         Histogram value = new Histogram(100_000, 3);
         value.recordValue(1);
         value.recordValue(100);
         value.recordValue(10_000);
 
-        ObjectMapper mapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
         module.addSerializer(Histogram.class, new HistogramSerializer());
         module.addDeserializer(Histogram.class, new HistogramDeserializer());
-        mapper.registerModule(module);
+
+        ObjectMapper mapper = JsonMapper.builder().addModule(module).build();
 
         byte[] serialized = mapper.writeValueAsBytes(value);
         Histogram deserialized = mapper.readValue(serialized, Histogram.class);

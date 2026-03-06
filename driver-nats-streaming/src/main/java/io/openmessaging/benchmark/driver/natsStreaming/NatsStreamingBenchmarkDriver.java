@@ -15,10 +15,6 @@ package io.openmessaging.benchmark.driver.natsStreaming;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.google.common.io.BaseEncoding;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.nats.streaming.AckHandler;
 import io.nats.streaming.Message;
@@ -35,9 +31,14 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private static final String defaultClusterId = "test-cluster";
@@ -50,8 +51,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config =
-                mapper.readValue(Files.newInputStream(configurationFile), NatsStreamingClientConfig.class);
+        config = reader.readValue(Files.newInputStream(configurationFile));
         log.info("read config file," + config.toString());
         if (config.clusterId != null) {
             clusterId = config.clusterId;
@@ -131,9 +131,11 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(NatsStreamingClientConfig.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static final org.slf4j.Logger log =
             LoggerFactory.getLogger(NatsStreamingBenchmarkDriver.class);
@@ -143,7 +145,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private static String getRandomString() {
         byte[] buffer = new byte[5];
         random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
     public static void main(String[] args) throws Exception {

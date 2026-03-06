@@ -14,7 +14,6 @@
 
 package io.openmessaging.benchmark;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -28,6 +27,7 @@ import java.util.stream.Collectors;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.ObjectMapper;
 
 public class ResultsToCsv {
 

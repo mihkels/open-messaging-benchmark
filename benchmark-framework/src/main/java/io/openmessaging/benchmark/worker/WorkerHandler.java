@@ -13,10 +13,6 @@
  */
 package io.openmessaging.benchmark.worker;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -29,6 +25,9 @@ import java.nio.file.Files;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectWriter;
 
 public class WorkerHandler {
     private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
@@ -115,12 +114,7 @@ public class WorkerHandler {
 
     private void handleStartLoad(Context ctx) throws IOException {
         ProducerWorkAssignment producerWorkAssignment;
-        try {
-            producerWorkAssignment = mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
-        } catch (JsonProcessingException e) {
-            log.error("Failed to parse ProducerWorkAssignment", e);
-            throw e;
-        }
+        producerWorkAssignment = mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
 
         log.info("Info received:{}", producerWorkAssignment.payloadData());
         log.info(

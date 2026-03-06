@@ -15,14 +15,13 @@ package io.openmessaging.benchmark.driver.rabbitmq;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class RabbitMqConfigTest {
 
     @Test
-    public void deserialize() throws JsonProcessingException {
+    public void deserialize() {
         String config =
                 "{\"amqpUris\":[\"amqp://local\"],\"messagePersistence\":true,\"queueType\":\"QUORUM\"}";
         RabbitMqConfig value = new ObjectMapper().readValue(config, RabbitMqConfig.class);
@@ -36,7 +35,7 @@ class RabbitMqConfigTest {
     }
 
     @Test
-    public void deserializeWithDefaults() throws JsonProcessingException {
+    public void deserializeWithDefaults() {
         String config = "{\"amqpUris\":[\"amqp://local\"]}";
         RabbitMqConfig value = new ObjectMapper().readValue(config, RabbitMqConfig.class);
         assertThat(value)

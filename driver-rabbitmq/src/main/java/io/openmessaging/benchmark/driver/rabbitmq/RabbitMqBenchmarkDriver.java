@@ -16,9 +16,6 @@ package io.openmessaging.benchmark.driver.rabbitmq;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.rabbitmq.client.Address;
 import com.rabbitmq.client.AlreadyClosedException;
 import com.rabbitmq.client.BuiltinExchangeType;
@@ -49,6 +46,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
 
@@ -64,7 +65,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config = mapper.readValue(Files.newInputStream(configurationFile), RabbitMqConfig.class);
+        config = reader.readValue(Files.newInputStream(configurationFile));
     }
 
     @Override
@@ -239,9 +240,12 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                 });
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(RabbitMqConfig.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqBenchmarkDriver.class);
 

@@ -13,25 +13,26 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.HdrHistogram.Histogram;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.module.SimpleModule;
 
 public enum ObjectMappers {
     DEFAULT;
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final SimpleModule module =
+            new SimpleModule()
+                    .addSerializer(Histogram.class, new HistogramSerializer())
+                    .addDeserializer(Histogram.class, new HistogramDeserializer());
 
-    static {
-        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
-        SimpleModule module = new SimpleModule();
-        module.addSerializer(Histogram.class, new HistogramSerializer());
-        module.addDeserializer(Histogram.class, new HistogramDeserializer());
-        mapper.registerModule(module);
-    }
+    private static final ObjectMapper mapper =
+            JsonMapper.builder()
+                    .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .addModule(module)
+                    .build();
 
     private static final ObjectWriter writer = mapper.writerWithDefaultPrettyPrinter();
 

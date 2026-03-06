@@ -13,10 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.pravega;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -38,6 +34,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkDriver.class);
@@ -66,12 +67,15 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(PravegaConfig.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static PravegaConfig readConfig(Path configurationFile) throws IOException {
-        return mapper.readValue(Files.newInputStream(configurationFile), PravegaConfig.class);
+        return reader.readValue(Files.newInputStream(configurationFile));
     }
 
     private String cleanName(String name) {

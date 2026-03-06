@@ -16,30 +16,29 @@ package io.openmessaging.benchmark.tool.workload;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.openmessaging.benchmark.Workload;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Generates a set of {@link Workload} definition files from a {@link WorkloadSetTemplate} file. */
 public class WorkloadGenerationTool {
     public static final Logger log = LoggerFactory.getLogger(WorkloadGenerationTool.class);
-    private static final ObjectMapper mapper =
-            new ObjectMapper(
-                            new YAMLFactory().configure(YAMLGenerator.Feature.WRITE_DOC_START_MARKER, false))
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader templateReader =
+            mapper
+                    .readerFor(WorkloadSetTemplate.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private static final ObjectWriter workloadWriter = mapper.writer();
 
-    static {
-        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
-    }
-
-    public static void main(String[] args) throws IOException {
+    static void main(String[] args) throws IOException {
         final WorkloadGenerationTool.Arguments arguments = new WorkloadGenerationTool.Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("workload-generator");
@@ -60,17 +59,11 @@ public class WorkloadGenerationTool {
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", mapper.writeValueAsString(arguments));
 
-        WorkloadSetTemplate template =
-                mapper.readValue(arguments.templateFile, WorkloadSetTemplate.class);
+        WorkloadSetTemplate template = templateReader.readValue(arguments.templateFile);
         List<Workload> workloads = new WorkloadGenerator(template).generate();
         for (Workload w : workloads) {
-            File outputFile = null;
-            try {
-                outputFile = new File(arguments.outputFolder, w.name + ".yaml");
-                mapper.writeValue(outputFile, w);
-            } catch (IOException e) {
-                log.error("Could not write file: {}", outputFile, e);
-            }
+            var outputFile = new File(arguments.outputFolder, w.name + ".yaml");
+            workloadWriter.writeValue(outputFile, w);
         }
     }
 

@@ -13,19 +13,18 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.util.ByteBufferBackedOutputStream;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.deser.std.StdDeserializer;
+import tools.jackson.databind.util.ByteBufferBackedOutputStream;
 
 public class HistogramDeserializer extends StdDeserializer<Histogram> {
 
@@ -38,7 +37,7 @@ public class HistogramDeserializer extends StdDeserializer<Histogram> {
 
     @Override
     public Histogram deserialize(JsonParser jsonParser, DeserializationContext deserializationContext)
-            throws IOException, JacksonException {
+            throws JacksonException {
         ByteBuffer buffer = threadBuffer.get();
         buffer.clear();
         try (OutputStream os = new ByteBufferBackedOutputStream(buffer)) {

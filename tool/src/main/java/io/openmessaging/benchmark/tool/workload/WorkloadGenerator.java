@@ -13,9 +13,6 @@
  */
 package io.openmessaging.benchmark.tool.workload;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.openmessaging.benchmark.Workload;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,6 +20,10 @@ import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Expands a {@link WorkloadSetTemplate} into a set of {@link Workload Workloads}. */
 class WorkloadGenerator {
@@ -151,17 +152,14 @@ class WorkloadGenerator {
     private Workload copyOf(Workload workload) {
         Objects.requireNonNull(workload, "Workload cannot be null");
 
-        try {
-            // Use Jackson for deep copying
-            ObjectMapper mapper =
-                    new ObjectMapper(new YAMLFactory())
-                            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        // Use Jackson for deep copying
+        ObjectMapper mapper =
+                new ObjectMapper(new YAMLFactory());
+        ObjectReader reader = mapper.readerFor(Workload.class)
+                .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
-            String serialized = mapper.writeValueAsString(workload);
-            return mapper.readValue(serialized, Workload.class);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to copy workload", e);
-        }
+        String serialized = mapper.writeValueAsString(workload);
+        return reader.readValue(serialized);
     }
 
     /**

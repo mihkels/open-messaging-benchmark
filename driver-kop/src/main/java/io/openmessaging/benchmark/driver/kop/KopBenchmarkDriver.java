@@ -13,9 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.kop;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -59,14 +56,20 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionType;
 import org.apache.pulsar.common.util.FutureUtil;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class KopBenchmarkDriver implements BenchmarkDriver {
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                    .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL, false)
-                    .configure(DeserializationFeature.USE_LONG_FOR_INTS, true);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(Config.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .with(DeserializationFeature.USE_LONG_FOR_INTS);
 
     private final List<BenchmarkProducer> producers = new CopyOnWriteArrayList<>();
     private final List<BenchmarkConsumer> consumers = new CopyOnWriteArrayList<>();
@@ -80,7 +83,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     private ConsumerBuilder<ByteBuffer> consumerBuilder = null;
 
     public static Config loadConfig(Path file) throws IOException {
-        return mapper.readValue(Files.newInputStream(file), Config.class);
+        return reader.readValue(Files.newInputStream(file));
     }
 
     @Override

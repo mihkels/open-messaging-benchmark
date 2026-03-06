@@ -13,9 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.nats;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
@@ -42,7 +39,12 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
+@SuppressWarnings("unused")
 public class NatsBenchmarkDriver implements BenchmarkDriver {
     private NatsConfig config;
     private Connection connection;
@@ -52,7 +54,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException, InterruptedException {
-        config = mapper.readValue(Files.newInputStream(configurationFile), NatsConfig.class);
+        config = reader.readValue(Files.newInputStream(configurationFile));
         log.info("read config file," + config.toString());
         this.connection =
                 Nats.connect(
@@ -153,9 +155,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static final Logger log = LoggerFactory.getLogger(NatsBenchmarkDriver.class);
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper.readerFor(NatsConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static long readLongFromBytes(final byte[] b) {
         long result = 0;

@@ -13,20 +13,17 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.io.Serial;
 import java.nio.ByteBuffer;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.databind.SerializationContext;
+import tools.jackson.databind.ser.std.StdSerializer;
 
 public class HistogramSerializer extends StdSerializer<Histogram> {
-    @Serial private static final long serialVersionUID = 1L;
-
     private static final Logger log = LoggerFactory.getLogger(HistogramSerializer.class);
     private static final int INITIAL_BUFFER_SIZE = 8 * 1024 * 1024;
     private final transient ThreadLocal<ByteBuffer> threadBuffer =
@@ -73,9 +70,8 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
     }
 
     @Override
-    public void serialize(
-            Histogram histogram, JsonGenerator jsonGenerator, SerializerProvider serializerProvider)
-            throws IOException {
+    public void serialize(Histogram histogram, JsonGenerator jsonGenerator, SerializationContext ctxt)
+            throws JacksonException {
         ByteBuffer buffer = threadBuffer.get();
         ByteBuffer newBuffer = serializeHistogram(histogram, buffer);
         if (newBuffer != buffer) {

@@ -13,10 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.redis;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.google.common.io.BaseEncoding;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -26,6 +22,7 @@ import io.openmessaging.benchmark.driver.redis.client.RedisClientConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
@@ -33,6 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 @SuppressWarnings("unused")
 public class RedisBenchmarkDriver implements BenchmarkDriver {
@@ -139,12 +140,14 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(RedisClientConfig.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static RedisClientConfig readConfig(Path configurationFile) throws IOException {
-        return mapper.readValue(Files.newInputStream(configurationFile), RedisClientConfig.class);
+        return reader.readValue(Files.newInputStream(configurationFile));
     }
 
     private static final Random random = new Random();
@@ -152,7 +155,7 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     private static String getRandomString() {
         byte[] buffer = new byte[5];
         random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkDriver.class);

@@ -13,14 +13,13 @@
  */
 package io.openmessaging.benchmark.driver.kop.config;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import java.io.IOException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.ValueDeserializer;
 
-public class PollTimeoutDeserializer extends JsonDeserializer<Long> {
+public class PollTimeoutDeserializer extends ValueDeserializer<Long> {
     @Override
-    public Long deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+    public Long deserialize(JsonParser p, DeserializationContext ctxt) {
         if (p.currentToken().isNumeric()) {
             return p.getLongValue();
         }

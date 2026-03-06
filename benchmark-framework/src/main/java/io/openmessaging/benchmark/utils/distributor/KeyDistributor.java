@@ -26,7 +26,7 @@
  */
 package io.openmessaging.benchmark.utils.distributor;
 
-import com.google.common.io.BaseEncoding;
+import java.util.Base64;
 import java.util.Random;
 
 public abstract class KeyDistributor {
@@ -42,7 +42,7 @@ public abstract class KeyDistributor {
         Random random = new Random();
         for (int i = 0; i < randomKeys.length; i++) {
             random.nextBytes(buffer);
-            randomKeys[i] = BaseEncoding.base64Url().omitPadding().encode(buffer);
+            randomKeys[i] = Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
         }
     }
 
@@ -57,20 +57,10 @@ public abstract class KeyDistributor {
     public abstract String next();
 
     public static KeyDistributor build(KeyDistributorType keyType) {
-        KeyDistributor keyDistributor = null;
-        switch (keyType) {
-            case NO_KEY:
-                keyDistributor = new NoKeyDistributor();
-                break;
-            case KEY_ROUND_ROBIN:
-                keyDistributor = new KeyRoundRobin();
-                break;
-            case RANDOM_NANO:
-                keyDistributor = new RandomNano();
-                break;
-            default:
-                throw new IllegalStateException("Unexpected KeyDistributorType: " + keyType);
-        }
-        return keyDistributor;
+        return switch (keyType) {
+            case NO_KEY -> new NoKeyDistributor();
+            case KEY_ROUND_ROBIN -> new KeyRoundRobin();
+            case RANDOM_NANO -> new RandomNano();
+        };
     }
 }

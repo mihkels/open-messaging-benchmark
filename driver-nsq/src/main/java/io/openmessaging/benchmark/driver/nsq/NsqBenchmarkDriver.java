@@ -13,9 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.nsq;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.github.brainlag.nsq.NSQConsumer;
 import com.github.brainlag.nsq.NSQProducer;
 import com.github.brainlag.nsq.lookup.DefaultNSQLookup;
@@ -31,6 +28,10 @@ import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NsqBenchmarkDriver implements BenchmarkDriver {
     private NsqConfig config;
@@ -38,7 +39,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
             throws IOException {
-        config = mapper.readValue(Files.newInputStream(configurationFile), NsqConfig.class);
+        config = reader.readValue(Files.newInputStream(configurationFile));
         log.info("read config file," + config.toString());
     }
 
@@ -97,7 +98,8 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     public void close() throws Exception {}
 
     private static final Logger log = LoggerFactory.getLogger(NsqBenchmarkDriver.class);
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+
+    private static final ObjectReader reader =
+            mapper.readerFor(NsqConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 }

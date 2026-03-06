@@ -18,10 +18,6 @@ import static java.util.stream.Collectors.toList;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.LocalWorker;
@@ -37,6 +33,11 @@ import java.util.Map;
 import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class Benchmark {
 
@@ -133,7 +134,8 @@ public final class Benchmark {
 
         if (arguments.workersFile != null) {
             log.info("Reading workers list from {}", arguments.workersFile);
-            arguments.workers = mapper.readValue(arguments.workersFile, Workers.class).workers;
+            Workers workers = workersReader.readValue(arguments.workersFile);
+            arguments.workers = workers.workers;
         }
 
         // Dump configuration variables
@@ -144,7 +146,7 @@ public final class Benchmark {
             File file = new File(path);
             String name = file.getName().substring(0, file.getName().lastIndexOf('.'));
 
-            workloads.put(name, mapper.readValue(file, Workload.class));
+            workloads.put(name, workloadReader.readValue(file));
         }
 
         log.info("Workloads: {}", writer.writeValueAsString(workloads));
@@ -170,7 +172,7 @@ public final class Benchmark {
                                         DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
                                         File driverConfigFile = new File(driverConfig);
                                         DriverConfiguration driverConfiguration =
-                                                mapper.readValue(driverConfigFile, DriverConfiguration.class);
+                                                driverConfigurationReader.readValue(driverConfigFile);
                                         log.info(
                                                 "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                                                 workload.name,
@@ -217,13 +219,15 @@ public final class Benchmark {
         worker.close();
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-    static {
-        mapper.enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE);
-    }
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader workersReader =
+            mapper.readerFor(Workers.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private static final ObjectReader workloadReader =
+            mapper.readerFor(Workload.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private static final ObjectReader driverConfigurationReader =
+            mapper
+                    .readerFor(DriverConfiguration.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 

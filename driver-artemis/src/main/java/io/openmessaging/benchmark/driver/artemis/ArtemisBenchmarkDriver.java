@@ -13,10 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.artemis;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+// import tools.jackson.databind.DeserializationFeature;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -36,6 +33,11 @@ import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.apache.activemq.artemis.api.core.client.ServerLocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ArtemisConfig config;
@@ -142,12 +144,14 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         log.info("ActiveMQ Artemis benchmark driver successfully shut down");
     }
 
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper
+                    .readerFor(ArtemisConfig.class)
+                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static ArtemisConfig readConfig(Path configurationFile) throws IOException {
-        return mapper.readValue(Files.newInputStream(configurationFile), ArtemisConfig.class);
+        return reader.readValue(Files.newInputStream(configurationFile));
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

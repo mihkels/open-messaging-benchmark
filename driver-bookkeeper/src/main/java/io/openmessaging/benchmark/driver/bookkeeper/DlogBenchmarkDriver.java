@@ -13,9 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.bookkeeper;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import dlshade.org.apache.bookkeeper.stats.CachingStatsLogger;
 import dlshade.org.apache.distributedlog.DistributedLogConfiguration;
 import dlshade.org.apache.distributedlog.api.DistributedLogManager;
@@ -37,14 +34,18 @@ import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Benchmark driver testing distributedlog. */
 public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(DlogBenchmarkProducer.class);
-    private static final ObjectMapper mapper =
-            new ObjectMapper(new YAMLFactory())
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private static final ObjectReader reader =
+            mapper.readerFor(Config.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private Config config;
     private Namespace namespace;
@@ -52,7 +53,7 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, PrometheusMeterRegistry prometheusRegistry)
             throws IOException {
-        config = mapper.readValue(Files.newInputStream(configurationFile), Config.class);
+        config = reader.readValue(Files.newInputStream(configurationFile));
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         try {

@@ -15,9 +15,9 @@ package io.openmessaging.benchmark.driver.kop.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.io.StringReader;
 import java.util.Properties;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record Config(
         @JsonProperty("producerType") ClientType producerType,

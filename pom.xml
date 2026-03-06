@@ -62,7 +62,7 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <maven.compiler.release>25</maven.compiler.release>
-        <guava.version>33.4.8-jre</guava.version>
+        <guava.version>33.5.0-jre</guava.version>
         <assertj.version>3.25.1</assertj.version>
         <bookkeeper.version>4.17.2</bookkeeper.version>
         <checkstyle.version>13.3.0</checkstyle.version>
@@ -71,7 +71,9 @@
         <mockito.junit.jupiter.version>5.18.0</mockito.junit.jupiter.version>
         <bytebuddy.version>1.17.6</bytebuddy.version>
         <commons.lang3.version>3.18.0</commons.lang3.version>
-        <jackson.version>2.16.1</jackson.version>
+        <!--        <jackson.version>2.16.1</jackson.version>-->
+        <jackson.version>3.1.0</jackson.version>
+        <jackson.annotations.version>2.21</jackson.annotations.version>
         <netty.version>4.2.7.Final</netty.version>
         <log4j.version>2.25.3</log4j.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
@@ -105,27 +107,12 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.dataformat</groupId>
-                <artifactId>jackson-dataformat-yaml</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.jaxrs</groupId>
-                <artifactId>jackson-jaxrs-base</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.jaxrs</groupId>
-                <artifactId>jackson-jaxrs-json-provider</artifactId>
-                <version>${jackson.version}</version>
+                <version>${jackson.annotations.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>33.5.0-jre</version>
+                <version>${guava.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
@@ -167,6 +154,21 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>2.0.17</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-yaml</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.jaxrs</groupId>
+                <artifactId>jackson-jaxrs-base</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.jaxrs</groupId>
+                <artifactId>jackson-jaxrs-json-provider</artifactId>
+                <version>${jackson.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.bytebuddy</groupId>

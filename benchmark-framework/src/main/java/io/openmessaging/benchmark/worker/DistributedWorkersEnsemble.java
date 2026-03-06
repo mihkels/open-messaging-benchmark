@@ -187,7 +187,7 @@ public class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         consumerWorkers.parallelStream()
                 .forEach(
                         w -> {

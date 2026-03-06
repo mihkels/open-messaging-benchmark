@@ -77,7 +77,7 @@
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
         <license.plugin.version>4.3</license.plugin.version>
-        <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
         <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
@@ -303,15 +303,26 @@
                 <artifactId>license-maven-plugin</artifactId>
                 <version>${license.plugin.version}</version>
                 <configuration>
-                    <header>etc/APACHE-2.txt</header>
-                    <excludes>
-                        <exclude>LICENSE</exclude>
-                        <exclude>NOTICE</exclude>
-                        <exclude>payload/**</exclude>
-                        <exclude>**/*.pyc</exclude>
-                        <exclude>**/.pydevproject</exclude>
-                        <exclude>.github/**</exclude>
-                    </excludes>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>etc/APACHE-2.txt</header>
+                            <excludes>
+                                <exclude>LICENSE</exclude>
+                                <exclude>NOTICE</exclude>
+                                <exclude>payload/**</exclude>
+                                <exclude>**/*.pyc</exclude>
+                                <exclude>**/.pydevproject</exclude>
+                                <exclude>.github/**</exclude>
+                                <exclude>**/*/myid</exclude>
+                                <exclude>**/*.tfvars</exclude>
+                                <exclude>**/*.tf</exclude>
+                                <exclude>**/*.cfg</exclude>
+                                <exclude>**/*.service</exclude>
+                                <exclude>**/*.cookie</exclude>
+                                <exclude>**/*.data</exclude>
+                            </excludes>
+                        </licenseSet>
+                    </licenseSets>
                     <mapping>
                         <benchmark>SCRIPT_STYLE</benchmark>
                         <j2>SCRIPT_STYLE</j2>
@@ -490,7 +501,6 @@
                                 <encoding>${project.build.sourceEncoding}</encoding>
                                 <showDeprecation>true</showDeprecation>
                                 <showWarnings>true</showWarnings>
-                                <optimize>true</optimize>
                             </configuration>
                         </plugin>
                     </plugins>

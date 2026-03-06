@@ -111,7 +111,10 @@ public class LocalWorker implements Worker, ConsumerCallback {
                 log.info("Loading driver {} from classpath", driverConfiguration.driverClass);
                 // Standard loading for non-isolated drivers
                 benchmarkDriver =
-                        (BenchmarkDriver) Class.forName(driverConfiguration.driverClass).newInstance();
+                        (BenchmarkDriver)
+                                Class.forName(driverConfiguration.driverClass)
+                                        .getDeclaredConstructor()
+                                        .newInstance();
             }
 
             benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());

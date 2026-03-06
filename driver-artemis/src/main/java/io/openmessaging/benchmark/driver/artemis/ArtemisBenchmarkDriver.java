@@ -85,7 +85,7 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
                         () -> {
                             try {
                                 session.createAddress(
-                                        SimpleString.toSimpleString(topic), RoutingType.MULTICAST, true);
+                                        SimpleString.of(topic), RoutingType.MULTICAST, true);
                                 future.complete(null);
                             } catch (ActiveMQException e) {
                                 future.completeExceptionally(e);

@@ -58,7 +58,7 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
                                 // Get a fresh Jedis connection from the pool for each iteration
                                 try (Jedis jedis = pool.getResource()) {
                                     Map<String, StreamEntryID> streamQuery =
-                                            Collections.singletonMap(topic, StreamEntryID.UNRECEIVED_ENTRY);
+                                            Collections.singletonMap(topic, StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
                                     // Use block(1000) for 1 second timeout instead of block(0) which blocks
                                     // indefinitely

@@ -55,6 +55,7 @@ import org.apache.pulsar.common.util.FutureUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("unused")
 public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
     private PulsarClient client;
@@ -75,7 +76,6 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                 PulsarClient.builder()
                         .ioThreads(config.client.ioThreads)
                         .connectionsPerBroker(config.client.connectionsPerBroker)
-                        .statsInterval(0, TimeUnit.SECONDS)
                         .serviceUrl(config.client.serviceUrl)
                         .maxConcurrentLookupRequests(config.client.maxConcurrentLookupRequests)
                         .maxLookupRequests(Integer.MAX_VALUE)
@@ -204,7 +204,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         List<CompletableFuture<Consumer<ByteBuffer>>> futures = new ArrayList<>();
         return client
-                .getPartitionsForTopic(topic)
+                .getPartitionsForTopic(topic, true)
                 .thenCompose(
                         partitions -> {
                             partitions.forEach(

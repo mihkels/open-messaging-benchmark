@@ -187,7 +187,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         } else if (config.consumerType().equals(ClientType.PULSAR)) {
             final List<CompletableFuture<Consumer<ByteBuffer>>> futures = new ArrayList<>();
             return client
-                    .getPartitionsForTopic(topic)
+                    .getPartitionsForTopic(topic, true)
                     .thenCompose(
                             partitions -> {
                                 partitions.forEach(

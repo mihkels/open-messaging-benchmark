@@ -153,10 +153,9 @@ class WorkloadGenerator {
         Objects.requireNonNull(workload, "Workload cannot be null");
 
         // Use Jackson for deep copying
-        ObjectMapper mapper =
-                new ObjectMapper(new YAMLFactory());
-        ObjectReader reader = mapper.readerFor(Workload.class)
-                .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        ObjectReader reader =
+                mapper.readerFor(Workload.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         String serialized = mapper.writeValueAsString(workload);
         return reader.readValue(serialized);

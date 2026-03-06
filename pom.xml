@@ -63,7 +63,7 @@
         <maven.compiler.target>25</maven.compiler.target>
         <maven.compiler.release>25</maven.compiler.release>
         <guava.version>33.5.0-jre</guava.version>
-        <assertj.version>3.25.1</assertj.version>
+        <assertj.version>3.27.7</assertj.version>
         <bookkeeper.version>4.17.2</bookkeeper.version>
         <checkstyle.version>13.3.0</checkstyle.version>
         <jcommander.version>2.0</jcommander.version>

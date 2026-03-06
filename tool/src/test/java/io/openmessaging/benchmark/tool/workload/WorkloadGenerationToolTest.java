@@ -24,7 +24,6 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
-// TODO: Review this class for test coverage and edge cases
 class WorkloadGenerationToolTest {
 
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());

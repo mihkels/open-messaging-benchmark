@@ -65,7 +65,7 @@
         <guava.version>33.4.8-jre</guava.version>
         <assertj.version>3.25.1</assertj.version>
         <bookkeeper.version>4.17.2</bookkeeper.version>
-        <checkstyle.version>10.12.4</checkstyle.version>
+        <checkstyle.version>13.3.0</checkstyle.version>
         <jcommander.version>2.0</jcommander.version>
         <junit.jupiter.version>5.13.4</junit.jupiter.version>
         <mockito.junit.jupiter.version>5.18.0</mockito.junit.jupiter.version>
@@ -74,7 +74,7 @@
         <jackson.version>2.16.1</jackson.version>
         <netty.version>4.2.7.Final</netty.version>
         <log4j.version>2.25.3</log4j.version>
-        <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
+        <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
         <license.plugin.version>4.3</license.plugin.version>
         <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>

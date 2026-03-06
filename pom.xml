@@ -230,7 +230,7 @@
                     <pom>
                         <sortPom>
                             <expandEmptyElements>false</expandEmptyElements>
-                            <indentSchemaLocation>true</indentSchemaLocation>
+                            <indentAttribute>schemaLocation</indentAttribute>
                             <nrOfIndentSpace>4</nrOfIndentSpace>
                             <sortDependencies>scope,groupId,artifactId</sortDependencies>
                             <sortDependencyExclusions>groupId,artifactId</sortDependencyExclusions>

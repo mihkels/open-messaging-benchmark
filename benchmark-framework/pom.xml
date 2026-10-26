@@ -26,9 +26,9 @@
     <artifactId>benchmark-framework</artifactId>
 
     <properties>
-        <jetty.version>11.0.26</jetty.version>
+        <jetty.version>12.0.36</jetty.version>
         <hdrhistogram.version>2.2.2</hdrhistogram.version>
-        <async.client.version>3.0.9</async.client.version>
+        <async.client.version>3.0.14</async.client.version>
         <javalin.version>6.7.0</javalin.version>
     </properties>
 

@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -111,7 +112,9 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
                     new MessageHandler() {
                         @Override
                         public void onMessage(Message message) {
-                            consumerCallback.messageReceived(message.getData(), message.getTimestamp());
+                            // NATS Streaming timestamps are nanoseconds since the epoch
+                            consumerCallback.messageReceived(
+                                    message.getData(), TimeUnit.NANOSECONDS.toMillis(message.getTimestamp()));
                         }
                     },
                     subBuilder.build());

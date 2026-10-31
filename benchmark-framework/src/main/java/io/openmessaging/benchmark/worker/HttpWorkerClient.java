@@ -37,6 +37,7 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -79,6 +80,12 @@ public class HttpWorkerClient implements Worker {
     public void initializeDriver(Path configurationFile) throws IOException {
         byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
         sendPost(INITIALIZE_DRIVER, confFileContent);
+    }
+
+    void initializeDriverFromLocalPath(Path configurationFile) {
+        sendPost(
+                DriverProcessMain.INITIALIZE_DRIVER_LOCAL,
+                configurationFile.toAbsolutePath().toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @SuppressWarnings("unchecked")

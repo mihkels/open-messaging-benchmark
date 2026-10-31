@@ -130,6 +130,71 @@ class PluginRegistryTest {
     }
 
     @Test
+    void unrelatedInvalidBundleDoesNotBlockAValidDriver() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        Path invalid = bundle("invalid", List.of("test.invalid.InvalidDriver"), "");
+        Path descriptor = invalid.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                descriptor,
+                Files.readString(descriptor).replace("driverApiVersion: 1", "driverApiVersion: 99"));
+        PluginRegistry registry = discover();
+
+        assertThat(registry.errors())
+                .anySatisfy(error -> assertThat(error).contains("driverApiVersion 99"));
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThatThrownBy(() -> registry.resolve("test.invalid.InvalidDriver", Map.of()))
+                .hasMessageContaining("test.invalid.InvalidDriver")
+                .hasMessageContaining("driverApiVersion 99");
+    }
+
+    @Test
+    void malformedClasspathEntriesAreReportedWithoutBlockingOtherDrivers() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        bundle("invalid-glob", List.of("test.invalid.GlobDriver"), "classpath:\n  - \"bad[*\"\n");
+        bundle("invalid-path", List.of("test.invalid.PathDriver"), "classpath:\n  - \"bad\\0path\"\n");
+        Path invalidNull = bundle("invalid-null", List.of("test.invalid.NullDriver"), "");
+        Path descriptor = invalidNull.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                descriptor,
+                Files.readString(descriptor).replace("  - test.invalid.NullDriver", "  - null"));
+
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThat(registry.errors())
+                .anySatisfy(error -> assertThat(error).contains("invalid-glob"))
+                .anySatisfy(error -> assertThat(error).contains("invalid-path"))
+                .anySatisfy(error -> assertThat(error).contains("invalid-null"));
+    }
+
+    @Test
+    void unrelatedDuplicateDriversDoNotBlockAValidDriver() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        bundle("other", List.of("test.other.OtherDriver"), "");
+        bundle("other-copy", List.of("test.other.OtherDriver"), "");
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThatThrownBy(() -> registry.resolve("test.other.OtherDriver", Map.of()))
+                .hasMessageContaining("test.other.OtherDriver")
+                .hasMessageContaining("other-copy");
+    }
+
+    @Test
+    void rejectsBothDriversOfBundlesWithTheSameId() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        descriptor(
+                dir.resolve("drivers").resolve("duplicate"), "kafka", List.of("test.other.Driver"), "");
+        PluginFixtures.writeJar(dir.resolve("drivers/duplicate/x.jar"), Map.of("x", new byte[0]));
+        PluginRegistry registry = discover();
+
+        assertThatThrownBy(() -> registry.resolve(KAFKA, Map.of()))
+                .hasMessageContaining("Duplicate plugin id 'kafka'");
+        assertThatThrownBy(() -> registry.resolve("test.other.Driver", Map.of()))
+                .hasMessageContaining("Duplicate plugin id 'kafka'");
+    }
+
+    @Test
     void rejectsBundledDriverApiArtifactsWithAnotherVersion() throws IOException {
         Path kafka = bundle("kafka", List.of(KAFKA), "");
         artifactJar(kafka.resolve("lib"), "io.micrometer", "micrometer-core", "0.1");
@@ -186,6 +251,88 @@ class PluginRegistryTest {
     }
 
     @Test
+    void usesHighestVersionOfAnnotationArtifactsSharedByBundlesOfOneProcess() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path older =
+                artifactJar(
+                        jms.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.5.1");
+        Path newer =
+                artifactJar(
+                        kafka.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.41.0");
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(newer.toRealPath())
+                .doesNotContain(older.toRealPath());
+        assertThat(classpath.warnings())
+                .singleElement()
+                .asString()
+                .contains("error_prone_annotations:2.41.0");
+    }
+
+    @Test
+    void reportsCorruptPluginJarsInsteadOfSilentlyUsingThem() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jar = kafka.resolve("lib/broken.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "not a jar");
+
+        assertThatThrownBy(
+                        () ->
+                                RuntimeClasspath.compose(
+                                        new HostRuntime(List.of()), discover().resolve(KAFKA, Map.of())))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("broken.jar")
+                .hasMessageContaining("inspect");
+    }
+
+    @Test
+    void retainsDistinctNativeClassifiersAndDeduplicatesMatchingVariants() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path jmsLib = jms.resolve("lib");
+        Path kafkaLib = kafka.resolve("lib");
+        Path generic = artifactJar(jmsLib, "io.netty", "native", "1.0");
+        Path arm = classifiedArtifact(jmsLib, "linux-aarch_64");
+        Path x86 = classifiedArtifact(kafkaLib, "linux-x86_64");
+        Path duplicate = classifiedArtifact(kafkaLib, "linux-aarch_64");
+
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(generic.toRealPath(), arm.toRealPath(), x86.toRealPath())
+                .doesNotContain(duplicate.toRealPath());
+    }
+
+    @Test
+    void hostUnclassifiedArtifactDoesNotReplaceClassifiedPluginArtifact() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        HostRuntime.Entry host = hostEntry("io.netty", "native", "1.0");
+        Path nativeJar = classifiedArtifact(kafka.resolve("lib"), "linux-x86_64");
+
+        RuntimeClasspath classpath =
+                RuntimeClasspath.compose(
+                        new HostRuntime(List.of(host)), discover().resolve(KAFKA, Map.of()));
+
+        assertThat(real(classpath.entries()))
+                .contains(host.path().toRealPath(), nativeJar.toRealPath());
+    }
+
+    @Test
     void resolvesUnpackagedDriverDirectoryOverride() throws IOException {
         Path module = dir.resolve("module with spaces");
         Files.createDirectories(module.resolve("target/classes"));
@@ -208,6 +355,11 @@ class PluginRegistryTest {
                             }
                         })
                 .toList();
+    }
+
+    private static Path classifiedArtifact(Path dir, String classifier) throws IOException {
+        Path jar = artifactJar(dir.resolve("staging"), "io.netty", "native", "1.0");
+        return Files.move(jar, dir.resolve("native-1.0-" + classifier + ".jar"));
     }
 
     private HostRuntime.Entry hostEntry(String groupId, String artifactId, String version)

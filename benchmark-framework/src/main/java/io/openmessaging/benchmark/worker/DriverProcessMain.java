@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +34,8 @@ import org.slf4j.LoggerFactory;
 public final class DriverProcessMain {
 
     private static final Logger log = LoggerFactory.getLogger(DriverProcessMain.class);
+    static final String INITIALIZE_DRIVER_LOCAL = "/initialize-driver-local";
+    private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
 
     private DriverProcessMain() {}
 
@@ -49,19 +51,22 @@ public final class DriverProcessMain {
             System.exit(2);
         }
 
+        Thread supervisorMonitor =
+                Thread.ofPlatform()
+                        .daemon()
+                        .name("driver-supervisor-monitor")
+                        .start(DriverProcessMain::exitWhenSupervisorDisconnects);
+
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         LocalWorker worker = new LocalWorker(registry);
         Javalin app = Javalin.create(config -> config.showJavalinBanner = false);
         app.get("/metrics", ctx -> ctx.result(registry.scrape()));
         WorkerHandler handler = new WorkerHandler(app, worker);
+        app.post(INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
         app.start("127.0.0.1", 0);
 
-        AtomicBoolean stopped = new AtomicBoolean();
         Runnable shutdown =
                 () -> {
-                    if (!stopped.compareAndSet(false, true)) {
-                        return;
-                    }
                     try {
                         worker.stopAll();
                     } catch (RuntimeException e) {
@@ -81,6 +86,10 @@ public final class DriverProcessMain {
         Files.move(tmp, portFile, StandardCopyOption.ATOMIC_MOVE);
         log.info("Driver process listening on 127.0.0.1:{}", app.port());
 
+        supervisorMonitor.join();
+    }
+
+    private static void exitWhenSupervisorDisconnects() {
         try {
             // The supervisor never writes; EOF means it closed the pipe or died
             int read = 0;
@@ -91,7 +100,20 @@ public final class DriverProcessMain {
             log.debug("Supervisor pipe failed", e);
         }
         log.info("Supervisor disconnected, stopping driver process");
-        shutdown.run();
+        Thread.ofPlatform()
+                .daemon()
+                .name("driver-shutdown-watchdog")
+                .start(
+                        () -> {
+                            try {
+                                Thread.sleep(SHUTDOWN_TIMEOUT);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                            log.error("Driver shutdown exceeded {}; forcing exit", SHUTDOWN_TIMEOUT);
+                            Runtime.getRuntime().halt(1);
+                        });
         System.exit(0);
     }
 }

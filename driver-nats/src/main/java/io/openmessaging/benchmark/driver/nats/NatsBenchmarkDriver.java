@@ -120,6 +120,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
         ConsumerConfiguration cc =
                 ConsumerConfiguration.builder()
                         .durable("durable-" + subscriptionName)
+                        .filterSubject(topic)
                         .deliverSubject("delivery-subject-" + subscriptionName)
                         .deliverGroup("group-" + subscriptionName)
                         .build();
@@ -151,7 +152,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void close() throws Exception {
-        this.connection.close();
+        if (this.connection != null) {
+            this.connection.close();
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(NatsBenchmarkDriver.class);

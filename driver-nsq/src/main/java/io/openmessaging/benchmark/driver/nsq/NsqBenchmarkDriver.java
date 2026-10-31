@@ -23,6 +23,12 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +40,9 @@ import tools.jackson.databind.ObjectReader;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NsqBenchmarkDriver implements BenchmarkDriver {
+    private static final int NSQD_HTTP_PORT = 4151;
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
     private NsqConfig config;
 
     @Override
@@ -50,11 +59,34 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        log.info("create a topic" + topic);
-        log.info("ignore partitions");
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        future.complete(null);
-        return future;
+        // Create the topic up front so nsqd registers it with nsqlookupd before consumers look it up;
+        // otherwise consumers only find it at their next periodic lookup
+        log.info("Creating topic {} on nsqd {} (partitions are ignored)", topic, config.nsqdHost);
+        HttpRequest request =
+                HttpRequest.newBuilder(
+                                URI.create(
+                                        "http://"
+                                                + config.nsqdHost
+                                                + ":"
+                                                + NSQD_HTTP_PORT
+                                                + "/topic/create?topic="
+                                                + URLEncoder.encode(topic, StandardCharsets.UTF_8)))
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build();
+        return httpClient
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(
+                        response -> {
+                            if (response.statusCode() != 200) {
+                                throw new IllegalStateException(
+                                        "Failed to create NSQ topic "
+                                                + topic
+                                                + ": HTTP "
+                                                + response.statusCode()
+                                                + " "
+                                                + response.body());
+                            }
+                        });
     }
 
     @Override
@@ -95,7 +127,9 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {}
+    public void close() throws Exception {
+        httpClient.close();
+    }
 
     private static final Logger log = LoggerFactory.getLogger(NsqBenchmarkDriver.class);
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

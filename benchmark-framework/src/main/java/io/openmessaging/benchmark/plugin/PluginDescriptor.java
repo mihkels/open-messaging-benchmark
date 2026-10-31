@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.plugin;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.openmessaging.benchmark.driver.DriverApiVersion;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -116,7 +117,13 @@ public record PluginDescriptor(
                 errors.add(field + " must not contain blank entries");
                 continue;
             }
-            Path path = Path.of(entry.replace('\\', '/'));
+            Path path;
+            try {
+                path = Path.of(entry.replace('\\', '/'));
+            } catch (InvalidPathException e) {
+                errors.add(field + " entry '" + entry + "' is invalid: " + e.getReason());
+                continue;
+            }
             if (path.isAbsolute() || entry.startsWith("/") || entry.startsWith("\\")) {
                 errors.add(field + " entry '" + entry + "' must be relative to the bundle directory");
                 continue;
@@ -126,7 +133,7 @@ public record PluginDescriptor(
                 errors.add(field + " entry '" + entry + "' escapes the bundle directory");
             }
             Path parent = normalized.getParent();
-            if (parent != null && parent.toString().contains("*")) {
+            if (parent != null && (parent.toString().contains("*") || parent.toString().contains("?"))) {
                 errors.add(field + " entry '" + entry + "' may only use wildcards in the file name");
             }
         }

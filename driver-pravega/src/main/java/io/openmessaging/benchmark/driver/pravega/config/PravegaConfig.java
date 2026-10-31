@@ -47,11 +47,13 @@ public record PravegaConfig(
                         (String)
                                 ((Map<String, Object>) properties.getOrDefault("client", Collections.emptyMap()))
                                         .get("scopeName"));
+        // YAML scalars such as "True" may arrive as strings, so parse rather than cast
         PravegaWriterConfig writerConfig =
                 new PravegaWriterConfig(
-                        (Boolean)
-                                ((Map<String, Object>) properties.getOrDefault("writer", Collections.emptyMap()))
-                                        .get("enableConnectionPooling"));
+                        getBoolean(
+                                        (Map<String, Object>) properties.getOrDefault("writer", Collections.emptyMap()),
+                                        "enableConnectionPooling")
+                                .orElse(null));
 
         return new PravegaConfig(
                 getBoolean(properties, "includeTimestampInEvent").orElse(true),

@@ -70,23 +70,13 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             }
             if (this.probeRequested(
                     key)) { // Populate probe transaction with the sufficient amount of events.
-                while (eventCount < this.eventsPerTransaction) {
-                    transaction.writeEvent(key.get(), ByteBuffer.wrap(payload));
+                // Probe events must use the same encoding as regular events: readers expect the timestamp
+                while (eventCount < this.eventsPerTransaction - 1) {
+                    writeEvent(key, encode(payload));
                     eventCount++;
                 }
             }
-            if (includeTimestampInEvent) {
-                if (timestampAndPayload == null
-                        || timestampAndPayload.limit() != Long.BYTES + payload.length) {
-                    timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
-                } else {
-                    timestampAndPayload.position(0);
-                }
-                timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
-                writeEvent(key, timestampAndPayload);
-            } else {
-                writeEvent(key, ByteBuffer.wrap(payload));
-            }
+            writeEvent(key, encode(payload));
             if (++eventCount >= eventsPerTransaction) {
                 eventCount = 0;
                 transaction.commit();
@@ -97,6 +87,20 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         }
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         return future;
+    }
+
+    private ByteBuffer encode(byte[] payload) {
+        if (!includeTimestampInEvent) {
+            return ByteBuffer.wrap(payload);
+        }
+        if (timestampAndPayload == null
+                || timestampAndPayload.capacity() != Long.BYTES + payload.length) {
+            timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
+        } else {
+            timestampAndPayload.clear();
+        }
+        timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
+        return timestampAndPayload;
     }
 
     private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {

@@ -25,7 +25,6 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -35,7 +34,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -70,14 +68,16 @@ public class ProcessWorker implements Worker {
     static final List<String> DEFAULT_JVM_OPTS =
             List.of(
                     "-XX:+UseG1GC",
+                    "--enable-native-access=ALL-UNNAMED",
                     "--add-opens=java.base/java.nio=ALL-UNNAMED",
                     "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
                     "--add-opens=java.base/java.util.zip=ALL-UNNAMED",
                     "-Dio.netty.tryReflectionSetAccessible=true",
+                    "-Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true",
                     "-Dio.netty.leakDetection.level=disabled");
 
     private static final List<String> FORWARDED_PROPERTIES =
-            List.of("log4j.configurationFile", "log4j2.configurationFile");
+            List.of("log4j.configurationFile", "log4j2.configurationFile", "zone.id");
     private static final String LOG_NAME_PROPERTY = "omb.log.name";
     private static final String DRIVER_LOG_NAME = "benchmark-driver";
     private static final Duration CRASH_DETECTION_TIMEOUT = Duration.ofSeconds(2);
@@ -88,10 +88,10 @@ public class ProcessWorker implements Worker {
     private final Supplier<HostRuntime> hostRuntime;
     private final Thread shutdownHook;
 
-    private Process process;
-    private OutputStream processStdin;
+    private volatile boolean closed;
+    private volatile Process process;
     private HttpWorkerClient client;
-    private Path workDir;
+    private volatile Path workDir;
     private String endpoint;
     private String driverDescription;
 
@@ -102,7 +102,7 @@ public class ProcessWorker implements Worker {
     ProcessWorker(Supplier<PluginRegistry> registry, Supplier<HostRuntime> hostRuntime) {
         this.registry = registry;
         this.hostRuntime = hostRuntime;
-        this.shutdownHook = new Thread(this::terminate, "process-worker-shutdown");
+        this.shutdownHook = new Thread(this::shutdownDriverProcess, "process-worker-shutdown");
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
@@ -114,6 +114,7 @@ public class ProcessWorker implements Worker {
     @Override
     public synchronized void initializeDriver(Path driverConfigFile, Path driverLocation)
             throws Exception {
+        ensureOpen();
         terminate();
 
         Map<String, Object> config;
@@ -130,6 +131,7 @@ public class ProcessWorker implements Worker {
         }
 
         PluginRegistry plugins = registry.get();
+        plugins.errors().forEach(error -> log.warn("Invalid driver plugin: {}", error));
         ResolvedDriver resolved =
                 driverLocation == null
                         ? plugins.resolve(driverClass.toString(), config)
@@ -144,10 +146,13 @@ public class ProcessWorker implements Worker {
                                 .map(b -> "'" + b.id() + "' (" + b.directory() + ")")
                                 .collect(Collectors.joining(", "));
         log.info("Starting driver process for {}", driverDescription);
-        start(classpath.entries());
 
         try {
-            client.initializeDriver(driverConfigFile);
+            start(classpath.entries());
+            client.initializeDriverFromLocalPath(driverConfigFile);
+        } catch (InterruptedException e) {
+            terminate();
+            throw e;
         } catch (Exception e) {
             String failure = describeFailure(e, process);
             terminate();
@@ -157,17 +162,19 @@ public class ProcessWorker implements Worker {
     }
 
     private void start(List<Path> classpath) throws IOException, InterruptedException {
+        ensureOpen();
         workDir = Files.createTempDirectory("omb-driver-");
         Path portFile = workDir.resolve("port");
         Path argFile = workDir.resolve("java.args");
 
-        List<String> jvmArgs = new ArrayList<>(jvmOptions());
+        List<String> jvmArgs = new ArrayList<>();
         for (String property : FORWARDED_PROPERTIES) {
             String value = System.getProperty(property);
             if (value != null) {
                 jvmArgs.add("-D" + property + "=" + value);
             }
         }
+        jvmArgs.addAll(jvmOptions());
         jvmArgs.add("-D" + LOG_NAME_PROPERTY + "=" + DRIVER_LOG_NAME);
         jvmArgs.add("-cp");
         jvmArgs.add(
@@ -188,13 +195,15 @@ public class ProcessWorker implements Worker {
         builder.environment().remove("CLASSPATH");
         log.debug("Driver process classpath: {}", classpath);
         process = builder.start();
-        processStdin = process.getOutputStream();
+        if (closed) {
+            closeDriverInput(process);
+            ensureOpen();
+        }
 
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(startupTimeoutSeconds());
         while (!Files.isRegularFile(portFile)) {
             if (!process.isAlive()) {
                 int exitCode = process.exitValue();
-                terminate();
                 throw new IllegalStateException(
                         "Driver process for "
                                 + driverDescription
@@ -203,7 +212,6 @@ public class ProcessWorker implements Worker {
                                 + "; see its output above");
             }
             if (System.nanoTime() > deadline) {
-                terminate();
                 throw new IllegalStateException(
                         "Driver process for "
                                 + driverDescription
@@ -225,7 +233,62 @@ public class ProcessWorker implements Worker {
         if (configured == null || configured.isBlank()) {
             return DEFAULT_JVM_OPTS;
         }
-        return Arrays.stream(configured.trim().split("\\s+")).toList();
+        return splitJvmOptions(configured);
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Cannot initialize a closed ProcessWorker");
+        }
+    }
+
+    private static List<String> splitJvmOptions(String options) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        char quote = 0;
+        boolean started = false;
+        for (int i = 0; i < options.length(); i++) {
+            char c = options.charAt(i);
+            if (c == '\\' && quote != '\'' && i + 1 < options.length()) {
+                char next = options.charAt(i + 1);
+                boolean escaped =
+                        quote == '"'
+                                ? next == '"' || next == '\\'
+                                : Character.isWhitespace(next) || next == '"' || next == '\'';
+                if (escaped) {
+                    current.append(next);
+                    started = true;
+                    i++;
+                    continue;
+                }
+            }
+            if (quote != 0) {
+                if (c == quote) {
+                    quote = 0;
+                } else {
+                    current.append(c);
+                }
+            } else if (c == '"' || c == '\'') {
+                quote = c;
+                started = true;
+            } else if (Character.isWhitespace(c)) {
+                if (started) {
+                    result.add(current.toString());
+                    current.setLength(0);
+                    started = false;
+                }
+            } else {
+                current.append(c);
+                started = true;
+            }
+        }
+        if (quote != 0) {
+            throw new IllegalArgumentException("Unterminated quote in driver JVM options");
+        }
+        if (started) {
+            result.add(current.toString());
+        }
+        return List.copyOf(result);
     }
 
     private static long startupTimeoutSeconds() {
@@ -248,13 +311,18 @@ public class ProcessWorker implements Worker {
     /**
      * Prometheus metrics of the running driver process.
      *
-     * @return the metrics, or an empty string if no driver process is running
+     * @return the metrics, or an empty string if no driver has been started
+     * @throws IllegalStateException if the driver exited or its metrics cannot be scraped
      */
     public String scrapeMetrics() {
         String url;
         synchronized (this) {
-            if (endpoint == null || process == null || !process.isAlive()) {
+            if (endpoint == null || process == null) {
                 return "";
+            }
+            if (!process.isAlive()) {
+                throw new IllegalStateException(
+                        "Driver process for " + driverDescription + " exited with code " + process.exitValue());
             }
             url = endpoint + "/metrics";
         }
@@ -263,12 +331,16 @@ public class ProcessWorker implements Worker {
                     http.send(
                             HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(10)).build(),
                             HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() == 200 ? response.body() : "";
+            if (response.statusCode() != 200) {
+                throw new IllegalStateException(
+                        "Driver metrics request to " + url + " failed with HTTP " + response.statusCode());
+            }
+            return response.body();
         } catch (IOException e) {
-            return "";
+            throw new IllegalStateException("Cannot scrape driver metrics from " + url, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "";
+            throw new IllegalStateException("Interrupted while scraping driver metrics from " + url, e);
         }
     }
 
@@ -432,6 +504,11 @@ public class ProcessWorker implements Worker {
 
     @Override
     public void close() {
+        closed = true;
+        Process current = process;
+        if (current != null) {
+            closeDriverInput(current);
+        }
         terminate();
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
@@ -448,6 +525,51 @@ public class ProcessWorker implements Worker {
         }
     }
 
+    private static void deleteWorkDir(Path directory) {
+        try (Stream<Path> files = Files.walk(directory)) {
+            files.sorted(Comparator.reverseOrder()).forEach(ProcessWorker::deleteQuietly);
+        } catch (IOException e) {
+            log.debug("Failed to delete {}", directory, e);
+        }
+    }
+
+    private static void closeDriverInput(Process current) {
+        try {
+            current.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("Failed to close driver process input", e);
+        }
+    }
+
+    private void shutdownDriverProcess() {
+        // Initialization holds the worker monitor while awaiting the child, so this hook cannot use it.
+        closed = true;
+        Process current = process;
+        Path directory = workDir;
+        if (current == null) {
+            if (directory != null) {
+                deleteWorkDir(directory);
+            }
+            return;
+        }
+        closeDriverInput(current);
+        try {
+            if (!current.waitFor(5, TimeUnit.SECONDS)) {
+                log.warn("Driver process {} did not stop during shutdown, killing it", current.pid());
+                current.destroyForcibly();
+                if (!current.waitFor(5, TimeUnit.SECONDS)) {
+                    log.error("Driver process {} did not exit after being killed", current.pid());
+                }
+            }
+        } catch (InterruptedException e) {
+            current.destroyForcibly();
+            Thread.currentThread().interrupt();
+        }
+        if (!current.isAlive() && directory != null) {
+            deleteWorkDir(directory);
+        }
+    }
+
     private synchronized void terminate() {
         if (client != null) {
             try {
@@ -458,12 +580,7 @@ public class ProcessWorker implements Worker {
             client = null;
         }
         if (process != null) {
-            try {
-                // Closing stdin asks the driver process to stop its driver and exit
-                processStdin.close();
-            } catch (IOException e) {
-                log.debug("Failed to close driver process input", e);
-            }
+            closeDriverInput(process);
             try {
                 if (!process.waitFor(10, TimeUnit.SECONDS)) {
                     process.destroy();
@@ -478,15 +595,10 @@ public class ProcessWorker implements Worker {
                 Thread.currentThread().interrupt();
             }
             process = null;
-            processStdin = null;
         }
         endpoint = null;
         if (workDir != null) {
-            try (Stream<Path> files = Files.walk(workDir)) {
-                files.sorted(Comparator.reverseOrder()).forEach(ProcessWorker::deleteQuietly);
-            } catch (IOException e) {
-                log.debug("Failed to delete {}", workDir, e);
-            }
+            deleteWorkDir(workDir);
             workDir = null;
         }
     }

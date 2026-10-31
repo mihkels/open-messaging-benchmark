@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarEntry;
@@ -49,7 +50,15 @@ public final class PluginFixtures {
      */
     public static Path compileJar(Path jar, Map<String, String> sources, List<Path> extraClasspath)
             throws IOException {
-        Path work = Files.createTempDirectory("omb-fixture-");
+        try (TemporaryDirectory work =
+                new TemporaryDirectory(Files.createTempDirectory("omb-fixture-"))) {
+            return compileJar(jar, sources, extraClasspath, work.path());
+        }
+    }
+
+    private static Path compileJar(
+            Path jar, Map<String, String> sources, List<Path> extraClasspath, Path work)
+            throws IOException {
         Path src = work.resolve("src");
         Path classes = work.resolve("classes");
         Files.createDirectories(classes);
@@ -165,6 +174,20 @@ public final class PluginFixtures {
      */
     public static String driverSource(
             String className, String prefixExpression, String initializeBody) {
+        return driverSource(className, prefixExpression, initializeBody, "");
+    }
+
+    /**
+     * Source of a driver with custom initialization and close behavior.
+     *
+     * @param className the fully qualified driver class name
+     * @param prefixExpression Java expression returning the topic name prefix
+     * @param initializeBody statements run by {@code initialize}
+     * @param closeBody statements run by {@code close}
+     * @return the driver source code
+     */
+    public static String driverSource(
+            String className, String prefixExpression, String initializeBody, String closeBody) {
         int dot = className.lastIndexOf('.');
         return "package "
                 + className.substring(0, dot)
@@ -194,7 +217,9 @@ public final class PluginFixtures {
                 + " ConsumerCallback c) {\n"
                 + "    return CompletableFuture.failedFuture(new UnsupportedOperationException());\n"
                 + "  }\n"
-                + "  public void close() {}\n"
+                + "  public void close() { "
+                + closeBody
+                + " }\n"
                 + "}\n";
     }
 
@@ -210,6 +235,17 @@ public final class PluginFixtures {
             return Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI());
         } catch (URISyntaxException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    private record TemporaryDirectory(Path path) implements AutoCloseable {
+        @Override
+        public void close() throws IOException {
+            try (Stream<Path> files = Files.walk(path)) {
+                for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.delete(file);
+                }
+            }
         }
     }
 

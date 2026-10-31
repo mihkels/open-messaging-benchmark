@@ -83,6 +83,7 @@
         <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
+        <maven.clean.plugin.version>3.2.0</maven.clean.plugin.version>
         <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
         <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
         <flatten.plugin.version>1.7.3</flatten.plugin.version>
@@ -528,6 +529,36 @@
             </activation>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <version>${maven.clean.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>omb-plugin-clean-generated</id>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.build.directory}/omb-plugin/lib</directory>
+                                            <followSymlinks>false</followSymlinks>
+                                        </fileset>
+                                        <fileset>
+                                            <directory>${project.build.directory}/omb-plugin</directory>
+                                            <includes>
+                                                <include>*.jar</include>
+                                            </includes>
+                                            <followSymlinks>false</followSymlinks>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-dependency-plugin</artifactId>

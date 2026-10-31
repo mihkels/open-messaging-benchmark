@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.plugin;
 
+import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,14 +27,17 @@ import java.util.Set;
  * Composes the classpath of a driver process: the benchmark core first, then the jars of the
  * resolved bundles.
  *
- * <p>Jars of the same artifact are reconciled by Maven coordinates:
+ * <p>Jars of the same artifact and classifier are reconciled by Maven coordinates:
  *
  * <ul>
  *   <li>a bundle copy of a core artifact with the same version is dropped;
  *   <li>a bundle copy of a core artifact with a different version is an error for the driver SPI
  *       boundary types (driver-api, Micrometer and the Prometheus model), otherwise the core
  *       version wins and a warning is reported;
- *   <li>bundles combined in one process (e.g. JMS and its delegate) must agree on versions.
+ *   <li>bundles combined in one process (e.g. JMS and its delegate) must agree on versions of the
+ *       same artifact variant, except for annotation-only artifacts, where the highest version wins
+ *       and a warning is reported. Different classifiers, such as native platform libraries, are
+ *       kept.
  * </ul>
  */
 public final class RuntimeClasspath {
@@ -48,6 +52,21 @@ public final class RuntimeClasspath {
                     "io.micrometer:micrometer-registry-prometheus",
                     "io.prometheus:prometheus-metrics-core",
                     "io.prometheus:prometheus-metrics-model");
+
+    /**
+     * Artifacts that only carry annotations without runtime behavior, so bundles combined in one
+     * process can safely share the highest version.
+     */
+    static final Set<String> ANNOTATION_ARTIFACTS =
+            Set.of(
+                    "com.google.errorprone:error_prone_annotations",
+                    "com.google.code.findbugs:jsr305",
+                    "com.google.j2objc:j2objc-annotations",
+                    "org.checkerframework:checker-qual",
+                    "org.codehaus.mojo:animal-sniffer-annotations",
+                    "com.github.spotbugs:spotbugs-annotations",
+                    "org.jetbrains:annotations",
+                    "org.jspecify:jspecify");
 
     private final List<Path> entries;
     private final List<String> warnings;
@@ -70,13 +89,14 @@ public final class RuntimeClasspath {
         Map<String, ArtifactCoordinates> hostArtifacts = new HashMap<>();
         for (HostRuntime.Entry entry : host.entries()) {
             result.add(entry.path());
-            hostArtifacts.put(entry.coordinates().key(), entry.coordinates());
+            hostArtifacts.put(entry.coordinates().variantKey(), entry.coordinates());
         }
 
         List<String> warnings = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         Map<String, ArtifactCoordinates> bundleArtifacts = new HashMap<>();
         Map<String, String> bundleOwners = new HashMap<>();
+        Map<String, Path> bundlePaths = new HashMap<>();
         for (PluginBundle bundle : driver.bundles()) {
             for (Path path : bundle.classpath()) {
                 Optional<ArtifactCoordinates> detected = ArtifactCoordinates.detect(path);
@@ -85,7 +105,7 @@ public final class RuntimeClasspath {
                     continue;
                 }
                 ArtifactCoordinates c = detected.get();
-                ArtifactCoordinates hostCopy = hostArtifacts.get(c.key());
+                ArtifactCoordinates hostCopy = hostArtifacts.get(c.variantKey());
                 if (hostCopy != null) {
                     if (!hostCopy.version().equals(c.version())) {
                         String message =
@@ -106,12 +126,33 @@ public final class RuntimeClasspath {
                     }
                     continue;
                 }
-                ArtifactCoordinates other = bundleArtifacts.putIfAbsent(c.key(), c);
+                ArtifactCoordinates other = bundleArtifacts.putIfAbsent(c.variantKey(), c);
                 if (other != null) {
-                    if (!other.version().equals(c.version())) {
+                    if (!other.version().equals(c.version()) && ANNOTATION_ARTIFACTS.contains(c.key())) {
+                        boolean newer = compareVersions(c.version(), other.version()) > 0;
+                        ArtifactCoordinates chosen = newer ? c : other;
+                        warnings.add(
+                                "Plugins '"
+                                        + bundleOwners.get(c.variantKey())
+                                        + "' and '"
+                                        + bundle.id()
+                                        + "' bundle "
+                                        + other
+                                        + " and "
+                                        + c
+                                        + "; using annotation artifact "
+                                        + chosen);
+                        if (newer) {
+                            result.remove(bundlePaths.get(c.variantKey()));
+                            result.add(path);
+                            bundleArtifacts.put(c.variantKey(), c);
+                            bundlePaths.put(c.variantKey(), path);
+                            bundleOwners.put(c.variantKey(), bundle.id());
+                        }
+                    } else if (!other.version().equals(c.version())) {
                         errors.add(
                                 "Plugins '"
-                                        + bundleOwners.get(c.key())
+                                        + bundleOwners.get(c.variantKey())
                                         + "' and '"
                                         + bundle.id()
                                         + "' run in the same process but bundle "
@@ -121,7 +162,8 @@ public final class RuntimeClasspath {
                     }
                     continue;
                 }
-                bundleOwners.put(c.key(), bundle.id());
+                bundleOwners.put(c.variantKey(), bundle.id());
+                bundlePaths.put(c.variantKey(), path);
                 result.add(path);
             }
         }
@@ -133,5 +175,30 @@ public final class RuntimeClasspath {
                             + String.join("\n  - ", errors));
         }
         return new RuntimeClasspath(new ArrayList<>(result), warnings);
+    }
+
+    /**
+     * Compares versions by their numeric segments, falling back to text for qualifiers.
+     *
+     * @param left the first version
+     * @param right the second version
+     * @return a negative number, zero or a positive number if {@code left} is lower than, equal to or
+     *     higher than {@code right}
+     */
+    static int compareVersions(String left, String right) {
+        String[] a = left.split("[.\\-]");
+        String[] b = right.split("[.\\-]");
+        for (int i = 0; i < Math.max(a.length, b.length); i++) {
+            String x = i < a.length ? a[i] : "0";
+            String y = i < b.length ? b[i] : "0";
+            int result =
+                    x.chars().allMatch(Character::isDigit) && y.chars().allMatch(Character::isDigit)
+                            ? new BigInteger(x).compareTo(new BigInteger(y))
+                            : x.compareTo(y);
+            if (result != 0) {
+                return result;
+            }
+        }
+        return 0;
     }
 }

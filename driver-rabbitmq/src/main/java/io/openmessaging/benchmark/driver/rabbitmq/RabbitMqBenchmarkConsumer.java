@@ -28,19 +28,25 @@ public final class RabbitMqBenchmarkConsumer extends DefaultConsumer implements 
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqBenchmarkConsumer.class);
 
+    // Stream queues do not support automatic acknowledgements and require a prefetch limit
+    static final int STREAM_PREFETCH = 1000;
+
     private final Channel channel;
     private final ConsumerCallback callback;
+    private final boolean manualAck;
 
     /**
      * Private constructor for the RabbitMQ consumer.
      *
      * @param channel The RabbitMQ channel.
      * @param callback The callback to invoke on message receipt.
+     * @param manualAck Whether deliveries are acknowledged explicitly instead of automatically.
      */
-    RabbitMqBenchmarkConsumer(Channel channel, ConsumerCallback callback) {
+    RabbitMqBenchmarkConsumer(Channel channel, ConsumerCallback callback, boolean manualAck) {
         super(channel);
         this.channel = channel;
         this.callback = callback;
+        this.manualAck = manualAck;
     }
 
     /**
@@ -49,20 +55,30 @@ public final class RabbitMqBenchmarkConsumer extends DefaultConsumer implements 
      * @param channel The RabbitMQ channel to use.
      * @param queueName The name of the queue to consume from.
      * @param callback The callback for handling received messages.
+     * @param manualAck Whether to acknowledge deliveries explicitly, as required by stream queues.
      * @return A new, initialized {@link RabbitMqBenchmarkConsumer}.
      * @throws IOException if the consumer cannot be started.
      */
     public static RabbitMqBenchmarkConsumer create(
-            Channel channel, String queueName, ConsumerCallback callback) throws IOException {
-        RabbitMqBenchmarkConsumer consumer = new RabbitMqBenchmarkConsumer(channel, callback);
-        channel.basicConsume(queueName, true, consumer);
+            Channel channel, String queueName, ConsumerCallback callback, boolean manualAck)
+            throws IOException {
+        RabbitMqBenchmarkConsumer consumer =
+                new RabbitMqBenchmarkConsumer(channel, callback, manualAck);
+        if (manualAck) {
+            channel.basicQos(STREAM_PREFETCH);
+        }
+        channel.basicConsume(queueName, !manualAck, consumer);
         return consumer;
     }
 
     @Override
     public void handleDelivery(
-            String consumerTag, Envelope envelope, BasicProperties properties, byte[] body) {
+            String consumerTag, Envelope envelope, BasicProperties properties, byte[] body)
+            throws IOException {
         callback.messageReceived(body, properties.getTimestamp().getTime());
+        if (manualAck) {
+            channel.basicAck(envelope.getDeliveryTag(), false);
+        }
     }
 
     @Override

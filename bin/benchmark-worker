@@ -35,20 +35,20 @@ then
     SUPERVISOR_HEAP_OPTS="-Xmx1G"
 fi
 
-JVM_OPTS="--enable-native-access=ALL-UNNAMED"
+DEFAULT_JVM_OPTS="--enable-native-access=ALL-UNNAMED"
 # Required by Netty for optimized direct byte buffer access
-JVM_OPTS="$JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true"
-JVM_OPTS="$JVM_OPTS --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
+DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true"
+DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
 # Set io.netty.tryReflectionSetAccessible in Pulsar's shaded client
-JVM_OPTS="$JVM_OPTS -Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true"
+DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true"
 # Required by Pulsar client optimized checksum calculation on other than Linux x86_64 platforms
 # reflection access to java.util.zip.CRC32C
-JVM_OPTS="$JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
+DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
 
 # Options of the driver JVM; set OMB_DRIVER_JVM_OPTS to override them completely
 if [ -z "$OMB_DRIVER_JVM_OPTS" ]
 then
-    export OMB_DRIVER_JVM_OPTS="-server $HEAP_OPTS -XX:+UseG1GC $JVM_OPTS"
+    export OMB_DRIVER_JVM_OPTS="-server $HEAP_OPTS -XX:+UseG1GC $DEFAULT_JVM_OPTS ${JVM_OPTS:-}"
 fi
 
-exec java -server -cp "$CLASSPATH" $SUPERVISOR_HEAP_OPTS -XX:+UseG1GC $JVM_OPTS -Domb.home="$BASE_DIR" io.openmessaging.benchmark.worker.BenchmarkWorker "$@"
+exec java -server -cp "$CLASSPATH" $SUPERVISOR_HEAP_OPTS -XX:+UseG1GC $DEFAULT_JVM_OPTS -Domb.home="${OMB_HOME:-$BASE_DIR}" io.openmessaging.benchmark.worker.BenchmarkWorker "$@"

@@ -125,6 +125,9 @@ How it works:
 - Some drivers depend on other plugins: the JMS driver loads the plugin of the class named by
   `delegateForAdminOperationsClassName` (for example the Kafka or Pulsar plugin), and KoP bundles
   both Kafka and Pulsar clients. Only these combinations share a driver process.
+  If bundles that share a process contain different versions of the same library, the driver fails
+  to start. Annotation-only jars, such as `error_prone_annotations` or `jsr305`, are the exception: the
+  highest version is used, and a warning is logged.
 
 ### Bundle layout
 
@@ -159,7 +162,8 @@ classReferenceProperties:     # driver YAML properties naming classes of other p
 Plugins are discovered in `$OMB_HOME/drivers/*`, in `*/target/omb-plugin` of a source checkout,
 and in the directories listed in `OMB_PLUGIN_PATH` (or the `omb.plugin.path` system property),
 separated by the platform path separator. Each entry may be a bundle or a directory of bundles.
-Discovery fails with a list of all problems if two bundles declare the same id or driver class.
+Invalid bundles are reported as warnings and do not block unrelated drivers. Selecting a driver with
+an ambiguous plugin id or driver class fails with a description of the conflicting bundles.
 
 ### Compatibility rules
 
@@ -169,7 +173,8 @@ Discovery fails with a list of all problems if two bundles declare the same id o
 - Any other library that is also part of the benchmark runtime (for example Jackson, HdrHistogram
   or Log4j) is loaded from the runtime; the bundle's copy is ignored with a warning.
 - Two bundles loaded into the same process (JMS plus its delegate) must not contain different
-  versions of the same library.
+  versions of the same library and classifier. Distinct classifiers, such as native libraries for
+  different platforms, remain on the classpath.
 - Bundles are never downloaded: install them on the coordinator (local mode) and on every worker.
 
 ### Writing an external driver plugin
@@ -206,10 +211,13 @@ Examples:
 ## Environment variables
 
 - HEAP_OPTS: JVM heap of the driver process, where the workload runs. Default "-Xms4G -Xmx4G".
-- JVM_OPTS: Extra JVM flags for the driver process.
+- JVM_OPTS: Extra JVM flags for the driver process. Quote values containing spaces.
 - OMB_DRIVER_JVM_OPTS: Replaces the complete driver process JVM options (heap, GC and `--add-opens` flags). By default the scripts build it from HEAP_OPTS and JVM_OPTS. Also available as the `omb.driver.jvmOpts` system property.
+- Driver-specific system properties can be passed in `JVM_OPTS` or `OMB_DRIVER_JVM_OPTS`; the
+  supervisor's `zone.id` and Log4j configuration properties are forwarded by default.
 - SUPERVISOR_HEAP_OPTS: JVM heap of the coordinator/worker supervisor process. Default "-Xmx1G".
-- OMB_HOME: Benchmark installation directory used to find `drivers/`. Set by the scripts.
+- OMB_HOME: Benchmark installation directory used to find `drivers/`. Defaults to the scripts'
+  installation directory.
 - OMB_PLUGIN_PATH: Additional plugin bundle locations (see [Driver plugins](#driver-plugins)).
 - The `omb.driver.startupTimeoutSeconds` system property limits the driver process start time (default 120).
 - DOCKER_PUSH, REPOSITORY, VERSION, PLATFORMS: used by local-build.sh for image builds.
@@ -221,6 +229,21 @@ Examples:
 - End-to-end tests are under e2e-tests and target real brokers (Kafka, RabbitMQ, Redis, etc.). Running them typically requires services available and may use Testcontainers or external endpoints. To run just e2e tests:
   - mvn -pl e2e-tests -am -DskipTests=false test
 - Some drivers include README.md files with instructions to spin up the corresponding broker and run sample benchmarks.
+
+### Driver plugin regression suite (Docker Compose)
+
+`e2e-tests/compose/run-e2e.sh` runs every driver plugin end to end against its messaging service. The brokers, two
+workers and the coordinator all run in Docker Compose. Each case checks that messages are published and consumed
+correctly. The suite writes an HTML report, a Markdown summary, JUnit XML and JSON to
+`e2e-tests/target/e2e-reports/<run-id>/`.
+
+```bash
+e2e-tests/compose/run-e2e.sh                 # all plugins
+e2e-tests/compose/run-e2e.sh --stacks kafka  # one messaging service
+```
+
+See [e2e-tests/compose/README.md](e2e-tests/compose/README.md) for the case matrix, platform notes and the JMS
+providers.
 
 ## Kubernetes/Helm and deployments
 

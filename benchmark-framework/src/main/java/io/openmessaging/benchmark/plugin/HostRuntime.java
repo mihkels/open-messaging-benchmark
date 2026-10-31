@@ -107,12 +107,13 @@ public final class HostRuntime {
             String artifactId = m.group(2);
             String classifier = m.group(4);
             String version = m.group(5);
-            ArtifactCoordinates coordinates = new ArtifactCoordinates(groupId, artifactId, version);
-            Optional<Path> path = locate(byFileName, loader, coordinates, classifier);
+            ArtifactCoordinates coordinates =
+                    new ArtifactCoordinates(groupId, artifactId, version, classifier);
+            Optional<Path> path = locate(byFileName, loader, coordinates);
             if (path.isPresent()) {
                 entries.add(new Entry(path.get(), coordinates));
             } else {
-                missing.add(coordinates + (classifier == null ? "" : ":" + classifier));
+                missing.add(coordinates.toString());
             }
         }
         if (!missing.isEmpty()) {
@@ -123,7 +124,8 @@ public final class HostRuntime {
     }
 
     private static Optional<Path> locate(
-            Map<String, Path> byFileName, ClassLoader loader, ArtifactCoordinates c, String classifier) {
+            Map<String, Path> byFileName, ClassLoader loader, ArtifactCoordinates c) {
+        String classifier = c.classifier();
         String suffix = (classifier == null ? "" : "-" + classifier) + ".jar";
         String base = c.artifactId() + "-" + c.version() + suffix;
         for (String name : List.of(base, c.groupId() + "-" + base)) {

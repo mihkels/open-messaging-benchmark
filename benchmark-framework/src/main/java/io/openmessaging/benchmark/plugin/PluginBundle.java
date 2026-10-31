@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.PatternSyntaxException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -130,7 +131,14 @@ public record PluginBundle(Path directory, PluginDescriptor descriptor) {
         if (parent == null || !Files.isDirectory(parent)) {
             return List.of();
         }
-        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + fileName);
+        PathMatcher matcher;
+        try {
+            matcher = FileSystems.getDefault().getPathMatcher("glob:" + fileName);
+        } catch (PatternSyntaxException e) {
+            throw new PluginException(
+                    "Invalid classpath glob '" + entry + "' in plugin '" + id() + "': " + e.getDescription(),
+                    e);
+        }
         List<Path> matches = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(parent)) {
             for (Path path : stream) {

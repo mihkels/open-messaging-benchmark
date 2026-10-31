@@ -1,0 +1,51 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Regression cases. Every shipped driver plugin must appear at least once (checked by the report).
+# Format: case id | plugin id | stack | kind | driver config (drivers/) | workload (workloads/) | description
+# kind: "contract" (common produce/consume/count contract) or "regression" (driver-specific behaviour)
+kafka-contract              | kafka          | kafka          | contract   | kafka.yaml                    | contract.yaml       | acks=all producer, single partition
+kafka-partitioned-lz4       | kafka          | kafka          | regression | kafka-lz4.yaml                | partitioned.yaml    | LZ4 compression, 4 partitions, keyed messages, consumer group with 2 members
+kafka-idempotent-fanout     | kafka          | kafka          | regression | kafka-idempotent.yaml         | fanout.yaml         | Idempotent producer, 2 topics x 2 consumer groups
+pulsar-contract             | pulsar         | pulsar         | contract   | pulsar.yaml                   | contract.yaml       | Batching producer, Failover subscription
+pulsar-shared-no-batching   | pulsar         | pulsar         | regression | pulsar-shared-nobatch.yaml    | random-payload.yaml | Batching disabled, Shared subscription with 2 consumers, random binary payloads
+pulsar-key-shared-dedup     | pulsar         | pulsar         | regression | pulsar-key-shared-dedup.yaml  | partitioned.yaml    | Key_Shared subscription, partitioned topic, broker deduplication, new tenant
+rabbitmq-contract           | rabbitmq       | rabbitmq       | contract   | rabbitmq-quorum.yaml          | contract.yaml       | Quorum queues
+rabbitmq-classic-fanout     | rabbitmq       | rabbitmq       | regression | rabbitmq-classic.yaml         | fanout.yaml         | Classic queues with persistent messages, 2 subscriptions per topic
+rabbitmq-stream             | rabbitmq       | rabbitmq       | regression | rabbitmq-stream.yaml          | contract.yaml       | Stream queues
+redis-contract              | redis          | redis          | contract   | redis.yaml                    | contract.yaml       | Redis streams with one consumer group
+redis-fanout                | redis          | redis          | regression | redis.yaml                    | fanout.yaml         | 2 streams x 2 consumer groups
+redis-random-payload        | redis          | redis          | regression | redis.yaml                    | random-payload.yaml | 2 consumers in one group, random binary payloads
+artemis-contract            | artemis        | artemis        | contract   | artemis.yaml                  | contract.yaml       | Core client, multicast address
+artemis-fanout              | artemis        | artemis        | regression | artemis.yaml                  | fanout.yaml         | 2 addresses x 2 subscription queues
+nats-contract               | nats           | nats           | contract   | nats-file.yaml                | contract.yaml       | JetStream file storage
+nats-memory-fanout          | nats           | nats           | regression | nats-memory.yaml              | fanout.yaml         | JetStream memory storage, 2 subjects x 2 durable consumers
+nats-streaming-contract     | nats-streaming | nats-streaming | contract   | nats-streaming.yaml           | contract.yaml       | Queue subscription with acknowledgements
+nats-streaming-fanout       | nats-streaming | nats-streaming | regression | nats-streaming.yaml           | fanout.yaml         | 2 channels x 2 queue groups
+nsq-contract                | nsq            | nsq            | contract   | nsq.yaml                      | contract.yaml       | nsqd publish, consumer discovery via nsqlookupd
+nsq-fanout                  | nsq            | nsq            | regression | nsq.yaml                      | fanout.yaml         | 2 topics x 2 channels
+rocketmq-contract           | rocketmq       | rocketmq       | contract   | rocketmq.yaml                 | contract.yaml       | Topic creation via admin API, async send
+rocketmq-partitioned        | rocketmq       | rocketmq       | regression | rocketmq.yaml                 | partitioned.yaml    | 4 queues, keyed messages, 2 consumers in one group
+bookkeeper-contract         | bookkeeper     | bookkeeper     | contract   | bookkeeper.yaml               | contract.yaml       | DistributedLog stream, single ordered reader
+pravega-contract            | pravega        | pravega        | contract   | pravega.yaml                  | contract.yaml       | Scope/stream creation, event writer and reader group
+pravega-transactions        | pravega        | pravega        | regression | pravega-transactions.yaml     | partitioned.yaml    | Transactional writer (100 events per transaction), 4 segments, routing keys
+kop-kafka-to-kafka          | kop            | kop            | contract   | kop-kafka-to-kafka.yaml       | contract.yaml       | Kafka producer and Kafka consumer through KoP
+kop-kafka-to-pulsar         | kop            | kop            | regression | kop-kafka-to-pulsar.yaml      | contract.yaml       | Kafka producer, Pulsar consumer with KafkaPayloadProcessor
+kop-pulsar-to-kafka         | kop            | kop            | regression | kop-pulsar-to-kafka.yaml      | contract.yaml       | Pulsar producer, Kafka consumer
+jms-artemis-contract        | jms            | jms-artemis    | contract   | jms-artemis.yaml              | contract.yaml       | JMS 2.0 API with the Artemis provider
+jms-artemis-transactions    | jms            | jms-artemis    | regression | jms-artemis-transactions.yaml | fanout.yaml         | JMS 1.1 API, transacted sends, 2 subscriptions
+jms-pulsar-contract         | jms            | jms-pulsar     | contract   | jms-pulsar.yaml               | contract.yaml       | Pulsar JMS provider with the Pulsar admin delegate
+jms-pulsar-selectors        | jms            | jms-pulsar     | regression | jms-pulsar-selectors.yaml     | contract.yaml       | Message properties and a client-side message selector
+jms-pulsar-transactions     | jms            | jms-pulsar     | regression | jms-pulsar-transactions.yaml  | contract.yaml       | Transacted sends through Pulsar transactions
+jms-kafka-contract          | jms            | jms-kafka      | contract   | jms-kafka.yaml                | contract.yaml       | Confluent Kafka JMS provider with the Kafka admin delegate

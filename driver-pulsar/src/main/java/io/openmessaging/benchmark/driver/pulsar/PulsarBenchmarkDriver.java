@@ -144,6 +144,12 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                                             .build());
                 } catch (ConflictException e) {
                     // Ignore. This can happen when multiple workers are initializing at the same time
+                } catch (PulsarAdminException e) {
+                    // Some metadata stores report the concurrent creation as a server error instead of
+                    // a conflict, so only fail when the tenant really does not exist
+                    if (!adminClient.tenants().getTenants().contains(tenant)) {
+                        throw e;
+                    }
                 }
             }
             log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);

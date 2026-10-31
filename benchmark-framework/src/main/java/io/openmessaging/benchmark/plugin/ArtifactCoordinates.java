@@ -31,16 +31,31 @@ import java.util.zip.ZipFile;
  * @param groupId the Maven group id
  * @param artifactId the Maven artifact id
  * @param version the Maven version
+ * @param classifier the Maven classifier, or {@code null} for the main artifact
  */
-public record ArtifactCoordinates(String groupId, String artifactId, String version) {
+public record ArtifactCoordinates(
+        String groupId, String artifactId, String version, String classifier) {
+
+    public ArtifactCoordinates(String groupId, String artifactId, String version) {
+        this(groupId, artifactId, version, null);
+    }
 
     public String key() {
         return groupId + ":" + artifactId;
     }
 
+    public String variantKey() {
+        return classifier == null ? key() : key() + ":" + classifier;
+    }
+
     @Override
     public String toString() {
-        return groupId + ":" + artifactId + ":" + version;
+        return groupId
+                + ":"
+                + artifactId
+                + ":"
+                + version
+                + (classifier == null ? "" : ":" + classifier);
     }
 
     /**
@@ -73,17 +88,28 @@ public record ArtifactCoordinates(String groupId, String artifactId, String vers
                     }
                 }
             }
-            return candidates.stream().filter(c -> c.matchesFileName(fileName)).findFirst();
+            return candidates.stream()
+                    .map(c -> c.withFileClassifier(fileName))
+                    .flatMap(Optional::stream)
+                    .findFirst();
         } catch (IOException e) {
-            return Optional.empty();
+            throw new PluginException("Cannot inspect plugin jar " + jar, e);
         }
     }
 
-    boolean matchesFileName(String fileName) {
+    private Optional<ArtifactCoordinates> withFileClassifier(String fileName) {
         String av = artifactId + "-" + version;
-        return fileName.startsWith(av + ".")
-                || fileName.startsWith(av + "-")
-                || fileName.startsWith(groupId + "-" + av + ".")
-                || fileName.startsWith(groupId + "-" + av + "-");
+        for (String base : List.of(groupId + "-" + av, av)) {
+            if (fileName.equals(base + ".jar")) {
+                return Optional.of(this);
+            }
+            if (fileName.startsWith(base + "-") && fileName.endsWith(".jar")) {
+                String suffix = fileName.substring(base.length() + 1, fileName.length() - 4);
+                if (!suffix.isEmpty()) {
+                    return Optional.of(new ArtifactCoordinates(groupId, artifactId, version, suffix));
+                }
+            }
+        }
+        return Optional.empty();
     }
 }

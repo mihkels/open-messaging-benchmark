@@ -194,7 +194,11 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                                         queueName, true, false, false, config.queueType.queueOptions());
                                 channel.queueBind(queueName, exchange, "");
                                 future.complete(
-                                        RabbitMqBenchmarkConsumer.create(channel, queueName, consumerCallback));
+                                        RabbitMqBenchmarkConsumer.create(
+                                                channel,
+                                                queueName,
+                                                consumerCallback,
+                                                config.queueType == RabbitMqConfig.QueueType.STREAM));
                             } catch (IOException e) {
                                 future.completeExceptionally(e);
                             }

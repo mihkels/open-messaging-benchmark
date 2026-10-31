@@ -52,16 +52,22 @@ public final class PluginRegistry {
     private final List<PluginBundle> bundles;
     private final Map<String, PluginBundle> byDriverClass;
     private final List<String> errors;
+    private final Map<String, List<String>> errorsByDriverClass;
     private final List<Path> searched;
 
     private PluginRegistry(
             List<PluginBundle> bundles,
             Map<String, PluginBundle> byDriverClass,
             List<String> errors,
+            Map<String, List<String>> errorsByDriverClass,
             List<Path> searched) {
         this.bundles = List.copyOf(bundles);
         this.byDriverClass = Map.copyOf(byDriverClass);
         this.errors = List.copyOf(errors);
+        Map<String, List<String>> copiedErrors = new LinkedHashMap<>();
+        errorsByDriverClass.forEach(
+                (driver, problems) -> copiedErrors.put(driver, List.copyOf(problems)));
+        this.errorsByDriverClass = Map.copyOf(copiedErrors);
         this.searched = List.copyOf(searched);
     }
 
@@ -124,6 +130,7 @@ public final class PluginRegistry {
         List<PluginBundle> bundles = new ArrayList<>();
         Map<String, PluginBundle> byId = new LinkedHashMap<>();
         Map<String, PluginBundle> byDriverClass = new LinkedHashMap<>();
+        Map<String, List<String>> errorsByDriverClass = new LinkedHashMap<>();
         for (Path dir : bundleDirs) {
             PluginBundle bundle;
             try {
@@ -134,19 +141,28 @@ public final class PluginRegistry {
             }
             PluginBundle sameId = byId.putIfAbsent(bundle.id(), bundle);
             if (sameId != null) {
-                errors.add(
+                String error =
                         "Duplicate plugin id '"
                                 + bundle.id()
                                 + "' in "
                                 + sameId.directory()
                                 + " and "
-                                + bundle.directory());
+                                + bundle.directory();
+                errors.add(error);
+                sameId
+                        .descriptor()
+                        .drivers()
+                        .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
+                bundle
+                        .descriptor()
+                        .drivers()
+                        .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
                 continue;
             }
             for (String driver : bundle.descriptor().drivers()) {
                 PluginBundle other = byDriverClass.putIfAbsent(driver, bundle);
                 if (other != null) {
-                    errors.add(
+                    String error =
                             "Driver class "
                                     + driver
                                     + " is provided by both '"
@@ -157,12 +173,19 @@ public final class PluginRegistry {
                                     + bundle.id()
                                     + "' ("
                                     + bundle.directory()
-                                    + ")");
+                                    + ")";
+                    errors.add(error);
+                    addDriverError(errorsByDriverClass, driver, error);
                 }
             }
             bundles.add(bundle);
         }
-        return new PluginRegistry(bundles, byDriverClass, errors, locations);
+        return new PluginRegistry(bundles, byDriverClass, errors, errorsByDriverClass, locations);
+    }
+
+    private static void addDriverError(
+            Map<String, List<String>> errorsByDriverClass, String driver, String error) {
+        errorsByDriverClass.computeIfAbsent(driver, unused -> new ArrayList<>()).add(error);
     }
 
     public static Path home() {
@@ -188,7 +211,7 @@ public final class PluginRegistry {
      * @return the bundles to load, primary bundle first
      */
     public ResolvedDriver resolve(String driverClass, Map<String, Object> driverConfig) {
-        failOnErrors();
+        failOnDriverErrors(driverClass);
         PluginBundle primary = byDriverClass.get(driverClass);
         if (primary == null) {
             throw new PluginException(
@@ -197,7 +220,8 @@ public final class PluginRegistry {
                             + ". Known driver classes: "
                             + new TreeSet<>(byDriverClass.keySet())
                             + ". Searched: "
-                            + searched);
+                            + searched
+                            + invalidBundleDetails());
         }
         return new ResolvedDriver(driverClass, withReferences(primary, driverConfig));
     }
@@ -218,7 +242,6 @@ public final class PluginRegistry {
         List<PluginBundle> result = new ArrayList<>(List.of(primary));
         for (PluginBundle referenced : withReferences(primary, driverConfig)) {
             if (referenced != primary) {
-                failOnErrors();
                 result.add(referenced);
             }
         }
@@ -235,16 +258,17 @@ public final class PluginRegistry {
                     continue;
                 }
                 String referencedClass = value.toString().trim();
+                failOnDriverErrors(referencedClass);
                 PluginBundle referenced = byDriverClass.get(referencedClass);
                 if (referenced == null) {
-                    failOnErrors();
                     throw new PluginException(
                             "Driver property '"
                                     + property
                                     + "' references "
                                     + referencedClass
                                     + " but no driver plugin bundle provides it. Known driver classes: "
-                                    + new TreeSet<>(byDriverClass.keySet()));
+                                    + new TreeSet<>(byDriverClass.keySet())
+                                    + invalidBundleDetails());
                 }
                 if (!result.contains(referenced)) {
                     result.add(referenced);
@@ -254,11 +278,19 @@ public final class PluginRegistry {
         return result;
     }
 
-    private void failOnErrors() {
-        if (!errors.isEmpty()) {
+    private void failOnDriverErrors(String driverClass) {
+        List<String> problems = errorsByDriverClass.get(driverClass);
+        if (problems != null && !problems.isEmpty()) {
             throw new PluginException(
-                    "Invalid driver plugin bundles:\n  - " + String.join("\n  - ", errors));
+                    "Invalid driver plugin bundles for "
+                            + driverClass
+                            + ":\n  - "
+                            + String.join("\n  - ", problems));
         }
+    }
+
+    private String invalidBundleDetails() {
+        return errors.isEmpty() ? "" : ". Invalid bundles:\n  - " + String.join("\n  - ", errors);
     }
 
     static PluginBundle legacyBundle(String driverClass, Path location) {

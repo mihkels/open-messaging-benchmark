@@ -1,0 +1,2 @@
+# Place the Confluent Kafka JMS client fat jar here (see e2e-tests/compose/README.md).
+*.jar

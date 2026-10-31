@@ -31,15 +31,19 @@ they are not tuned to be equivalent.
 
 Durability settings have the largest effect on latency. Compare like with like.
 
-|         Guarantee          |                        Kafka                        |                  Pulsar                   |       RabbitMQ        |       Others        |
-|----------------------------|-----------------------------------------------------|-------------------------------------------|-----------------------|---------------------|
-| Replicas                   | `replicationFactor`                                 | `ensembleSize`, `writeQuorum`             | Quorum queue replicas | See the driver page |
-| Acknowledged by            | `acks=all`, `min.insync.replicas`                   | `ackQuorum`                               | Publisher confirms    | See the driver page |
-| Flushed to disk before ack | `flush.messages=1` or `log.flush.interval.messages` | `journalSyncData` on bookies (default on) | Quorum queues fsync   | See the driver page |
+|    Consideration     |                       Kafka                       |                  Pulsar                   |       RabbitMQ        |       Others        |
+|----------------------|---------------------------------------------------|-------------------------------------------|-----------------------|---------------------|
+| Replicas             | `replicationFactor`                               | `ensembleSize`, `writeQuorum`             | Quorum queue replicas | See the driver page |
+| Acknowledgments      | `acks=all`, `min.insync.replicas`                 | `ackQuorum`                               | Publisher confirms    | See the driver page |
+| Persistence controls | `flush.messages` or `log.flush.interval.messages` | `journalSyncData` on bookies (default on) | Queue type and mode   | See the driver page |
 
 Kafka by default acknowledges after replication to memory and relies on the page cache, while
 BookKeeper syncs its journal before acknowledging. Comparing defaults compares different guarantees.
-Either configure both to sync, or both not to sync, and state which you chose.
+Kafka's `acks=all` does not itself require every in-sync replica to fsync before acknowledging, and
+its flush settings should not be assumed to provide that guarantee. Check each system's actual
+failure and persistence semantics rather than treating similarly named settings as equivalent; record
+the differences in your results. See the [Kafka producer configuration](https://kafka.apache.org/35/configuration/producer-configs/)
+and [topic configuration](https://kafka.apache.org/35/configuration/topic-level-configs/).
 
 Each [driver page](../drivers/index.md) lists the configuration keys that control durability,
 batching and acknowledgment for that system.

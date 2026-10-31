@@ -29,7 +29,8 @@ Supported platforms (drivers) include:
 
 ## Documentation
 
-The user documentation is published at **<https://mihkels.github.io/open-messaging-benchmark/>**:
+Documentation site: **<https://mihkels.github.io/open-messaging-benchmark/>** (deployed from `main`
+using GitHub Pages):
 
 - [Quickstart](https://mihkels.github.io/open-messaging-benchmark/getting-started/quickstart/): run a
   first benchmark with Docker in a few minutes

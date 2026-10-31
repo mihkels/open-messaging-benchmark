@@ -260,9 +260,9 @@ The plugin id is the `id` from the bundle's `plugin.yaml` (see
 name | url | sha256
 ```
 
-Then run only the new stack until it passes:
+Then run only the new stack until it passes, replacing `my-stack` with its ID:
 
 ```bash
-e2e-tests/compose/run-e2e.sh --stacks <stack>
+e2e-tests/compose/run-e2e.sh --stacks my-stack
 ```
 

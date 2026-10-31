@@ -73,7 +73,17 @@ docker compose up -d
 docker compose ps
 ```
 
-All four containers should be running. Kafka needs a few seconds to accept connections.
+All four containers should be running. Wait until Kafka and both workers are ready before starting
+the benchmark:
+
+```bash
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list
+docker exec omb-worker-1 wget -qO /dev/null http://127.0.0.1:8080/metrics
+docker exec omb-worker-2 wget -qO /dev/null http://127.0.0.1:8080/metrics
+```
+
+The topic list may be empty; all three commands should succeed. If one fails, wait and retry it.
 
 ## 3. Run a benchmark
 

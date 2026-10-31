@@ -16,7 +16,8 @@
 name: Nsq
 driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
 
-# RabbitMq client specific configurations
+# NSQ hosts. Topic creation uses nsqd's HTTP port; producers use TCP 4150 and lookup uses HTTP 4161.
 
 nsqdHost: localhost
+nsqdHttpPort: 4151
 lookupHost: localhost

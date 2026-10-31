@@ -1,22 +1,31 @@
-Users can deploy the helm chart:
+# Helm deployment
+
+The chart uses Helm 3. From the repository root, install it with the release name `benchmark`:
 
 ```bash
-$ helm install ./benchmark --name benchmark
+IMAGE=registry.example.com/your/openmessaging-benchmark:java25
+helm upgrade --install benchmark deployment/kubernetes/helm/benchmark \
+  --set image="$IMAGE" --set driverMemoryLimit=8Gi
 ```
 
-After the chart has started, users can exec into the pod name "benchmark-driver" and run the benchmark from there.
+Replace `IMAGE` with a reachable Java 25 image containing the current distribution and its
+`drivers/` plugin bundles; the chart's default image is not maintained by this fork. The release
+name matters because the current worker-address template hard-codes `benchmark-worker`. The chart
+defaults to eight workers and a 4 GiB driver heap. Size the cluster and pod limits accordingly:
+the default 2 GiB coordinator limit is too small for that heap plus the supervisor process.
 
-For example, once inside the "benchmark-driver" pod, users can execute:
+After the pods are ready, enter the coordinator pod and run a workload:
 
 ```bash
-bin/benchmark --drivers driver-pulsar/pulsar.yaml --workers $WORKERS workloads/1-topic-16-partitions-1kb.yaml
+kubectl exec -it benchmark-driver -- sh
+bin/benchmark --drivers driver-pulsar/pulsar.yaml --workers "$WORKERS" \
+  workloads/1-topic-16-partitions-1kb.yaml
 ```
 
-All workers that has configured to startup will be set in the "$WORKERS" env variable
-
-To tear down the chart:
+Configure the driver YAML with broker addresses reachable from the workers. The chart populates
+`WORKERS` with the worker URLs. Remove the deployment with:
 
 ```bash
-$ helm delete benchmark --purge
+helm uninstall benchmark
 ```
 

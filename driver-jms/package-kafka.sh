@@ -12,12 +12,21 @@
 # limitations under the License.
 #
 
-# the one argument is the path to the confluent jms client fat jar on your local system
+# The one argument is the path to the Confluent JMS client fat jar on your local system.
+# The jar is added to the JMS plugin's ext/ directory in the distribution.
+set -euo pipefail
 
-cd package/target
-gunzip openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz 
-mkdir -p openmessaging-benchmark-0.0.1-SNAPSHOT/lib 
-cp -p ${1} openmessaging-benchmark-0.0.1-SNAPSHOT/lib/.
-tar --append --file=openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar openmessaging-benchmark-0.0.1-SNAPSHOT/lib/kafka-jms-client-fat-6.2.1.jar
-gzip openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar
+if [ "$#" -ne 1 ] || [ ! -f "$1" ] || [ ! -r "$1" ]; then
+    echo "Usage: bash driver-jms/package-kafka.sh /path/to/kafka-jms-client.jar" >&2
+    exit 2
+fi
+case "$1" in
+    /*) KAFKA_JMS_JAR=$1 ;;
+    *) KAFKA_JMS_JAR="$PWD/$1" ;;
+esac
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$SCRIPT_DIR/package-common.sh"
 
+prepare_distribution
+cp -p "$KAFKA_JMS_JAR" "$EXT_DIR/"
+replace_distribution

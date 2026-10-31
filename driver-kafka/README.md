@@ -2,9 +2,16 @@
 
 For instructions on running the OpenMessaging bencmarks for Kafka, see the [official documentation](http://openmessaging.cloud/docs/benchmarks/kafka).
 
-NOTE: This is a slightly modified version with two key differences:
+For a local Kafka-backed plugin check, run
+`e2e-tests/compose/run-e2e.sh --stacks kafka`; see the
+[Compose regression suite](../e2e-tests/compose/README.md) for requirements and reports.
 
-- workloads have extra arguments for sending randomized payloads rather than the same payload over and over.
-- there is a new argument that converts all output result json files into a single csv.
+Workloads can use randomized payloads by setting `useRandomizedPayloads`, `randomBytesRatio`, and
+`randomizedPayloadPoolSize` in the workload YAML. To convert benchmark result JSON files in a
+directory to a CSV in the current directory, run:
 
-TODO: Document these changes.
+```bash
+bin/benchmark --csv path/to/results
+```
+
+The [legacy AWS deployment](deploy/README.md) requires adaptation for Java 25 and plugin bundles.

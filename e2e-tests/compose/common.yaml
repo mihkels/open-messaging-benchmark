@@ -1,0 +1,66 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Services shared by every regression stack: two benchmark workers and the coordinator ("runner").
+# Each stack file adds its brokers and makes `stack-ready` depend on their readiness checks.
+# All paths are absolute and supplied by run-e2e.sh.
+
+x-omb: &omb
+  image: ${OMB_E2E_IMAGE:-omb-e2e-runner:local}
+  init: true
+  environment:
+    HEAP_OPTS: "-Xms128m -Xmx768m"
+    SUPERVISOR_HEAP_OPTS: "-Xmx256m"
+  volumes:
+    - ${OMB_E2E_JMS_EXT:?OMB_E2E_JMS_EXT must be set}:/benchmark/drivers/driver-jms/ext:ro
+
+x-worker: &worker
+  <<: *omb
+  command: ["bin/benchmark-worker", "-p", "8080", "-sp", "8081"]
+  stop_grace_period: 20s
+  depends_on:
+    stack-ready:
+      condition: service_completed_successfully
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/metrics"]
+    interval: 2s
+    timeout: 5s
+    retries: 60
+
+services:
+  # Completes once every broker of the stack is ready and initialized.
+  stack-ready:
+    image: ${OMB_E2E_IMAGE:-omb-e2e-runner:local}
+    command: ["true"]
+
+  worker-1:
+    <<: *worker
+
+  worker-2:
+    <<: *worker
+
+  runner:
+    <<: *omb
+    profiles: ["runner"]
+    environment:
+      HEAP_OPTS: "-Xmx512m"
+    volumes:
+      - ${OMB_E2E_JMS_EXT}:/benchmark/drivers/driver-jms/ext:ro
+      - ${OMB_E2E_SUITE_DIR:?OMB_E2E_SUITE_DIR must be set}:/e2e:ro
+      - ${OMB_E2E_CASE_DIR:?OMB_E2E_CASE_DIR must be set}:/out
+    depends_on:
+      worker-1:
+        condition: service_healthy
+      worker-2:
+        condition: service_healthy

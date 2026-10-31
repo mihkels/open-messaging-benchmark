@@ -16,7 +16,7 @@ package io.openmessaging.benchmark.e2e;
 import io.openmessaging.benchmark.TestResult;
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.LocalWorker;
+import io.openmessaging.benchmark.worker.ProcessWorker;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -186,8 +186,8 @@ class KafkaE2eIT extends BaseE2eIT {
     }
 
     private TestResult runBenchmark(Workload workload) throws Exception {
-        // Create a new LocalWorker for each test
-        LocalWorker worker = new LocalWorker(statsLogger);
+        // Run the driver in its own process for each test
+        ProcessWorker worker = new ProcessWorker();
 
         try {
             // Initialize the worker with driver configuration

@@ -74,7 +74,8 @@
         <!--        <jackson.version>2.16.1</jackson.version>-->
         <jackson.version>3.1.0</jackson.version>
         <jackson.annotations.version>2.21</jackson.annotations.version>
-        <netty.version>4.2.7.Final</netty.version>
+        <!-- Keep at least the version async-http-client is built against -->
+        <netty.version>4.2.18.Final</netty.version>
         <log4j.version>2.25.4</log4j.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
@@ -82,7 +83,10 @@
         <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.enforcer.plugin.version>3.4.1</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
+        <maven.clean.plugin.version>3.2.0</maven.clean.plugin.version>
         <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
+        <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
+        <flatten.plugin.version>1.7.3</flatten.plugin.version>
         <spotbugs.plugin.version>4.9.3.2</spotbugs.plugin.version>
         <spotless.plugin.version>3.0.0</spotless.plugin.version>
         <micrometer.version>1.15.4</micrometer.version>
@@ -256,6 +260,9 @@
                         <includes>
                             <include>**/*.md</include>
                         </includes>
+                        <excludes>
+                            <exclude>**/target/**</exclude>
+                        </excludes>
                         <flexmark/>
                     </markdown>
                     <formats>
@@ -426,6 +433,32 @@
                 </configuration>
             </plugin>
             <plugin>
+                <!-- Resolve ${revision} in installed/published POMs so external plugin builds can consume driver-api -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten.plugin.version}</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                        <phase>process-resources</phase>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <phase>clean</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <!-- Check test coverage -->
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -484,6 +517,116 @@
         </plugins>
     </build>
     <profiles>
+        <profile>
+            <!--
+                Builds a self-contained driver plugin bundle in target/omb-plugin for every module that
+                provides src/main/plugin/plugin.yaml. The bundle contains the filtered descriptor, the
+                module jar and the module's runtime dependency closure in lib/. Dependencies with provided
+                scope (driver-api and the host-owned types it exposes) are supplied by the benchmark host.
+            -->
+            <id>omb-driver-bundle</id>
+            <activation>
+                <file>
+                    <exists>${basedir}/src/main/plugin/plugin.yaml</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <version>${maven.clean.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>omb-plugin-clean-generated</id>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.build.directory}/omb-plugin/lib</directory>
+                                            <followSymlinks>false</followSymlinks>
+                                        </fileset>
+                                        <fileset>
+                                            <directory>${project.build.directory}/omb-plugin</directory>
+                                            <includes>
+                                                <include>*.jar</include>
+                                            </includes>
+                                            <followSymlinks>false</followSymlinks>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>${maven.dependency.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>omb-plugin-libraries</id>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/omb-plugin/lib</outputDirectory>
+                                    <includeScope>runtime</includeScope>
+                                    <overWriteReleases>true</overWriteReleases>
+                                    <overWriteSnapshots>true</overWriteSnapshots>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>${maven.resources.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>omb-plugin-descriptor</id>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/omb-plugin</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>src/main/plugin</directory>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>omb-plugin-jar</id>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <phase>package</phase>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/omb-plugin</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>${project.build.finalName}.jar</include>
+                                            </includes>
+                                            <filtering>false</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>modern-java-compile</id>
             <activation>

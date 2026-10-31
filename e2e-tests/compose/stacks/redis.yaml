@@ -12,22 +12,17 @@
 # limitations under the License.
 #
 
-Configuration:
-  status: INFO
-  name: messaging-benchmark
-  
-  Appenders:
-    Console:
-      name: Console
-      target: SYSTEM_OUT
-      PatternLayout:
-        Pattern: "%d{HH:mm:ss.SSS} [%t] %-4level %c{1} - %msg%n"
-  Loggers:
-    Logger:
-      - name: io.openmessaging
-        level: debug
-    Root:
-      level: info
-      additivity: false
-      AppenderRef:
-        - ref: Console
+# Redis (streams and consumer groups).
+services:
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  stack-ready:
+    depends_on:
+      redis:
+        condition: service_healthy

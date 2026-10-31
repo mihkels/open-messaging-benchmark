@@ -27,8 +27,16 @@ public interface Worker extends AutoCloseable {
 
     void initializeDriver(Path driverConfigFile) throws Exception;
 
-    // New method to support isolated driver loading
-    default void initializeDriver(Path driverConfigFile, Path isolatedDriverHome) throws Exception {
+    /**
+     * Initializes the driver, optionally loading it from an explicit plugin bundle directory or jar
+     * instead of the installed plugin bundles.
+     *
+     * @param driverConfigFile the driver configuration file
+     * @param driverLocation a plugin bundle directory or jar, or {@code null} to use installed
+     *     bundles
+     * @throws Exception if the driver cannot be initialized
+     */
+    default void initializeDriver(Path driverConfigFile, Path driverLocation) throws Exception {
         initializeDriver(driverConfigFile);
     }
 

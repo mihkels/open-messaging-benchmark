@@ -12,19 +12,8 @@
 # limitations under the License.
 #
 
-Configuration:
-  status: INFO
-  name: driver-kafka-test
-  
-  Appenders:
-    Console:
-      name: Console
-      target: SYSTEM_OUT
-      PatternLayout:
-        Pattern: "%d{HH:mm:ss.SSS} [%t] %-4level %c{1} - %msg%n"
-  Loggers:
-    Root:
-      level: info
-      additivity: false
-      AppenderRef:
-        - ref: Console
+name: NATS-memory
+driverClass: io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver
+natsHostUrl: nats://nats:4222
+replicationFactor: 1
+storageType: memory

@@ -21,3 +21,8 @@ core/*.json
 # IntelliJ artifacts
 .idea/
 *.iml
+.flattened-pom.xml
+
+# Benchmark supervisor and driver process logs
+benchmark-worker.log*
+benchmark-driver.log*

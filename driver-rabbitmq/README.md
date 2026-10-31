@@ -1,5 +1,10 @@
 # RabbitMQ benchmarks
 
+> **Legacy AWS deployment:** the Terraform/Ansible assets below install Java 11 and refer to the
+> 0.0.1 tarball and old launcher settings. Adapt them to deploy the current tarball, Java 25 and
+> complete `drivers/` plugin bundles on every worker before use. For a local broker-backed check,
+> use the [Compose regression suite](../e2e-tests/compose/README.md).
+
 This folder houses all of the assets necessary to run benchmarks for [RabbitMQ](https://www.rabbitmq.com/). In order to run these benchmarks, you'll need to:
 
 * [Create the necessary local artifacts](#creating-local-artifacts)
@@ -9,12 +14,13 @@ This folder houses all of the assets necessary to run benchmarks for [RabbitMQ](
 
 ## Creating local artifacts
 
-In order to create the local artifacts necessary to run the RabbitMQ benchmarks in AWS, you'll need to have [Maven](https://maven.apache.org/install.html) installed. Once Maven's installed, you can create the necessary artifacts with a single Maven command:
+To create local artifacts, install [Maven](https://maven.apache.org/install.html) and JDK 25, then build
+the full reactor to include the driver plugins:
 
 ```bash
-$ git clone https://github.com/openmessaging/benchmark.git
-% cd messaging-benchmark
-$ mvn install
+$ git clone https://github.com/mihkels/open-messaging-benchmark.git
+$ cd open-messaging-benchmark
+$ mvn clean install
 ```
 
 ## Creating a RabbitMQ cluster on Amazon Web Services (AWS) using Terraform and Ansible
@@ -56,7 +62,7 @@ That will install the following [EC2](https://aws.amazon.com/ec2) instances (plu
 | Resource            | Description                                                 | Count |
 |:--------------------|:------------------------------------------------------------|:------|
 | RabbitMQ instances  | The VMs on which RabbitMQ brokers will run                  | 3     |
-| Client instance     | The VM from which the benchmarking suite itself will be run | 1     |
+| Client instance     | The VM from which the benchmarking suite itself will be run | 4     |
 | Prometheus instance | The VM on which metrics services will be run                | 1     |
 
 When you run `terraform apply`, you will be prompted to type `yes`. Type `yes` to continue with the installation or anything else to quit.
@@ -67,20 +73,20 @@ Once the installation is complete, you will see a confirmation message listing t
 
 There's a handful of configurable parameters related to the Terraform deployment that you can alter by modifying the defaults in the `terraform.tfvars` file.
 
-| Variable          | Description                                                                                                                         | Default                                                             |
-|:------------------|:------------------------------------------------------------------------------------------------------------------------------------|:--------------------------------------------------------------------|
-| `region`          | The AWS region in which the RabbitMQ cluster will be deployed                                                                       | `us-west-2`                                                         |
-| `az`              | The availability zone in which the RabbitMQ cluster will be deployed                                                                | `us-west-2a`                                                        |
-| `public_key_path` | The path to the SSH public key that you've generated                                                                                | `~/.ssh/rabbitmq_aws.pub`                                           |
-| `ami`             | The [Amazon Machine Image](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html) (AWI) to be used by the cluster's machines | [`ami-9fa343e7`](https://access.redhat.com/articles/3135091)        |
-| `instance_types`  | The EC2 instance types used by the various components                                                                               | `i3.4xlarge` (RabbitMQ brokers), `c4.8xlarge` (benchmarking client) |
+| Variable          | Description                                                                                                              | Default                                                                     |
+|:------------------|:-------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------|
+| `region`          | The AWS region in which the RabbitMQ cluster will be deployed                                                            | `us-west-2`                                                                 |
+| `az`              | The availability zone in which the RabbitMQ cluster will be deployed                                                     | `us-west-2a`                                                                |
+| `public_key_path` | The path to the SSH public key that you've generated                                                                     | `~/.ssh/rabbitmq_aws.pub`                                                   |
+| `ami`             | The [Amazon Machine Image](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html) used by the cluster's machines | `ami-08970fb2e5767e3b8` (RHEL 8, us-west-2)                                 |
+| `instance_types`  | The EC2 instance types used by the various components                                                                    | `i3en.6xlarge` (RabbitMQ), `m5n.8xlarge` (clients), `t2.large` (Prometheus) |
 
 > If you modify the `public_key_path`, make sure that you point to the appropriate SSH key path when running the [Ansible playbook](#running-the-ansible-playbook).
 
 ### Running the Ansible playbook
 
-With the appropriate infrastructure in place, you can install and start the RabbitMQ cluster using Ansible with just one command.
-Note that a `TFSTATE` environment must point to the folder in which the `tf.state` file is located.
+With the appropriate infrastructure in place, run Ansible after adapting the playbook as noted above.
+`TF_STATE` must point to the directory containing the Terraform state.
 
 ```bash
 $ TF_STATE=. ansible-playbook \
@@ -101,18 +107,20 @@ $ ssh -i ~/.ssh/rabbitmq_aws ec2-user@$(terraform output client_ssh_host)
 
 ## Running the benchmarks from the client host
 
-Once you've successfully SSHed into the client host, you can run all [available benchmark workloads](../#benchmarking-workloads) like this:
+Once you've successfully SSHed into the client host, you can run all [available benchmark workloads](../workloads/) like this:
 
 ```bash
 $ cd /opt/benchmark
-$ sudo bin/benchmark --drivers driver-rabbitmq/rabbitmq-classic.yaml workloads/*.yaml
+$ sudo bin/benchmark --drivers driver-rabbitmq/rabbitmq.yaml workloads/*.yaml
 ```
 
 You can also run specific workloads in the `workloads` folder. Here's an example:
 
 ```bash
-$ sudo bin/benchmark --drivers driver-rabbotmq/rabbitmq-classic.yaml workloads/1-topic-1-partitions-1kb.yaml
+$ sudo bin/benchmark --drivers driver-rabbitmq/rabbitmq.yaml workloads/1-topic-1-partition-1kb.yaml
 ```
+
+The checked-in configuration uses quorum queues; adjust its broker URI and queue type for your deployment.
 
 ## Monitoring
 
@@ -138,4 +146,3 @@ Grafana and a set of standard dashboards are installed alongside Prometheus. The
 `http://${prometheus_host}:3000`. Credentials are `admin`/`admin`. Dashboards included:
 * [RabbitMQ's standard dashboards](https://grafana.com/rabbitmq)
 * [Node Exporter dashboard](https://grafana.com/grafana/dashboards/1860-node-exporter-full/)
-

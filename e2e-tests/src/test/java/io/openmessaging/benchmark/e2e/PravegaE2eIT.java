@@ -16,7 +16,7 @@ package io.openmessaging.benchmark.e2e;
 import io.openmessaging.benchmark.TestResult;
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.LocalWorker;
+import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.admin.StreamManager;
 import org.junit.jupiter.api.AfterAll;
@@ -181,7 +181,7 @@ class PravegaE2eIT extends BaseE2eIT {
     }
 
     private TestResult runBenchmark(Workload workload) throws Exception {
-        var worker = new LocalWorker(statsLogger);
+        ProcessWorker worker = new ProcessWorker();
         try {
             worker.initializeDriver(driverConfigFile);
             WorkloadGenerator generator = new WorkloadGenerator("Pravega", workload, worker);

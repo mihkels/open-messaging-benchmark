@@ -1,0 +1,33 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Messaging service stacks, executed sequentially in this order.
+# Format: stack | compose files in stacks/ (space separated) | architecture | prerequisite | description
+# architecture: "native" (multi-arch images) or "emulated-amd64" (linux/amd64 only images, emulated on arm64)
+# prerequisite: "-" or "kop-nar" or "jms:<provider>"; a missing prerequisite fails the stack's cases.
+kafka          | kafka.yaml          | native         | -          | Apache Kafka 3.9.1 (KRaft)
+pulsar         | pulsar.yaml         | native         | -          | Apache Pulsar 4.0.6 standalone
+rabbitmq       | rabbitmq.yaml       | native         | -          | RabbitMQ 4.1
+redis          | redis.yaml          | native         | -          | Redis 7.4
+artemis        | artemis.yaml        | native         | -          | Apache ActiveMQ Artemis 2.42.0
+nats           | nats.yaml           | native         | -          | NATS 2.11 with JetStream
+nats-streaming | nats-streaming.yaml | native         | -          | NATS Streaming 0.25.6
+nsq            | nsq.yaml            | native         | -          | NSQ 1.3.0 (nsqlookupd + nsqd)
+rocketmq       | rocketmq.yaml       | native         | -          | Apache RocketMQ 5.3.2 (name server + broker)
+bookkeeper     | bookkeeper.yaml     | native         | -          | ZooKeeper + BookKeeper (Pulsar 4.0.6 image) + DistributedLog namespace
+pravega        | pravega.yaml        | emulated-amd64 | -          | Pravega 0.13.0 standalone
+kop            | kop.yaml            | emulated-amd64 | kop-nar    | Pulsar 2.10.4 standalone + KoP 2.10.4.6
+jms-artemis    | artemis.yaml        | native         | jms:artemis | JMS provider: Artemis JMS client 2.42.0 against Artemis
+jms-pulsar     | pulsar.yaml         | native         | jms:pulsar | JMS provider: DataStax Pulsar JMS 6.0.11 against Pulsar
+jms-kafka      | kafka.yaml          | native         | jms:kafka  | JMS provider: Confluent Kafka JMS client (user supplied) against Kafka

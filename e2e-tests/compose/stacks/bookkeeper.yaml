@@ -1,0 +1,87 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# ZooKeeper and one BookKeeper bookie from the multi-architecture Apache Pulsar image, plus the
+# DistributedLog namespace binding performed with the driver plugin's own shaded DistributedLog tool.
+services:
+  zookeeper:
+    image: apachepulsar/pulsar:4.0.6
+    command: ["sh", "-c", "bin/apply-config-from-env.py conf/zookeeper.conf && exec bin/pulsar zookeeper"]
+    environment:
+      PULSAR_MEM: "-Xmx256m"
+    healthcheck:
+      test: ["CMD", "bin/pulsar-zookeeper-ruok.sh"]
+      interval: 3s
+      timeout: 10s
+      retries: 30
+
+  bookkeeper-init:
+    image: apachepulsar/pulsar:4.0.6
+    command: ["sh", "-c", "bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/bookkeeper shell initnewcluster"]
+    environment:
+      BOOKIE_MEM: "-Xmx256m"
+      metadataServiceUri: "zk+hierarchical://zookeeper:2181/ledgers"
+      zkServers: zookeeper:2181
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+  bookie:
+    image: apachepulsar/pulsar:4.0.6
+    command:
+      - sh
+      - -c
+      - >-
+        bin/apply-config-from-env.py conf/bookkeeper.conf &&
+        exec bin/bookkeeper bookie
+    environment:
+      BOOKIE_MEM: "-Xms256m -Xmx512m -XX:MaxDirectMemorySize=512m"
+      metadataServiceUri: "zk+hierarchical://zookeeper:2181/ledgers"
+      zkServers: zookeeper:2181
+      advertisedAddress: bookie
+      bookiePort: "3181"
+      httpServerEnabled: "true"
+      httpServerPort: "8000"
+      journalDirectories: /tmp/bk-journal
+      ledgerDirectories: /tmp/bk-ledgers
+      dbStorage_writeCacheMaxSizeMb: "64"
+      dbStorage_readAheadCacheMaxSizeMb: "64"
+      dbStorage_rocksDB_blockCacheSize: "16777216"
+    depends_on:
+      bookkeeper-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/bookie/state | grep -q '\"running\" : true'"]
+      interval: 3s
+      timeout: 10s
+      retries: 40
+
+  dlog-init:
+    image: ${OMB_E2E_IMAGE:-omb-e2e-runner:local}
+    command:
+      - sh
+      - -c
+      - >-
+        java -cp '/benchmark/drivers/driver-bookkeeper/lib/*'
+        dlshade.org.apache.distributedlog.tools.Tool
+        dlshade.org.apache.distributedlog.admin.DistributedLogAdmin
+        bind -l /ledgers -s zookeeper:2181 -c distributedlog://zookeeper:2181/streams
+    depends_on:
+      bookie:
+        condition: service_healthy
+
+  stack-ready:
+    depends_on:
+      dlog-init:
+        condition: service_completed_successfully

@@ -12,13 +12,22 @@
 # limitations under the License.
 #
 
-cd package/target
-tar zxvf openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
-cd openmessaging-benchmark-0.0.1-SNAPSHOT
-rm lib/org.apache.pulsar-*
-rm lib/*jackson*
-curl https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/1.2.2/pulsar-jms-all-1.2.2.jar -o lib/pulsar-jms-all-1.2.2.jar
-cd ..
-rm openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
-tar zcvf openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz openmessaging-benchmark-0.0.1-SNAPSHOT
+# Adds DataStax Starlight for JMS to the JMS plugin's ext/ directory in the distribution.
+set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$SCRIPT_DIR/package-common.sh"
+
+prepare_distribution
+PULSAR_JMS_VERSION=6.0.11
+PULSAR_JMS_SHA256=d4c744c8e5bdedb8f373ece959ebf2256128fc31248d5c2db909bce913ed7f3a
+PULSAR_JMS_JAR="$PACKAGE_WORK_DIR/pulsar-jms-all-$PULSAR_JMS_VERSION.jar"
+curl -fsSL "https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/$PULSAR_JMS_VERSION/pulsar-jms-all-$PULSAR_JMS_VERSION.jar" \
+    -o "$PULSAR_JMS_JAR"
+verify_sha256 "$PULSAR_JMS_JAR" "$PULSAR_JMS_SHA256"
+for old_jar in "$EXT_DIR"/pulsar-jms-all-*.jar; do
+    [ -e "$old_jar" ] || continue
+    rm "$old_jar"
+done
+cp "$PULSAR_JMS_JAR" "$EXT_DIR/"
+replace_distribution

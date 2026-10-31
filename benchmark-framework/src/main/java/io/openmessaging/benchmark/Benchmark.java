@@ -20,10 +20,9 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
-import io.openmessaging.benchmark.worker.LocalWorker;
+import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -77,7 +76,9 @@ public final class Benchmark {
 
         @Parameter(
                 names = {"--legacy-driver-name"},
-                description = "Path to legacy driver with conflicting or not maintained dependencies")
+                description =
+                        "Load the driver from this plugin bundle directory, unpackaged driver module"
+                                + " directory or jar instead of the installed plugin bundles (local runs only)")
         public String legacyDriverName;
 
         @Parameter(description = "Workloads") // , required = true)
@@ -158,10 +159,15 @@ public final class Benchmark {
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
             worker = new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
             log.info("Using distributed workers ensemble");
+            if (arguments.legacyDriverName != null) {
+                log.warn(
+                        "--legacy-driver-name is ignored with remote workers; they load drivers from their"
+                                + " own installed plugin bundles");
+            }
         } else {
-            // Use local worker implementation
-            worker = new LocalWorker();
-            log.info("Using local worker");
+            // Run the driver in a child JVM with only its plugin bundle on the classpath
+            worker = new ProcessWorker();
+            log.info("Using local driver process worker");
         }
 
         workloads.forEach(
@@ -181,13 +187,12 @@ public final class Benchmark {
                                         // Stop any leftover workload
                                         worker.stopAll();
 
-                                        var legacyDriverFile =
+                                        var driverLocation =
                                                 arguments.legacyDriverName != null
-                                                        ? Files.createFile(Path.of(arguments.legacyDriverName))
+                                                        ? Path.of(arguments.legacyDriverName)
                                                         : null;
 
-                                        worker.initializeDriver(
-                                                Files.createFile(Path.of(driverConfig)), legacyDriverFile);
+                                        worker.initializeDriver(Path.of(driverConfig), driverLocation);
                                         var generator =
                                                 new WorkloadGenerator(driverConfiguration.name, workload, worker);
                                         var result = generator.run();

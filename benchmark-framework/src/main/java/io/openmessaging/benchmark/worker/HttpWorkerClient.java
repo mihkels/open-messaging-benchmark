@@ -29,7 +29,6 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.START_LOAD;
 import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
-import com.google.common.base.Preconditions;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -38,6 +37,7 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -45,6 +45,7 @@ import java.time.Duration;
 import java.util.List;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.Dsl;
+import org.asynchttpclient.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -79,6 +80,12 @@ public class HttpWorkerClient implements Worker {
     public void initializeDriver(Path configurationFile) throws IOException {
         byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
         sendPost(INITIALIZE_DRIVER, confFileContent);
+    }
+
+    void initializeDriverFromLocalPath(Path configurationFile) {
+        sendPost(
+                DriverProcessMain.INITIALIZE_DRIVER_LOCAL,
+                configurationFile.toAbsolutePath().toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @SuppressWarnings("unchecked")
@@ -175,16 +182,7 @@ public class HttpWorkerClient implements Worker {
                 .toCompletableFuture()
                 .thenApply(
                         response -> {
-                            if (response.getStatusCode() != HTTP_OK) {
-                                log.error(
-                                        "Failed to do HTTP post request to {}{} -- code: {}",
-                                        host,
-                                        path,
-                                        response.getStatusCode());
-                            }
-                            Preconditions.checkArgument(
-                                    response.getStatusCode() == HTTP_OK,
-                                    "Failed to do HTTP post request to -- code:");
+                            checkResponse("post", path, response);
                             return null;
                         })
                 .join();
@@ -197,14 +195,7 @@ public class HttpWorkerClient implements Worker {
                 .toCompletableFuture()
                 .thenApply(
                         r -> {
-                            if (r.getStatusCode() != HTTP_OK) {
-                                log.error(
-                                        "Failed to do HTTP get request to {}{} -- code: {}",
-                                        host,
-                                        path,
-                                        r.getStatusCode());
-                            }
-                            Preconditions.checkArgument(r.getStatusCode() == HTTP_OK);
+                            checkResponse("get", path, r);
                             var value = mapper.readValue(r.getResponseBody(), clazz);
                             log.debug("Received response: {}", value);
                             return value;
@@ -220,16 +211,31 @@ public class HttpWorkerClient implements Worker {
                 .toCompletableFuture()
                 .thenApply(
                         response -> {
-                            if (response.getStatusCode() != HTTP_OK) {
-                                log.error(
-                                        "Failed to do HTTP post request to {}{} -- code: {}",
-                                        host,
-                                        path,
-                                        response.getStatusCode());
-                            }
-                            Preconditions.checkArgument(response.getStatusCode() == HTTP_OK);
+                            checkResponse("post", path, response);
                             return mapper.readValue(response.getResponseBody(), clazz);
                         })
                 .join();
+    }
+
+    private void checkResponse(String method, String path, Response response) {
+        if (response.getStatusCode() != HTTP_OK) {
+            String body = response.getResponseBody();
+            log.error(
+                    "Failed to do HTTP {} request to {}{} -- code: {} -- {}",
+                    method,
+                    host,
+                    path,
+                    response.getStatusCode(),
+                    body);
+            throw new IllegalStateException(
+                    "HTTP "
+                            + method
+                            + " "
+                            + host
+                            + path
+                            + " failed with code "
+                            + response.getStatusCode()
+                            + (body == null || body.isBlank() ? "" : ": " + body));
+        }
     }
 }

@@ -4,6 +4,11 @@
 > This module relates to [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) which supersedes the now
 > deprecated [NATS Streaming / STAN](https://docs.nats.io/legacy/stan). If you are interested in STAN benchmarks,
 > see the [driver-nats-streaming](../driver-nats-streaming) module.
+>
+> **Legacy AWS deployment:** the Terraform/Ansible assets below predate Java 25 and isolated
+> plugins. Their playbooks refer to the 0.0.1 tarball and old launcher settings. Adapt them to
+> deploy the current tarball, Java 25 and complete `drivers/` bundles on every worker before use.
+> For a local broker-backed check, use the [Compose regression suite](../e2e-tests/compose/README.md).
 
 This folder houses the assets necessary to run benchmarks for
 [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream). In order to run these benchmarks, you'll need to:
@@ -17,13 +22,13 @@ This folder houses the assets necessary to run benchmarks for
 ## Creating local artifacts
 
 In order to create the local artifacts necessary to run the JetStream benchmarks in AWS, you'll need to have
-[Maven](https://maven.apache.org/install.html) installed. Once Maven's installed, you can create the necessary
-artifacts with a single Maven command:
+[Maven](https://maven.apache.org/install.html) and JDK 25 installed. Build the full reactor to
+include the driver plugins:
 
 ```bash
-$ git clone https://github.com/openmessaging/benchmark.git
-% cd messaging-benchmark
-$ mvn install
+$ git clone https://github.com/mihkels/open-messaging-benchmark.git
+$ cd open-messaging-benchmark
+$ mvn clean install
 ```
 
 ## Creating a NATS cluster on Amazon Web Services (AWS) using Terraform and Ansible
@@ -80,13 +85,13 @@ Once the installation is complete, you will see a confirmation message listing t
 There's a handful of configurable parameters related to the Terraform deployment that you can alter by modifying the
 defaults in the `terraform.tfvars` file.
 
-| Variable          | Description                                                                                                                         | Default                                                          |
-|:------------------|:------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------|
-| `region`          | The AWS region in which the NATS cluster will be deployed                                                                           | `us-west-2`                                                      |
-| `az`              | The availability zone in which the NATS cluster will be deployed                                                                    | `us-west-2a`                                                     |
-| `public_key_path` | The path to the SSH public key that you've generated                                                                                | `~/.ssh/rabbitmq_aws.pub`                                        |
-| `ami`             | The [Amazon Machine Image](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html) (AWI) to be used by the cluster's machines | [`ami-9fa343e7`](https://access.redhat.com/articles/3135091)     |
-| `instance_types`  | The EC2 instance types used by the various components                                                                               | `i3.4xlarge` (NATS brokers), `c4.8xlarge` (benchmarking clients) |
+| Variable          | Description                                                                                                              | Default                                                                 |
+|:------------------|:-------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------|
+| `region`          | The AWS region in which the NATS cluster will be deployed                                                                | `us-west-2`                                                             |
+| `az`              | The availability zone in which the NATS cluster will be deployed                                                         | `us-west-2a`                                                            |
+| `public_key_path` | The path to the SSH public key that you've generated                                                                     | `~/.ssh/nats_aws.pub`                                                   |
+| `ami`             | The [Amazon Machine Image](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AMIs.html) used by the cluster's machines | `ami-08970fb2e5767e3b8` (RHEL 8, us-west-2)                             |
+| `instance_types`  | The EC2 instance types used by the various components                                                                    | `i3en.6xlarge` (NATS), `m5n.8xlarge` (clients), `t2.large` (Prometheus) |
 
 > If you modify the `public_key_path`, make sure that you point to the appropriate SSH key path when running the
 > [Ansible playbook](#running-the-ansible-playbook).
@@ -94,7 +99,7 @@ defaults in the `terraform.tfvars` file.
 ### Running the Ansible playbook
 
 With the appropriate infrastructure in place, you can install and start the NATS cluster using Ansible with just
-one command. Note that a `TFSTATE` environment must point to the folder in which the `tf.state` file is located.
+one command after adapting it as noted above. `TF_STATE` must point to the folder containing the Terraform state.
 
 ```bash
 $ TF_STATE=. ansible-playbook \
@@ -119,7 +124,7 @@ $ ssh -i ~/.ssh/nats_aws ec2-user@$(terraform output client_ssh_host)
 ## Running the benchmarks from the client host
 
 Once you've successfully SSHed into the client host, you can run all
-[available benchmark workloads](../#benchmarking-workloads) like this:
+[available benchmark workloads](../workloads/) like this:
 
 ```bash
 $ cd /opt/benchmark
@@ -129,7 +134,7 @@ $ sudo bin/benchmark --drivers driver-nats/nats.yaml workloads/*.yaml
 You can also run specific workloads in the `workloads` folder. Here's an example:
 
 ```bash
-$ sudo bin/benchmark --drivers driver-nats/nats.yaml workloads/1-topic-1-partitions-1kb.yaml
+$ sudo bin/benchmark --drivers driver-nats/nats.yaml workloads/1-topic-1-partition-1kb.yaml
 ```
 
 ## Monitoring

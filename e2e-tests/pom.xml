@@ -133,6 +133,16 @@
 
     <build>
         <plugins>
+            <!-- The Compose suite's .txt matrix files use # comments -->
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <configuration>
+                    <mapping>
+                        <txt>SCRIPT_STYLE</txt>
+                    </mapping>
+                </configuration>
+            </plugin>
 
             <!-- Failsafe for integration tests - skip by default -->
             <plugin>
@@ -146,6 +156,8 @@
                     </includes>
                     <systemPropertyVariables>
                         <testcontainers.reuse.enable>false</testcontainers.reuse.enable>
+                        <!-- Drivers run in child JVMs from the plugin bundles in driver-*/target/omb-plugin -->
+                        <omb.home>${project.basedir}/..</omb.home>
                     </systemPropertyVariables>
                 </configuration>
                 <executions>

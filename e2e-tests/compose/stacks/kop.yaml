@@ -1,0 +1,50 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Apache Pulsar 2.10 standalone with the StreamNative Kafka-on-Pulsar (KoP) protocol handler.
+# KoP is archived upstream and only supports Pulsar 2.10.x, whose image is published for linux/amd64
+# only, so the broker runs emulated on Apple Silicon. run-e2e.sh downloads the pinned protocol
+# handler NAR and supplies its directory as OMB_E2E_KOP_DIR.
+services:
+  pulsar-kop:
+    image: apachepulsar/pulsar:2.10.4
+    platform: linux/amd64
+    hostname: pulsar-kop
+    command: ["sh", "-c", "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"]
+    volumes:
+      - ${OMB_E2E_KOP_DIR:?OMB_E2E_KOP_DIR must be set}:/pulsar/protocols:ro
+    environment:
+      PULSAR_MEM: "-Xms256m -Xmx1g -XX:MaxDirectMemorySize=512m"
+      PULSAR_PREFIX_messagingProtocols: kafka
+      PULSAR_PREFIX_protocolHandlerDirectory: /pulsar/protocols
+      PULSAR_PREFIX_allowAutoTopicCreationType: partitioned
+      PULSAR_PREFIX_kafkaListeners: PLAINTEXT://0.0.0.0:9092
+      PULSAR_PREFIX_kafkaAdvertisedListeners: PLAINTEXT://pulsar-kop:9092
+      PULSAR_PREFIX_brokerEntryMetadataInterceptors: org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor
+      PULSAR_PREFIX_brokerDeleteInactiveTopicsEnabled: "false"
+      # Kafka 3.x clients use idempotent producers by default, which KoP serves through its
+      # transaction coordinator.
+      PULSAR_PREFIX_kafkaTransactionCoordinatorEnabled: "true"
+      PULSAR_PREFIX_brokerDeduplicationEnabled: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/admin/v2/brokers/health > /dev/null && bash -c 'echo > /dev/tcp/localhost/9092'"]
+      interval: 5s
+      timeout: 20s
+      retries: 60
+      start_period: 30s
+
+  stack-ready:
+    depends_on:
+      pulsar-kop:
+        condition: service_healthy

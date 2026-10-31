@@ -1,0 +1,41 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# NSQ: nsqlookupd for discovery and one nsqd that registers itself under its service name.
+services:
+  nsqlookupd:
+    image: nsqio/nsq:v1.3.0
+    command: ["/nsqlookupd"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:4161/ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  nsqd:
+    image: nsqio/nsq:v1.3.0
+    command: ["/nsqd", "--broadcast-address=nsqd", "--lookupd-tcp-address=nsqlookupd:4160", "--data-path=/tmp"]
+    depends_on:
+      nsqlookupd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:4151/ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  stack-ready:
+    depends_on:
+      nsqd:
+        condition: service_healthy

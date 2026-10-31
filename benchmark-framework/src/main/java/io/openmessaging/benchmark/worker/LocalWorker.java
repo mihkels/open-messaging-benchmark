@@ -24,7 +24,6 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
-import io.openmessaging.benchmark.utils.IsolatedDriverLoader;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
@@ -81,50 +80,37 @@ public class LocalWorker implements Worker, ConsumerCallback {
 
     @Override
     public void initializeDriver(Path driverConfigFile) throws Exception {
-        initializeDriver(driverConfigFile, null);
-    }
-
-    @Override
-    public void initializeDriver(Path driverConfigFile, Path isolatedDriverHome) throws Exception {
         DriverConfiguration driverConfiguration =
                 reader.readValue(Files.newInputStream(driverConfigFile));
         log.info("Initializing driver: {}", writer.writeValueAsString(driverConfiguration));
 
-        try {
-            // Validate driver class is present
-            if (driverConfiguration.driverClass == null || driverConfiguration.driverClass.isEmpty()) {
-                throw new IllegalArgumentException("Driver configuration must specify a driverClass");
-            }
-
-            // Check if this driver should be loaded in isolation
-            var shouldIsolate = isolatedDriverHome != null;
-            if (shouldIsolate) {
-                log.info("Using isolated driver home {}", isolatedDriverHome);
-                log.info(
-                        "Loading driver {} with isolated classloader from {}",
-                        driverConfiguration.driverClass,
-                        isolatedDriverHome);
-                ClassLoader isolatedCL = IsolatedDriverLoader.forDriverFolder(isolatedDriverHome);
-                benchmarkDriver =
-                        IsolatedDriverLoader.newInstance(isolatedCL, driverConfiguration.driverClass);
-            } else {
-                log.info("Loading driver {} from classpath", driverConfiguration.driverClass);
-                // Standard loading for non-isolated drivers
-                benchmarkDriver =
-                        (BenchmarkDriver)
-                                Class.forName(driverConfiguration.driverClass)
-                                        .getDeclaredConstructor()
-                                        .newInstance();
-            }
-
-            benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());
-
-        } catch (InstantiationException
-                | IllegalAccessException
-                | ClassNotFoundException
-                | InterruptedException e) {
-            throw new RuntimeException(e);
+        if (driverConfiguration.driverClass == null || driverConfiguration.driverClass.isEmpty()) {
+            throw new IllegalArgumentException("Driver configuration must specify a driverClass");
         }
+        log.info("Loading driver {} from classpath", driverConfiguration.driverClass);
+        try {
+            benchmarkDriver =
+                    (BenchmarkDriver)
+                            Class.forName(driverConfiguration.driverClass).getDeclaredConstructor().newInstance();
+        } catch (ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                    "Driver class " + driverConfiguration.driverClass + " is not on the classpath", e);
+        }
+        benchmarkDriver.initialize(driverConfigFile, stats.getMeterRegistry());
+    }
+
+    /**
+     * Drivers always run on this JVM's classpath. Use {@link ProcessWorker} to run a driver from its
+     * own plugin bundle.
+     */
+    @Override
+    public void initializeDriver(Path driverConfigFile, Path driverLocation) throws Exception {
+        if (driverLocation != null) {
+            throw new IllegalArgumentException(
+                    "LocalWorker loads drivers from its own classpath; use ProcessWorker for "
+                            + driverLocation);
+        }
+        initializeDriver(driverConfigFile);
     }
 
     @Override

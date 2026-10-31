@@ -13,10 +13,9 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.Unpooled;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.HexFormat;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +47,13 @@ public class HistogramDeserializer extends StdDeserializer<Histogram> {
             // share the same parameters of the source histogram that was serialized.
             return Histogram.decodeFromCompressedByteBuffer(buffer, Long.MIN_VALUE);
         } catch (Exception e) {
+            ByteBuffer content = buffer.duplicate();
+            byte[] bytes = new byte[Math.min(content.remaining(), 4096)];
+            content.get(bytes);
             log.error(
-                    "Failed to decode publish delay latency: {}",
-                    ByteBufUtil.prettyHexDump(Unpooled.wrappedBuffer(buffer)));
+                    "Failed to decode publish delay latency ({} bytes): {}",
+                    buffer.remaining(),
+                    HexFormat.ofDelimiter(" ").formatHex(bytes));
             throw new RuntimeException(e);
         }
     }

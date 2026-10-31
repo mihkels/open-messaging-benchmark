@@ -1,0 +1,31 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Legacy NATS Streaming (STAN) server. The cluster ID must match `clusterId` in the driver configuration.
+services:
+  nats-streaming:
+    image: nats-streaming:0.25.6
+    command: ["-cid", "omb-e2e", "-m", "8222", "-store", "memory"]
+
+  # The scratch-based image has no shell; probe the monitoring endpoint from another container.
+  nats-streaming-probe:
+    image: ${OMB_E2E_IMAGE:-omb-e2e-runner:local}
+    command: ["sh", "-c", "for i in $$(seq 1 60); do curl -fsS http://nats-streaming:8222/streaming/serverz > /dev/null && exit 0; sleep 1; done; exit 1"]
+    depends_on:
+      - nats-streaming
+
+  stack-ready:
+    depends_on:
+      nats-streaming-probe:
+        condition: service_completed_successfully

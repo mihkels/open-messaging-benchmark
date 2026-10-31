@@ -59,8 +59,8 @@ fi
 
 # Run mvn build before docker build and exit on failure
 mvn license:format
-mvn -Pformat spotless:apply
-mvn clean install -pl package -am
+mvn spotless:apply
+mvn clean install
 if [[ $? -ne 0 ]]; then
   echo "Maven build failed"
   exit 1
@@ -88,7 +88,7 @@ elif [[ "${DO_LOAD}" -eq 1 ]]; then
   OUTPUT_FLAGS+=(--load)
 else
   # Multi-platform or explicit no load/push: save to local tarball
-  TARBALL="omb-image-${VERSION}-kafka-3.9-java24.oci.tar"
+  TARBALL="omb-image-${VERSION}-kafka-${KAFKA_VERSION}-java${JAVA_VERSION}.oci.tar"
   OUTPUT_FLAGS+=(--output "type=oci,dest=${TARBALL}")
   echo "Will export image to ${TARBALL}"
 fi
@@ -102,4 +102,3 @@ docker buildx build  --progress=plain \
   --build-context host-m2=$HOME/.m2 \
   --cache-to type=registry,ref=mihkels/open-messaging-benchmark:cache \
   "${OUTPUT_FLAGS[@]}"
-

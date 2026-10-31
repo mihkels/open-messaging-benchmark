@@ -111,6 +111,10 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                         } catch (ReinitializationRequiredException e) {
                             log.error("Exception during read", e);
                             throw e;
+                        } catch (RuntimeException e) {
+                            // The task's future is never inspected, so an escaping exception would stop
+                            // this reader silently and strand its segments for the rest of the run.
+                            log.error("Failed to process event; continuing to read", e);
                         }
                     }
                 });

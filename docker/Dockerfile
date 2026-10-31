@@ -15,6 +15,8 @@
 FROM amazoncorretto:25-alpine
 ARG BENCHMARK_TARBALL
 
+RUN apk add --no-cache bash
+
 # Using ADD instead of COPY because ${BENCHMARK_TARBALL} is an archive that needs to be extracted
 ADD ${BENCHMARK_TARBALL} /
 

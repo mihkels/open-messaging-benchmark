@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.plugin;
 
-import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.maven.artifact.versioning.ComparableVersion;
 
 /**
  * Composes the classpath of a driver process: the benchmark core first, then the jars of the
@@ -177,28 +177,7 @@ public final class RuntimeClasspath {
         return new RuntimeClasspath(new ArrayList<>(result), warnings);
     }
 
-    /**
-     * Compares versions by their numeric segments, falling back to text for qualifiers.
-     *
-     * @param left the first version
-     * @param right the second version
-     * @return a negative number, zero or a positive number if {@code left} is lower than, equal to or
-     *     higher than {@code right}
-     */
     static int compareVersions(String left, String right) {
-        String[] a = left.split("[.\\-]");
-        String[] b = right.split("[.\\-]");
-        for (int i = 0; i < Math.max(a.length, b.length); i++) {
-            String x = i < a.length ? a[i] : "0";
-            String y = i < b.length ? b[i] : "0";
-            int result =
-                    x.chars().allMatch(Character::isDigit) && y.chars().allMatch(Character::isDigit)
-                            ? new BigInteger(x).compareTo(new BigInteger(y))
-                            : x.compareTo(y);
-            if (result != 0) {
-                return result;
-            }
-        }
-        return 0;
+        return new ComparableVersion(left).compareTo(new ComparableVersion(right));
     }
 }

@@ -65,26 +65,47 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --stacks) STACK_FILTER="$2"; shift 2 ;;
-        --stacks=*) STACK_FILTER="${1#*=}"; shift ;;
-        --cases) CASE_FILTER="$2"; shift 2 ;;
-        --cases=*) CASE_FILTER="${1#*=}"; shift ;;
-        --build) BUILD_MODE="$2"; shift 2 ;;
-        --build=*) BUILD_MODE="${1#*=}"; shift ;;
-        --kafka-jms-jar) KAFKA_JMS_JAR="$2"; shift 2 ;;
-        --kafka-jms-jar=*) KAFKA_JMS_JAR="${1#*=}"; shift ;;
-        --case-timeout) CASE_TIMEOUT="$2"; shift 2 ;;
-        --case-timeout=*) CASE_TIMEOUT="${1#*=}"; shift ;;
+        --stacks|--cases|--build|--kafka-jms-jar|--case-timeout)
+            if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "Missing value for $1" >&2
+                exit 2
+            fi
+            option=$1 value=$2
+            shift 2
+            ;;
+        --stacks=*|--cases=*|--build=*|--kafka-jms-jar=*|--case-timeout=*)
+            option=${1%%=*} value=${1#*=}
+            if [ -z "$value" ]; then
+                echo "Missing value for $option" >&2
+                exit 2
+            fi
+            shift
+            ;;
         --list) LIST_ONLY=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
+    case "${option:-}" in
+        --stacks) STACK_FILTER=$value ;;
+        --cases) CASE_FILTER=$value ;;
+        --build) BUILD_MODE=$value ;;
+        --kafka-jms-jar) KAFKA_JMS_JAR=$value ;;
+        --case-timeout) CASE_TIMEOUT=$value ;;
+    esac
+    option=""
 done
 
 case "$BUILD_MODE" in
     auto|docker|host|skip) ;;
     *) echo "Invalid --build mode: $BUILD_MODE" >&2; exit 2 ;;
 esac
+
+positive_integer() {
+    case "$1" in ""|*[!0-9]*) return 1 ;; esac
+    [ "$1" -gt 0 ] 2>/dev/null
+}
+positive_integer "$CASE_TIMEOUT" || { echo "Invalid case timeout: $CASE_TIMEOUT" >&2; exit 2; }
+positive_integer "$STARTUP_TIMEOUT" || { echo "Invalid startup timeout: $STARTUP_TIMEOUT" >&2; exit 2; }
 
 # --- matrix helpers -------------------------------------------------------------------------------
 
@@ -116,6 +137,44 @@ selected_cases_for_stack() {
         echo "$row"
     done
 }
+
+validate_filter() (
+    local values=$1 matrix=$2 kind=$3 item
+    [ -z "$values" ] && return 0
+    case "$values" in
+        ,*|*,|*,,*) echo "Invalid $kind filter: $values" >&2; return 1 ;;
+    esac
+    set -f
+    local IFS=,
+    for item in $values; do
+        if ! matrix_rows "$matrix" | awk -F'|' -v id="$item" '$1 == id { found = 1 } END { exit !found }'; then
+            echo "Unknown $kind: $item" >&2
+            return 1
+        fi
+    done
+)
+
+validate_case_stacks() (
+    [ -z "$CASE_FILTER" ] && return 0
+    set -f
+    local IFS=, id row stack
+    for id in $CASE_FILTER; do
+        row=$(matrix_rows "$SUITE_DIR/cases.txt" | awk -F'|' -v id="$id" '$1 == id { print; exit }')
+        stack=$(field "$row" 3)
+        if ! in_list "$STACK_FILTER" "$stack"; then
+            echo "Case $id belongs to stack $stack, which is not selected" >&2
+            return 1
+        fi
+        if ! matrix_rows "$SUITE_DIR/stacks.txt" | awk -F'|' -v id="$stack" '$1 == id { found = 1 } END { exit !found }'; then
+            echo "Case $id references unknown stack $stack" >&2
+            return 1
+        fi
+    done
+)
+
+validate_filter "$STACK_FILTER" "$SUITE_DIR/stacks.txt" stack || exit 2
+validate_filter "$CASE_FILTER" "$SUITE_DIR/cases.txt" case || exit 2
+validate_case_stacks || exit 2
 
 if [ "$LIST_ONLY" = 1 ]; then
     matrix_rows "$SUITE_DIR/stacks.txt" | while IFS= read -r srow; do
@@ -165,10 +224,15 @@ prop "$RUN_PROPS" case_timeout_seconds "$CASE_TIMEOUT"
 CURRENT_PROJECT=""
 CURRENT_CHILD=""
 INTERRUPTED=0
+COMPOSE_FILES=()
 
 compose() {
+    if [ "${#COMPOSE_FILES[@]}" -eq 0 ]; then
+        echo "No Compose stack files are configured for $CURRENT_PROJECT" >&2
+        return 1
+    fi
     docker compose -p "$CURRENT_PROJECT" --project-directory "$SUITE_DIR" \
-        -f "$SUITE_DIR/common.yaml" $COMPOSE_FILES "$@"
+        -f "$SUITE_DIR/common.yaml" "${COMPOSE_FILES[@]}" "$@"
 }
 
 teardown_current() {
@@ -229,6 +293,13 @@ run_with_timeout() {
     return $rc
 }
 
+reports_present() {
+    local file
+    for file in index.html summary.md junit.xml results.json; do
+        [ -s "$REPORT_DIR/$file" ] || return 1
+    done
+}
+
 generate_report() {
     log "Generating report"
     prop "$RUN_PROPS" finished_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -239,11 +310,20 @@ generate_report() {
         rc=0
     else
         rc=$?
-        if [ "$rc" -ne 1 ] && command -v python3 > /dev/null 2>&1; then
-            log "Report container failed (exit $rc), falling back to host python3"
+    fi
+    if { [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; } || ! reports_present; then
+        if command -v python3 > /dev/null 2>&1; then
+            log "Report container failed or produced incomplete output (exit $rc), falling back to host python3"
             python3 "$SUITE_DIR/report/report.py" --suite "$SUITE_DIR" --report "$REPORT_DIR" >> "$RUN_LOG" 2>&1
             rc=$?
+        else
+            log "ERROR: Report container failed or produced incomplete output, and host python3 is unavailable"
+            return 2
         fi
+    fi
+    if ! reports_present; then
+        log "ERROR: Report generation did not produce all four report files; see $RUN_LOG"
+        return 2
     fi
     if [ -f "$REPORT_DIR/summary.md" ]; then
         sed -n '1,/^## Cases/p' "$REPORT_DIR/summary.md" | sed '$d'
@@ -539,9 +619,9 @@ run_stack() {
         return
     fi
 
-    COMPOSE_FILES=""
+    COMPOSE_FILES=()
     for f in $files; do
-        COMPOSE_FILES="$COMPOSE_FILES -f $SUITE_DIR/stacks/$f"
+        COMPOSE_FILES+=(-f "$SUITE_DIR/stacks/$f")
     done
     CURRENT_PROJECT=$(echo "omb-e2e-$RUN_ID-$stack" | tr 'A-Z' 'a-z')
     CURRENT_STACK_DIR="$sdir"

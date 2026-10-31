@@ -10,23 +10,22 @@ The JMS client library is not part of the build. Put the JMS provider jars into 
 of the distribution, on the coordinator and on every worker. They are only visible to the JMS driver process.
 When `delegateForAdminOperationsClassName` is set, the plugin of that driver (for example `driver-kafka`)
 is loaded into the same process. The scripts below add the provider to the distribution tar file.
+Run a full-reactor build from the repository root first; the scripts require exactly one
+`package/target/openmessaging-benchmark-*-bin.tar.gz`. They use a temporary extraction and replace the
+tarball only after repackaging succeeds.
 
 ### DataStax Starlight for JMS / Pulsar Fast JMS
 
-Follow these instructions to compile the openmessaging benchmark for Fast JMS for Apache Pulsar
+Build the distribution with JDK 25 and add the Pulsar JMS provider:
 
-- Build the openmessaging benchmark package as you would normally
+```bash
+mvn clean install -DskipTests
+bash driver-jms/package-pulsar.sh
+```
 
-  ```
-  mvn clean package
-  ```
-- Run the repacking script
-
-  ```
-  bash driver-jms/package-pulsar.sh
-  ```
-
-You can now deploy to AWS from `driver-pulsar/deploy`.
+The script downloads and SHA-256 verifies `pulsar-jms-all` 6.0.11, replacing older
+`pulsar-jms-all` jars in the tarball. This is the latest `javax.jms` release; version 1.2.2 has an
+unshaded older Pulsar client that conflicts with the Pulsar plugin and its transaction support.
 
 ### Confluent JMS Client / Kafka JMS
 
@@ -52,7 +51,7 @@ Follow these instructions to compile the openmessaging benchmark for Confluent J
 - Build the openmessaging benchmark package
 
   ```
-  mvn clean package
+  mvn clean install -DskipTests
   ```
 - Run the repacking script passing in the location of the fat jar. EG. `~/kafka-jms-client/target/kafka-jms-client-fat-6.2.1.jar`
 
@@ -60,7 +59,9 @@ Follow these instructions to compile the openmessaging benchmark for Confluent J
   bash driver-jms/package-kafka.sh /path/to/the/kafka-jms-client.jar
   ```
 
-You can now deploy to AWS from `driver-kafka/deploy`.
+The jar path can be absolute or relative to the directory from which the script is invoked.
+Legacy AWS deployment scripts need adaptation for Java 25 and plugin bundles before use; see
+the [root README](../README.md#kuberneteshelm-and-deployments).
 
 ## JMS Driver Benchmarks
 

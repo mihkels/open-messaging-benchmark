@@ -39,7 +39,8 @@ e2e-tests/compose/run-e2e.sh --cases kafka-contract,pulsar-contract
 - No host JDK or Python is needed. The distribution is built with Maven in Docker when it is missing.
 Use `--build host` to build it with the host Maven and JDK 25 instead, or `--build docker` to always rebuild.
 
-Run `--help` to see all options.
+Run `--help` to see all options. Filters must name existing cases and stacks; explicitly selected
+cases must belong to a selected, configured stack.
 
 ## What a case checks
 
@@ -49,11 +50,13 @@ against `http://worker-1:8080,http://worker-2:8080`.
 Each workload lasts one minute, with no warm-up, at a low fixed rate. A case passes when all of these hold:
 
 - the coordinator exits normally within the case timeout and does not log `Failed to run the workload`;
-- `result.json` is written with at least three 10-second rate samples;
+- `result.json` is written with at least three 10-second rate samples and complete, finite publish,
+  consume, publish-error and backlog series;
 - at least 50% of the target publish rate was published, with no publish errors;
 - every subscription received the messages: consumed / (published × subscriptions per topic) is between 0.9 and 1.1;
 - the final backlog has drained, within a small tolerance;
-- end-to-end latency was recorded.
+- end-to-end latency was recorded;
+- any collected worker counter values and their combined totals are finite numbers.
 
 Every plugin has one **contract** case: one topic, one partition, one subscription.
 
@@ -69,7 +72,9 @@ Every plugin has one **contract** case: one topic, one partition, one subscripti
 - JMS selectors and transactions
 - fan-out, partitioning, keys and random payloads
 
-In a full run, any plugin shipped in `drivers/` that has no contract case is reported as a failure.
+In a full run, any plugin shipped in `drivers/` that has no registered contract case is reported as
+a failure. Matrix cases that were not registered, for example because their stack is missing, are
+also reported.
 
 ## Reports
 
@@ -79,7 +84,7 @@ Each run writes to `e2e-tests/target/e2e-reports/<run-id>/`. The latest run is a
 |-----------------------------|-------------------------------------------------------------------------------------------------------------------------|
 | `index.html`                | Self-contained report: verdict, plugin and case matrix, checks, rate charts, log excerpts, images and artifacts         |
 | `summary.md`                | Short Markdown summary for pull requests or chat                                                                        |
-| `junit.xml`                 | One test suite per stack, for CI tools                                                                                  |
+| `junit.xml`                 | One test suite per stack plus run-level infrastructure errors, for CI tools                                             |
 | `results.json`              | Machine-readable results (`schemaVersion` 1)                                                                            |
 | `cases/<case>/`             | `result.json`, the coordinator log, worker and driver logs, worker metrics, and the effective driver and workload files |
 | `stacks/<stack>/`           | Effective Compose file, startup, broker and teardown logs, images with digests and platforms                            |
@@ -96,6 +101,9 @@ Each run writes to `e2e-tests/target/e2e-reports/<run-id>/`. The latest run is a
 | `aborted` / `not-run` | The run was interrupted.                                   |
 
 The exit code is 0 only when every selected case passed and every stack was cleaned up.
+If the report container fails or does not produce all four files, the runner tries host `python3`.
+If Docker is unavailable and host Python is not installed, it cannot create a report and reports
+the preflight error on the console.
 
 Reports may contain hostnames, image digests and log excerpts. Values that look like passwords or tokens are
 redacted from the excerpts.
@@ -172,7 +180,7 @@ stops the run.
   treated as milliseconds.
 - **NSQ:** `createTopic` did nothing, so consumers sometimes subscribed after the probe messages had been
   published, and the run failed with "Timed out waiting for consumers to be ready". Topics are now created
-  through the nsqd HTTP API.
+  through the nsqd HTTP API. `nsqdHttpPort` defaults to 4151 and can be overridden in the driver YAML.
 - **KoP:** the Pulsar producer branch checked `consumerType` instead of `producerType`.
 - **KoP stack:** Kafka 3.x clients use idempotent producers, which KoP rejects unless the transaction coordinator
   and broker deduplication are enabled.
@@ -186,3 +194,4 @@ stops the run.
   different versions of annotation-only jars, such as `error_prone_annotations`. For these jars only, the
   highest version is now used, with a warning.
 
+The driver-specific regression cases are listed in [cases.txt](cases.txt).

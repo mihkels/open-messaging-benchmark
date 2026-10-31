@@ -2,6 +2,13 @@
 
 For instructions on running the OpenMessaging benchmarks for Pulsar, see the [official documentation](http://openmessaging.cloud/docs/benchmarks/pulsar/).
 
+For a local Pulsar-backed plugin check, run `e2e-tests/compose/run-e2e.sh --stacks pulsar`; see the
+[Compose regression suite](../e2e-tests/compose/README.md) for requirements and reports.
+
+> **Legacy deployment:** the AWS/Ansible assets refer to the 0.0.1 tarball and old launcher
+> settings. Adapt them to deploy the current distribution, Java 25 and complete `drivers/` plugin
+> bundles on every worker before use.
+
 ## Supplement to the official documentation
 
 Before you run `ansible-playbook` with `terraform-inventory`, you must set the environment variable `TF_STATE`. i.e. the completed command should be:

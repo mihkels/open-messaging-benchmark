@@ -279,6 +279,39 @@ class PluginRegistryTest {
     }
 
     @Test
+    void comparesAnnotationVersionsWithMavenQualifierOrdering() {
+        assertThat(RuntimeClasspath.compareVersions("2.0-rc1", "2.0")).isNegative();
+        assertThat(RuntimeClasspath.compareVersions("2.0", "2.0-rc1")).isPositive();
+        assertThat(RuntimeClasspath.compareVersions("2.10", "2.9")).isPositive();
+        assertThat(RuntimeClasspath.compareVersions("2.0-final", "2.0")).isZero();
+        assertThat(RuntimeClasspath.compareVersions("2.0-sp1", "2.0")).isPositive();
+    }
+
+    @Test
+    void prefersAReleaseAnnotationArtifactOverItsPrerelease() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path candidate =
+                artifactJar(
+                        jms.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.0-rc1");
+        Path release =
+                artifactJar(
+                        kafka.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.0");
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(release.toRealPath())
+                .doesNotContain(candidate.toRealPath());
+    }
+
+    @Test
     void reportsCorruptPluginJarsInsteadOfSilentlyUsingThem() throws IOException {
         Path kafka = bundle("kafka", List.of(KAFKA), "");
         Path jar = kafka.resolve("lib/broken.jar");

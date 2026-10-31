@@ -27,6 +27,7 @@ import argparse
 import datetime
 import html
 import json
+import math
 import os
 import re
 import sys
@@ -133,13 +134,17 @@ def parse_metrics(path):
         for line in f:
             if line.startswith("#") or not line.strip():
                 continue
-            m = re.match(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([-+0-9.eE]+|NaN)", line)
+            m = re.match(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+(\S+)", line)
             if not m or not m.group(1).endswith("_total"):
                 continue
             try:
-                totals[m.group(1)] = totals.get(m.group(1), 0.0) + float(m.group(3))
-            except ValueError:
-                pass
+                value = float(m.group(3))
+            except ValueError as e:
+                raise ValueError("%s has invalid counter value %r" % (m.group(1), m.group(3))) from e
+            total = totals.get(m.group(1), 0.0) + value
+            if not math.isfinite(value) or not math.isfinite(total):
+                raise ValueError("%s has a non-finite or overflowing counter value" % m.group(1))
+            totals[m.group(1)] = total
     return totals
 
 
@@ -147,26 +152,46 @@ def check(name, ok, detail):
     return {"name": name, "passed": bool(ok), "detail": detail}
 
 
+def result_series(result, name, allow_negative=False):
+    values = result.get(name)
+    if not isinstance(values, list) or not values:
+        raise ValueError("%s must be a non-empty array" % name)
+    for value in values:
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or (not allow_negative and value < 0)):
+            raise ValueError("%s contains an invalid value: %r" % (name, value))
+    return values
+
+
 def validate_result(case, cdir):
     """Applies the common messaging contract to the benchmark result of one case."""
-    workload = read_simple_yaml(os.path.join(cdir, "workload.yaml"))
     result_path = os.path.join(cdir, "result.json")
     coordinator_log = os.path.join(cdir, "coordinator.log")
     checks, measurements = [], {}
+    try:
+        workload = read_simple_yaml(os.path.join(cdir, "workload.yaml"))
+    except (OSError, UnicodeError) as e:
+        workload = {}
+        checks.append(check("Workload configuration", False, "cannot read workload file: %s" % e))
 
     exit_code = case.get("coordinator_exit_code", "")
     timed_out = case.get("timed_out") == "true"
     if timed_out:
         checks.append(check("Coordinator finished in time", False,
                             "Coordinator was killed after the case timeout"))
-    elif exit_code not in ("", "0"):
-        checks.append(check("Coordinator exit code", False, "exit code %s" % exit_code))
+    elif exit_code != "0":
+        checks.append(check("Coordinator exit code", False,
+                            "exit code %s" % exit_code if exit_code else "exit code was not recorded"))
     else:
         checks.append(check("Coordinator exit code", True, "exit code 0"))
 
-    failures = [l for l in error_lines(coordinator_log, 200) if "Failed to run the workload" in l]
-    checks.append(check("Workload completed", not failures,
-                        failures[0] if failures else "no 'Failed to run the workload' entry"))
+    try:
+        with open(coordinator_log, encoding="utf-8", errors="replace") as f:
+            failure = next((redact(line.rstrip()) for line in f if "Failed to run the workload" in line), "")
+        checks.append(check("Workload completed", not failure,
+                            failure or "no 'Failed to run the workload' entry"))
+    except OSError as e:
+        checks.append(check("Workload completed", False, "cannot read coordinator log: %s" % e))
 
     if not os.path.isfile(result_path):
         checks.append(check("Result file written", False, "result.json is missing"))
@@ -177,19 +202,56 @@ def validate_result(case, cdir):
     except (OSError, ValueError) as e:
         checks.append(check("Result file written", False, "result.json is not valid JSON: %s" % e))
         return checks, measurements
+    if not isinstance(result, dict):
+        checks.append(check("Result file written", False, "result.json must contain an object"))
+        return checks, measurements
     checks.append(check("Result file written", True, "result.json parsed"))
 
-    publish = [float(x) for x in result.get("publishRate") or []]
-    consume = [float(x) for x in result.get("consumeRate") or []]
-    errors = [float(x) for x in result.get("publishErrorRate") or []]
-    backlog = [int(x) for x in result.get("backlog") or []]
-    subscriptions = int(workload.get("subscriptionsPerTopic", 1) or 1)
-    target_rate = float(workload.get("producerRate", 0) or 0)
-    duration = float(workload.get("testDurationMinutes", 1) or 1) * 60.0
+    try:
+        publish = result_series(result, "publishRate")
+        consume = result_series(result, "consumeRate")
+        errors = result_series(result, "publishErrorRate")
+        backlog = result_series(result, "backlog", allow_negative=True)
+        if any(int(value) != value for value in backlog):
+            raise ValueError("backlog samples must be whole numbers")
+        backlog = [int(value) for value in backlog]
+        if any(len(series) != len(publish) for series in (consume, errors, backlog)):
+            raise ValueError("publish, consume, error and backlog sample counts must match")
+        subscriptions = workload["subscriptionsPerTopic"]
+        target_rate = float(workload["producerRate"])
+        duration = float(workload["testDurationMinutes"]) * 60.0
+        if (isinstance(subscriptions, bool) or not isinstance(subscriptions, int)
+                or subscriptions <= 0) or not math.isfinite(target_rate) or target_rate <= 0 \
+                or not math.isfinite(duration) or duration <= 0:
+            raise ValueError("workload subscriptions, producer rate and duration must be positive")
+        for key in ("aggregatedPublishLatencyAvg", "aggregatedPublishLatency99pct",
+                    "aggregatedEndToEndLatencyAvg", "aggregatedEndToEndLatency99pct"):
+            value = result.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                      or not math.isfinite(value) or value < 0):
+                raise ValueError("%s must be a non-negative finite number" % key)
+        quantiles = result.get("aggregatedEndToEndLatencyQuantiles")
+        if quantiles is not None and (not isinstance(quantiles, dict) or any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0 for value in quantiles.values())):
+            raise ValueError("aggregatedEndToEndLatencyQuantiles must contain finite non-negative values")
+        published = sum(publish) * STATS_INTERVAL_SECONDS
+        consumed = sum(consume) * STATS_INTERVAL_SECONDS
+        publish_errors = sum(errors) * STATS_INTERVAL_SECONDS
+        expected_deliveries = published * subscriptions
+        minimum = 0.5 * target_rate * duration
+        tolerance = max(100.0, target_rate * subscriptions * 2.0)
+        avg_publish_rate = published / duration
+        avg_consume_rate = consumed / duration
+        ratio = consumed / expected_deliveries if expected_deliveries else 0.0
+        if not all(math.isfinite(value) for value in
+                   (published, consumed, publish_errors, expected_deliveries, minimum, tolerance,
+                    avg_publish_rate, avg_consume_rate, ratio)):
+            raise ValueError("result or workload totals exceed the supported numeric range")
+    except (KeyError, TypeError, ValueError, OverflowError) as e:
+        checks.append(check("Statistics collected", False, "invalid result or workload data: %s" % e))
+        return checks, measurements
 
-    published = sum(publish) * STATS_INTERVAL_SECONDS
-    consumed = sum(consume) * STATS_INTERVAL_SECONDS
-    expected_deliveries = published * subscriptions
     measurements.update({
         "samples": len(publish),
         "published_estimate": round(published),
@@ -197,10 +259,10 @@ def validate_result(case, cdir):
         "expected_deliveries": round(expected_deliveries),
         "subscriptions_per_topic": subscriptions,
         "target_publish_rate": target_rate,
-        "avg_publish_rate": round(published / duration, 1) if duration else None,
-        "avg_consume_rate": round(consumed / duration, 1) if duration else None,
+        "avg_publish_rate": round(avg_publish_rate, 1),
+        "avg_consume_rate": round(avg_consume_rate, 1),
         "final_backlog": backlog[-1] if backlog else None,
-        "publish_errors_estimate": round(sum(errors) * STATS_INTERVAL_SECONDS),
+        "publish_errors_estimate": round(publish_errors),
         "publish_latency_avg_ms": result.get("aggregatedPublishLatencyAvg"),
         "publish_latency_p99_ms": result.get("aggregatedPublishLatency99pct"),
         "e2e_latency_avg_ms": result.get("aggregatedEndToEndLatencyAvg"),
@@ -212,18 +274,15 @@ def validate_result(case, cdir):
 
     checks.append(check("Statistics collected", len(publish) >= 3,
                         "%d rate samples" % len(publish)))
-    minimum = 0.5 * target_rate * duration if target_rate else 1
     checks.append(check("Messages published", published >= minimum,
                         "~%d published, at least %d expected (50%% of %g msg/s for %ds)"
                         % (published, minimum, target_rate, duration)))
     checks.append(check("No publish errors", sum(errors) == 0,
                         "~%d publish errors" % round(sum(errors) * STATS_INTERVAL_SECONDS)))
-    ratio = consumed / expected_deliveries if expected_deliveries else 0.0
     measurements["delivery_ratio"] = round(ratio, 4)
     checks.append(check("Every subscription received the messages", 0.9 <= ratio <= 1.1,
                         "consumed/expected = %.3f (~%d of ~%d; %d subscription(s) per topic)"
                         % (ratio, consumed, expected_deliveries, subscriptions)))
-    tolerance = max(100.0, target_rate * subscriptions * 2.0)
     if backlog:
         final = backlog[-1]
         checks.append(check("Backlog drained", -tolerance <= final <= tolerance,
@@ -231,15 +290,23 @@ def validate_result(case, cdir):
                             % (final, tolerance)))
     else:
         checks.append(check("Backlog drained", False, "no backlog samples"))
-    e2e = result.get("aggregatedEndToEndLatencyQuantiles") or {}
+    e2e = quantiles or {}
     checks.append(check("End-to-end latency recorded",
                         bool(e2e) or (result.get("aggregatedEndToEndLatencyAvg") or 0) > 0,
                         "average %.2f ms" % float(result.get("aggregatedEndToEndLatencyAvg") or 0)))
 
     metric_totals = {}
     for worker in ("worker-1", "worker-2"):
-        for key, value in parse_metrics(os.path.join(cdir, worker + "-metrics.txt")).items():
-            metric_totals[key] = metric_totals.get(key, 0.0) + value
+        try:
+            combined = metric_totals.copy()
+            for key, value in parse_metrics(os.path.join(cdir, worker + "-metrics.txt")).items():
+                total = combined.get(key, 0.0) + value
+                if not math.isfinite(total):
+                    raise ValueError("%s overflows when combining worker counters" % key)
+                combined[key] = total
+            metric_totals = combined
+        except (OSError, ValueError) as e:
+            checks.append(check("Worker metrics", False, "%s: %s" % (worker, e)))
     interesting = {k: v for k, v in metric_totals.items()
                    if re.search(r"(sent|received|error|bytes)", k)}
     measurements["worker_metric_totals"] = dict(sorted(interesting.items()))
@@ -317,8 +384,18 @@ def coverage_cases(report_dir, suite_dir, run, cases):
                 if "|" in line:
                     shipped.append(line.strip().split("|", 1)[1])
     matrix = read_matrix(os.path.join(suite_dir, "cases.txt"))
-    contract = {row[1] for row in matrix if len(row) > 3 and row[3] == "contract"}
+    registered = {case["id"] for case in cases}
+    contract = {case["plugin"] for case in cases if case["kind"] == "contract"}
     extra = []
+    for row in matrix:
+        if len(row) >= 4 and row[0] not in registered:
+            extra.append({
+                "id": "matrix-" + row[0], "plugin": row[1], "stack": row[2], "kind": "coverage",
+                "description": "Case missing from the run", "status": ERROR, "phase": "coverage",
+                "reason": "Case '%s' was not registered; check its stack in stacks.txt" % row[0],
+                "checks": [], "measurements": {}, "artifacts": [], "architecture": "",
+                "rerun": "", "duration_seconds": None,
+            })
     for plugin in sorted(set(shipped)):
         if plugin not in contract:
             extra.append({
@@ -397,12 +474,21 @@ def worst(statuses):
 
 def write_json(data, report_dir):
     with open(os.path.join(report_dir, "results.json"), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, sort_keys=False)
+        json.dump(data, f, indent=2, sort_keys=False, allow_nan=False)
         f.write("\n")
 
 
 def write_junit(data, report_dir):
-    root = ET.Element("testsuites", name="omb-plugin-regression", tests=str(data["total"]))
+    integrity = [("cleanup-" + stack, "Cleanup failed for stack " + stack)
+                 for stack in data["cleanup_failures"]]
+    if data["run"].get("preflight_error"):
+        integrity.append(("preflight", data["run"]["preflight_error"]))
+    if data["run"].get("interrupted") == "true":
+        integrity.append(("interrupted", "The regression run was interrupted"))
+    if not data["cases"]:
+        integrity.append(("no-cases", "No regression cases were registered"))
+    root = ET.Element("testsuites", name="omb-plugin-regression",
+                      tests=str(data["total"] + len(integrity)))
     by_stack = {}
     for c in data["cases"]:
         by_stack.setdefault(c["stack"], []).append(c)
@@ -427,6 +513,13 @@ def write_junit(data, report_dir):
                 el.text = c.get("reason", "")
             if c.get("log_excerpt"):
                 ET.SubElement(tc, "system-out").text = c["log_excerpt"]
+    if integrity:
+        suite = ET.SubElement(root, "testsuite", name="run.integrity", tests=str(len(integrity)),
+                              failures="0", errors=str(len(integrity)), skipped="0", time="0")
+        for name, message in integrity:
+            tc = ET.SubElement(suite, "testcase", classname="run.integrity", name=name, time="0")
+            ET.SubElement(tc, "error", message=message, type="infrastructure").text = message
+        total_err += len(integrity)
     root.set("failures", str(total_fail))
     root.set("errors", str(total_err))
     ET.ElementTree(root).write(os.path.join(report_dir, "junit.xml"), encoding="utf-8", xml_declaration=True)

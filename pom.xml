@@ -260,6 +260,9 @@
                         <includes>
                             <include>**/*.md</include>
                         </includes>
+                        <excludes>
+                            <exclude>**/target/**</exclude>
+                        </excludes>
                         <flexmark/>
                     </markdown>
                     <formats>

@@ -3,7 +3,8 @@
 [![Build](https://github.com/openmessaging/benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/openmessaging/benchmark/actions/workflows/pr-build-and-test.yml)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-This is a maintained fork of the OpenMessaging Benchmark framework. The goal of this fork is to keep the Docker images and dependencies up to date (notably updating the official Docker image to a Java 17 base) while tracking upstream functionality.
+This is a maintained fork of the OpenMessaging Benchmark framework, keeping its dependencies and
+Java 25 container images up to date while tracking upstream functionality.
 
 Notice: We do not consider or plan to release any unilateral test results based on this standard. For reference, you can purchase server tests on the cloud by yourself.
 
@@ -36,9 +37,8 @@ More details can be found in the upstream documentation: http://openmessaging.cl
 - Metrics: Micrometer and Prometheus client libraries
 - Containers: Docker (with Dockerfiles in docker/), multi-arch builds supported
 
-Notes on Java versions:
-- Build requires JDK 25 (pom.xml sets maven.compiler.release=25 and mise.toml sets java = "25").
-- Docker runtime images are based on Java 17 (Temurin 17) per docker/README.md. This is acceptable because the runtime only needs to execute the assembled distribution. If you build locally, use JDK 25.
+Builds and benchmark runtimes require Java 25. The application Dockerfiles use Amazon Corretto 25;
+the Compose regression runner uses Eclipse Temurin 25.
 
 ## Requirements
 
@@ -52,7 +52,7 @@ Notes on Java versions:
 - benchmark-framework: Core coordinator and worker implementation, common logic
 - driver-api: Driver SPI
 - driver-*: Implementations for specific brokers (Kafka, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ, Artemis, Pravega, JMS, KoP), each packaged as a driver plugin bundle (see [Driver plugins](#driver-plugins))
-- e2e-tests: End-to-end tests for selected drivers
+- e2e-tests: Testcontainers tests for selected drivers and a Compose regression suite for all plugins
 - package: Assembles a binary distribution (tar.gz) including bin/, lib/, workloads/, payload/
 - docker: Dockerfiles and instructions for building runnable images
 - deployment: Kubernetes/Helm and other deployment manifests
@@ -72,48 +72,54 @@ The packaged distribution and this repository include two main shell entry point
 - `bin/benchmark-worker` — runs a worker process that executes workload operations.
   - Main class: `io.openmessaging.benchmark.worker.BenchmarkWorker`
   - Important env vars: see [Environment variables](#environment-variables).
-  - Common flags: -p <port> (HTTP server port; `/metrics` is served here and includes the metrics of the driver process), -sp <stats-port>
-  - Example: bin/benchmark-worker -p 8080 -sp 8081
+  - Common flag: `-p <port>` (HTTP server port; `/metrics` includes the driver process metrics).
+    `-sp` is deprecated and does not start a separate metrics listener.
+  - Example: `bin/benchmark-worker -p 8080`
 
-Other helpful files:
-- local-build.sh — convenience script to build multi-arch Docker images with buildx.
-- Variables/args:
-- VERSION (arg1, default: latest)
-- PLATFORMS (arg2 or auto-detected; e.g., linux/arm64,linux/amd64)
-- PUSH_ARG (arg3: push|--push|true|1 to push; load|--load to docker load)
-- Env: DOCKER_PUSH=1 to push; REPOSITORY (default mihkels/open-messaging-benchmark); KAFKA_VERSION and JAVA_VERSION tags baked into image name.
+`local-build.sh` builds multi-architecture images with buildx. Its arguments are the version
+(default `latest`), platforms (for example `linux/arm64,linux/amd64`), and optionally `push` or
+`load`. `DOCKER_PUSH=1` also enables pushing. The repository and Kafka/Java tag components are set
+in the script. It formats license headers and source files, and exports a BuildKit cache to
+`mihkels/open-messaging-benchmark:cache` even when the image itself is not pushed.
 
 ## Build
 
 Common build actions (from project root):
 - Full build and unit test: `mvn clean install`
-- Skip tests: mvn `clean install -DskipTests`
-- Skip JaCoCo coverage: mvn clean verify -Djacoco.skip
-- Skip Checkstyle: mvn clean verify -Dcheckstyle.skip
-- Skip Spotless check: mvn clean verify -Dspotless.check.skip
+- Skip tests: `mvn clean install -DskipTests`
+- Skip JaCoCo coverage: `mvn clean verify -Djacoco.skip`
+- Skip Checkstyle: `mvn clean verify -Dcheckstyle.skip`
+- Skip Spotless check: `mvn clean verify -Dspotless.check.skip`
 - Format code: `mvn spotless:apply`
 - Generate license headers: `mvn license:format`
 
+In some Git worktrees, the license plugin can fail with "Bare Repository has neither a working
+tree, nor an index". As a workaround, append `-Dlicense.skip` to a build command; this bypasses
+the license check.
+
 ## Running benchmarks (local)
 
-1) Build classes if running from source tree (non-packaged):
-- `mvn -q -DskipTests package`
+Build from the repository root with the full reactor. The distribution assembly includes plugin
+bundles from the reactor, so building only the `package` module can omit drivers.
+
+1) Build classes and plugin bundles if running from the source tree:
+- `mvn -q -DskipTests install`
 2) Start one or more workers:
-- `bin/benchmark-worker -p 8080 -sp 8081`
+- `bin/benchmark-worker -p 8080`
 - Repeat on other machines/ports as needed; ensure network connectivity from coordinator to workers.
 3) Run the coordinator pointing to drivers and workloads:
 - bin/benchmark --drivers driver-kafka/kafka.yaml --workers http://host1:8080,http://host2:8080 workloads/1-topic-16-partitions-1kb.yaml
 
 Notes:
-- Each driver has its own configuration YAML (see `driver-*/ *.yaml`), describing broker endpoints and client parameters.
+- Each driver has its own configuration YAML (see `driver-*/*.yaml`), describing broker endpoints and client parameters.
 - Workloads live under workloads/ and payload/; feel free to copy and customize.
 
 ## Driver plugins
 
 Drivers are not on the benchmark classpath. Each driver is a self-contained plugin bundle, and every
 benchmark run starts the selected driver in its own child JVM whose classpath contains only the
-benchmark runtime, that driver and its own libraries. Upgrading a client library of one driver can
-therefore not break another driver.
+benchmark runtime, that driver and its own libraries. Driver-specific dependencies are isolated
+from other drivers; the shared-runtime and combined-plugin rules below still apply.
 
 How it works:
 
@@ -145,14 +151,19 @@ drivers/driver-kafka/
 ```yaml
 descriptorVersion: 1          # descriptor format, currently 1
 id: kafka                     # unique plugin id
-version: 0.0.6
+version: 0.0.6-SNAPSHOT
 driverApiVersion: 1           # must equal the benchmark's DriverApiVersion.CURRENT
 javaVersion: 25               # minimum Java feature version
 drivers:                      # BenchmarkDriver implementations in this bundle
   - io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
 classpath:                    # relative to the bundle; plain entries must exist, globs ('*' in the file name) may match nothing
-  - driver-kafka-0.0.6.jar
+  - driver-kafka-0.0.6-SNAPSHOT.jar
   - lib/*.jar
+```
+
+Bundles can also declare optional entries. For example, the JMS descriptor includes:
+
+```yaml
 optionalClasspath:            # entries that may be missing, e.g. user supplied jars
   - ext/*.jar
 classReferenceProperties:     # driver YAML properties naming classes of other plugins
@@ -173,9 +184,13 @@ an ambiguous plugin id or driver class fails with a description of the conflicti
 - Any other library that is also part of the benchmark runtime (for example Jackson, HdrHistogram
   or Log4j) is loaded from the runtime; the bundle's copy is ignored with a warning.
 - Two bundles loaded into the same process (JMS plus its delegate) must not contain different
-  versions of the same library and classifier. Distinct classifiers, such as native libraries for
-  different platforms, remain on the classpath.
+  versions of the same library and classifier, except for the annotation-only artifacts listed by
+  `RuntimeClasspath`, where the highest Maven version is selected with a warning. Distinct
+  classifiers, such as native libraries for different platforms, remain on the classpath.
 - Bundles are never downloaded: install them on the coordinator (local mode) and on every worker.
+
+The NSQ driver also needs access to the nsqd HTTP API to create topics. `nsqdHttpPort` in
+`driver-nsq/nsq.yaml` defaults to 4151; producer TCP port 4150 and lookup HTTP port 4161 are fixed.
 
 ### Writing an external driver plugin
 
@@ -183,26 +198,30 @@ an ambiguous plugin id or driver class fails with a description of the conflicti
 Maven project for an in-memory loopback driver:
 
 ```bash
-mvn -q install -DskipTests                    # installs driver-api to the local repository
+mvn -q install -DskipTests                    # full reactor; installs driver-api locally
 mvn -q -f examples/external-driver-plugin/pom.xml package
-cp -r examples/external-driver-plugin/target/omb-plugin <benchmark>/drivers/loopback
-<benchmark>/bin/benchmark -d examples/external-driver-plugin/loopback.yaml workloads/1-topic-1-partition-100b.yaml
+OMB_PLUGIN_PATH="$PWD/examples/external-driver-plugin/target/omb-plugin" \
+  bin/benchmark -d examples/external-driver-plugin/loopback.yaml \
+  -o loopback-result.json e2e-tests/compose/workloads/contract.yaml
 ```
+
+For a packaged distribution, copy `examples/external-driver-plugin/target/omb-plugin` into its
+`drivers/loopback` directory instead. Install the same bundle on every remote worker.
 
 Plugins inside this repository get the bundle layout from the `omb-driver-bundle` profile of the root
 POM, which activates for every module that has `src/main/plugin/plugin.yaml`.
 
 ## Docker images
 
-See docker/README.md for details. Summary:
-- docker/Dockerfile: runtime image based on eclipse-temurin:17 that expects a prebuilt distribution tarball (BENCHMARK_TARBALL build-arg).
-- docker/Dockerfile.build: builds the project (using a Maven builder) and produces a runtime image on eclipse-temurin:17.
+See [docker/README.md](docker/README.md) for details. Both Dockerfiles use an Amazon Corretto 25
+runtime. `docker/Dockerfile` consumes a prebuilt distribution; `docker/Dockerfile.build` builds the
+full project with Maven in Docker.
 
 Examples:
 - Build with prebuilt tarball:
-- mvn -q -DskipTests -pl package -am package
-- export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-<VERSION>-SNAPSHOT-bin.tar.gz
-- docker build -t openmessaging-benchmark:latest --build-arg BENCHMARK_TARBALL . -f docker/Dockerfile
+- `mvn -q -DskipTests install`
+- `export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.6-SNAPSHOT-bin.tar.gz`
+- `docker build -t openmessaging-benchmark:latest --build-arg "BENCHMARK_TARBALL=$BENCHMARK_TARBALL" -f docker/Dockerfile .`
 - Build everything inside Docker (no local Maven required):
 - docker build -t openmessaging-benchmark:latest . -f docker/Dockerfile.build
 - Multi-arch buildx helper:
@@ -220,14 +239,15 @@ Examples:
   installation directory.
 - OMB_PLUGIN_PATH: Additional plugin bundle locations (see [Driver plugins](#driver-plugins)).
 - The `omb.driver.startupTimeoutSeconds` system property limits the driver process start time (default 120).
-- DOCKER_PUSH, REPOSITORY, VERSION, PLATFORMS: used by local-build.sh for image builds.
-- TODO: Document any driver-specific environment variables if/when added (search driver-*/ docs).
+- DOCKER_PUSH: enables pushing images from `local-build.sh`.
 
 ## Tests
 
-- Unit and integration tests run with: mvn clean verify
-- End-to-end tests are under e2e-tests and target real brokers (Kafka, RabbitMQ, Redis, etc.). Running them typically requires services available and may use Testcontainers or external endpoints. To run just e2e tests:
-  - mvn -pl e2e-tests -am -DskipTests=false test
+- Unit tests run with `mvn clean verify`. Testcontainers integration tests are skipped by default;
+  run them with Docker using `mvn -pl e2e-tests -am -De2e verify`. They use Maven Failsafe, so the
+  `verify` phase is required.
+- If the Docker daemon rejects the older API version negotiated by Testcontainers 1.21.3, append
+  `-Dapi.version=1.44` to that command.
 - Some drivers include README.md files with instructions to spin up the corresponding broker and run sample benchmarks.
 
 ### Driver plugin regression suite (Docker Compose)
@@ -247,9 +267,11 @@ providers.
 
 ## Kubernetes/Helm and deployments
 
-- Manifests and Helm charts are under deployment/. These install workers and run the coordinator with provided values.
-- See deployment/kubernetes/helm/README.md for example commands.
-- TODO: Provide an end-to-end example for a chosen driver in Kubernetes in this fork.
+- Manifests and Helm charts are under `deployment/`. See
+  [deployment/kubernetes/helm/README.md](deployment/kubernetes/helm/README.md) for Helm 3 examples.
+- The legacy Terraform/Ansible deployments under the driver directories still reference older
+  distribution names, Java versions and launcher settings. Adapt them for Java 25, the current
+  tarball, and the complete `drivers/` plugin bundles before using them with this fork.
 
 ## License
 

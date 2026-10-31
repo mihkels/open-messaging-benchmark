@@ -185,3 +185,4 @@ stops the run.
 - **Plugin classpath:** plugins that share a process, such as JMS and Pulsar, failed to start when they bundled
   different versions of annotation-only jars, such as `error_prone_annotations`. For these jars only, the
   highest version is now used, with a warning.
+

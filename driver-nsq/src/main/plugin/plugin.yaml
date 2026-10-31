@@ -12,22 +12,14 @@
 # limitations under the License.
 #
 
-Configuration:
-  status: INFO
-  name: messaging-benchmark
-  
-  Appenders:
-    Console:
-      name: Console
-      target: SYSTEM_OUT
-      PatternLayout:
-        Pattern: "%d{HH:mm:ss.SSS} [%t] %-4level %c{1} - %msg%n"
-  Loggers:
-    Logger:
-      - name: io.openmessaging
-        level: debug
-    Root:
-      level: info
-      additivity: false
-      AppenderRef:
-        - ref: Console
+# Driver plugin bundle descriptor. Maven filters this file into target/omb-plugin/plugin.yaml.
+descriptorVersion: 1
+id: nsq
+version: ${project.version}
+driverApiVersion: 1
+javaVersion: ${maven.compiler.release}
+drivers:
+  - io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
+classpath:
+  - ${project.build.finalName}.jar
+  - lib/*.jar

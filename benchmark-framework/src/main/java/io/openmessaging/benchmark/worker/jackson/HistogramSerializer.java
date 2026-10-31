@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import com.google.common.base.Preconditions;
 import java.nio.ByteBuffer;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
@@ -44,7 +43,10 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
         while (true) {
             final int outBytes = histo.encodeIntoCompressedByteBuffer(buffer);
             try {
-                Preconditions.checkState(outBytes == buffer.position());
+                if (outBytes != buffer.position()) {
+                    throw new IllegalStateException(
+                            "Encoded " + outBytes + " bytes but buffer position is " + buffer.position());
+                }
             } catch (IllegalStateException e) {
                 log.error(
                         "HdrHistogram encoding produced inconsistent results: outBytes={}, buffer.position()={}",

@@ -99,13 +99,26 @@ public final class BenchmarkWorker {
         // Start the web server (no try-with-resources)
         Javalin app = Javalin.create().start(arguments.getHttpPort());
 
-        // Add Prometheus metrics endpoint
-        app.get("/metrics", ctx -> ctx.result(prometheusRegistry.scrape()));
+        // Drivers run in a child process with only their own plugin bundle on the classpath
+        ProcessWorker worker = new ProcessWorker();
+        WorkerHandler handler = new WorkerHandler(app, worker);
 
-        new WorkerHandler(app, prometheusRegistry);
+        // Add Prometheus metrics endpoint, including the metrics of the current driver process
+        app.get("/metrics", ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
 
-        // Stop server on JVM shutdown and keep the process alive
-        Runtime.getRuntime().addShutdownHook(new Thread(app::stop, "benchmark-worker-shutdown"));
+        // Stop server and driver process on JVM shutdown and keep the process alive
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(
+                                () -> {
+                                    app.stop();
+                                    try {
+                                        handler.close();
+                                    } catch (Exception e) {
+                                        log.warn("Failed to stop driver process", e);
+                                    }
+                                },
+                                "benchmark-worker-shutdown"));
         Thread.currentThread().join();
     }
 

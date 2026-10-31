@@ -12,13 +12,15 @@
 # limitations under the License.
 #
 
-cd package/target
-tar zxvf openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
-cd openmessaging-benchmark-0.0.1-SNAPSHOT
-rm lib/org.apache.pulsar-*
-rm lib/*jackson*
-curl https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/1.2.2/pulsar-jms-all-1.2.2.jar -o lib/pulsar-jms-all-1.2.2.jar
-cd ..
-rm openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
-tar zcvf openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz openmessaging-benchmark-0.0.1-SNAPSHOT
+# Adds DataStax Starlight for JMS to the JMS plugin's ext/ directory in the distribution.
+set -euo pipefail
 
+cd package/target
+TARBALL=$(ls openmessaging-benchmark-*-bin.tar.gz)
+DIST=${TARBALL%-bin.tar.gz}
+tar zxf "${TARBALL}"
+mkdir -p "${DIST}/drivers/driver-jms/ext"
+curl -fsSL https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/1.2.2/pulsar-jms-all-1.2.2.jar \
+    -o "${DIST}/drivers/driver-jms/ext/pulsar-jms-all-1.2.2.jar"
+rm "${TARBALL}"
+tar zcf "${TARBALL}" "${DIST}"

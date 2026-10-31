@@ -29,7 +29,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 
-public class WorkerHandler {
+public class WorkerHandler implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
 
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
@@ -52,7 +52,24 @@ public class WorkerHandler {
     private final Worker localWorker;
 
     public WorkerHandler(Javalin app, PrometheusMeterRegistry statsLogger) {
-        this.localWorker = new LocalWorker(statsLogger);
+        this(app, new LocalWorker(statsLogger));
+    }
+
+    /**
+     * Serves {@code worker} over HTTP on {@code app}.
+     *
+     * @param app the HTTP server
+     * @param worker the worker to expose
+     */
+    public WorkerHandler(Javalin app, Worker worker) {
+        this.localWorker = worker;
+
+        app.exception(
+                Exception.class,
+                (e, ctx) -> {
+                    log.error("Request {} {} failed", ctx.method(), ctx.path(), e);
+                    ctx.status(500).result(describe(e));
+                });
 
         app.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
         app.post(CREATE_TOPICS, this::handleCreateTopics);
@@ -70,13 +87,34 @@ public class WorkerHandler {
         app.post(RESET_STATS, this::handleResetStats);
     }
 
+    @Override
+    public void close() throws Exception {
+        localWorker.close();
+    }
+
+    private static String describe(Throwable e) {
+        StringBuilder message = new StringBuilder();
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (!message.isEmpty()) {
+                message.append(" | caused by: ");
+            }
+            message.append(t.getClass().getName());
+            if (t.getMessage() != null) {
+                message.append(": ").append(t.getMessage());
+            }
+        }
+        return message.toString();
+    }
+
     private void handleInitializeDriver(Context ctx) throws Exception {
         // Save config to the temp file
-        var tempFile = Files.createTempFile("driver-configuration", "conf");
-        Files.write(tempFile, ctx.bodyAsBytes());
-
-        localWorker.initializeDriver(tempFile);
-        Files.delete(tempFile);
+        var tempFile = Files.createTempFile("driver-configuration", ".yaml");
+        try {
+            Files.write(tempFile, ctx.bodyAsBytes());
+            localWorker.initializeDriver(tempFile);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
     }
 
     private void handleCreateTopics(Context ctx) throws IOException {

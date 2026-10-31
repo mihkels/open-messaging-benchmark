@@ -66,57 +66,37 @@
 		</file>
 	</files>
 
-	<!-- Main lib with all non-isolated drivers -->
+	<!-- Benchmark core only: drivers are packaged as plugin bundles under drivers/ -->
 	<dependencySets>
 		<dependencySet>
 			<outputDirectory>lib</outputDirectory>
 			<unpack>false</unpack>
-			<scope>compile</scope>
+			<scope>runtime</scope>
 			<useProjectArtifact>false</useProjectArtifact>
 			<outputFileNameMapping>${artifact.groupId}-${artifact.artifactId}-${artifact.version}${dashClassifier?}.${artifact.extension}</outputFileNameMapping>
 
 			<excludes>
-				<!-- Exclude isolated drivers from main lib -->
-				<exclude>io.openmessaging.benchmark:driver-pravega</exclude>
-                <exclude>io.openmessaging.benchmark:driver-bookkeeper</exclude>
-				<!-- Add more isolated drivers here -->
 				<exclude>ch.qos.logback:*</exclude>
 			</excludes>
 		</dependencySet>
 	</dependencySets>
 
-	<!-- Package isolated drivers separately -->
+	<!-- One self-contained plugin bundle per driver: plugin.yaml, driver jar and lib/ -->
 	<moduleSets>
-		<!-- Package isolated drivers jar -->
 		<moduleSet>
 			<useAllReactorProjects>true</useAllReactorProjects>
 			<includes>
-				<include>io.openmessaging.benchmark:driver-pravega</include>
-                <include>io.openmessaging.benchmark:driver-bookkeeper</include>
+				<include>io.openmessaging.benchmark:driver-*</include>
 			</includes>
-			<binaries>
-				<outputDirectory>drivers/${module.artifactId}</outputDirectory>
-				<unpack>false</unpack>
-				<includeDependencies>false</includeDependencies>
-			</binaries>
-		</moduleSet>
-
-		<!-- Package isolated drivers dependencies from target/lib -->
-		<moduleSet>
-			<useAllReactorProjects>true</useAllReactorProjects>
-			<includes>
-				<include>io.openmessaging.benchmark:driver-pravega</include>
-                <include>io.openmessaging.benchmark:driver-bookkeeper</include>
-			</includes>
+			<excludes>
+				<exclude>io.openmessaging.benchmark:driver-api</exclude>
+			</excludes>
 			<sources>
 				<includeModuleDirectory>false</includeModuleDirectory>
 				<fileSets>
 					<fileSet>
-						<directory>target/lib</directory>
-						<outputDirectory>drivers/${module.artifactId}/lib</outputDirectory>
-						<includes>
-							<include>*.jar</include>
-						</includes>
+						<directory>target/omb-plugin</directory>
+						<outputDirectory>drivers/${module.artifactId}</outputDirectory>
 					</fileSet>
 				</fileSets>
 			</sources>

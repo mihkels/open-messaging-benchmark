@@ -13,19 +13,29 @@
 # limitations under the License.
 #
 
-if [ -d "./lib" ]; then
-        CLASSPATH=$CLASSPATH:lib/*
+BASE_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+# The launcher JVM only holds the benchmark core. Each driver runs in its own JVM with the core plus
+# its plugin bundle from drivers/<name> (binary distribution) or driver-*/target/omb-plugin (source).
+if [ -d "$BASE_DIR/lib" ]; then
+    CLASSPATH="$BASE_DIR/lib/*"
 else
-    CLASSPATH=benchmark-framework/target/classes:`cat benchmark-framework/target/classpath.txt`
+    CLASSPATH="$BASE_DIR/benchmark-framework/target/classes:$(cat "$BASE_DIR/benchmark-framework/target/classpath.txt")"
 fi
 
+# Heap of the driver JVM that produces and consumes messages
 if [ -z "$HEAP_OPTS" ]
 then
     HEAP_OPTS="-Xms4G -Xmx4G"
 fi
 
-JVM_MEM="${HEAP_OPTS} -XX:+UseG1GC"
-JVM_GC_LOG=" -XX:+PrintGCDetails -XX:+PrintGCApplicationStoppedTime  -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=64m  -Xloggc:/dev/shm/benchmark-client-gc_%p.log"
+# Heap of this launcher JVM, which coordinates the run and supervises the driver JVM
+if [ -z "$SUPERVISOR_HEAP_OPTS" ]
+then
+    SUPERVISOR_HEAP_OPTS="-Xmx1G"
+fi
+
+JVM_OPTS="--enable-native-access=ALL-UNNAMED"
 # Required by Netty for optimized direct byte buffer access
 JVM_OPTS="$JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true"
 JVM_OPTS="$JVM_OPTS --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
@@ -34,4 +44,11 @@ JVM_OPTS="$JVM_OPTS -Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessibl
 # Required by Pulsar client optimized checksum calculation on other than Linux x86_64 platforms
 # reflection access to java.util.zip.CRC32C
 JVM_OPTS="$JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
-exec java -server -cp $CLASSPATH $JVM_MEM $JVM_OPTS io.openmessaging.benchmark.worker.BenchmarkWorker "$@"
+
+# Options of the driver JVM; set OMB_DRIVER_JVM_OPTS to override them completely
+if [ -z "$OMB_DRIVER_JVM_OPTS" ]
+then
+    export OMB_DRIVER_JVM_OPTS="-server $HEAP_OPTS -XX:+UseG1GC $JVM_OPTS"
+fi
+
+exec java -server -cp "$CLASSPATH" $SUPERVISOR_HEAP_OPTS -XX:+UseG1GC $JVM_OPTS -Domb.home="$BASE_DIR" io.openmessaging.benchmark.worker.BenchmarkWorker "$@"

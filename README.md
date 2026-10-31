@@ -51,7 +51,7 @@ Notes on Java versions:
 
 - benchmark-framework: Core coordinator and worker implementation, common logic
 - driver-api: Driver SPI
-- driver-*: Implementations for specific brokers (Kafka, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ, Artemis, Pravega, JMS, KoP)
+- driver-*: Implementations for specific brokers (Kafka, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ, Artemis, Pravega, JMS, KoP), each packaged as a driver plugin bundle (see [Driver plugins](#driver-plugins))
 - e2e-tests: End-to-end tests for selected drivers
 - package: Assembles a binary distribution (tar.gz) including bin/, lib/, workloads/, payload/
 - docker: Dockerfiles and instructions for building runnable images
@@ -59,6 +59,7 @@ Notes on Java versions:
 - bin: Launch scripts used by the distribution and for in-repo runs
 - workloads, payload: Example workloads and message payloads
 - tool: Auxiliary tools/utilities
+- examples/external-driver-plugin: A standalone driver plugin built outside this repository
 
 ## Entry points and scripts
 
@@ -66,15 +67,12 @@ The packaged distribution and this repository include two main shell entry point
 
 - `bin/benchmark` — runs the benchmark coordinator.
   - Main class: `io.openmessaging.benchmark.Benchmark`
-  - Important env vars:
-    - `HEAP_OPTS`: JVM heap settings (default "-Xms4G -Xmx4G").
+  - Important env vars: see [Environment variables](#environment-variables).
   - Example: bin/benchmark --drivers driver-kafka/kafka.yaml --workers <worker-urls> workloads/1-topic-16-partitions-1kb.yaml
 - `bin/benchmark-worker` — runs a worker process that executes workload operations.
   - Main class: `io.openmessaging.benchmark.worker.BenchmarkWorker`
-  - Important env vars:
-    - HEAP_OPTS: JVM heap settings (default "-Xms4G -Xmx4G").
-    - JVM_OPTS: additional JVM flags; script sets required --add-opens flags and Netty/Pulsar reflective access options.
-  - Common flags: -p <port> (HTTP server port), -sp <prometheus-port> (if supported by build; see help)
+  - Important env vars: see [Environment variables](#environment-variables).
+  - Common flags: -p <port> (HTTP server port; `/metrics` is served here and includes the metrics of the driver process), -sp <stats-port>
   - Example: bin/benchmark-worker -p 8080 -sp 8081
 
 Other helpful files:
@@ -110,6 +108,85 @@ Notes:
 - Each driver has its own configuration YAML (see `driver-*/ *.yaml`), describing broker endpoints and client parameters.
 - Workloads live under workloads/ and payload/; feel free to copy and customize.
 
+## Driver plugins
+
+Drivers are not on the benchmark classpath. Each driver is a self-contained plugin bundle, and every
+benchmark run starts the selected driver in its own child JVM whose classpath contains only the
+benchmark runtime, that driver and its own libraries. Upgrading a client library of one driver can
+therefore not break another driver.
+
+How it works:
+
+- The `driverClass` in the driver YAML selects the plugin, as before.
+- `bin/benchmark` (local mode) and every `bin/benchmark-worker` act as supervisors: when a driver is
+  initialized they start a driver process (`DriverProcessMain`) on a loopback port and proxy all
+  worker calls to it. Running a different driver replaces the process. The process is stopped
+  when the supervisor exits.
+- Some drivers depend on other plugins: the JMS driver loads the plugin of the class named by
+  `delegateForAdminOperationsClassName` (for example the Kafka or Pulsar plugin), and KoP bundles
+  both Kafka and Pulsar clients. Only these combinations share a driver process.
+
+### Bundle layout
+
+The distribution contains one directory per plugin under `drivers/`:
+
+```
+drivers/driver-kafka/
+├── plugin.yaml
+├── driver-kafka-<version>.jar
+└── lib/            # the driver's runtime dependencies
+```
+
+`plugin.yaml` describes the bundle:
+
+```yaml
+descriptorVersion: 1          # descriptor format, currently 1
+id: kafka                     # unique plugin id
+version: 0.0.6
+driverApiVersion: 1           # must equal the benchmark's DriverApiVersion.CURRENT
+javaVersion: 25               # minimum Java feature version
+drivers:                      # BenchmarkDriver implementations in this bundle
+  - io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+classpath:                    # relative to the bundle; plain entries must exist, globs ('*' in the file name) may match nothing
+  - driver-kafka-0.0.6.jar
+  - lib/*.jar
+optionalClasspath:            # entries that may be missing, e.g. user supplied jars
+  - ext/*.jar
+classReferenceProperties:     # driver YAML properties naming classes of other plugins
+  - delegateForAdminOperationsClassName
+```
+
+Plugins are discovered in `$OMB_HOME/drivers/*`, in `*/target/omb-plugin` of a source checkout,
+and in the directories listed in `OMB_PLUGIN_PATH` (or the `omb.plugin.path` system property),
+separated by the platform path separator. Each entry may be a bundle or a directory of bundles.
+Discovery fails with a list of all problems if two bundles declare the same id or driver class.
+
+### Compatibility rules
+
+- Plugins compile against `driver-api` with `provided` scope and must not bundle it.
+- `driver-api`, Micrometer and the Prometheus metrics libraries are shared with the benchmark
+  runtime. A bundle containing a different version of these is rejected.
+- Any other library that is also part of the benchmark runtime (for example Jackson, HdrHistogram
+  or Log4j) is loaded from the runtime; the bundle's copy is ignored with a warning.
+- Two bundles loaded into the same process (JMS plus its delegate) must not contain different
+  versions of the same library.
+- Bundles are never downloaded: install them on the coordinator (local mode) and on every worker.
+
+### Writing an external driver plugin
+
+[`examples/external-driver-plugin`](examples/external-driver-plugin) is a complete, standalone
+Maven project for an in-memory loopback driver:
+
+```bash
+mvn -q install -DskipTests                    # installs driver-api to the local repository
+mvn -q -f examples/external-driver-plugin/pom.xml package
+cp -r examples/external-driver-plugin/target/omb-plugin <benchmark>/drivers/loopback
+<benchmark>/bin/benchmark -d examples/external-driver-plugin/loopback.yaml workloads/1-topic-1-partition-100b.yaml
+```
+
+Plugins inside this repository get the bundle layout from the `omb-driver-bundle` profile of the root
+POM, which activates for every module that has `src/main/plugin/plugin.yaml`.
+
 ## Docker images
 
 See docker/README.md for details. Summary:
@@ -128,8 +205,13 @@ Examples:
 
 ## Environment variables
 
-- HEAP_OPTS: JVM heap for coordinator/worker scripts. Default "-Xms4G -Xmx4G".
-- JVM_OPTS: Extra JVM flags passed by benchmark-worker script (add your own as needed).
+- HEAP_OPTS: JVM heap of the driver process, where the workload runs. Default "-Xms4G -Xmx4G".
+- JVM_OPTS: Extra JVM flags for the driver process.
+- OMB_DRIVER_JVM_OPTS: Replaces the complete driver process JVM options (heap, GC and `--add-opens` flags). By default the scripts build it from HEAP_OPTS and JVM_OPTS. Also available as the `omb.driver.jvmOpts` system property.
+- SUPERVISOR_HEAP_OPTS: JVM heap of the coordinator/worker supervisor process. Default "-Xmx1G".
+- OMB_HOME: Benchmark installation directory used to find `drivers/`. Set by the scripts.
+- OMB_PLUGIN_PATH: Additional plugin bundle locations (see [Driver plugins](#driver-plugins)).
+- The `omb.driver.startupTimeoutSeconds` system property limits the driver process start time (default 120).
 - DOCKER_PUSH, REPOSITORY, VERSION, PLATFORMS: used by local-build.sh for image builds.
 - TODO: Document any driver-specific environment variables if/when added (search driver-*/ docs).
 

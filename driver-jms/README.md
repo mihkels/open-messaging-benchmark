@@ -6,7 +6,10 @@ For instructions on running the OpenMessaging benchmarks for JMS, see the [offic
 
 ## Modifying the Openmessaging Benchmark Tar for JMS
 
-Rather than simply dropping a JMS Client Library into `/opt/benchmark/lib` the lib directory tar file is modified.
+The JMS client library is not part of the build. Put the JMS provider jars into `drivers/driver-jms/ext/`
+of the distribution, on the coordinator and on every worker. They are only visible to the JMS driver process.
+When `delegateForAdminOperationsClassName` is set, the plugin of that driver (for example `driver-kafka`)
+is loaded into the same process. The scripts below add the provider to the distribution tar file.
 
 ### DataStax Starlight for JMS / Pulsar Fast JMS
 

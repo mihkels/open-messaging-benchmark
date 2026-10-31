@@ -49,8 +49,8 @@ driver child JVM            bin/benchmark-worker supervisors,
 - The **coordinator** (`bin/benchmark`) creates topics, producers and consumers, drives the load,
   collects statistics every 10 seconds and writes a JSON result.
 - **Workers** (`bin/benchmark-worker`) run producers and consumers on other machines. Each worker
-  and the local coordinator start the selected driver in a separate JVM containing only that
-  driver's plugin bundle.
+  and the local coordinator start the selected driver in a separate JVM containing its plugin
+  bundle and any required delegate bundles.
 
 ## Where to start
 
@@ -85,8 +85,8 @@ driver child JVM            bin/benchmark-worker supervisors,
 | Apache RocketMQ (remoting client)                 | `rocketmq`       | [RocketMQ](drivers/rocketmq.md)             |
 | Apache RocketMQ 5 (gRPC client)                   | `rocketmq5`      | [RocketMQ 5](drivers/rocketmq5.md)          |
 
-The [driver overview](drivers/index.md) lists configuration files, tested broker versions and
-regression coverage for each plugin.
+The [driver overview](drivers/index.md) lists configuration files, the regression suite's broker
+versions and registered cases for each plugin.
 
 ## Relationship to upstream
 

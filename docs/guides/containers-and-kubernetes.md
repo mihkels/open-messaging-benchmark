@@ -36,8 +36,10 @@ docker build -t openmessaging-benchmark:local \
   -f docker/Dockerfile .
 ```
 
-Adjust the tarball name to the current project version. `docker/local-build.sh` builds
-multi-platform images. See [docker/README.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
+Adjust the tarball name to the current project version. The root
+[`local-build.sh`](https://github.com/mihkels/open-messaging-benchmark/blob/main/local-build.sh)
+builds multi-platform images. See
+[docker/README.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
 for details.
 
 > **Note:** The fork does not publish a Java 27 image. Push your build to a registry your machines

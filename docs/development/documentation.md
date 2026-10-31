@@ -104,7 +104,7 @@ blocks:
 **Links.**
 
 - Link to other pages of this site with relative links to the `.md` file, for example
-  `[Workloads](../guides/workloads.md)` or `[CLI](../reference/cli.md#coordinator)`. Strict mode checks
+  `[Workloads](../guides/workloads.md)` or `[CLI](../reference/cli.md#binbenchmark)`. Strict mode checks
   that the target exists.
 - Link to repository files with absolute GitHub URLs:
   `https://github.com/mihkels/open-messaging-benchmark/blob/main/<path>` for files and
@@ -149,7 +149,8 @@ The site is published to <https://mihkels.github.io/open-messaging-benchmark/> b
 workflow `.github/workflows/docs.yml`:
 
 - Pushes to `main` that change `docs/`, `mkdocs.yml` or the workflow build the site and deploy it to
-  GitHub Pages. The workflow can also be started manually from the Actions tab.
+  GitHub Pages. The workflow can also be started manually from the Actions tab; only runs on `main`
+  deploy the site.
 - Pull requests only build the site, so broken links and navigation errors are reported before a merge,
   but nothing is deployed.
 

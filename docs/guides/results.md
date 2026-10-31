@@ -42,14 +42,15 @@ cover the whole period.
 jq '{driver, workload,
      avgPublishRate: ((.publishRate | add) / (.publishRate | length)),
      maxBacklog: (.backlog | max),
-     errors: (.publishErrorRate | add),
+     maxPublishErrorRate: (.publishErrorRate | max),
      pubP99: .aggregatedPublishLatency99pct,
      pubP999: .aggregatedPublishLatency999pct,
      e2eP99: .aggregatedEndToEndLatency99pct}' result.json
 ```
 
 Use the aggregated percentiles to summarize a run. Do not average per-sample percentiles; an
-average of 10-second p99 values is not the p99 of the run.
+average of 10-second p99 values is not the p99 of the run. `publishErrorRate` is a rate in errors
+per second, not a count of errors.
 
 ## Converting to CSV
 

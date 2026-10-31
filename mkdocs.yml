@@ -85,7 +85,7 @@ nav:
       - Containers and Kubernetes: guides/containers-and-kubernetes.md
       - Troubleshooting: guides/troubleshooting.md
   - Drivers:
-      - drivers/index.md
+      - Supported drivers: drivers/index.md
       - Apache ActiveMQ Artemis: drivers/artemis.md
       - Apache BookKeeper (DistributedLog): drivers/bookkeeper.md
       - Apache Kafka: drivers/kafka.md

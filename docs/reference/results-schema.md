@@ -19,13 +19,13 @@ how to read and chart it.
 
 ## Units
 
-|    Measurement     |        Unit         |                      Precision                      |
-|--------------------|---------------------|-----------------------------------------------------|
-| Publish latency    | milliseconds        | microseconds                                        |
-| Publish delay      | **microseconds**    | microseconds                                        |
-| End-to-end latency | milliseconds        | 1 ms, because messages carry millisecond timestamps |
-| Rates              | messages per second |                                                     |
-| Backlog            | messages            |                                                     |
+|    Measurement     |        Unit         |                             Precision                              |
+|--------------------|---------------------|--------------------------------------------------------------------|
+| Publish latency    | milliseconds        | microseconds                                                       |
+| Publish delay      | **microseconds**    | microseconds                                                       |
+| End-to-end latency | milliseconds        | Millisecond clock differences; some drivers use coarser timestamps |
+| Rates              | messages per second |                                                                    |
+| Backlog            | messages            |                                                                    |
 
 ## Run description
 

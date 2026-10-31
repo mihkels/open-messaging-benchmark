@@ -86,7 +86,8 @@ configuration enables compression.
 | `KEY_ROUND_ROBIN`  | Cycles through 10,000 random 10-character keys                                            |
 | `RANDOM_NANO`      | Picks one of the same 10,000 keys based on `System.nanoTime()`                            |
 
-An unknown value falls back to `NO_KEY`. Keys are generated independently in each worker process.
+An unknown value fails workload parsing; omit the field or use `NO_KEY` for the default. Keys are
+generated independently in each worker process.
 
 Keys matter because most partitioned systems hash them to choose a partition, and because some
 drivers use them for routing or ordering. With keys, per-partition batches are usually smaller,

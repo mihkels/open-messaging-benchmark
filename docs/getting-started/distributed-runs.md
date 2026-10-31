@@ -54,9 +54,9 @@ docker run -d --name omb-worker -p 8080:8080 openmessaging-benchmark:local \
 ```
 
 Each worker is a small supervisor process. When the coordinator initializes a driver, the worker
-starts a separate JVM with only that driver's plugin on the classpath, and stops it when the next
-driver is initialized. The driver JVM heap defaults to 4 GiB; set `HEAP_OPTS` on the worker to
-change it. See [Runtime and plugins](../reference/runtime-and-plugins.md).
+starts a separate JVM with that driver's plugin and any required delegate plugins on the classpath,
+and stops it when the next driver is initialized. The driver JVM heap defaults to 4 GiB; set
+`HEAP_OPTS` on the worker to change it. See [Runtime and plugins](../reference/runtime-and-plugins.md).
 
 > **Note:** `--stats-port` is deprecated and ignored, but it must differ from `--port`. Its default
 > is 8081, so pass `--stats-port` with another value if you run the worker on port 8081.

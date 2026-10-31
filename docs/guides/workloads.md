@@ -95,8 +95,9 @@ Rate discovery cannot be combined with `consumerBacklogSizeGB`.
 
 - `warmupDurationMinutes` (default 1) runs the full load and then discards its statistics. It lets
   JIT compilation, connection pools, caches and partition leadership settle.
-- `testDurationMinutes` is the measured period. Statistics are sampled every 10 seconds, so a
-  5-minute run has about 30 samples per series.
+- `testDurationMinutes` is the measured period. It must be positive for the run to end
+  automatically; the default of `0` runs indefinitely. Statistics are sampled every 10 seconds, so
+  a 5-minute run has about 30 samples per series.
 
 Use longer runs for tail percentiles and for systems with periodic background work such as log
 compaction, segment rolling or garbage collection. See
@@ -114,9 +115,9 @@ testDurationMinutes: 5
 ```
 
 Consumers are paused until the requested amount of data is queued, then resumed while producers keep
-sending. Measurement starts when consumers are paused, so the result covers the build-up, the drain
-and then `testDurationMinutes` of steady state after the backlog has drained to the level set by
-`backlogDrainRatio`. The run lasts much longer than `testDurationMinutes`. See
+sending. The backlog operation runs in the measured phase, so the result covers the build-up, the
+drain and then `testDurationMinutes` after the backlog has drained to the level set by
+`backlogDrainRatio`. The run lasts longer than `testDurationMinutes`. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
 ## Bundled workloads
@@ -132,8 +133,8 @@ The `workloads/` directory has about 130 files. Their names encode the shape:
 | `backlog-*`                       | `backlog-1-topic-16-partitions-1kb.yaml`     | Backlog build-up and drain                              |
 | `1m-10-topics-*`                  | `1m-10-topics-16-partitions-100b.yaml`       | 10 topics with small messages                           |
 
-Many run for 15 minutes or more at high rates. Read the file before running it, and copy it under a
-new name before changing it.
+Most run for 5 minutes, and some for 15 minutes or more; many use high rates. Read the file before
+running it, and copy it under a new name before changing it.
 
 ## Running several workloads
 

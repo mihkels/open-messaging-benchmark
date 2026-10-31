@@ -15,9 +15,10 @@ limitations under the License.
 # Runtime and plugins
 
 Both `bin/benchmark` and `bin/benchmark-worker` start a small supervisor JVM. When a driver is
-initialized, the supervisor starts a separate driver JVM whose classpath contains only the
-framework and that driver's plugin bundle. Driver dependencies therefore cannot conflict with each
-other or with the framework.
+initialized, the supervisor starts a separate driver JVM with the framework, the selected plugin
+and any required delegate plugins on its classpath. Independent drivers are isolated, but bundles
+that share a process and the framework still need compatible dependencies. The runtime checks known
+artifact coordinates and reports conflicts; see [Packaging a plugin](../development/packaging-a-plugin.md).
 
 ## Environment variables
 

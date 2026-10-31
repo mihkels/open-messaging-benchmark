@@ -18,12 +18,14 @@ This page explains exactly what each latency number measures and how backlog wor
 
 ## Publish latency
 
-The time from the moment the driver's send call starts to the moment the broker acknowledges the
-message, measured on the producer's monotonic clock. Only successful sends are recorded. Values are
-capped at 60 seconds.
+The time from the moment the driver's send call starts until its send future completes successfully,
+measured on the producer's monotonic clock. Only successful sends are recorded. Values are capped at
+60 seconds.
 
-What "acknowledged" means depends on the driver configuration: a leader write, a replicated write
-or an fsync. See [Fair comparisons](fair-comparisons.md).
+Completion semantics depend on the driver and its configuration: for example, completion can
+represent client acceptance or a broker acknowledgment, with different replication and persistence
+guarantees. See the relevant [driver page](../drivers/index.md) and
+[Fair comparisons](fair-comparisons.md).
 
 ## Publish delay
 
@@ -32,13 +34,15 @@ started compared with its scheduled time, in microseconds, also capped at 60 sec
 
 Publish latency is measured from the actual send, not the scheduled one. If the client blocks, for
 example because its buffer is full, later messages start late and their wait does not appear in
-publish latency. This is the coordinated omission problem. Publish delay exposes it:
+publish latency. Publish delay helps expose this form of coordinated omission.
 
-- A publish delay of a few hundred microseconds or less means producers kept to the schedule and
-  publish latency is trustworthy.
-- A publish delay in milliseconds or growing means producers fell behind. The real latency
-  experienced by an application sending at that rate is roughly publish delay plus publish latency.
-  Treat the run as saturated.
+Low delay and an achieved publish rate close to the target suggest producers are keeping up with
+their schedule. Large or growing delay signals that sends are starting late, but does not by itself
+prove the broker is saturated: inspect worker CPU, GC, errors and backlog too.
+
+For an individual successful send, the time from scheduled send to completion is its publish delay
+plus its publish latency. The result contains separate histograms, not paired per-message values;
+adding their p99 values does not yield the p99 of that combined time.
 
 ## End-to-end latency
 
@@ -77,7 +81,8 @@ grows during a fixed-rate run means consumers cannot keep up with that rate.
 A workload with `consumerBacklogSizeGB` greater than 0 measures how the system behaves while
 consumers catch up. It requires a fixed `producerRate`.
 
-1. After warm-up, statistics are reset and the measured phase starts.
+1. After warm-up, the coordinator starts backlog handling in the background and resets statistics
+   for measurement. Pausing consumers and resetting statistics can overlap.
 2. Consumers are paused while producers continue at the target rate. Each consumer stops after
    receiving one more message, so the backlog grows by almost the full publish rate.
 3. When `backlog × message size` reaches `consumerBacklogSizeGB` (1 GB = 1024³ bytes), consumers
@@ -90,7 +95,8 @@ The result therefore covers the build-up, the drain and the steady state after i
 drain, consumers read older data, often from disk rather than cache, and end-to-end latency rises to
 the age of the oldest messages. Read the time series, not only the aggregates:
 
-- The `consumeRate` above the `publishRate` during the drain is the catch-up rate.
+- A `consumeRate` above `publishRate × subscriptionsPerTopic` indicates that the backlog is
+  shrinking; the difference is the catch-up rate.
 - The time for `backlog` to return to near zero is the drain time.
 - `publishLatency` during the drain shows whether catch-up reads hurt producers.
 

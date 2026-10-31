@@ -48,10 +48,12 @@ environment, and several of them share the same `name`. Each driver page explain
 > **Note:** NATS Streaming is deprecated by its maintainers. Prefer the NATS JetStream driver for new
 > work.
 
-## Tested versions
+## Regression suite versions
 
-The [Compose regression suite](../development/testing-a-driver.md) runs every driver against these
-broker versions. Other versions usually work, but these are the ones checked.
+The [Compose regression suite](../development/testing-a-driver.md) registers cases for every driver
+against the broker versions below. Registration is not a guarantee that every case passes in a
+particular environment, nor evidence of compatibility with other versions. These are functional
+checks, not performance comparisons.
 
 |      Stack       |                               Broker                                |                                     Cases                                     |
 |------------------|---------------------------------------------------------------------|-------------------------------------------------------------------------------|

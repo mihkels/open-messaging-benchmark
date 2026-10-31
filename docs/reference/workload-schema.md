@@ -36,13 +36,15 @@ for explanations and examples.
 | `randomizedPayloadPoolSize` | int     | 0        | Number of randomized payloads generated                                                        |
 | `messageSizeDistribution`   | map     | none     | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool           |
 | `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN` or `RANDOM_NANO`                                                   |
-| `consumerBacklogSizeGB`     | int     | 0        | Build a backlog of this size before measuring; `0` disables it                                 |
-| `backlogDrainRatio`         | number  | 1.0      | Fraction of the backlog that must drain before measuring                                       |
+| `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                               |
+| `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor     |
 | `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                   |
-| `testDurationMinutes`       | int     | 0        | Measured period                                                                                |
+| `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                       |
 
-Set every topology and duration field explicitly. Zero values for `topics`, producers, consumers or
-`testDurationMinutes` produce an empty or zero-length run rather than an error.
+Set the topology and duration fields explicitly. In particular, a missing or non-positive
+`testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
+not produce a zero-length run. Use positive topic, producer and consumer counts for a meaningful
+benchmark.
 
 ## Payload precedence
 

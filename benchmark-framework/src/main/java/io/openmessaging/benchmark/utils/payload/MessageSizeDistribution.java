@@ -35,6 +35,8 @@ public class MessageSizeDistribution {
     private final List<Bucket> buckets;
     private final int totalWeight;
 
+    private record ParsedDistribution(List<Bucket> buckets, int totalWeight) {}
+
     /** Represents a single size bucket with min/max range and weight. */
     public static class Bucket {
         public final int minSize;
@@ -58,6 +60,15 @@ public class MessageSizeDistribution {
     }
 
     public MessageSizeDistribution(Map<String, Integer> config) {
+        this(parse(config));
+    }
+
+    private MessageSizeDistribution(ParsedDistribution parsed) {
+        this.buckets = parsed.buckets();
+        this.totalWeight = parsed.totalWeight();
+    }
+
+    private static ParsedDistribution parse(Map<String, Integer> config) {
         if (config == null || config.isEmpty()) {
             throw new IllegalArgumentException("Distribution config cannot be null or empty");
         }
@@ -83,15 +94,13 @@ public class MessageSizeDistribution {
             }
         }
 
-        this.buckets = List.copyOf(parsed);
-        this.totalWeight = total;
-
-        if (totalWeight <= 0) {
+        if (total <= 0) {
             throw new IllegalArgumentException("Distribution weights must sum to a positive value");
         }
+        return new ParsedDistribution(List.copyOf(parsed), total);
     }
 
-    private int[] parseRange(String range) {
+    private static int[] parseRange(String range) {
         if (range == null || range.isEmpty()) {
             throw new IllegalArgumentException("Range cannot be null or empty");
         }
@@ -119,7 +128,7 @@ public class MessageSizeDistribution {
         return new int[] {minSize, maxSize};
     }
 
-    private int parseSize(String s) {
+    private static int parseSize(String s) {
         s = s.trim().toUpperCase();
         int multiplier = 1;
 

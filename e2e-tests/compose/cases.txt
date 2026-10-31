@@ -18,6 +18,7 @@
 kafka-contract              | kafka          | kafka          | contract   | kafka.yaml                    | contract.yaml       | acks=all producer, single partition
 kafka-partitioned-lz4       | kafka          | kafka          | regression | kafka-lz4.yaml                | partitioned.yaml    | LZ4 compression, 4 partitions, keyed messages, consumer group with 2 members
 kafka-idempotent-fanout     | kafka          | kafka          | regression | kafka-idempotent.yaml         | fanout.yaml         | Idempotent producer, 2 topics x 2 consumer groups
+kafka-size-distribution    | kafka          | kafka          | regression | kafka.yaml                     | size-distribution.yaml | Weighted variable message sizes through the isolated worker process
 pulsar-contract             | pulsar         | pulsar         | contract   | pulsar.yaml                   | contract.yaml       | Batching producer, Failover subscription
 pulsar-shared-no-batching   | pulsar         | pulsar         | regression | pulsar-shared-nobatch.yaml    | random-payload.yaml | Batching disabled, Shared subscription with 2 consumers, random binary payloads
 pulsar-key-shared-dedup     | pulsar         | pulsar         | regression | pulsar-key-shared-dedup.yaml  | partitioned.yaml    | Key_Shared subscription, partitioned topic, broker deduplication, new tenant
@@ -36,6 +37,8 @@ nats-streaming-fanout       | nats-streaming | nats-streaming | regression | nat
 nsq-contract                | nsq            | nsq            | contract   | nsq.yaml                      | contract.yaml       | nsqd publish, consumer discovery via nsqlookupd
 nsq-fanout                  | nsq            | nsq            | regression | nsq.yaml                      | fanout.yaml         | 2 topics x 2 channels
 rocketmq-contract           | rocketmq       | rocketmq       | contract   | rocketmq.yaml                 | contract.yaml       | Topic creation via admin API, async send
+rocketmq5-contract          | rocketmq5      | rocketmq5      | contract   | rocketmq5.yaml                 | contract.yaml       | RocketMQ 5 gRPC producer and consumer through the proxy
+mqtt5-contract              | mqtt5          | mqtt5          | contract   | mqtt5.yaml                     | contract.yaml       | MQTT 5 publish/subscribe through Mosquitto
 rocketmq-partitioned        | rocketmq       | rocketmq       | regression | rocketmq.yaml                 | partitioned.yaml    | 4 queues, keyed messages, 2 consumers in one group
 bookkeeper-contract         | bookkeeper     | bookkeeper     | contract   | bookkeeper.yaml               | contract.yaml       | DistributedLog stream, single ordered reader
 pravega-contract            | pravega        | pravega        | contract   | pravega.yaml                  | contract.yaml       | Scope/stream creation, event writer and reader group

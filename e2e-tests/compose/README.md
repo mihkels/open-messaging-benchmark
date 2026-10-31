@@ -70,7 +70,8 @@ Every plugin has one **contract** case: one topic, one partition, one subscripti
 - transactions
 - KoP protocol conversions
 - JMS selectors and transactions
-- fan-out, partitioning, keys and random payloads
+- fan-out, partitioning, keys, random payloads and weighted message-size distributions
+- MQTT 5 and RocketMQ 5 gRPC contract cases
 
 In a full run, any plugin shipped in `drivers/` that has no registered contract case is reported as
 a failure. Matrix cases that were not registered, for example because their stack is missing, are
@@ -165,6 +166,10 @@ which is mounted as a whole, so older versions are removed when a new one is dow
 2. Add the stack to `stacks.txt`.
 3. Add a driver configuration that uses the Compose host names.
 4. Add a `contract` row to `cases.txt`.
+
+The Compose matrix includes an MQTT 5 stack backed by Mosquitto and a RocketMQ 5 stack that adds
+the gRPC proxy to the existing RocketMQ broker services. `kafka-size-distribution` exercises
+weighted message sizes through the worker's isolated plugin process and serialized command path.
 
 Stacks run one after another, and every case gets freshly recreated workers. A failing case or stack never
 stops the run.

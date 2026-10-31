@@ -26,3 +26,5 @@ core/*.json
 # Benchmark supervisor and driver process logs
 benchmark-worker.log*
 benchmark-driver.log*
+site/
+.venv/

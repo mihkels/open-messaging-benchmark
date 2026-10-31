@@ -1,5 +1,7 @@
 # OpenMessaging Benchmark Docker images
 
+> **Note:** See [Containers and Kubernetes](https://mihkels.github.io/open-messaging-benchmark/guides/containers-and-kubernetes/) in the documentation site for a usage guide.
+
 Both images run on Amazon Corretto 27 (Alpine) and include Bash for the benchmark launchers.
 Run the commands below from the repository root.
 

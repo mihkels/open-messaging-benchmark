@@ -1,5 +1,7 @@
 # Helm deployment
 
+> **Note:** See [Containers and Kubernetes](https://mihkels.github.io/open-messaging-benchmark/guides/containers-and-kubernetes/) in the documentation site for a usage guide.
+
 The chart uses Helm 3. From the repository root, install it with the release name `benchmark`:
 
 ```bash

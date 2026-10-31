@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 This is a maintained fork of the OpenMessaging Benchmark framework, keeping its dependencies and
-Java 25 container images up to date while tracking upstream functionality.
+Java 27 container images up to date while tracking upstream functionality.
 
 Notice: We do not consider or plan to release any unilateral test results based on this standard. For reference, you can purchase server tests on the cloud by yourself.
 
@@ -31,19 +31,20 @@ More details can be found in the upstream documentation: http://openmessaging.cl
 
 - Language: Java
 - Build tool / package manager: Apache Maven (multi-module project)
-- Java version: 25 (as enforced by the build) — see mise.toml and pom.xml
-- Tests: JUnit 5 (Jupiter), Mockito; integration/e2e tests under e2e-tests
+- Java version: 27 (as enforced by the build) — see mise.toml and pom.xml
+- Tests: JUnit 6 (Jupiter), Mockito; integration/e2e tests under e2e-tests
 - Static analysis/formatting: Checkstyle, Spotless, SpotBugs, JaCoCo coverage
 - Metrics: Micrometer and Prometheus client libraries
 - Containers: Docker (with Dockerfiles in docker/), multi-arch builds supported
 
-Builds and benchmark runtimes require Java 25. The application Dockerfiles use Amazon Corretto 25;
-the Compose regression runner uses Eclipse Temurin 25.
+Builds and benchmark runtimes require Java 27. The application Dockerfiles use Amazon Corretto 27;
+the Compose regression runner uses Eclipse Temurin 27.
 
 ## Requirements
 
-- JDK 25
-- Maven 3.8.6+ (3.9.x recommended)
+- JDK 27
+- Maven 3.9.0+ (3.10.0 recommended)
+- [mise](https://mise.jdx.dev/) (recommended for the Java, Maven, and Python versions in `mise.toml`)
 - Docker (optional; required for image builds or local containerized runs)
 - GNU make or bash (for helper scripts)
 
@@ -83,6 +84,9 @@ in the script. It formats license headers and source files, and exports a BuildK
 `mihkels/open-messaging-benchmark:cache` even when the image itself is not pushed.
 
 ## Build
+
+Run `mise install` to install the project tools. Activate mise in your shell, or prefix the commands
+below with `mise exec --` to use the configured versions.
 
 Common build actions (from project root):
 - Full build and unit test: `mvn clean install`
@@ -153,7 +157,7 @@ descriptorVersion: 1          # descriptor format, currently 1
 id: kafka                     # unique plugin id
 version: 0.0.6-SNAPSHOT
 driverApiVersion: 1           # must equal the benchmark's DriverApiVersion.CURRENT
-javaVersion: 25               # minimum Java feature version
+javaVersion: 27               # minimum Java feature version
 drivers:                      # BenchmarkDriver implementations in this bundle
   - io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
 classpath:                    # relative to the bundle; plain entries must exist, globs ('*' in the file name) may match nothing
@@ -213,7 +217,7 @@ POM, which activates for every module that has `src/main/plugin/plugin.yaml`.
 
 ## Docker images
 
-See [docker/README.md](docker/README.md) for details. Both Dockerfiles use an Amazon Corretto 25
+See [docker/README.md](docker/README.md) for details. Both Dockerfiles use an Amazon Corretto 27
 runtime. `docker/Dockerfile` consumes a prebuilt distribution; `docker/Dockerfile.build` builds the
 full project with Maven in Docker.
 
@@ -226,6 +230,9 @@ Examples:
 - docker build -t openmessaging-benchmark:latest . -f docker/Dockerfile.build
 - Multi-arch buildx helper:
 - ./local-build.sh <version> [platforms] [push|load]
+
+The `local-test/docker-compose.yaml` example uses `openmessaging-benchmark:local` by default.
+Build that tag locally or set `OMB_IMAGE` to an existing Java 27 benchmark image before starting it.
 
 ## Environment variables
 
@@ -246,8 +253,6 @@ Examples:
 - Unit tests run with `mvn clean verify`. Testcontainers integration tests are skipped by default;
   run them with Docker using `mvn -pl e2e-tests -am -De2e verify`. They use Maven Failsafe, so the
   `verify` phase is required.
-- If the Docker daemon rejects the older API version negotiated by Testcontainers 1.21.3, append
-  `-Dapi.version=1.44` to that command.
 - Some drivers include README.md files with instructions to spin up the corresponding broker and run sample benchmarks.
 
 ### Driver plugin regression suite (Docker Compose)
@@ -270,7 +275,7 @@ providers.
 - Manifests and Helm charts are under `deployment/`. See
   [deployment/kubernetes/helm/README.md](deployment/kubernetes/helm/README.md) for Helm 3 examples.
 - The legacy Terraform/Ansible deployments under the driver directories still reference older
-  distribution names, Java versions and launcher settings. Adapt them for Java 25, the current
+  distribution names, Java versions and launcher settings. Adapt them for Java 27, the current
   tarball, and the complete `drivers/` plugin bundles before using them with this fork.
 
 ## License

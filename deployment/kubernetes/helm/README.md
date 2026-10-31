@@ -3,12 +3,12 @@
 The chart uses Helm 3. From the repository root, install it with the release name `benchmark`:
 
 ```bash
-IMAGE=registry.example.com/your/openmessaging-benchmark:java25
+IMAGE=registry.example.com/your/openmessaging-benchmark:java27
 helm upgrade --install benchmark deployment/kubernetes/helm/benchmark \
   --set image="$IMAGE" --set driverMemoryLimit=8Gi
 ```
 
-Replace `IMAGE` with a reachable Java 25 image containing the current distribution and its
+Replace `IMAGE` with a reachable Java 27 image containing the current distribution and its
 `drivers/` plugin bundles; the chart's default image is not maintained by this fork. The release
 name matters because the current worker-address template hard-codes `benchmark-worker`. The chart
 defaults to eight workers and a 4 GiB driver heap. Size the cluster and pod limits accordingly:

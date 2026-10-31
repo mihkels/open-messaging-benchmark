@@ -6,7 +6,7 @@ You can currently deploy to the following platforms:
 * [Amazon Web Services (AWS)](#deploy-a-pravega-cluster-on-amazon-web-services)
 
 > **Legacy AWS deployment:** the Terraform/Ansible assets below install Java 11 and refer to the
-> 0.0.1 tarball and old launcher settings. Adapt them to deploy the current tarball, Java 25 and
+> 0.0.1 tarball and old launcher settings. Adapt them to deploy the current tarball, Java 27 and
 > complete `drivers/` plugin bundles on every worker before use. For a local broker-backed check,
 > use the [Compose regression suite](../e2e-tests/compose/README.md).
 
@@ -19,7 +19,7 @@ $ git clone https://github.com/mihkels/open-messaging-benchmark.git
 $ cd open-messaging-benchmark
 ```
 
-You will also need [Maven](https://maven.apache.org/install.html) and JDK 25.
+You will also need [Maven](https://maven.apache.org/install.html) and JDK 27.
 
 # CREATE LOCAL ARTIFACTS
 

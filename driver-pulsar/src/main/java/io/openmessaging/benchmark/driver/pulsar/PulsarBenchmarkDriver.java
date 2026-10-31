@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.pulsar;
 
-import com.google.common.collect.Sets;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -47,7 +46,6 @@ import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.BacklogQuota.RetentionPolicy;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.TenantInfo;
-import org.apache.pulsar.common.util.FutureUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
@@ -140,7 +138,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                                     tenant,
                                     TenantInfo.builder()
                                             .adminRoles(Collections.emptySet())
-                                            .allowedClusters(Sets.newHashSet(cluster))
+                                            .allowedClusters(Collections.singleton(cluster))
                                             .build());
                 } catch (ConflictException e) {
                     // Ignore. This can happen when multiple workers are initializing at the same time
@@ -216,7 +214,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                         partitions -> {
                             partitions.forEach(
                                     p -> futures.add(createInternalConsumer(p, subscriptionName, consumerCallback)));
-                            return FutureUtil.waitForAll(futures);
+                            return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
                         })
                 .thenApply(
                         __ ->

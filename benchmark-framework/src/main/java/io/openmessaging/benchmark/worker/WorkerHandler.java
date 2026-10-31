@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.worker;
 
-import io.javalin.Javalin;
+import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -51,40 +51,41 @@ public class WorkerHandler implements AutoCloseable {
     public static final String RESET_STATS = "/reset-stats";
     private final Worker localWorker;
 
-    public WorkerHandler(Javalin app, PrometheusMeterRegistry statsLogger) {
-        this(app, new LocalWorker(statsLogger));
+    public WorkerHandler(PrometheusMeterRegistry statsLogger) {
+        this(new LocalWorker(statsLogger));
     }
 
     /**
-     * Serves {@code worker} over HTTP on {@code app}.
+     * Creates a handler for serving {@code worker} over HTTP.
      *
-     * @param app the HTTP server
      * @param worker the worker to expose
      */
-    public WorkerHandler(Javalin app, Worker worker) {
+    public WorkerHandler(Worker worker) {
         this.localWorker = worker;
+    }
 
-        app.exception(
+    public void registerRoutes(RoutesConfig routes) {
+        routes.exception(
                 Exception.class,
                 (e, ctx) -> {
                     log.error("Request {} {} failed", ctx.method(), ctx.path(), e);
                     ctx.status(500).result(describe(e));
                 });
 
-        app.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
-        app.post(CREATE_TOPICS, this::handleCreateTopics);
-        app.post(CREATE_PRODUCERS, this::handleCreateProducers);
-        app.post(PROBE_PRODUCERS, this::handleProbeProducers);
-        app.post(CREATE_CONSUMERS, this::handleCreateConsumers);
-        app.post(PAUSE_CONSUMERS, this::handlePauseConsumers);
-        app.post(RESUME_CONSUMERS, this::handleResumeConsumers);
-        app.post(START_LOAD, this::handleStartLoad);
-        app.post(ADJUST_PUBLISH_RATE, this::handleAdjustPublishRate);
-        app.post(STOP_ALL, this::handleStopAll);
-        app.get(PERIOD_STATS, this::handlePeriodStats);
-        app.get(CUMULATIVE_LATENCIES, this::handleCumulativeLatencies);
-        app.get(COUNTERS_STATS, this::handleCountersStats);
-        app.post(RESET_STATS, this::handleResetStats);
+        routes.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
+        routes.post(CREATE_TOPICS, this::handleCreateTopics);
+        routes.post(CREATE_PRODUCERS, this::handleCreateProducers);
+        routes.post(PROBE_PRODUCERS, this::handleProbeProducers);
+        routes.post(CREATE_CONSUMERS, this::handleCreateConsumers);
+        routes.post(PAUSE_CONSUMERS, this::handlePauseConsumers);
+        routes.post(RESUME_CONSUMERS, this::handleResumeConsumers);
+        routes.post(START_LOAD, this::handleStartLoad);
+        routes.post(ADJUST_PUBLISH_RATE, this::handleAdjustPublishRate);
+        routes.post(STOP_ALL, this::handleStopAll);
+        routes.get(PERIOD_STATS, this::handlePeriodStats);
+        routes.get(CUMULATIVE_LATENCIES, this::handleCumulativeLatencies);
+        routes.get(COUNTERS_STATS, this::handleCountersStats);
+        routes.post(RESET_STATS, this::handleResetStats);
     }
 
     @Override

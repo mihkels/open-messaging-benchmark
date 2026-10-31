@@ -13,23 +13,21 @@
 #
 
 # Build the Project
-FROM maven:3.9.11-amazoncorretto-25-alpine AS build
+FROM maven:3.10.0-eclipse-temurin-27-alpine AS build
 
-# Copy only pom files to cache dependencies
+# Copy sources and Git metadata
 COPY . /benchmark/
 WORKDIR /benchmark
 
-# Download all possible dependencies and plugins
-RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B -Dexcludes="io.openmessaging.benchmark:*" || true
-RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve -B -Dexcludes="io.openmessaging.benchmark:*" -DincludeScope=test || true
-RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve-plugins -B || true
-RUN --mount=type=cache,target=/root/.m2 mvn dependency:resolve-sources -B -Dexcludes="io.openmessaging.benchmark:*" -DincludeScope=test || true
+# Download dependencies and plugins, excluding artifacts built by this reactor.
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B -DexcludeReactor=true
 
-# Now do the actual build
-RUN --mount=type=cache,target=/root/.m2 mvn install
+# Reap orphaned driver processes created by the supervisor lifecycle tests.
+RUN apk add --no-cache tini
+RUN --mount=type=cache,target=/root/.m2 tini -s -- mvn install
 
 # Create the benchmark image
-FROM amazoncorretto:25-alpine
+FROM amazoncorretto:27-alpine
 
 RUN apk add --no-cache bash
 

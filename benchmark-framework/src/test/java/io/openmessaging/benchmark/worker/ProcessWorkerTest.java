@@ -279,11 +279,17 @@ class ProcessWorkerTest {
 
     @Test
     void remoteSupervisorPropagatesResultsAndReportsDriverCrashes() throws Exception {
-        Javalin app = Javalin.create(config -> config.showJavalinBanner = false);
         ProcessWorker worker = newWorker();
+        WorkerHandler handler = new WorkerHandler(worker);
+        Javalin app =
+                Javalin.create(
+                        config -> {
+                            config.startup.showJavalinBanner = false;
+                            handler.registerRoutes(config.routes);
+                            config.routes.get("/metrics", ctx -> ctx.result(worker.scrapeMetrics()));
+                        });
         try (worker;
-                WorkerHandler handler = new WorkerHandler(app, worker)) {
-            app.get("/metrics", ctx -> ctx.result(worker.scrapeMetrics()));
+                handler) {
             app.start("127.0.0.1", 0);
             String host = "http://127.0.0.1:" + app.port();
             try (HttpWorkerClient remote = new HttpWorkerClient(host);

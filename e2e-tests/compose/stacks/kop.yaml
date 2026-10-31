@@ -33,7 +33,7 @@ services:
       PULSAR_PREFIX_kafkaAdvertisedListeners: PLAINTEXT://pulsar-kop:9092
       PULSAR_PREFIX_brokerEntryMetadataInterceptors: org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor
       PULSAR_PREFIX_brokerDeleteInactiveTopicsEnabled: "false"
-      # Kafka 3.x clients use idempotent producers by default, which KoP serves through its
+      # Kafka clients use idempotent producers by default, which KoP serves through its
       # transaction coordinator.
       PULSAR_PREFIX_kafkaTransactionCoordinatorEnabled: "true"
       PULSAR_PREFIX_brokerDeduplicationEnabled: "true"

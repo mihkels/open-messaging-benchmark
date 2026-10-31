@@ -55,7 +55,6 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionType;
-import org.apache.pulsar.common.util.FutureUtil;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
@@ -197,7 +196,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                                         p ->
                                                 futures.add(
                                                         createInternalPulsarConsumer(p, subscriptionName, consumerCallback)));
-                                return FutureUtil.waitForAll(futures);
+                                return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
                             })
                     .thenApply(
                             __ ->

@@ -12,9 +12,9 @@
 # limitations under the License.
 #
 
-# Java 25 image used by the regression suite for the coordinator and both benchmark workers.
+# Java 27 image used by the regression suite for the coordinator and both benchmark workers.
 # The build context only contains the distribution tarball produced by the `package` module.
-FROM eclipse-temurin:25-jre
+FROM eclipse-temurin:27-jre
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

@@ -35,7 +35,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DistributedWorkersEnsemble implements Worker {
+public final class DistributedWorkersEnsemble implements Worker {
     private final Thread shutdownHook = new Thread(this::stopAll);
     private final List<Worker> workers;
     private final List<Worker> producerWorkers;

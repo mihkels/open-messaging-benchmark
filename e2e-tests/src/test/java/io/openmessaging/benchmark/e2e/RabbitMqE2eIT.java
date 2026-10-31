@@ -22,9 +22,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,7 +43,7 @@ class RabbitMqE2eIT extends BaseE2eIT {
     private static final String RABBITMQ_IMAGE = "rabbitmq:3.13-management";
 
     @Container
-    static RabbitMQContainer rabbitmq = new RabbitMQContainer(RABBITMQ_IMAGE);
+    static RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse(RABBITMQ_IMAGE));
 
     private static Path driverConfigFile;
 

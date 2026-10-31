@@ -26,12 +26,12 @@
     <artifactId>driver-artemis</artifactId>
 
     <properties>
-        <activemq.artemis.version>2.42.0</activemq.artemis.version>
+        <activemq.artemis.version>2.57.0</activemq.artemis.version>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-core-client</artifactId>
             <version>${activemq.artemis.version}</version>
         </dependency>

@@ -15,5 +15,5 @@
 # Pinned third-party artifacts downloaded by run-e2e.sh into e2e-tests/target/e2e-cache.
 # Format: name | url | sha256
 kop-nar     | https://github.com/streamnative/kop/releases/download/v2.10.4.6/pulsar-protocol-handler-kafka-2.10.4.6.nar | 2e03d879181b718898809b7b759231cfde03ba5a693405bb8211dd4b89f3849f
-jms-artemis | https://repo1.maven.org/maven2/org/apache/activemq/artemis-jms-client-all/2.42.0/artemis-jms-client-all-2.42.0.jar | 441b64b52258fcbb4abae80a894fc1c17aee044b51310b5852637affd01e9b35
+jms-artemis | https://repo1.maven.org/maven2/org/apache/artemis/artemis-jms-client-all/2.57.0/artemis-jms-client-all-2.57.0.jar | a60bc90946368c5908908fd82ef8cec6e8401a1fd3805ebda1d7ccd9c6b1ddee
 jms-pulsar  | https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/6.0.11/pulsar-jms-all-6.0.11.jar | d4c744c8e5bdedb8f373ece959ebf2256128fc31248d5c2db909bce913ed7f3a

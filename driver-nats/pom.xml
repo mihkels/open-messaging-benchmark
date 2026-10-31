@@ -26,7 +26,7 @@
     <artifactId>driver-nats</artifactId>
 
     <properties>
-        <nats.version>2.21.4</nats.version>
+        <nats.version>2.26.4</nats.version>
     </properties>
 
     <dependencies>

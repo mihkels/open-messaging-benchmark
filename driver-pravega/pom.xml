@@ -27,8 +27,8 @@
     <properties>
         <!--Provide Pravega version for build: mvn clean install  "-DpravegaVersion=0.9.0-2766.2515791-SNAPSHOT" -DskipTests=true -Dlicense.skip=true-->
         <pravegaVersion>0.13.0</pravegaVersion>
-        <protobuf.version>4.31.1</protobuf.version>
-        <grpc.version>1.75.0</grpc.version>
+        <protobuf.version>4.36.2</protobuf.version>
+        <grpc.version>1.85.1</grpc.version>
 
         <driver.isolated>true</driver.isolated>
     </properties>
@@ -51,7 +51,7 @@
         <dependency>
             <groupId>io.perfmark</groupId>
             <artifactId>perfmark-api</artifactId>
-            <version>0.25.0</version>
+            <version>0.27.0</version>
             <scope>compile</scope>
         </dependency>
         <dependency>

@@ -26,7 +26,7 @@
     <artifactId>driver-bookkeeper</artifactId>
 
     <properties>
-        <distributedlog.version>4.17.2</distributedlog.version>
+        <distributedlog.version>${bookkeeper.version}</distributedlog.version>
         <driver.isolated>true</driver.isolated>
     </properties>
 

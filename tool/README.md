@@ -27,7 +27,7 @@ testDurationMinutes: 15
 warmupDurationMinutes: 0
 ```
 
-Save the template as `template.yaml`. From the repository root, build with JDK 25 and create the
+Save the template as `template.yaml`. From the repository root, build with JDK 27 and create the
 tool's runtime classpath:
 
 ```bash

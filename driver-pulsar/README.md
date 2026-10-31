@@ -6,7 +6,7 @@ For a local Pulsar-backed plugin check, run `e2e-tests/compose/run-e2e.sh --stac
 [Compose regression suite](../e2e-tests/compose/README.md) for requirements and reports.
 
 > **Legacy deployment:** the AWS/Ansible assets refer to the 0.0.1 tarball and old launcher
-> settings. Adapt them to deploy the current distribution, Java 25 and complete `drivers/` plugin
+> settings. Adapt them to deploy the current distribution, Java 27 and complete `drivers/` plugin
 > bundles on every worker before use.
 
 ## Supplement to the official documentation

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 """Validates the regression run artifacts and renders the reports.
 
 Reads <report>/run.properties, <report>/stacks/*/stack.properties and

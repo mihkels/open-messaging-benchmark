@@ -1,72 +1,90 @@
-# Apache Pulsar benchmarks
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-For instructions on running the OpenMessaging benchmarks for Pulsar, see the [official documentation](http://openmessaging.cloud/docs/benchmarks/pulsar/).
+http://www.apache.org/licenses/LICENSE-2.0
 
-For a local Pulsar-backed plugin check, run `e2e-tests/compose/run-e2e.sh --stacks pulsar`; see the
-[Compose regression suite](../e2e-tests/compose/README.md) for requirements and reports.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
 
-> **Legacy deployment:** the AWS/Ansible assets refer to the 0.0.1 tarball and old launcher
-> settings. Adapt them to deploy the current distribution, Java 27 and complete `drivers/` plugin
-> bundles on every worker before use.
+# Apache Pulsar driver
 
-## Supplement to the official documentation
+This plugin benchmarks Apache Pulsar with the Pulsar Java client. Before the run it uses the admin
+API to create a tenant (if missing), a new namespace with the configured persistence and
+deduplication policies, and partitioned topics.
 
-Before you run `ansible-playbook` with `terraform-inventory`, you must set the environment variable `TF_STATE`. i.e. the completed command should be:
+- Plugin ID: `pulsar`
+- `driverClass`: `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`
+- Configs: [`pulsar.yaml`](pulsar.yaml), [`pulsar-effectively-once.yaml`](pulsar-effectively-once.yaml)
+  (broker-side deduplication only; no transactions)
 
-```bash
-TF_STATE=. ansible-playbook \
-  --user ec2-user \
-  --inventory `which terraform-inventory` \
-  deploy.yaml
-```
+Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/pulsar/>
 
-### Ansible variable files
+## Prerequisites
 
-The Ansible deployment script supports flexible configuration with a variable file, which is specified by `-e` option like:
+- A Pulsar cluster whose binary endpoint (`serviceUrl`, port 6650) and admin endpoint (`httpUrl`,
+  port 8080) are reachable from every worker. The identity used must be allowed to create tenants,
+  namespaces and partitioned topics.
+- `clusterName` must name an existing cluster (`standalone` for `bin/pulsar standalone`; the shipped
+  files use `local`).
+- `persistence.ensembleSize`/`writeQuorum`/`ackQuorum` must fit your bookies. The shipped files use
+  3/3/2; a standalone broker needs 1/1/1.
 
-```bash
-TF_STATE=. ansible-playbook \
-  --user ec2-user \
-  --inventory `which terraform-inventory` \
-  -e @extra_vars.yaml \
-  deploy.yaml
-```
-
-For example, if you changed the AWS instance type, the two SSD device paths might not be `/dev/nvme1n1` and `/dev/nvme2n1`. In this case, you can configure them like
-
-```yaml
-disk_dev:
-  - /path/to/disk1
-  - /path/to/disk2
-```
-
-See more explanations in [the example variable file](./deploy/ssd/extra_vars.yaml).
-
-### Enable protocol handlers
-
-With the Ansible variable file, you can enable multiple protocol handlers in `protocol_handlers` variable. For example, given following configurations:
-
-```yaml
-protocol_handlers:
-  - protocol: kafka
-    conf: kop.conf
-    url: https://github.com/streamnative/kop/releases/download/v2.9.2.5/pulsar-protocol-handler-kafka-2.9.2.5.nar
-  - protocol: mqtt
-    conf: mop.conf
-    url: https://github.com/streamnative/mop/releases/download/v2.9.2.5/pulsar-protocol-handler-mqtt-2.9.2.5.nar
-```
-
-It will download KoP and MoP from the given URLs. Then, the configuration templates will be formatted and appended to the `broker.conf`. The `conf` field is the name of the configuration template, which must be put under `templates` directory.
-
-### Restart the brokers with new configurations
-
-You can change the configuration files and then restart the cluster by executing the following command.
+A test broker, as used by the regression suite:
 
 ```bash
-TF_STATE=. ansible-playbook \
-  --user ec2-user \
-  --inventory `which terraform-inventory` \
-  -e @extra_vars.yaml \
-  restart-brokers.yaml
+docker run -d --name pulsar -p 6650:6650 -p 8080:8080 \
+  apachepulsar/pulsar:4.0.6 bin/pulsar standalone -nfw -nss
 ```
 
+## Usage
+
+Copy `pulsar.yaml`, set `clusterName: standalone` and the persistence quorums to `1`, and run in
+local mode from the repository root (after `mvn -DskipTests install`) or from `/benchmark` in the
+benchmark image:
+
+```bash
+bin/benchmark --drivers pulsar-local.yaml workloads/1-topic-1-partition-1kb.yaml
+```
+
+For several workers, see the
+[distributed runs guide](https://mihkels.github.io/open-messaging-benchmark/getting-started/distributed-runs/).
+Install the plugin bundle on every worker.
+
+## Smoke check
+
+```bash
+e2e-tests/compose/run-e2e.sh --cases pulsar-contract
+e2e-tests/compose/run-e2e.sh --stacks pulsar
+```
+
+See the [Compose regression suite](../e2e-tests/compose/README.md). A passing case is a functional
+check, not a performance result.
+
+## Limitations
+
+- Topics, subscriptions and namespaces are not deleted after the run. Every driver instance creates
+  a new namespace.
+- The subscription type applies per partition: the driver creates one consumer per partition.
+- There is no pass-through for other Pulsar client settings and no transaction support.
+- `pulsar-effectively-once.yaml` only enables broker deduplication on the namespace.
+
+More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
+[results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),
+[troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/).
+
+## Legacy deployment files
+
+[`deploy/ssd`](deploy/ssd) contains Terraform and Ansible files for AWS (and
+[`deploy/ssd/alicloud`](deploy/ssd/alicloud) for Alibaba Cloud) from the original project. They are
+unmaintained: they refer to older distribution names, Java versions and launcher settings. Adapt
+them for Java 27 and the current distribution and plugin layout (`drivers/` bundles on every worker)
+before use. The playbooks read Ansible variables from
+[`deploy/ssd/extra_vars.yaml`](deploy/ssd/extra_vars.yaml), for example `disk_dev` for the bookie
+disk devices and `protocol_handlers` for downloading protocol handlers such as KoP;
+`restart-brokers.yaml` restarts the brokers after a configuration change.

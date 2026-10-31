@@ -1,6 +1,7 @@
 # OpenMessaging Benchmark (Fork)
 
-[![Build](https://github.com/openmessaging/benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/openmessaging/benchmark/actions/workflows/pr-build-and-test.yml)
+[![Build](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml)
+[![Docs](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/docs.yml/badge.svg)](https://mihkels.github.io/open-messaging-benchmark/)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 This is a maintained fork of the OpenMessaging Benchmark framework, keeping its dependencies and
@@ -26,7 +27,26 @@ Supported platforms (drivers) include:
 - RabbitMQ
 - Redis
 
-More details can be found in the upstream documentation: http://openmessaging.cloud/docs/benchmarks/
+## Documentation
+
+Documentation site: **<https://mihkels.github.io/open-messaging-benchmark/>** (deployed from `main`
+using GitHub Pages):
+
+- [Quickstart](https://mihkels.github.io/open-messaging-benchmark/getting-started/quickstart/): run a
+  first benchmark with Docker in a few minutes
+- [Supported drivers](https://mihkels.github.io/open-messaging-benchmark/drivers/): setup, configuration
+  and semantics for every driver
+- [Guides](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
+  [reference](https://mihkels.github.io/open-messaging-benchmark/reference/cli/) and
+  [methodology](https://mihkels.github.io/open-messaging-benchmark/methodology/benchmark-design/)
+- [Development](https://mihkels.github.io/open-messaging-benchmark/development/architecture/): building
+  the project and writing driver plugins
+
+The sources are in [`docs/`](docs/). The [upstream documentation](http://openmessaging.cloud/docs/benchmarks/)
+describes the original project and is kept for historical reference only; it does not cover this fork's
+plugin runtime, drivers or tooling.
+
+The rest of this README is a summary for contributors.
 
 ## Technology stack
 
@@ -70,7 +90,7 @@ The packaged distribution and this repository include two main shell entry point
 - `bin/benchmark` — runs the benchmark coordinator.
   - Main class: `io.openmessaging.benchmark.Benchmark`
   - Important env vars: see [Environment variables](#environment-variables).
-  - Example: bin/benchmark --drivers driver-kafka/kafka.yaml --workers <worker-urls> workloads/1-topic-16-partitions-1kb.yaml
+  - Example: bin/benchmark --drivers driver-kafka/kafka-latency.yaml --workers <worker-urls> workloads/1-topic-16-partitions-1kb.yaml
 - `bin/benchmark-worker` — runs a worker process that executes workload operations.
   - Main class: `io.openmessaging.benchmark.worker.BenchmarkWorker`
   - Important env vars: see [Environment variables](#environment-variables).
@@ -113,7 +133,7 @@ bundles from the reactor, so building only the `package` module can omit drivers
 - `bin/benchmark-worker -p 8080`
 - Repeat on other machines/ports as needed; ensure network connectivity from coordinator to workers.
 3) Run the coordinator pointing to drivers and workloads:
-- bin/benchmark --drivers driver-kafka/kafka.yaml --workers http://host1:8080,http://host2:8080 workloads/1-topic-16-partitions-1kb.yaml
+- bin/benchmark --drivers driver-kafka/kafka-latency.yaml --workers http://host1:8080,http://host2:8080 workloads/1-topic-16-partitions-1kb.yaml
 
 Notes:
 - Each driver has its own configuration YAML (see `driver-*/*.yaml`), describing broker endpoints and client parameters.

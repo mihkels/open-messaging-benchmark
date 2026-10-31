@@ -342,6 +342,7 @@
                         <j2>SCRIPT_STYLE</j2>
                         <conf>SCRIPT_STYLE</conf>
                         <yaml>SCRIPT_STYLE</yaml>
+                        <requirements.txt>SCRIPT_STYLE</requirements.txt>
                         <md>XML_STYLE</md>
                         <puml>APOSTROPHE_STYLE</puml>
                     </mapping>

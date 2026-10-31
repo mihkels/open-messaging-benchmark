@@ -14,6 +14,8 @@ limitations under the License.
 
 # Driver plugin regression suite (Docker Compose)
 
+> **Note:** See [Testing a driver](https://mihkels.github.io/open-messaging-benchmark/development/testing-a-driver/) in the documentation site for a usage guide.
+
 This is a local end-to-end regression suite for every driver plugin in the distribution. Each plugin
 runs against the messaging service it targets. Everything runs in Docker Compose:
 

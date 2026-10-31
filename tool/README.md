@@ -1,5 +1,7 @@
 # Tool
 
+> **Note:** See [Workload generation](https://mihkels.github.io/open-messaging-benchmark/guides/workload-generation/) in the documentation site for a usage guide.
+
 ## `WorkloadGenerationTool`
 
 Generates a set of `Workload` definition files from a `WorkloadSetTemplate` file.

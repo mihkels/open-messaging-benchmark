@@ -1,76 +1,129 @@
-# General Purpose JMS benchmark
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-With this driver you can run the benchmark against any messaging system that supports JMS 1.1 or JMS 2.0 API.
+http://www.apache.org/licenses/LICENSE-2.0
 
-For instructions on running the OpenMessaging benchmarks for JMS, see the [official documentation](https://github.com/openmessaging/openmessaging.github.io/blob/source/docs/benchmarks/jms.md).
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
 
-## Modifying the Openmessaging Benchmark Tar for JMS
+# JMS driver
 
-The JMS client library is not part of the build. Put the JMS provider jars into `drivers/driver-jms/ext/`
-of the distribution, on the coordinator and on every worker. They are only visible to the JMS driver process.
-When `delegateForAdminOperationsClassName` is set, the plugin of that driver (for example `driver-kafka`)
-is loaded into the same process. The scripts below add the provider to the distribution tar file.
-Run a full-reactor build from the repository root first; the scripts require exactly one
-`package/target/openmessaging-benchmark-*-bin.tar.gz`. They use a temporary extraction and replace the
-tarball only after repackaging succeeds.
+This plugin benchmarks any broker with a JMS 1.1 or 2.0 client in the `javax.jms` package. It contains
+only the JMS API (`jakarta.jms-api` 2.0.3); you supply the provider's client jar. Topic creation can be
+delegated to the Kafka or Pulsar driver.
 
-### DataStax Starlight for JMS / Pulsar Fast JMS
+Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/jms/>
 
-Build the distribution with JDK 27 and add the Pulsar JMS provider:
+## Plugin and configuration files
+
+- Plugin ID: `jms`
+- `driverClass`: `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`
+- Configurations in this directory:
+
+|              File               |      Provider       |                     Notes                     |
+|---------------------------------|---------------------|-----------------------------------------------|
+| `artemis-jms.yaml`              | Artemis             | JMS 2.0 API                                   |
+| `artemis-jms-transactions.yaml` | Artemis             | One transaction per message                   |
+| `pulsar-jms.yaml`               | Pulsar JMS          | Pulsar admin delegate                         |
+| `pulsar-jms-selectors.yaml`     | Pulsar JMS          | Message property and selector                 |
+| `pulsar-jms-transactions.yaml`  | Pulsar JMS          | Needs Pulsar transactions on the broker       |
+| `kafka-jms.yaml`                | Confluent Kafka JMS | Kafka admin delegate, JMS 1.1 API, 3 replicas |
+
+All use `localhost` and the same `name: JMS`; set a distinct `name` per provider.
+
+## Provider jars
+
+`plugin.yaml` declares `optionalClasspath: ext/*.jar`. Put the provider jar, with its dependencies, in:
+
+- `drivers/driver-jms/ext/` in the distribution, on the coordinator (local mode) and every worker;
+- `/benchmark/drivers/driver-jms/ext/` in the container;
+- `driver-jms/target/omb-plugin/ext/` in a source checkout (removed by `mvn clean`).
+
+| Provider |                           Jar                            |                      Connection factory class                      |
+|----------|----------------------------------------------------------|--------------------------------------------------------------------|
+| Artemis  | `org.apache.artemis:artemis-jms-client-all` 2.57.0       | `org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory` |
+| Pulsar   | `com.datastax.oss:pulsar-jms-all` 6.0.11                 | `com.datastax.oss.pulsar.jms.PulsarConnectionFactory`              |
+| Kafka    | Confluent `kafka-jms-client` fat jar (build it yourself) | `io.confluent.kafka.jms.KafkaConnectionFactory`                    |
+
+Use `pulsar-jms-all` 6.0.11: 7.x and later implement `jakarta.jms`, which this driver cannot load, and
+older releases such as 1.2.2 bundle an unshaded Pulsar 2.8 client that cannot reach a Pulsar 4
+transaction coordinator and collides with the Pulsar plugin.
+
+The scripts below add a provider to the distribution tarball. Run `mvn clean install -DskipTests` first;
+they need exactly one `package/target/openmessaging-benchmark-*-bin.tar.gz`:
 
 ```bash
-mvn clean install -DskipTests
-bash driver-jms/package-pulsar.sh
+bash driver-jms/package-pulsar.sh                      # downloads and sha256-checks pulsar-jms-all 6.0.11
+bash driver-jms/package-kafka.sh /path/to/kafka-jms-client-fat.jar
 ```
 
-The script downloads and SHA-256 verifies `pulsar-jms-all` 6.0.11, replacing older
-`pulsar-jms-all` jars in the tarball. This is the latest `javax.jms` release; version 1.2.2 has an
-unshaded older Pulsar client that conflicts with the Pulsar plugin and its transaction support.
-The Pulsar plugin uses the 4.2.x client because Pulsar 5's shaded client conflicts with the provider's
-embedded classes when the JMS and admin-delegate plugins share a process.
+### Building the Confluent Kafka JMS fat jar
 
-### Confluent JMS Client / Kafka JMS
+The Confluent client cannot be redistributed, so build it yourself:
 
-Follow the [Confluent instructions][1] to create a fat jar.
+1. Follow Confluent's
+   [installation instructions, Appendix 1](https://docs.confluent.io/platform/current/clients/kafka-jms-client/installation.html#appendix-1).
+2. `mkdir kafka-jms-client` and create the `pom.xml` from the appendix in it.
+3. Change the repository URL `http://packages.confluent.io/maven/` to `https://packages.confluent.io/maven/`.
+4. Run `mvn clean package`. The jar is in `target/`, for example `target/kafka-jms-client-fat-6.2.1.jar`.
+5. In this repository, run `mvn clean install -DskipTests`, then
+   `bash driver-jms/package-kafka.sh /path/to/kafka-jms-client-fat-6.2.1.jar` (absolute or relative path).
 
-- Create a directory
+## Admin delegate
 
-  ```
-  cd ~
-  mkdir kafka-jms-client
-  cd kafka-jms-client
-  ```
-- Create the pom.xml
-- Change `<url>http://packages.confluent.io/maven/</url>` to `<url>https://packages.confluent.io/maven/</url>`
-- Build the fat jar
+`delegateForAdminOperationsClassName` (for example
+`io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver` or
+`io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`) creates topics and provides the topic
+prefix. The delegate is initialized with the same YAML file, so its keys (`client`/`producer` for
+Pulsar, `replicationFactor` and the four property blocks for Kafka) go in the JMS file. The runtime
+loads the delegate's plugin into the same process, so that plugin must be installed. Without a delegate,
+the broker must create topics on first use; set `topicNamePrefix`.
 
-  ```
-  mvn clean package
-  ```
+## Usage
 
-Follow these instructions to compile the openmessaging benchmark for Confluent JMS Client
+Local mode, from the repository root or from `/benchmark` in the container, after adding the Artemis
+provider jar:
 
-- Build the openmessaging benchmark package
+```bash
+bin/benchmark --drivers driver-jms/artemis-jms.yaml -o jms-artemis.json workloads/1-topic-1-partition-1kb.yaml
+```
 
-  ```
-  mvn clean install -DskipTests
-  ```
-- Run the repacking script passing in the location of the fat jar. EG. `~/kafka-jms-client/target/kafka-jms-client-fat-6.2.1.jar`
+For remote workers, add `--workers` (see
+[Distributed runs](https://mihkels.github.io/open-messaging-benchmark/getting-started/distributed-runs/)).
 
-  ```
-  bash driver-jms/package-kafka.sh /path/to/the/kafka-jms-client.jar
-  ```
+## Smoke check
 
-The jar path can be absolute or relative to the directory from which the script is invoked.
-Legacy AWS deployment scripts need adaptation for Java 27 and plugin bundles before use; see
-the [root README](../README.md#kuberneteshelm-and-deployments).
+```bash
+e2e-tests/compose/run-e2e.sh --stacks jms-artemis
+e2e-tests/compose/run-e2e.sh --stacks jms-pulsar
+e2e-tests/compose/run-e2e.sh --stacks jms-kafka --kafka-jms-jar /path/to/kafka-jms-client-fat-6.2.1.jar
+```
 
-## JMS Driver Benchmarks
+The Artemis and Pulsar provider jars are downloaded and sha256-checked automatically. For Kafka, put the
+fat jar in `e2e-tests/compose/jms-providers/kafka/` or pass `--kafka-jms-jar`; otherwise the lane is
+`blocked`. See the [Compose regression suite](../e2e-tests/compose/README.md#jms-providers). A passing
+case is a functional check, not a performance result.
 
-For Pulsar JMS (and likely Kafka) you will likely want to allocate additional consumer clients.
+## Limitations
 
-- Edit your `terraform.tfvars` file to adjust `num_instances["client"]`.
-- Run `bin/benchmark` with the `--extra` option to allocate more workers as consumers.
+- Providers must implement `javax.jms`; `jakarta.jms` providers are not supported.
+- `sendWithTransactions` commits one message per transaction; consumers are not transacted.
+- With `use20api: false`, consumers are non-durable and ignore the benchmark subscription name (the
+  Confluent client uses `group.id` from the connection factory parameter).
+- Message selectors and properties are fixed for the whole run.
+- Topics, subscriptions and delegate-created namespaces are not deleted.
 
-[1]: https://docs.confluent.io/platform/current/clients/kafka-jms-client/installation.html#appendix-1
+## Further reading
+
+- [JMS driver page](https://mihkels.github.io/open-messaging-benchmark/drivers/jms/)
+- [Apache ActiveMQ Artemis native driver](https://mihkels.github.io/open-messaging-benchmark/drivers/artemis/)
+- [Runtime and plugins](https://mihkels.github.io/open-messaging-benchmark/reference/runtime-and-plugins/)
+- [Workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
+  [Troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/)
 

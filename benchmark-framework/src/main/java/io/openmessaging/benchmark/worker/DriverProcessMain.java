@@ -59,10 +59,16 @@ public final class DriverProcessMain {
 
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         LocalWorker worker = new LocalWorker(registry);
-        Javalin app = Javalin.create(config -> config.showJavalinBanner = false);
-        app.get("/metrics", ctx -> ctx.result(registry.scrape()));
-        WorkerHandler handler = new WorkerHandler(app, worker);
-        app.post(INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
+        WorkerHandler handler = new WorkerHandler(worker);
+        Javalin app =
+                Javalin.create(
+                        config -> {
+                            config.startup.showJavalinBanner = false;
+                            handler.registerRoutes(config.routes);
+                            config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
+                            config.routes.post(
+                                    INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
+                        });
         app.start("127.0.0.1", 0);
 
         Runnable shutdown =

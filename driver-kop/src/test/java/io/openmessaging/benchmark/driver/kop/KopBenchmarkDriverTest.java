@@ -13,11 +13,8 @@
  */
 package io.openmessaging.benchmark.driver.kop;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.openmessaging.benchmark.driver.kop.config.ClientType;
 import io.openmessaging.benchmark.driver.kop.config.Config;
@@ -27,73 +24,70 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Properties;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 
 public class KopBenchmarkDriverTest {
 
     @Test
     public void testLoadDefaultConfig() throws URISyntaxException, IOException {
         final URL url = getClass().getClassLoader().getResource("kop_required.yaml");
-        assertNotNull(url);
+        assertThat(url).isNotNull();
 
         final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
-        assertEquals(config.producerType(), ClientType.PULSAR);
-        assertEquals(config.consumerType(), ClientType.KAFKA);
-        assertEquals(config.pollTimeoutMs(), 100);
+        assertThat(config.producerType()).isEqualTo(ClientType.PULSAR);
+        assertThat(config.consumerType()).isEqualTo(ClientType.KAFKA);
+        assertThat(config.pollTimeoutMs()).isEqualTo(100);
 
         final PulsarConfig pulsarConfig = config.pulsarConfig();
-        assertEquals(pulsarConfig.serviceUrl(), "pulsar://localhost:6650");
-        assertTrue(pulsarConfig.batchingEnabled());
-        assertEquals(pulsarConfig.batchingMaxPublishDelayMs(), 1);
-        assertEquals(pulsarConfig.batchingMaxBytes(), 131072);
-        assertTrue(pulsarConfig.blockIfQueueFull());
-        assertEquals(pulsarConfig.pendingQueueSize(), 1000);
-        assertEquals(pulsarConfig.maxPendingMessagesAcrossPartitions(), 50000);
-        assertEquals(pulsarConfig.maxTotalReceiverQueueSizeAcrossPartitions(), 50000);
-        assertEquals(pulsarConfig.receiverQueueSize(), 1000);
+        assertThat(pulsarConfig.serviceUrl()).isEqualTo("pulsar://localhost:6650");
+        assertThat(pulsarConfig.batchingEnabled()).isTrue();
+        assertThat(pulsarConfig.batchingMaxPublishDelayMs()).isEqualTo(1);
+        assertThat(pulsarConfig.batchingMaxBytes()).isEqualTo(131072);
+        assertThat(pulsarConfig.blockIfQueueFull()).isTrue();
+        assertThat(pulsarConfig.pendingQueueSize()).isEqualTo(1000);
+        assertThat(pulsarConfig.maxPendingMessagesAcrossPartitions()).isEqualTo(50000);
+        assertThat(pulsarConfig.maxTotalReceiverQueueSizeAcrossPartitions()).isEqualTo(50000);
+        assertThat(pulsarConfig.receiverQueueSize()).isEqualTo(1000);
 
-        assertEquals(config.getKafkaProperties().get("bootstrap.servers"), "localhost:9092");
+        assertThat(config.getKafkaProperties().get("bootstrap.servers")).isEqualTo("localhost:9092");
     }
 
     @Test
     public void testLoadCustomConfig() throws Exception {
         final URL url = this.getClass().getClassLoader().getResource("kop_custom.yaml");
-        assertNotNull(url);
+        assertThat(url).isNotNull();
 
         final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
-        assertEquals(config.producerType(), ClientType.KAFKA);
-        assertEquals(config.consumerType(), ClientType.PULSAR);
-        assertEquals(config.pollTimeoutMs(), 1000);
+        assertThat(config.producerType()).isEqualTo(ClientType.KAFKA);
+        assertThat(config.consumerType()).isEqualTo(ClientType.PULSAR);
+        assertThat(config.pollTimeoutMs()).isEqualTo(1000);
 
         final PulsarConfig pulsarConfig = config.pulsarConfig();
-        assertEquals(pulsarConfig.serviceUrl(), "pulsar+ssl://localhost:6651");
-        assertFalse(pulsarConfig.batchingEnabled());
-        assertEquals(pulsarConfig.batchingMaxPublishDelayMs(), 10);
-        assertEquals(pulsarConfig.batchingMaxBytes(), 1310720);
-        assertFalse(pulsarConfig.blockIfQueueFull());
-        assertEquals(pulsarConfig.pendingQueueSize(), 10000);
-        assertEquals(pulsarConfig.maxPendingMessagesAcrossPartitions(), 500000);
-        assertEquals(pulsarConfig.maxTotalReceiverQueueSizeAcrossPartitions(), 500000);
-        assertEquals(pulsarConfig.receiverQueueSize(), 10000);
+        assertThat(pulsarConfig.serviceUrl()).isEqualTo("pulsar+ssl://localhost:6651");
+        assertThat(pulsarConfig.batchingEnabled()).isFalse();
+        assertThat(pulsarConfig.batchingMaxPublishDelayMs()).isEqualTo(10);
+        assertThat(pulsarConfig.batchingMaxBytes()).isEqualTo(1310720);
+        assertThat(pulsarConfig.blockIfQueueFull()).isFalse();
+        assertThat(pulsarConfig.pendingQueueSize()).isEqualTo(10000);
+        assertThat(pulsarConfig.maxPendingMessagesAcrossPartitions()).isEqualTo(500000);
+        assertThat(pulsarConfig.maxTotalReceiverQueueSizeAcrossPartitions()).isEqualTo(500000);
+        assertThat(pulsarConfig.receiverQueueSize()).isEqualTo(10000);
 
         final Properties props = config.getKafkaProperties();
-        assertEquals(props.size(), 3);
-        assertEquals(props.get("bootstrap.servers"), "localhost:9092");
-        assertEquals(props.get("linger.ms"), "1");
-        assertEquals(props.get("batch.size"), "1048576");
+        assertThat(props).hasSize(3);
+        assertThat(props.get("bootstrap.servers")).isEqualTo("localhost:9092");
+        assertThat(props.get("linger.ms")).isEqualTo("1");
+        assertThat(props.get("batch.size")).isEqualTo("1048576");
     }
 
     @Test
     public void testLoadWrongKafkaConfig() throws Exception {
         final URL url = this.getClass().getClassLoader().getResource("kop_wrong_kafka_config.yaml");
-        assertNotNull(url);
+        assertThat(url).isNotNull();
 
         final Config config = KopBenchmarkDriver.loadConfig(Path.of(url.toURI()));
-        try {
-            config.getKafkaProperties();
-            fail();
-        } catch (IllegalArgumentException e) {
-            assertEquals(e.getMessage(), "bootstrap.servers is not set");
-        }
+        assertThatThrownBy(config::getKafkaProperties)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("bootstrap.servers is not set");
     }
 }

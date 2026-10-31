@@ -25,7 +25,8 @@
 
     <artifactId>driver-pulsar</artifactId>
     <properties>
-        <pulsar.version>4.0.6</pulsar.version>
+        <!-- Pulsar 5's shaded client conflicts with the JMS 2 provider when both plugins are loaded. -->
+        <pulsar.version>4.2.5</pulsar.version>
     </properties>
 
     <dependencies>
@@ -38,6 +39,11 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>driver-api</artifactId>
             <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
             <scope>provided</scope>
         </dependency>
     </dependencies>

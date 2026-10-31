@@ -96,15 +96,18 @@ public final class BenchmarkWorker {
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
 
-        // Start the web server (no try-with-resources)
-        Javalin app = Javalin.create().start(arguments.getHttpPort());
-
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();
-        WorkerHandler handler = new WorkerHandler(app, worker);
-
-        // Add Prometheus metrics endpoint, including the metrics of the current driver process
-        app.get("/metrics", ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
+        WorkerHandler handler = new WorkerHandler(worker);
+        Javalin app =
+                Javalin.create(
+                                config -> {
+                                    handler.registerRoutes(config.routes);
+                                    config.routes.get(
+                                            "/metrics",
+                                            ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
+                                })
+                        .start(arguments.getHttpPort());
 
         // Stop server and driver process on JVM shutdown and keep the process alive
         Runtime.getRuntime()

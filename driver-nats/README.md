@@ -5,9 +5,9 @@
 > deprecated [NATS Streaming / STAN](https://docs.nats.io/legacy/stan). If you are interested in STAN benchmarks,
 > see the [driver-nats-streaming](../driver-nats-streaming) module.
 >
-> **Legacy AWS deployment:** the Terraform/Ansible assets below predate Java 25 and isolated
+> **Legacy AWS deployment:** the Terraform/Ansible assets below predate Java 27 and isolated
 > plugins. Their playbooks refer to the 0.0.1 tarball and old launcher settings. Adapt them to
-> deploy the current tarball, Java 25 and complete `drivers/` bundles on every worker before use.
+> deploy the current tarball, Java 27 and complete `drivers/` bundles on every worker before use.
 > For a local broker-backed check, use the [Compose regression suite](../e2e-tests/compose/README.md).
 
 This folder houses the assets necessary to run benchmarks for
@@ -22,7 +22,7 @@ This folder houses the assets necessary to run benchmarks for
 ## Creating local artifacts
 
 In order to create the local artifacts necessary to run the JetStream benchmarks in AWS, you'll need to have
-[Maven](https://maven.apache.org/install.html) and JDK 25 installed. Build the full reactor to
+[Maven](https://maven.apache.org/install.html) and JDK 27 installed. Build the full reactor to
 include the driver plugins:
 
 ```bash

@@ -34,8 +34,8 @@ BUILD_MODE="auto"
 CASE_TIMEOUT=${OMB_E2E_CASE_TIMEOUT:-420}
 STARTUP_TIMEOUT=${OMB_E2E_STARTUP_TIMEOUT:-600}
 IMAGE=${OMB_E2E_IMAGE:-omb-e2e-runner:local}
-PYTHON_IMAGE=${OMB_E2E_PYTHON_IMAGE:-python:3.13-slim}
-MAVEN_IMAGE=${OMB_E2E_MAVEN_IMAGE:-maven:3.9.11-eclipse-temurin-25}
+PYTHON_IMAGE=${OMB_E2E_PYTHON_IMAGE:-python:3.15-slim}
+MAVEN_IMAGE=${OMB_E2E_MAVEN_IMAGE:-maven:3.10.0-eclipse-temurin-27}
 KAFKA_JMS_JAR=${OMB_E2E_KAFKA_JMS_JAR:-}
 LIST_ONLY=0
 
@@ -51,7 +51,7 @@ Options:
   --cases a,b         Only run these cases (see cases.txt); combines with --stacks
   --build MODE        auto (default): build the distribution in Docker only when it is missing
                       docker: always rebuild with Maven in Docker
-                      host:   always rebuild with the host Maven and JDK 25
+                      host:   always rebuild with the host Maven and JDK 27
                       skip:   never build; fail when the distribution is missing
   --kafka-jms-jar F   Confluent Kafka JMS client fat jar (default: jms-providers/kafka/*.jar)
   --case-timeout S    Timeout for one case in seconds (default 420)

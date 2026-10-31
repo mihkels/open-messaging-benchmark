@@ -25,6 +25,7 @@
 
     <artifactId>driver-jms</artifactId>
     <properties>
+        <!-- JMS 2 uses javax.jms; newer Jakarta JMS APIs are incompatible with existing providers. -->
         <jms.version>2.0.3</jms.version>
     </properties>
 

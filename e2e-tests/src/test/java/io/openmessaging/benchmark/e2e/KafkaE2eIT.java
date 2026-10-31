@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -40,10 +41,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class KafkaE2eIT extends BaseE2eIT {
     private static final Logger log = LoggerFactory.getLogger(KafkaE2eIT.class);
 
-    private static final String KAFKA_IMAGE = "apache/kafka:3.8.0";
+    private static final String KAFKA_IMAGE = "apache/kafka:4.4.0";
 
     @Container
-    static KafkaContainer kafka = new KafkaContainer(KAFKA_IMAGE);
+    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
     private static Path driverConfigFile;
 

@@ -1,7 +1,7 @@
 # Kafka Deployments
 
 > These are legacy deployment assets. The playbooks refer to the 0.0.1 tarball and Java 11-era
-> launcher settings. Adapt them to install Java 25 and deploy the current distribution, including
+> launcher settings. Adapt them to install Java 27 and deploy the current distribution, including
 > its `drivers/` bundles, on every worker before using them with this fork.
 
 There are two types of deployment found under ssd-deployment and hdd-deployment folders:

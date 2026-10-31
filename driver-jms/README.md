@@ -16,7 +16,7 @@ tarball only after repackaging succeeds.
 
 ### DataStax Starlight for JMS / Pulsar Fast JMS
 
-Build the distribution with JDK 25 and add the Pulsar JMS provider:
+Build the distribution with JDK 27 and add the Pulsar JMS provider:
 
 ```bash
 mvn clean install -DskipTests
@@ -26,6 +26,8 @@ bash driver-jms/package-pulsar.sh
 The script downloads and SHA-256 verifies `pulsar-jms-all` 6.0.11, replacing older
 `pulsar-jms-all` jars in the tarball. This is the latest `javax.jms` release; version 1.2.2 has an
 unshaded older Pulsar client that conflicts with the Pulsar plugin and its transaction support.
+The Pulsar plugin uses the 4.2.x client because Pulsar 5's shaded client conflicts with the provider's
+embedded classes when the JMS and admin-delegate plugins share a process.
 
 ### Confluent JMS Client / Kafka JMS
 
@@ -60,7 +62,7 @@ Follow these instructions to compile the openmessaging benchmark for Confluent J
   ```
 
 The jar path can be absolute or relative to the directory from which the script is invoked.
-Legacy AWS deployment scripts need adaptation for Java 25 and plugin bundles before use; see
+Legacy AWS deployment scripts need adaptation for Java 27 and plugin bundles before use; see
 the [root README](../README.md#kuberneteshelm-and-deployments).
 
 ## JMS Driver Benchmarks

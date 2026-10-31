@@ -26,14 +26,35 @@
     <artifactId>driver-rocketmq</artifactId>
 
     <properties>
-        <rocketmq.version>5.3.2</rocketmq.version>
+        <rocketmq.version>5.5.1</rocketmq.version>
+        <!-- The ACL artifact stopped being published after 5.3.2. -->
+        <rocketmq.acl.version>5.3.2</rocketmq.acl.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-acl</artifactId>
-            <version>${rocketmq.version}</version>
+            <version>${rocketmq.acl.version}</version>
+            <!-- Use the current client and tools' dependencies with the legacy ACL hook. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.rocketmq</groupId>
+                    <artifactId>rocketmq-common</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.rocketmq</groupId>
+                    <artifactId>rocketmq-proto</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.rocketmq</groupId>
+                    <artifactId>rocketmq-remoting</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.rocketmq</groupId>
+                    <artifactId>rocketmq-srvutil</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
@@ -56,6 +77,16 @@
             <artifactId>driver-api</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

@@ -12,7 +12,7 @@
 # limitations under the License.
 #
 
-FROM amazoncorretto:25-alpine
+FROM amazoncorretto:27-alpine
 ARG BENCHMARK_TARBALL
 
 RUN apk add --no-cache bash

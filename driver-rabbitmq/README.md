@@ -1,7 +1,7 @@
 # RabbitMQ benchmarks
 
 > **Legacy AWS deployment:** the Terraform/Ansible assets below install Java 11 and refer to the
-> 0.0.1 tarball and old launcher settings. Adapt them to deploy the current tarball, Java 25 and
+> 0.0.1 tarball and old launcher settings. Adapt them to deploy the current tarball, Java 27 and
 > complete `drivers/` plugin bundles on every worker before use. For a local broker-backed check,
 > use the [Compose regression suite](../e2e-tests/compose/README.md).
 
@@ -14,7 +14,7 @@ This folder houses all of the assets necessary to run benchmarks for [RabbitMQ](
 
 ## Creating local artifacts
 
-To create local artifacts, install [Maven](https://maven.apache.org/install.html) and JDK 25, then build
+To create local artifacts, install [Maven](https://maven.apache.org/install.html) and JDK 27, then build
 the full reactor to include the driver plugins:
 
 ```bash

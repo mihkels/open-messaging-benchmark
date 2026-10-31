@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectReader;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Expands a {@link WorkloadSetTemplate} into a set of {@link Workload Workloads}. */
-class WorkloadGenerator {
+final class WorkloadGenerator {
     private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
 
     private final WorkloadSetTemplate template;

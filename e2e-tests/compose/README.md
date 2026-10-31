@@ -37,7 +37,7 @@ e2e-tests/compose/run-e2e.sh --cases kafka-contract,pulsar-contract
 - About 8 GB of memory available to Docker.
 - Network access to Docker Hub and to the pinned artifact URLs.
 - No host JDK or Python is needed. The distribution is built with Maven in Docker when it is missing.
-Use `--build host` to build it with the host Maven and JDK 25 instead, or `--build docker` to always rebuild.
+Use `--build host` to build it with the host Maven and JDK 27 instead, or `--build docker` to always rebuild.
 
 Run `--help` to see all options. Filters must name existing cases and stacks; explicitly selected
 cases must belong to a selected, configured stack.
@@ -130,7 +130,7 @@ and loaded through the plugin's optional classpath:
 
 |     Lane      |               Provider               |                     Source                      |
 |---------------|--------------------------------------|-------------------------------------------------|
-| `jms-artemis` | `artemis-jms-client-all` 2.42.0      | Maven Central, sha256-pinned in `artifacts.txt` |
+| `jms-artemis` | `artemis-jms-client-all` 2.57.0      | Maven Central, sha256-pinned in `artifacts.txt` |
 | `jms-pulsar`  | `pulsar-jms-all` 6.0.11              | Maven Central, sha256-pinned in `artifacts.txt` |
 | `jms-kafka`   | Confluent `kafka-jms-client` fat jar | You supply it, because of its license           |
 
@@ -156,7 +156,7 @@ which is mounted as a whole, so older versions are removed when a new one is dow
 | `cases.txt`              | `case\|plugin id\|stack\|contract or regression\|driver file\|workload file\|description` |
 | `drivers/`, `workloads/` | Case inputs, using Compose service names as hosts                                         |
 | `artifacts.txt`          | Pinned external artifacts with sha256                                                     |
-| `runner/Dockerfile`      | Java 25 image containing the binary distribution                                          |
+| `runner/Dockerfile`      | Java 27 image containing the binary distribution                                          |
 | `report/report.py`       | Report generator, Python standard library only                                            |
 
 **To add a plugin:**

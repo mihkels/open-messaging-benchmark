@@ -15,8 +15,8 @@
 
 set -e
 
-KAFKA_VERSION="3.9"
-JAVA_VERSION="25"
+KAFKA_VERSION="4.4"
+JAVA_VERSION="27"
 
 REPOSITORY="mihkels/open-messaging-benchmark"
 VERSION=${1:-latest}

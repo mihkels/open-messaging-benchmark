@@ -14,4 +14,4 @@ directory to a CSV in the current directory, run:
 bin/benchmark --csv path/to/results
 ```
 
-The [legacy AWS deployment](deploy/README.md) requires adaptation for Java 25 and plugin bundles.
+The [legacy AWS deployment](deploy/README.md) requires adaptation for Java 27 and plugin bundles.

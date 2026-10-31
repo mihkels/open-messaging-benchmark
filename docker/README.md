@@ -1,11 +1,11 @@
 # OpenMessaging Benchmark Docker images
 
-Both images run on Amazon Corretto 25 (Alpine) and include Bash for the benchmark launchers.
+Both images run on Amazon Corretto 27 (Alpine) and include Bash for the benchmark launchers.
 Run the commands below from the repository root.
 
 ## Prebuilt distribution
 
-This option requires Docker, Maven and JDK 25 on the host. Build the **full reactor** so the
+This option requires Docker, Maven and JDK 27 on the host. Build the **full reactor** so the
 distribution includes every driver plugin:
 
 ```bash
@@ -23,7 +23,7 @@ license check.
 ## Build inside Docker
 
 This option does not require Maven or a JDK on the host. `Dockerfile.build` uses the
-`maven:3.9.11-amazoncorretto-25-alpine` builder and assembles the distribution in the image build:
+`maven:3.10.0-eclipse-temurin-27-alpine` builder and assembles the distribution in the image build:
 
 ```bash
 docker build -t openmessaging-benchmark:latest -f docker/Dockerfile.build .

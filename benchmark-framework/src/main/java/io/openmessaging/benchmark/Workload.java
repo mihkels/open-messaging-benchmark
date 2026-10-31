@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import java.util.Map;
 
 public class Workload {
     public String name;
@@ -27,6 +28,13 @@ public class Workload {
     public KeyDistributorType keyDistributor = KeyDistributorType.NO_KEY;
 
     public int messageSize;
+
+    /** Optional weighted size buckets; when configured, this takes precedence over messageSize. */
+    public Map<String, Integer> messageSizeDistribution;
+
+    public boolean usesMessageSizeDistribution() {
+        return messageSizeDistribution != null && !messageSizeDistribution.isEmpty();
+    }
 
     public boolean useRandomizedPayloads;
     public double randomBytesRatio;

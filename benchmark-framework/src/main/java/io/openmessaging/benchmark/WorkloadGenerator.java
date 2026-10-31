@@ -20,6 +20,7 @@ import io.openmessaging.benchmark.utils.PaddingDecimalFormat;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.payload.FilePayloadReader;
+import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -94,9 +95,29 @@ public class WorkloadGenerator implements AutoCloseable {
                     });
         }
 
-        final var payloadReader = new FilePayloadReader(workload.messageSize);
         List<byte[]> payloads = new ArrayList<>();
-        if (workload.useRandomizedPayloads) {
+        int[] payloadWeights = null;
+        if (workload.usesMessageSizeDistribution()) {
+            MessageSizeDistribution distribution =
+                    new MessageSizeDistribution(workload.messageSizeDistribution);
+            payloadWeights = distribution.getWeights();
+            Random random = new Random();
+            for (int size : distribution.getBucketSizes()) {
+                byte[] payload = new byte[size];
+                if (workload.useRandomizedPayloads) {
+                    int randomBytes = (int) (size * workload.randomBytesRatio);
+                    random.nextBytes(payload);
+                    java.util.Arrays.fill(payload, randomBytes, size, (byte) 0);
+                }
+                payloads.add(payload);
+            }
+            log.info(
+                    "Prepared {} payload templates for message-size distribution (bucket sizes: {}, "
+                            + "weighted average: {} bytes)",
+                    payloads.size(),
+                    distribution.getBucketSizes(),
+                    distribution.getAvgSize());
+        } else if (workload.useRandomizedPayloads) {
             var r = new Random();
             var randomBytes = (int) (workload.messageSize * workload.randomBytesRatio);
             var zerodBytes = workload.messageSize - randomBytes;
@@ -108,15 +129,16 @@ public class WorkloadGenerator implements AutoCloseable {
                 payloads.add(combined);
             }
         } else {
-            payloads.add(payloadReader.load(workload.payloadFile));
+            payloads.add(new FilePayloadReader(workload.messageSize).load(workload.payloadFile));
         }
 
         var producerWorkAssignment =
-                new ProducerWorkAssignment(payloads, targetPublishRate, workload.keyDistributor);
+                new ProducerWorkAssignment(
+                        payloads, targetPublishRate, workload.keyDistributor, payloadWeights);
         log.info(
-                "Loaded {} payloads from file {} in {} ms",
+                "Prepared {} payloads from {} in {} ms",
                 producerWorkAssignment.payloadData().size(),
-                workload.payloadFile,
+                workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile,
                 timer.elapsedMillis());
         worker.startLoad(producerWorkAssignment);
 
@@ -274,13 +296,17 @@ public class WorkloadGenerator implements AutoCloseable {
 
         this.needToWaitForBacklogDraining = true;
 
+        int effectiveMessageSize = effectiveMessageSize();
+        if (effectiveMessageSize <= 0) {
+            throw new IllegalArgumentException("Message size must be positive when building a backlog");
+        }
         long requestedBacklogSize = workload.consumerBacklogSizeGB * 1024 * 1024 * 1024;
 
         while (true) {
             CountersStats stats = worker.getCountersStats();
             long currentBacklogSize =
                     (workload.subscriptionsPerTopic * stats.messagesSent() - stats.messagesReceived())
-                            * workload.messageSize;
+                            * effectiveMessageSize;
 
             if (currentBacklogSize >= requestedBacklogSize) {
                 break;
@@ -299,7 +325,7 @@ public class WorkloadGenerator implements AutoCloseable {
 
         worker.resumeConsumers();
 
-        long backlogMessageCapacity = requestedBacklogSize / workload.messageSize;
+        long backlogMessageCapacity = requestedBacklogSize / effectiveMessageSize;
         long backlogEmptyLevel = (long) ((1.0 - workload.backlogDrainRatio) * backlogMessageCapacity);
         final long minBacklog = Math.max(1000L, backlogEmptyLevel);
 
@@ -342,7 +368,7 @@ public class WorkloadGenerator implements AutoCloseable {
         result.driver = driverName;
         result.topics = workload.topics;
         result.partitions = workload.partitionsPerTopic;
-        result.messageSize = workload.messageSize;
+        result.messageSize = effectiveMessageSize();
         result.producersPerTopic = workload.producersPerTopic;
         result.consumersPerTopic = workload.consumerPerSubscription;
 
@@ -525,6 +551,12 @@ public class WorkloadGenerator implements AutoCloseable {
         }
 
         return result;
+    }
+
+    private int effectiveMessageSize() {
+        return workload.usesMessageSizeDistribution()
+                ? new MessageSizeDistribution(workload.messageSizeDistribution).getAvgSize()
+                : workload.messageSize;
     }
 
     private static final DecimalFormat rateFormat = new PaddingDecimalFormat("0.0", 7);

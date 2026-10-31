@@ -40,9 +40,11 @@
         <module>driver-pravega</module>
         <module>driver-pulsar</module>
         <module>driver-kafka</module>
+        <module>driver-mqtt5</module>
         <module>driver-rabbitmq</module>
         <module>driver-artemis</module>
         <module>driver-rocketmq</module>
+        <module>driver-rocketmq5</module>
         <module>driver-nats</module>
         <module>driver-nats-streaming</module>
         <module>driver-nsq</module>

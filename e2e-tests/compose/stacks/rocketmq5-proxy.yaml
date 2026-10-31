@@ -1,0 +1,60 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# The RocketMQ 5 client uses its gRPC proxy rather than the legacy remoting protocol.
+services:
+  namesrv:
+    environment:
+      JAVA_OPT_EXT: "-Xms64m -Xmx256m -Xmn64m"
+
+  broker:
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx512m -Xmn128m"
+
+  proxy:
+    image: apache/rocketmq:5.3.2
+    command: ["sh", "mqproxy", "-n", "namesrv:9876"]
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+      JAVA_OPT_EXT: "-Xms64m -Xmx256m"
+    depends_on:
+      broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8081'"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  stack-ready:
+    depends_on:
+      proxy:
+        condition: service_healthy
+
+  worker-1:
+    environment:
+      HEAP_OPTS: "-Xms64m -Xmx512m"
+      SUPERVISOR_HEAP_OPTS: "-Xmx128m"
+      OMB_DRIVER_JVM_OPTS: "-Xms64m -Xmx512m"
+
+  worker-2:
+    environment:
+      HEAP_OPTS: "-Xms64m -Xmx512m"
+      SUPERVISOR_HEAP_OPTS: "-Xmx128m"
+      OMB_DRIVER_JVM_OPTS: "-Xms64m -Xmx512m"
+
+  runner:
+    environment:
+      HEAP_OPTS: "-Xmx384m"

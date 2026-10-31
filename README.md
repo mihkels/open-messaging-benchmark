@@ -16,8 +16,9 @@ Supported platforms (drivers) include:
 - Apache ActiveMQ Artemis
 - Apache BookKeeper
 - Apache Kafka
+- MQTT 5
 - Apache Pulsar (and KoP: Kafka-on-Pulsar)
-- Apache RocketMQ
+- Apache RocketMQ (including RocketMQ 5)
 - Generic JMS
 - NATS (JetStream and legacy Streaming/STAN)
 - NSQ
@@ -52,7 +53,7 @@ the Compose regression runner uses Eclipse Temurin 27.
 
 - benchmark-framework: Core coordinator and worker implementation, common logic
 - driver-api: Driver SPI
-- driver-*: Implementations for specific brokers (Kafka, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ, Artemis, Pravega, JMS, KoP), each packaged as a driver plugin bundle (see [Driver plugins](#driver-plugins))
+- driver-*: Implementations for specific brokers (Kafka, MQTT 5, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ 4/5, Artemis, Pravega, JMS, KoP), each packaged as a driver plugin bundle (see [Driver plugins](#driver-plugins))
 - e2e-tests: Testcontainers tests for selected drivers and a Compose regression suite for all plugins
 - package: Assembles a binary distribution (tar.gz) including bin/, lib/, workloads/, payload/
 - docker: Dockerfiles and instructions for building runnable images
@@ -117,6 +118,17 @@ bundles from the reactor, so building only the `package` module can omit drivers
 Notes:
 - Each driver has its own configuration YAML (see `driver-*/*.yaml`), describing broker endpoints and client parameters.
 - Workloads live under workloads/ and payload/; feel free to copy and customize.
+
+For weighted variable-size payloads, set `messageSizeDistribution` instead of `messageSize`.
+Range endpoints accept bytes, `KB`, or `MB`; each bucket sends its midpoint size, selected according
+to its relative weight:
+
+```yaml
+messageSizeDistribution:
+  "256-1KB": 2
+  "1KB-4KB": 5
+  "4KB-16KB": 1
+```
 
 ## Driver plugins
 

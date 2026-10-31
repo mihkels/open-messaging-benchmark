@@ -28,6 +28,7 @@ import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
+import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -180,6 +181,34 @@ public class LocalWorker implements Worker, ConsumerCallback {
         int processors = Runtime.getRuntime().availableProcessors();
 
         updateMessageProducer(producerWorkAssignment.publishRate());
+        List<byte[]> payloads = producerWorkAssignment.payloadData();
+        if (payloads.isEmpty()) {
+            throw new IllegalArgumentException("At least one payload is required");
+        }
+
+        int[] weights = producerWorkAssignment.payloadWeights();
+        int[] cumulativeWeights = null;
+        int totalWeight = payloads.size();
+        if (weights != null) {
+            cumulativeWeights = new int[weights.length];
+            totalWeight = 0;
+            for (int i = 0; i < weights.length; i++) {
+                if (weights[i] < 0) {
+                    throw new IllegalArgumentException("Payload weights cannot be negative");
+                }
+                try {
+                    totalWeight = Math.addExact(totalWeight, weights[i]);
+                } catch (ArithmeticException e) {
+                    throw new IllegalArgumentException("Payload weights exceed the supported total", e);
+                }
+                cumulativeWeights[i] = totalWeight;
+            }
+            if (totalWeight == 0) {
+                throw new IllegalArgumentException("Payload weights must sum to a positive value");
+            }
+        }
+        final int[] payloadCumulativeWeights = cumulativeWeights;
+        final int payloadTotalWeight = totalWeight;
 
         Map<Integer, List<BenchmarkProducer>> processorAssignment = new TreeMap<>();
 
@@ -199,7 +228,9 @@ public class LocalWorker implements Worker, ConsumerCallback {
                                 submitProducersToExecutor(
                                         benchmarkProducers,
                                         KeyDistributor.build(producerWorkAssignment.keyDistributorType()),
-                                        producerWorkAssignment.payloadData()));
+                                        payloads,
+                                        payloadCumulativeWeights,
+                                        payloadTotalWeight));
     }
 
     @Override
@@ -210,21 +241,27 @@ public class LocalWorker implements Worker, ConsumerCallback {
     }
 
     private void submitProducersToExecutor(
-            List<BenchmarkProducer> producers, KeyDistributor keyDistributor, List<byte[]> payloads) {
+            List<BenchmarkProducer> producers,
+            KeyDistributor keyDistributor,
+            List<byte[]> payloads,
+            int[] cumulativeWeights,
+            int totalWeight) {
         log.info(
                 "Submitting {} producers to executor, testCompleted: {}", producers.size(), testCompleted);
 
-        ThreadLocalRandom r = ThreadLocalRandom.current();
-        int payloadCount = payloads.size();
         for (BenchmarkProducer p : producers) {
             executor.submit(
                     () -> {
                         try {
+                            ThreadLocalRandom random = ThreadLocalRandom.current();
                             while (!testCompleted) {
+                                int payloadIndex =
+                                        cumulativeWeights == null
+                                                ? random.nextInt(payloads.size())
+                                                : MessageSizeDistribution.bucketIndexForTicket(
+                                                        random.nextInt(totalWeight), cumulativeWeights);
                                 messageProducer.sendMessage(
-                                        p,
-                                        Optional.ofNullable(keyDistributor.next()),
-                                        payloads.get(r.nextInt(payloadCount)));
+                                        p, Optional.ofNullable(keyDistributor.next()), payloads.get(payloadIndex));
                             }
                         } catch (Throwable t) {
                             log.error("Producer thread failed", t);

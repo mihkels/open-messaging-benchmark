@@ -18,15 +18,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record ProducerWorkAssignment(
-        List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
+        List<byte[]> payloadData,
+        double publishRate,
+        KeyDistributorType keyDistributorType,
+        int[] payloadWeights) {
 
-    // Defensive copy constructor
     public ProducerWorkAssignment(
             List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
+        this(payloadData, publishRate, keyDistributorType, null);
+    }
+
+    public ProducerWorkAssignment(
+            List<byte[]> payloadData,
+            double publishRate,
+            KeyDistributorType keyDistributorType,
+            int[] payloadWeights) {
         this.payloadData =
                 payloadData != null
                         ? new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList())
                         : new ArrayList<>();
+        if (payloadWeights != null && payloadWeights.length != this.payloadData.size()) {
+            throw new IllegalArgumentException("Payload weights must match the number of payloads");
+        }
+        this.payloadWeights = payloadWeights == null ? null : payloadWeights.clone();
         this.publishRate = publishRate;
         this.keyDistributorType = keyDistributorType;
     }
@@ -40,7 +54,12 @@ public record ProducerWorkAssignment(
         return new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList());
     }
 
+    public int[] payloadWeights() {
+        return payloadWeights == null ? null : payloadWeights.clone();
+    }
+
     public ProducerWorkAssignment withPublishRate(double publishRate) {
-        return new ProducerWorkAssignment(this.payloadData, publishRate, this.keyDistributorType);
+        return new ProducerWorkAssignment(
+                this.payloadData, publishRate, this.keyDistributorType, this.payloadWeights);
     }
 }

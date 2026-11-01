@@ -187,7 +187,7 @@ class KafkaTopicCreator {
                         log.warn("Failed to check existing topics: {}", checkException.getMessage());
                     }
 
-                    long backoffMs = 2000 * attempt;
+                    long backoffMs = 2000L * attempt;
                     log.info("Waiting {}ms before retrying topic creation", backoffMs);
                     try {
                         Thread.sleep(backoffMs);
@@ -202,7 +202,7 @@ class KafkaTopicCreator {
         throw new RuntimeException(
                 String.format(
                         "Failed to create topics after %d attempts. Last error: %s",
-                        MAX_CREATION_ATTEMPTS, lastException != null ? lastException.getMessage() : "unknown"),
+                        MAX_CREATION_ATTEMPTS, lastException.getMessage()),
                 lastException);
     }
 
@@ -235,7 +235,7 @@ class KafkaTopicCreator {
                     executeBatch(batch)
                             .forEach(
                                     (topicInfo, success) -> {
-                                        if (success) {
+                                        if (Boolean.TRUE.equals(success)) {
                                             succeeded.incrementAndGet();
                                         } else {
                                             log.warn("Topic creation failed for: {}, will retry", topicInfo.topic());
@@ -271,7 +271,7 @@ class KafkaTopicCreator {
         } catch (Exception e) {
             if (Thread.currentThread().isInterrupted() || isInterruption(e)) {
                 Thread.currentThread().interrupt();
-                throw e instanceof RuntimeException runtime ? runtime : new RuntimeException(e);
+                throw (RuntimeException) e;
             }
             log.error(
                     "Failed to execute batch creation for topics: {}",

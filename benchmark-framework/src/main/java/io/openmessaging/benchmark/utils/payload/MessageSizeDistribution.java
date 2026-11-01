@@ -156,23 +156,7 @@ public class MessageSizeDistribution {
      */
     public List<Integer> getBucketSizes() {
         List<Integer> sizes = new ArrayList<>();
-        for (Bucket b : buckets) {
-            sizes.add(b.getRepresentativeSize());
-        }
-        return sizes;
-    }
-
-    /**
-     * Returns list of max sizes, one per bucket (for payload generation). Using max sizes ensures the
-     * system is tested with the largest messages in each bucket range.
-     *
-     * @return list of max sizes per bucket
-     */
-    public List<Integer> getBucketMaxSizes() {
-        List<Integer> sizes = new ArrayList<>();
-        for (Bucket b : buckets) {
-            sizes.add(b.maxSize);
-        }
+        buckets.stream().map(Bucket::getRepresentativeSize).forEach(sizes::add);
         return sizes;
     }
 
@@ -250,7 +234,4 @@ public class MessageSizeDistribution {
         return buckets.size();
     }
 
-    public List<Bucket> getBuckets() {
-        return List.copyOf(buckets);
-    }
 }

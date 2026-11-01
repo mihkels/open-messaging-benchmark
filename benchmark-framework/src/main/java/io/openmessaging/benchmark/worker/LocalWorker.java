@@ -638,7 +638,8 @@ public final class LocalWorker implements Worker, ConsumerCallback {
                 cleanup.add(current.cleanupFailure);
             }
 
-            if (tasksExited && creationsFinished && callbacksFinished) {
+            // A worker with failed cleanup is already unusable and may still receive stats from stuck resources.
+            if (!cleanup.hasFailure() && tasksExited && creationsFinished && callbacksFinished) {
                 interrupted |= resetStatistics(cleanup);
             }
             if (cleanup.hasFailure()) {

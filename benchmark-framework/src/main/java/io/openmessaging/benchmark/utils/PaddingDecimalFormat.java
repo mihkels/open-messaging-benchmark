@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.utils;
 
 import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.text.FieldPosition;
 import java.util.Objects;
 
@@ -25,23 +24,11 @@ public class PaddingDecimalFormat extends DecimalFormat {
      * Creates a PaddingDecimalFormat using the given pattern and minimum minimumLength and the
      * symbols for the default locale.
      *
-     * @param pattern
-     * @param minLength
+     * @param pattern the pattern to use for formatting
+     * @param minLength the minimum length of the formatted number
      */
     public PaddingDecimalFormat(String pattern, int minLength) {
         super(pattern);
-        minimumLength = minLength;
-    }
-
-    /**
-     * Creates a PaddingDecimalFormat using the given pattern, symbols and minimum minimumLength.
-     *
-     * @param pattern
-     * @param symbols
-     * @param minLength
-     */
-    public PaddingDecimalFormat(String pattern, DecimalFormatSymbols symbols, int minLength) {
-        super(pattern, symbols);
         minimumLength = minLength;
     }
 
@@ -63,10 +50,8 @@ public class PaddingDecimalFormat extends DecimalFormat {
         int numLength = toAppendTo.length() - initLength;
         int padLength = minimumLength - numLength;
         if (padLength > 0) {
-            StringBuffer pad = new StringBuffer(padLength);
-            for (int i = 0; i < padLength; i++) {
-                pad.append(' ');
-            }
+            StringBuilder pad = new StringBuilder(padLength);
+            pad.repeat(" ", padLength);
             toAppendTo.insert(initLength, pad);
         }
         return toAppendTo;

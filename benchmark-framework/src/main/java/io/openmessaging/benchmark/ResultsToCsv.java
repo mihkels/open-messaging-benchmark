@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +63,7 @@ public class ResultsToCsv {
                                     Comparator.comparing(TestResult::getMessageSize)
                                             .thenComparing(TestResult::getTopics)
                                             .thenComparing(TestResult::getPartitions))
-                            .collect(Collectors.toList());
+                            .toList();
             for (TestResult tr : sortedResults) {
                 lines.add(extractResults(tr));
             }
@@ -74,7 +73,7 @@ public class ResultsToCsv {
                 for (String str : lines) {
                     writer.write(str + System.lineSeparator());
                 }
-                log.info("Results extracted into CSV " + resultsFileName);
+                log.info("Results extracted into CSV {}", resultsFileName);
             }
         } catch (IOException e) {
             log.error("Failed creating csv file.", e);
@@ -94,8 +93,7 @@ public class ResultsToCsv {
                 conRateHistogram.recordValueWithCount(rate.longValue(), 2);
             }
 
-            String line =
-                    MessageFormat.format(
+            return MessageFormat.format(
                             "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},"
                                     + "{5,number,#},{6,number,#},{7,number,#.##},{8,number,#},"
                                     + "{9,number,#},{10,number,#},{11,number,#.##},{12,number,#}",
@@ -112,8 +110,6 @@ public class ResultsToCsv {
                             conRateHistogram.getMean(),
                             conRateHistogram.getStdDeviation(),
                             conRateHistogram.getMaxValue());
-
-            return line;
         } catch (Exception e) {
             log.error("Error writing results csv", e);
             throw new RuntimeException(e);

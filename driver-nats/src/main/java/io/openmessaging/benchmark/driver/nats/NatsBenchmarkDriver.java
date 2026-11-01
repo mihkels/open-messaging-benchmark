@@ -58,7 +58,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
         try (InputStream input = Files.newInputStream(configurationFile)) {
             config = reader.readValue(input);
         }
-        log.info("read config file," + config.toString());
+        log.info("read config file: {}", config);
         try {
             this.connection =
                     Nats.connect(
@@ -90,7 +90,8 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                     connection.close();
                 } catch (InterruptedException | RuntimeException closeFailure) {
                     interrupted |= closeFailure instanceof InterruptedException;
-                    if (closeFailure != e) {
+                    var failure = closeFailure;
+                    if (failure != e) {
                         e.addSuppressed(closeFailure);
                     }
                 }
@@ -121,7 +122,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                                     .maxBytes(config.maxBytes)
                                     .replicas(config.replicationFactor)
                                     .build());
-            log.info("Created stream {} -- {}", topic, JsonUtils.getFormatted(streamInfo));
+            if (log.isInfoEnabled()) {
+                log.info("Created stream {} -- {}", topic, JsonUtils.getFormatted(streamInfo));
+            }
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
             CompletableFuture<Void> f = new CompletableFuture<>();

@@ -74,7 +74,7 @@ the Compose regression runner uses Eclipse Temurin 27.
 - benchmark-framework: Core coordinator and worker implementation, common logic
 - driver-api: Driver SPI
 - driver-*: Implementations for specific brokers (Kafka, MQTT 5, Pulsar, RabbitMQ, Redis, NATS, NSQ, RocketMQ 4/5, Artemis, Pravega, JMS, KoP), each packaged as a driver plugin bundle (see [Driver plugins](#driver-plugins))
-- e2e-tests: Testcontainers tests for selected drivers and a Compose regression suite for all plugins
+- e2e-tests: opt-in Testcontainers contracts and a Compose regression suite for driver plugins
 - package: Assembles a binary distribution (tar.gz) including bin/, lib/, workloads/, payload/
 - docker: Dockerfiles and instructions for building runnable images
 - deployment: Kubernetes/Helm and other deployment manifests
@@ -284,7 +284,10 @@ Build that tag locally or set `OMB_IMAGE` to an existing Java 27 benchmark image
 
 - Unit tests run with `mvn clean verify`. Testcontainers integration tests are skipped by default;
   run them with Docker using `mvn -pl e2e-tests -am -De2e verify`. They use Maven Failsafe, so the
-  `verify` phase is required.
+  `verify` phase is required. The tests define contracts for all shipped driver plugins and write the
+  outcomes actually executed to `e2e-tests/target/testcontainers-coverage.txt`. See
+  [Testing a driver](docs/development/testing-a-driver.md#testcontainers-end-to-end-tests) for
+  selection, platform requirements, and optional JMS provider setup.
 - Some drivers include README.md files with instructions to spin up the corresponding broker and run sample benchmarks.
 
 ### Driver plugin regression suite (Docker Compose)

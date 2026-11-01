@@ -13,251 +13,238 @@
  */
 package io.openmessaging.benchmark.e2e;
 
-import io.openmessaging.benchmark.TestResult;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
 import io.openmessaging.benchmark.Workload;
-import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.ProcessWorker;
-import org.junit.jupiter.api.AfterAll;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.utility.DockerImageName;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * End-to-end test for RabbitMQ. Testing is done by creating a simple workload and running the benchmark.
- */
+/** End-to-end tests for the RabbitMQ driver. */
 @Testcontainers
 class RabbitMqE2eIT extends BaseE2eIT {
-    private static final Logger log = LoggerFactory.getLogger(RabbitMqE2eIT.class);
-
-    private static final String RABBITMQ_IMAGE = "rabbitmq:3.13-management";
-
     @Container
-    static RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse(RABBITMQ_IMAGE));
+    static RabbitMQContainer rabbitmq =
+            new RabbitMQContainer(DockerImageName.parse("rabbitmq:3.13-management"));
 
-    private static Path driverConfigFile;
+    private Path driverConfigFile;
 
     @BeforeAll
-    static void setupDriver() throws Exception {
-        // Wait for RabbitMQ to be fully ready
-        rabbitmq.start();
+    static void verifyRabbitMqConnection() throws Exception {
+        try (Connection connection = connectionFactory().newConnection();
+                var channel = connection.createChannel()) {
+            channel.queueDeclare("test-connection-queue", false, true, true, null);
+        }
+    }
 
-        // Give RabbitMQ some additional time to be ready
-        Thread.sleep(2000);
+    @BeforeEach
+    void setupDriver() throws Exception {
+        driverConfigFile = writeDriverConfig("CLASSIC", false);
+    }
 
-        log.info("RabbitMQ AMQP URL: amqp://{}:{}", rabbitmq.getHost(), rabbitmq.getAmqpPort());
-
-        // Create driver configuration
-        var amqpUri = String.format("amqp://guest:guest@%s:%d", rabbitmq.getHost(), rabbitmq.getAmqpPort());
-        String driverConfig = String.format("""
+    private Path writeDriverConfig(String queueType, boolean persistence) throws Exception {
+        String amqpUri =
+                String.format(
+                        "amqp://%s:%s@%s:%d",
+                        rabbitmq.getAdminUsername(),
+                        rabbitmq.getAdminPassword(),
+                        rabbitmq.getHost(),
+                        rabbitmq.getAmqpPort());
+        String driverConfig =
+                """
                 name: RabbitMQ
                 driverClass: io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver
-
-                # RabbitMQ connection URIs
                 amqpUris:
                   - %s
-
-                # Message persistence (false for faster testing)
-                messagePersistence: false
-
-                # Queue type: CLASSIC, QUORUM, or STREAM
-                queueType: CLASSIC
-
-                # Producer creation settings
+                messagePersistence: %s
+                queueType: %s
                 producerCreationDelay: 100
                 producerCreationBatchSize: 5
-
-                # Consumer creation settings
                 consumerCreationDelay: 100
                 consumerCreationBatchSize: 5
-                """, amqpUri);
-
-        Path configPath = Files.createTempFile("rabbitmq-driver-", ".yaml");
+                """
+                        .formatted(amqpUri, persistence, queueType);
+        Path configPath = tempDir.resolve("rabbitmq-" + queueType + "-" + persistence + ".yaml");
         Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath;
-        driverConfigFile.toFile().deleteOnExit();
-
-        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
-
-        // Verify RabbitMQ is responsive
-        verifyRabbitMqConnection();
-    }
-
-    private static void verifyRabbitMqConnection() throws Exception {
-        com.rabbitmq.client.ConnectionFactory factory = new com.rabbitmq.client.ConnectionFactory();
-        factory.setHost(rabbitmq.getHost());
-        factory.setPort(rabbitmq.getAmqpPort());
-        factory.setUsername(rabbitmq.getAdminUsername());
-        factory.setPassword(rabbitmq.getAdminPassword());
-
-        try (com.rabbitmq.client.Connection connection = factory.newConnection();
-             com.rabbitmq.client.Channel channel = connection.createChannel()) {
-            // Try to declare a test queue to verify connection
-            channel.queueDeclare("test-connection-queue", false, true, true, null);
-            log.info("RabbitMQ connection verified successfully");
-        }
-    }
-
-    @AfterAll
-    static void tearDownDriver() {
-        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
-            try {
-                Files.deleteIfExists(driverConfigFile);
-            } catch (IOException e) {
-                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
-                throw new RuntimeException(e);
-            }
-        }
+        return configPath;
     }
 
     @Test
+    @DriverContract("rabbitmq")
     void testSimpleProduceConsume() throws Exception {
-        // Create workload
         Workload workload = createSimpleWorkload();
-        workload.topics = 1;
-        workload.partitionsPerTopic = 1; // RabbitMQ doesn't use partitions like Kafka
         workload.producersPerTopic = 2;
         workload.consumerPerSubscription = 2;
-        workload.producerRate = 500;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
-
-        // Run benchmark
-        TestResult result = runBenchmark(workload);
-
-        // Validate results
+        SmokeResult result = runBenchmark("RabbitMQ", driverConfigFile, workload);
         validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish approximately expected messages")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.7));
     }
 
     @Test
     void testMultipleTopics() throws Exception {
         Workload workload = createSimpleWorkload();
         workload.topics = 3;
-        workload.partitionsPerTopic = 1;
-        workload.testDurationMinutes = 1;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
-
-        TestResult result = runBenchmark(workload);
-
+        Set<String> before = exchanges();
+        SmokeResult result = runBenchmark("RabbitMQ", driverConfigFile, workload);
         validateResults(result, workload);
-        assertThat(result.topics).isEqualTo(workload.topics);
+        Set<String> created = new HashSet<>(exchanges());
+        created.removeAll(before);
+        created.removeIf(exchange -> !exchange.startsWith("test-exchange"));
+        assertThat(created).hasSize(workload.topics);
     }
 
     @Test
-    void testHighThroughput() throws Exception {
+    void testMultipleProducersAndConsumers() throws Exception {
         Workload workload = createSimpleWorkload();
-        workload.topics = 1;
-        workload.partitionsPerTopic = 1;
         workload.messageSize = 100;
         workload.producersPerTopic = 4;
         workload.consumerPerSubscription = 4;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
-        workload.testDurationMinutes = 1;
-
-        TestResult result = runBenchmark(workload);
-
+        SmokeResult result = runBenchmark("RabbitMQ", driverConfigFile, workload);
         validateResults(result, workload);
+    }
 
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        double actualRate = total / workload.testDurationMinutes;
-        log.info("Actual publish rate: {} msg/s", actualRate);
-        assertThat(actualRate).isGreaterThan(workload.producerRate * 0.5);
+    @ParameterizedTest
+    @ValueSource(strings = {"QUORUM", "STREAM"})
+    void testQueueTypesAndFanout(String queueType) throws Exception {
+        Workload workload = createSimpleWorkload();
+        workload.subscriptionsPerTopic = 2;
+        Path config = writeDriverConfig(queueType, true);
+        SmokeResult result = runBenchmark("RabbitMQ", config, workload);
+        validateResults(result, workload);
+        verifyFanoutPayload(config);
+    }
+
+    @Test
+    void testClassicQueueFanoutPayload() throws Exception {
+        verifyFanoutPayload(driverConfigFile);
+    }
+
+    private void verifyFanoutPayload(Path config) throws Exception {
+        byte[] payload = {0, 1, (byte) 0x80, (byte) 0xff, 42};
+        MessageCapture first = new MessageCapture();
+        MessageCapture second = new MessageCapture();
+        try (RabbitMqBenchmarkDriver driver = new RabbitMqBenchmarkDriver()) {
+            driver.initialize(config, null);
+            String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
+            driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
+            try (var firstConsumer = driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
+                    var secondConsumer =
+                            driver.createConsumer(topic, "group-b", second).get(10, TimeUnit.SECONDS);
+                    var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
+                producer.sendAsync(Optional.empty(), payload).get(10, TimeUnit.SECONDS);
+                for (MessageCapture capture : List.of(first, second)) {
+                    var delivery = capture.await();
+                    assertThat(delivery.payload()).isEqualTo(payload);
+                    assertThat(delivery.timestamp()).isPositive();
+                }
+            }
+        }
     }
 
     @Test
     void testMessagePersistence() throws Exception {
-        // Create a custom driver config with persistence enabled
-        String amqpUri = String.format("amqp://guest:guest@%s:%d", rabbitmq.getHost(), rabbitmq.getAmqpPort());
-        String driverConfig = String.format("""
-                name: RabbitMQ
-                driverClass: io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver
+        byte[] payload = ("persistent-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+        String subscription = "persistent";
+        String queue;
+        AtomicBoolean unexpectedDelivery = new AtomicBoolean();
+        try (RabbitMqBenchmarkDriver driver = new RabbitMqBenchmarkDriver()) {
+            driver.initialize(writeDriverConfig("CLASSIC", true), null);
+            String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
+            queue = URI.create(topic).getQuery().substring("exchange=".length()) + "-" + subscription;
+            driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
+            try (var consumer =
+                    driver.createConsumer(
+                                    topic,
+                                    subscription,
+                                    new ConsumerCallback() {
+                                        @Override
+                                        public void messageReceived(byte[] message, long timestamp) {
+                                            unexpectedDelivery.set(true);
+                                        }
 
-                amqpUris:
-                  - %s
-
-                messagePersistence: true
-                queueType: CLASSIC
-
-                producerCreationDelay: 100
-                producerCreationBatchSize: 5
-                consumerCreationDelay: 100
-                consumerCreationBatchSize: 5
-                """, amqpUri);
-
-        Path configPath = Files.createTempFile("rabbitmq-driver-persistence-", ".yaml");
-        Files.writeString(configPath, driverConfig);
-        Path persistenceConfigFile = configPath;
-        persistenceConfigFile.toFile().deleteOnExit();
-
-        Workload workload = createSimpleWorkload();
-        workload.topics = 1;
-        workload.partitionsPerTopic = 1;
-        workload.producersPerTopic = 1;
-        workload.consumerPerSubscription = 1;
-        workload.producerRate = 100;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
-
-        // Run benchmark with persistence
-        TestResult result = runBenchmarkWithConfig(workload, persistenceConfigFile);
-
-        validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish messages even with persistence")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.5));
-    }
-
-    private TestResult runBenchmark(Workload workload) throws Exception {
-        return runBenchmarkWithConfig(workload, driverConfigFile);
-    }
-
-    private TestResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
-        // Run the driver in its own process for each test
-        ProcessWorker worker = new ProcessWorker();
-
-        try {
-            // Initialize the worker with driver configuration
-            worker.initializeDriver(configFile);
-
-            // Create WorkloadGenerator with the driver name, workload, and worker
-            WorkloadGenerator generator = new WorkloadGenerator("RabbitMQ", workload, worker);
-
-            // Run the benchmark
-            TestResult result = generator.run();
-
-            // Clean up generator
-            generator.close();
-
-            return result;
-        } finally {
-            // Always close the worker
-            worker.stopAll();
-            worker.close();
+                                        @Override
+                                        public void messageReceived(ByteBuffer message, long timestamp) {
+                                            unexpectedDelivery.set(true);
+                                        }
+                                    })
+                            .get(10, TimeUnit.SECONDS)) {
+                assertThat(consumer).isNotNull();
+            }
+            try (var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
+                producer.sendAsync(Optional.empty(), payload).get(10, TimeUnit.SECONDS);
+            }
         }
+        assertThat(unexpectedDelivery).isFalse();
+
+        var stop = rabbitmq.execInContainer("rabbitmqctl", "stop_app");
+        assertThat(stop.getExitCode()).as("stopping RabbitMQ: %s", stop.getStderr()).isZero();
+        var start = rabbitmq.execInContainer("rabbitmqctl", "start_app");
+        assertThat(start.getExitCode()).as("restarting RabbitMQ: %s", start.getStderr()).isZero();
+        try (Connection connection = waitForRabbitMq();
+                var channel = connection.createChannel()) {
+            assertThat(channel.queueDeclarePassive(queue).getMessageCount()).isEqualTo(1);
+            var message = channel.basicGet(queue, true);
+            assertThat(message).isNotNull();
+            assertThat(message.getProps().getDeliveryMode()).isEqualTo(2);
+            assertThat(message.getBody()).isEqualTo(payload);
+        }
+    }
+
+    private static Set<String> exchanges() throws Exception {
+        var result = rabbitmq.execInContainer("rabbitmqctl", "-q", "list_exchanges", "name");
+        assertThat(result.getExitCode())
+                .as("listing RabbitMQ exchanges: %s", result.getStderr())
+                .isZero();
+        return result.getStdout().lines().map(String::trim).collect(Collectors.toSet());
+    }
+
+    private static ConnectionFactory connectionFactory() {
+        ConnectionFactory factory = new ConnectionFactory();
+        factory.setHost(rabbitmq.getHost());
+        factory.setPort(rabbitmq.getAmqpPort());
+        factory.setUsername(rabbitmq.getAdminUsername());
+        factory.setPassword(rabbitmq.getAdminPassword());
+        factory.setConnectionTimeout(1000);
+        return factory;
+    }
+
+    private static Connection waitForRabbitMq() throws Exception {
+        ConnectionFactory factory = connectionFactory();
+        long deadline = System.nanoTime() + Duration.ofMinutes(2).toNanos();
+        Exception lastFailure = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                return factory.newConnection();
+            } catch (IOException | TimeoutException e) {
+                lastFailure = e;
+                Thread.sleep(250);
+            }
+        }
+        throw new IllegalStateException("RabbitMQ did not become ready after restart", lastFailure);
     }
 }

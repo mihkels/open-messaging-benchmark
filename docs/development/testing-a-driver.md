@@ -24,8 +24,8 @@ A driver can be tested at three levels:
 
 All commands run from the repository root.
 
-> **Note:** These suites check that a driver works. Passing them is not a performance result: the
-> regression workloads run at a low fixed rate for one minute on a single Docker host. To measure
+> **Note:** These suites check that a driver works, not its performance. The Testcontainers suite uses
+> short message exchanges; the separate Compose suite uses one-minute regression workloads. To measure
 > performance, see [Benchmark design](../methodology/benchmark-design.md).
 
 ## Unit tests
@@ -57,9 +57,10 @@ CI runs `mvn verify` for the whole reactor on every pull request (see
 
 ## Testcontainers end-to-end tests
 
-The [`e2e-tests`](https://github.com/mihkels/open-messaging-benchmark/tree/main/e2e-tests) module runs
-real workloads against brokers started with Testcontainers. The tests are skipped by default. Enable
-them with the `e2e` property, which activates the `e2e-tests` profile:
+The [`e2e-tests`](https://github.com/mihkels/open-messaging-benchmark/tree/main/e2e-tests) module checks
+message delivery against brokers started with Testcontainers. The tests are skipped by default. Enable
+them with the `e2e` property, which activates the `e2e-tests` profile. They require JDK 27, Maven,
+Docker, and network access to the broker images and pinned provider artifacts:
 
 ```bash
 mvn -pl e2e-tests -am -De2e verify
@@ -67,23 +68,86 @@ mvn -pl e2e-tests -am -De2e verify
 
 - The tests are named `*IT.java` and run with Maven Failsafe, so the `verify` phase is required. Surefire
   is skipped in this module.
-- Failsafe sets the `omb.home` system property to the repository root. The tests therefore load the
-  plugin bundles from `driver-*/target/omb-plugin`; `-am` builds them.
-- Each test starts a broker container, runs a workload through `new ProcessWorker()` and
-  `WorkloadGenerator` (the same isolated driver JVM used in production), and checks the result.
-- Current tests: `KafkaE2eIT`, `PravegaE2eIT`, `RabbitMqE2eIT` and `RedisE2eIT`.
+- The profile builds the plugin bundles and binary distribution. Tests use the same isolated
+  `ProcessWorker` driver JVM as the benchmark: either from the host against mapped ports, or from a
+  packaged benchmark container sharing a network with the broker. The latter handles advertised or fixed
+  broker addresses without binding their fixed ports on the host. Maven also runs upstream unit tests
+  when building the required modules, including for a selected integration test.
+- Each functional check sends readiness probes and a small burst of messages at a low rate, then stops as
+  soon as it observes delivery and no publish errors. The delivery polling deadline is 30 seconds; broker
+  startup, worker operations and cleanup may take longer. There are no throughput or load-test thresholds.
+  Broker-specific checks also inspect resources and, where appropriate, actual message bytes, timestamps,
+  selectors, or delayed delivery. Running the full suite takes longer than one check because it starts
+  multiple brokers, particularly when images need emulation. Networked checks log when each exchange or
+  message probe starts and completes.
+- Pravega and KoP use `linux/amd64` images and need amd64 emulation on arm64 hosts. The shared-network
+  runner builds an image containing the distribution; allow sufficient Docker disk space and memory.
+  The first run downloads broker images and the Artemis/Pulsar JMS jars and KoP NAR pinned and
+  SHA-256-checked against `e2e-tests/compose/artifacts.txt`. Testcontainers caches these artifacts under
+  `e2e-tests/target/testcontainers-artifacts/`; JMS providers are copied into separate runner containers.
+- The license Maven plugin can fail in a linked Git worktree because it treats the worktree as a bare
+  repository. Run the full command in a regular clone if that happens.
 
-`BaseE2eIT.validateResults` asserts that the average publish rate, the average consume rate and the
-average publish latency are all greater than zero. The end-to-end latency assertion is currently
-commented out, so these tests do not catch a publish timestamp in the wrong unit; the Compose suite does.
+Run a subset using Failsafe's test selector. The `failIfNoSpecifiedTests` setting prevents the upstream
+reactor modules, which do not have these integration tests, from rejecting the selection:
+
+```bash
+mvn -pl e2e-tests -am -De2e -Dit.test=KafkaE2eIT,RedisE2eIT \
+  -Dfailsafe.failIfNoSpecifiedTests=false verify
+```
+
+The suite writes `e2e-tests/target/testcontainers-coverage.txt` from the plugin IDs in the shipped
+descriptors and the contract methods executed in the current Failsafe JVM. `PASSED`, `FAILED`, `SKIPPED`
+and `NOT_EXECUTED` are method outcomes, not claims about other environments. A selective run naturally
+leaves other drivers `NOT_EXECUTED`; old Failsafe XML files are not used to fill the report.
+At `pre-integration-test`, the old coverage and Failsafe reports are removed so a selection that runs no
+tests leaves no coverage report and cannot reuse an earlier Failsafe result. If Maven stops before that
+phase, existing reports may predate the run. The per-class Failsafe XML reports in
+`e2e-tests/target/failsafe-reports/` contain failure and skip details.
+Shared-network runs also retain their smoke-check output and result JSON, when produced, under
+`e2e-tests/target/testcontainers-runs/<run-id>/` for diagnosing failed assertions.
+
+The suite defines the following contracts and focused regressions:
+
+|      Plugin      |                          Test class                          |                                         Broker and cases                                         |
+|------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `kafka`          | `KafkaE2eIT`                                                 | Kafka 4.4; topics, partitions, keys, compression and consumer groups                             |
+| `rabbitmq`       | `RabbitMqE2eIT`, `RabbitMq41E2eIT`                           | RabbitMQ 3.13 and 4.1; classic, quorum and stream queues, fan-out and broker-application restart |
+| `redis`          | `RedisE2eIT`                                                 | Redis 7.4; streams, consumer groups, binary payloads and pool settings                           |
+| `pravega`        | `PravegaE2eIT`                                               | Pravega 0.13; streams, segments, timestamps and transactions                                     |
+| `pulsar`         | `PulsarE2eIT`                                                | Pulsar 4.0; Failover, Shared and Key_Shared subscriptions, batching and deduplication            |
+| `artemis`        | `ArtemisE2eIT`                                               | Artemis 2.57; multicast and independent subscriptions                                            |
+| `bookkeeper`     | `BookKeeperE2eIT`                                            | ZooKeeper and a BookKeeper bookie; DistributedLog stream and ordered payloads                    |
+| `jms`            | `JmsArtemisE2eIT`, `JmsPulsarE2eIT`, `JmsKafkaOptionalE2eIT` | Artemis and Pulsar JMS 1.1/2.0, transactions and selectors; optional Kafka JMS 1.1               |
+| `nats`           | `NatsE2eIT`                                                  | JetStream file/memory storage, fan-out, durable groups and timestamp-bearing payloads            |
+| `nats-streaming` | `NatsStreamingE2eIT`                                         | STAN publish/ack, queue groups, server timestamps and non-durable subscriptions                  |
+| `nsq`            | `NsqE2eIT`                                                   | Lookup discovery, topics and channel delivery                                                    |
+| `rocketmq`       | `RocketMqE2eIT`                                              | RocketMQ 5.3 remoting, queues and consumer groups                                                |
+| `rocketmq5`      | `RocketMq5E2eIT`                                             | RocketMQ 5.3 gRPC proxy, normal and delayed delivery                                             |
+| `mqtt5`          | `Mqtt5E2eIT`                                                 | Mosquitto, QoS 0/1/2 and shared subscriptions; QoS 0 is not a durability guarantee               |
+| `kop`            | `KopE2eIT`                                                   | KoP 2.10.4.6; Kafka and Pulsar producer/consumer combinations                                    |
+
+These are defined cases, not a guarantee of success for every Docker environment or broker version. The
+coverage and Failsafe reports show which ones actually completed.
+
+The Kafka JMS provider is licensed and is never downloaded by the suite. Its test is explicitly skipped
+unless enabled. To run it, supply your own provider fat jar:
+
+```bash
+mvn -pl e2e-tests -am -De2e -Dit.test=JmsKafkaOptionalE2eIT \
+  -Dfailsafe.failIfNoSpecifiedTests=false \
+  -Domb.e2e.jms.kafka.enabled=true -Domb.e2e.jms.kafka.jar=/path/to/provider-fat.jar verify
+```
+
+Enabling the case without a usable jar fails rather than silently skipping it.
 
 To add a test for a new driver:
 
-1. Add the driver module as a dependency in `e2e-tests/pom.xml`, next to the existing driver
-   dependencies, so the reactor builds its bundle first.
-2. Extend `BaseE2eIT`, start the broker with Testcontainers, and write a driver YAML that points at the
-   container's mapped host and port.
-3. Run the workload and call `validateResults`.
+1. Extend `BaseE2eIT` and start the broker with Testcontainers, using mapped ports or `NetworkBenchmark`
+   for discovery-sensitive brokers. The `package` dependency in the opt-in profile builds shipped bundles.
+2. Run an isolated-process smoke check, call `validateResults`, and check actual broker resources or messages.
+3. Annotate the contract method with `@DriverContract("<plugin-id>")` so its executed outcome appears in
+   the coverage report. An added plugin without an executed contract is reported as `NOT_EXECUTED`.
 
 ## Compose regression suite
 

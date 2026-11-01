@@ -13,13 +13,11 @@
  */
 package io.openmessaging.benchmark.e2e;
 
-import io.openmessaging.benchmark.TestResult;
 import io.openmessaging.benchmark.Workload;
-import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.ProcessWorker;
-import org.junit.jupiter.api.AfterAll;
+import io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,10 +26,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.resps.StreamGroupInfo;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,26 +44,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RedisE2eIT extends BaseE2eIT {
     private static final Logger log = LoggerFactory.getLogger(RedisE2eIT.class);
 
-    private static final String REDIS_IMAGE = "redis:7-alpine";
+    private static final String REDIS_IMAGE = "redis:7.4-alpine";
     private static final int REDIS_PORT = 6379;
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
             .withExposedPorts(REDIS_PORT);
 
-    private static Path driverConfigFile;
+    private Path driverConfigFile;
 
     @BeforeAll
-    static void setupDriver() throws Exception {
-        // Wait for Redis to be fully ready
-        redis.start();
-
-        // Give Redis some additional time to be ready
-        Thread.sleep(1000);
-
+    static void verifyRedisConnection() {
         log.info("Redis running at {}:{}", redis.getHost(), redis.getMappedPort(REDIS_PORT));
+        try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(REDIS_PORT))) {
+            assertThat(jedis.ping()).isEqualTo("PONG");
+        }
+    }
 
-        // Create driver configuration
+    @BeforeEach
+    void setupDriver() throws Exception {
         String driverConfig = String.format("""
                 name: Redis
                 driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
@@ -75,58 +76,19 @@ class RedisE2eIT extends BaseE2eIT {
                 jedisPoolMaxIdle: 16
                 """, redis.getHost(), redis.getMappedPort(REDIS_PORT));
 
-        Path configPath = Files.createTempFile("redis-driver-", ".yaml");
-        Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath;
-        driverConfigFile.toFile().deleteOnExit();
-
-        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
-
-        // Verify Redis is responsive
-        verifyRedisConnection();
-    }
-
-    private static void verifyRedisConnection() throws Exception {
-        try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(REDIS_PORT))) {
-            // Try to ping Redis to verify connection
-            String response = jedis.ping();
-            assertThat(response).isEqualTo("PONG");
-            log.info("Redis connection verified successfully");
-        }
-    }
-
-    @AfterAll
-    static void tearDownDriver() {
-        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
-            try {
-                Files.deleteIfExists(driverConfigFile);
-            } catch (IOException e) {
-                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
-                throw new RuntimeException(e);
-            }
-        }
+        driverConfigFile = tempDir.resolve("redis-driver.yaml");
+        Files.writeString(driverConfigFile, driverConfig);
     }
 
     @AfterEach
     void cleanupRedis() {
-        // Flush Redis database between tests to avoid consumer group conflicts
-        // Redis Streams consumer groups persist, causing BUSYGROUP errors on subsequent tests
         try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(REDIS_PORT))) {
-            jedis.flushAll();  // Changed from flushDB to flushAll for thoroughness
-            log.info("Flushed Redis database after test");
-        } catch (Exception e) {
-            log.warn("Failed to flush Redis database", e);
-        }
-
-        // Give Redis a moment to complete the flush
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            jedis.flushDB();
         }
     }
 
     @Test
+    @DriverContract("redis")
     void testSimpleProduceConsume() throws Exception {
         // Create workload
         Workload workload = createSimpleWorkload();
@@ -134,21 +96,15 @@ class RedisE2eIT extends BaseE2eIT {
         workload.partitionsPerTopic = 1; // Redis uses streams but we keep it simple
         workload.producersPerTopic = 2;
         workload.consumerPerSubscription = 2;
-        workload.producerRate = 500;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
 
         // Run benchmark
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         // Validate results
         validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish approximately expected messages")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.6));
     }
 
     @Test
@@ -156,20 +112,48 @@ class RedisE2eIT extends BaseE2eIT {
         Workload workload = createSimpleWorkload();
         workload.topics = 3;
         workload.partitionsPerTopic = 1;
-        workload.testDurationMinutes = 1;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
 
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
-        assertThat(result.topics).isEqualTo(workload.topics);
+        try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(REDIS_PORT))) {
+            assertThat(jedis.keys("redis-openmessaging-benchmark*")).hasSize(workload.topics);
+        }
     }
 
     @Test
-    void testHighThroughput() throws Exception {
+    void testBinaryPayloadAndIndependentConsumerGroups() throws Exception {
+        byte[] payload = {0, 1, (byte) 0x80, (byte) 0xff, 42, 0};
+        MessageCapture first = new MessageCapture();
+        MessageCapture second = new MessageCapture();
+        try (RedisBenchmarkDriver driver = new RedisBenchmarkDriver()) {
+            driver.initialize(driverConfigFile, null);
+            String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
+            driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
+            try (var firstConsumer = driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
+                    var secondConsumer =
+                            driver.createConsumer(topic, "group-b", second).get(10, TimeUnit.SECONDS);
+                    var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
+                producer.sendAsync(Optional.empty(), payload).get(10, TimeUnit.SECONDS);
+                for (MessageCapture capture : List.of(first, second)) {
+                    MessageCapture.Delivery received = capture.await();
+                    assertThat(received.payload()).isEqualTo(payload);
+                    assertThat(received.timestamp()).isPositive();
+                }
+                try (Jedis jedis = new Jedis(redis.getHost(), redis.getMappedPort(REDIS_PORT))) {
+                    assertThat(jedis.xinfoGroups(topic))
+                            .extracting(StreamGroupInfo::getName)
+                            .containsExactlyInAnyOrder("group-a", "group-b");
+                }
+            }
+        }
+    }
+
+    @Test
+    void testMultipleProducersAndConsumers() throws Exception {
         Workload workload = createSimpleWorkload();
         workload.topics = 1;
         workload.partitionsPerTopic = 1;
@@ -179,17 +163,11 @@ class RedisE2eIT extends BaseE2eIT {
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
-        workload.testDurationMinutes = 1;
 
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
 
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        double actualRate = total / workload.testDurationMinutes;
-        log.info("Actual publish rate: {} msg/s", actualRate);
-        assertThat(actualRate).isGreaterThan(workload.producerRate * 0.4);
     }
 
     @Test
@@ -200,19 +178,13 @@ class RedisE2eIT extends BaseE2eIT {
         workload.messageSize = 64; // Small messages
         workload.producersPerTopic = 2;
         workload.consumerPerSubscription = 2;
-        workload.producerRate = 500;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
 
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish small messages successfully")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.5));
     }
 
     @Test
@@ -230,58 +202,30 @@ class RedisE2eIT extends BaseE2eIT {
                 jedisPoolMaxIdle: 16
                 """, redis.getHost(), redis.getMappedPort(REDIS_PORT));
 
-        Path configPath = Files.createTempFile("redis-driver-large-pool-", ".yaml");
-        Files.writeString(configPath, driverConfig);
-        Path largePoolConfigFile = configPath;
-        largePoolConfigFile.toFile().deleteOnExit();
+        Path largePoolConfigFile = tempDir.resolve("redis-driver-large-pool.yaml");
+        Files.writeString(largePoolConfigFile, driverConfig);
 
         Workload workload = createSimpleWorkload();
         workload.topics = 1;
         workload.partitionsPerTopic = 1;
         workload.producersPerTopic = 4;
         workload.consumerPerSubscription = 4;
-        workload.producerRate = 200;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
 
         // Run benchmark with larger pool configuration
-        TestResult result = runBenchmarkWithConfig(workload, largePoolConfigFile);
+        SmokeResult result = runBenchmarkWithConfig(workload, largePoolConfigFile);
 
         validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should handle higher concurrency with larger pool")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.6));
     }
 
-    private TestResult runBenchmark(Workload workload) throws Exception {
+    private SmokeResult runBenchmark(Workload workload) throws Exception {
         return runBenchmarkWithConfig(workload, driverConfigFile);
     }
 
-    private TestResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
-        // Run the driver in its own process for each test
-        ProcessWorker worker = new ProcessWorker();
-
-        try {
-            // Initialize the worker with driver configuration
-            worker.initializeDriver(configFile);
-
-            // Create WorkloadGenerator with the driver name, workload, and worker
-            WorkloadGenerator generator = new WorkloadGenerator("Redis", workload, worker);
-
-            // Run the benchmark
-            TestResult result = generator.run();
-
-            // Clean up generator
-            generator.close();
-
-            return result;
-        } finally {
-            // Always close the worker
-            worker.stopAll();
-            worker.close();
-        }
+    private SmokeResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
+        return runBenchmark("Redis", configFile, workload);
     }
+
 }

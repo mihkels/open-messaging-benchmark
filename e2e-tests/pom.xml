@@ -29,6 +29,8 @@
 
     <properties>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <omb.e2e.jms.kafka.enabled>false</omb.e2e.jms.kafka.enabled>
+        <omb.e2e.jms.kafka.jar/>
     </properties>
 
     <dependencies>
@@ -42,6 +44,18 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>driver-kafka</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>driver-nats</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>driver-nats-streaming</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -158,6 +172,9 @@
                         <testcontainers.reuse.enable>false</testcontainers.reuse.enable>
                         <!-- Drivers run in child JVMs from the plugin bundles in driver-*/target/omb-plugin -->
                         <omb.home>${project.basedir}/..</omb.home>
+                        <omb.e2e.distribution>${project.basedir}/../package/target/openmessaging-benchmark-${project.version}-bin.tar.gz</omb.e2e.distribution>
+                        <omb.e2e.jms.kafka.enabled>${omb.e2e.jms.kafka.enabled}</omb.e2e.jms.kafka.enabled>
+                        <omb.e2e.jms.kafka.jar>${omb.e2e.jms.kafka.jar}</omb.e2e.jms.kafka.jar>
                     </systemPropertyVariables>
                 </configuration>
                 <executions>
@@ -188,13 +205,52 @@
                     <name>e2e</name>
                 </property>
             </activation>
+            <dependencies>
+                <!-- Build every isolated plugin bundle and the runner distribution before Failsafe. -->
+                <dependency>
+                    <groupId>${project.groupId}</groupId>
+                    <artifactId>package</artifactId>
+                    <version>${project.version}</version>
+                    <type>pom</type>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <version>${maven.clean.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>clear-testcontainers-reports</id>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <phase>pre-integration-test</phase>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>testcontainers-coverage.txt</include>
+                                                <include>failsafe-reports/**</include>
+                                            </includes>
+                                            <followSymlinks>false</followSymlinks>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <skipITs>false</skipITs>
+                            <!-- Driver subprocesses inherit stdout; keep it separate from Failsafe's protocol. -->
+                            <forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory"/>
                         </configuration>
                     </plugin>
                 </plugins>

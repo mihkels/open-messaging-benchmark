@@ -13,12 +13,10 @@
  */
 package io.openmessaging.benchmark.e2e;
 
-import io.openmessaging.benchmark.TestResult;
 import io.openmessaging.benchmark.Workload;
-import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.ProcessWorker;
-import org.junit.jupiter.api.AfterAll;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +25,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,16 +48,10 @@ class KafkaE2eIT extends BaseE2eIT {
     @Container
     static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
-    private static Path driverConfigFile;
+    private Path driverConfigFile;
 
-    @BeforeAll
-    static void setupDriver() throws Exception {
-        // Wait for Kafka to be fully ready
-        kafka.start();
-
-        // Give Kafka some additional time to be ready for topic operations
-        Thread.sleep(2000);
-
+    @BeforeEach
+    void setupDriver() throws Exception {
         log.info("Kafka bootstrap servers: {}", kafka.getBootstrapServers());
 
         // Create driver configuration
@@ -78,6 +74,8 @@ class KafkaE2eIT extends BaseE2eIT {
                   linger.ms=1
                   batch.size=131072
                   max.in.flight.requests.per.connection=1
+                  enable.idempotence=true
+                  compression.type=lz4
 
                 consumerConfig: |
                   auto.offset.reset=earliest
@@ -85,18 +83,12 @@ class KafkaE2eIT extends BaseE2eIT {
                   max.partition.fetch.bytes=10485760
                 """, kafka.getBootstrapServers());
 
-        Path configPath = Files.createTempFile("kafka-driver-", ".yaml");
-        Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath;
-        driverConfigFile.toFile().deleteOnExit();
-
-        log.info("Created driver config at: {}", driverConfigFile.toAbsolutePath());
-
-        // Verify Kafka is responsive by creating a test AdminClient
-        verifyKafkaConnection();
+        driverConfigFile = tempDir.resolve("kafka-driver.yaml");
+        Files.writeString(driverConfigFile, driverConfig);
     }
 
-    private static void verifyKafkaConnection() throws Exception {
+    @BeforeAll
+    static void verifyKafkaConnection() throws Exception {
         Properties props = new Properties();
         props.put("bootstrap.servers", kafka.getBootstrapServers());
         props.put("request.timeout.ms", "10000");
@@ -108,19 +100,8 @@ class KafkaE2eIT extends BaseE2eIT {
         }
     }
 
-    @AfterAll
-    static void tearDownDriver() {
-        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
-            try {
-                Files.deleteIfExists(driverConfigFile);
-            } catch (IOException e) {
-                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     @Test
+    @DriverContract("kafka")
     void testSimpleProduceConsume() throws Exception {
         // Create workload
         Workload workload = createSimpleWorkload();
@@ -128,21 +109,15 @@ class KafkaE2eIT extends BaseE2eIT {
         workload.partitionsPerTopic = 4;
         workload.producersPerTopic = 2;
         workload.consumerPerSubscription = 2;
-        workload.producerRate = 1000;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;
         workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
 
         // Run benchmark
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         // Validate results
         validateResults(result, workload);
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish approximately expected messages")
-                .isGreaterThan((long) (workload.producerRate * workload.testDurationMinutes * 0.8));
     }
 
     @Test
@@ -150,20 +125,52 @@ class KafkaE2eIT extends BaseE2eIT {
         Workload workload = createSimpleWorkload();
         workload.topics = 3;
         workload.partitionsPerTopic = 2;
-        workload.testDurationMinutes = 1;
+        workload.subscriptionsPerTopic = 2;
+        workload.keyDistributor = KeyDistributorType.KEY_ROUND_ROBIN;
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;  // Add this
         workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
 
-        TestResult result = runBenchmark(workload);
+        Set<String> topicsBefore = kafkaTopics();
+        SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
-        assertThat(result.topics).isEqualTo(workload.topics);
+        Set<String> createdTopics = new HashSet<>(kafkaTopics());
+        createdTopics.removeAll(topicsBefore);
+        createdTopics.removeIf(topic -> !topic.startsWith("test-topic"));
+        assertThat(createdTopics).hasSize(workload.topics);
+        Properties props = new Properties();
+        props.put("bootstrap.servers", kafka.getBootstrapServers());
+        try (var adminClient = org.apache.kafka.clients.admin.AdminClient.create(props)) {
+            var descriptions = adminClient.describeTopics(createdTopics).allTopicNames().get(10, TimeUnit.SECONDS);
+            assertThat(descriptions.values())
+                    .allSatisfy(topic -> assertThat(topic.partitions()).hasSize(workload.partitionsPerTopic));
+
+            Map<String, Integer> groupsWithDeliveries = new HashMap<>();
+            for (var group : adminClient.listConsumerGroups().all().get(10, TimeUnit.SECONDS)) {
+                var offsets =
+                        adminClient
+                                .listConsumerGroupOffsets(group.groupId())
+                                .partitionsToOffsetAndMetadata()
+                                .get(10, TimeUnit.SECONDS);
+                Set<String> deliveredTopics = new HashSet<>();
+                offsets.forEach(
+                        (partition, offset) -> {
+                            if (createdTopics.contains(partition.topic())) {
+                                assertThat(offset.offset()).isPositive();
+                                deliveredTopics.add(partition.topic());
+                            }
+                        });
+                deliveredTopics.forEach(topic -> groupsWithDeliveries.merge(topic, 1, Integer::sum));
+            }
+            assertThat(groupsWithDeliveries.keySet()).containsExactlyInAnyOrderElementsOf(createdTopics);
+            assertThat(groupsWithDeliveries.values())
+                    .allSatisfy(count -> assertThat(count).isEqualTo(workload.subscriptionsPerTopic));
+        }
     }
 
     @Test
-    void testHighThroughput() throws Exception {
+    void testMultipleProducersAndConsumers() throws Exception {
         Workload workload = createSimpleWorkload();
         workload.topics = 1;
         workload.partitionsPerTopic = 8;
@@ -173,41 +180,22 @@ class KafkaE2eIT extends BaseE2eIT {
         workload.useRandomizedPayloads = true;
         workload.randomizedPayloadPoolSize = 10;  // Add this
         workload.randomBytesRatio = 0.5;
-        workload.producerRate = 100;
-        workload.testDurationMinutes = 1;
 
-        TestResult result = runBenchmark(workload);
+        SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
 
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        double actualRate = total / workload.testDurationMinutes;
-        log.info("Actual publish rate: {} msg/s", actualRate);
-        assertThat(actualRate).isGreaterThan(workload.producerRate * 0.5);
     }
 
-    private TestResult runBenchmark(Workload workload) throws Exception {
-        // Run the driver in its own process for each test
-        ProcessWorker worker = new ProcessWorker();
+    private SmokeResult runBenchmark(Workload workload) throws Exception {
+        return runBenchmark("Kafka", driverConfigFile, workload);
+    }
 
-        try {
-            // Initialize the worker with driver configuration
-            worker.initializeDriver(driverConfigFile);
-
-            // Create WorkloadGenerator with the driver name, workload, and worker
-            WorkloadGenerator generator = new WorkloadGenerator("Kafka", workload, worker);
-
-            // Run the benchmark
-            TestResult result = generator.run();
-
-            // Clean up generator
-            generator.close();
-
-            return result;
-        } finally {
-            // Always close to the worker
-            worker.stopAll();
-            worker.close();
+    private static Set<String> kafkaTopics() throws Exception {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", kafka.getBootstrapServers());
+        try (var adminClient = org.apache.kafka.clients.admin.AdminClient.create(props)) {
+            return adminClient.listTopics().names().get(10, TimeUnit.SECONDS);
         }
     }
 }

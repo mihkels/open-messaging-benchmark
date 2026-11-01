@@ -13,55 +13,24 @@
  */
 package io.openmessaging.benchmark.e2e;
 
-import io.micrometer.prometheusmetrics.PrometheusConfig;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import io.openmessaging.benchmark.TestResult;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.openmessaging.benchmark.Workload;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import io.openmessaging.benchmark.worker.ProcessWorker;
+import java.nio.file.Path;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * Base class for E2E tests using the Open Messaging Benchmark framework.
- */
+/** Shared workload, lifecycle and result assertions for broker integration tests. */
+@ExtendWith(DriverCoverageExtension.class)
 public abstract class BaseE2eIT {
 
     protected static final Logger log = LoggerFactory.getLogger(BaseE2eIT.class);
 
-    protected PrometheusMeterRegistry statsLogger;
-    protected Path tempDir;
+    @TempDir protected Path tempDir;
 
-    @BeforeEach
-    void setUp() throws IOException {
-        statsLogger = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        tempDir = Files.createTempDirectory("omb-e2e-test-");
-        log.info("Created temporary directory: {}", tempDir);
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (statsLogger != null) {
-            statsLogger.close();
-        }
-
-        if (tempDir != null) {
-            deleteDirectory(tempDir.toFile());
-        }
-    }
-
-    /**
-     * Create a simple workload for testing.
-     *
-     * @return a configured workload instance
-     */
     protected Workload createSimpleWorkload() {
         Workload workload = new Workload();
         workload.name = "e2e-test-workload";
@@ -71,114 +40,34 @@ public abstract class BaseE2eIT {
         workload.producersPerTopic = 1;
         workload.consumerPerSubscription = 1;
         workload.subscriptionsPerTopic = 1;
-        workload.producerRate = 100;
-        workload.consumerBacklogSizeGB = 0;
-        workload.testDurationMinutes = 1;
+        workload.producerRate = 20;
+        workload.useRandomizedPayloads = true;
+        workload.randomizedPayloadPoolSize = 10;
+        workload.randomBytesRatio = 0.5;
         return workload;
     }
 
-    /**
-     * Create a workload configuration file.
-     *
-     * @param workload the workload configuration
-     * @return the created workload file
-     * @throws IOException if file creation fails
-     */
-    protected File createWorkloadFile(Workload workload) throws IOException {
-        Path workloadPath = tempDir.resolve("workload.yaml");
-        // You would serialize workload to YAML here
-        // For now, create a simple workload file
-        String yaml = String.format("""
-                name: %s
-                topics: %d
-                partitionsPerTopic: %d
-                messageSize: %d
-
-                subscriptionsPerTopic: %d
-                consumerPerSubscription: %d
-                producersPerTopic: %d
-                producerRate: %d
-                consumerBacklogSizeGB: %d
-                testDurationMinutes: %d
-                """,
-                workload.name,
-                workload.topics,
-                workload.partitionsPerTopic,
-                workload.messageSize,
-                workload.subscriptionsPerTopic,
-                workload.consumerPerSubscription,
-                workload.producersPerTopic,
-                workload.producerRate,
-                workload.consumerBacklogSizeGB,
-                workload.testDurationMinutes
-        );
-        Files.writeString(workloadPath, yaml);
-        return workloadPath.toFile();
+    protected SmokeResult runBenchmark(String driver, Path config, Workload workload)
+            throws Exception {
+        log.info("Checking {} message delivery", driver);
+        try (ProcessWorker worker = new ProcessWorker()) {
+            worker.initializeDriver(config);
+            return FunctionalSmoke.run(worker, workload);
+        }
     }
 
-    /**
-     * Validate test results.
-     *
-     * @param result the test result to validate
-     * @param workload the workload configuration
-     */
-    protected void validateResults(TestResult result, Workload workload) {
-        var wholeTestDuration = workload.testDurationMinutes + workload.warmupDurationMinutes;
-
-        // Calculate actual aggregate rates
-        double aggregatePublishRate = result.publishRate.stream()
-                .mapToDouble(Double::doubleValue)
-                .sum() / result.publishRate.size();
-
-        double aggregateConsumeRate = result.consumeRate.stream()
-                .mapToDouble(Double::doubleValue)
-                .sum() / result.consumeRate.size();
-
-        log.info("Test completed - Aggregate publish rate: {} msg/s, consume rate: {} msg/s, throughput: {} Mbit/s",
-                aggregatePublishRate,
-                aggregateConsumeRate,
-                aggregatePublishRate * workload.messageSize * 8.0 / 1024 / 1024);
-
-        // Validate that messages were published
-        assertThat(aggregatePublishRate)
-                .as("Should have published messages")
-                .isGreaterThan(0);
-
-        // Validate that messages were consumed
-        assertThat(aggregateConsumeRate)
-                .as("Should have consumed messages")
-                .isGreaterThan(0);
-
-        // Optional: Validate latencies are reasonable
-        assertThat(result.aggregatedPublishLatencyAvg)
-                .as("Publish latency should be positive")
-                .isGreaterThan(0);
-
-//        assertThat(result.aggregatedEndToEndLatencyAvg)
-//                .as("End-to-end latency should be positive")
-//                .isGreaterThan(0);
-    }
-
-    private void deleteDirectory(File directory) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    deleteDirectory(file);
-                } else {
-                    if (file.delete()) {
-                        log.info("Deleted file {}", file.getAbsolutePath());
-                    } else {
-                        log.warn("Failed to delete file {}", file.getAbsolutePath());
-                    }
-                }
-            }
-        }
-
-        if (directory.delete()) {
-            log.info("Deleted directory {}", directory.getAbsolutePath());
-        } else {
-            log.warn("Failed to delete directory {}", directory.getAbsolutePath());
-        }
+    protected void validateResults(SmokeResult result, Workload workload) {
+        assertThat(result).as("smoke result").isNotNull();
+        assertThat(workload.topics).as("topics").isPositive();
+        assertThat(workload.subscriptionsPerTopic).as("subscriptions per topic").isPositive();
+        assertThat(result.messagesSent())
+                .as("published messages")
+                .isGreaterThanOrEqualTo(FunctionalSmoke.minimumMessages(workload));
+        assertThat(result.messagesReceived())
+                .as("delivered messages")
+                .isGreaterThanOrEqualTo(
+                        FunctionalSmoke.minimumMessages(workload) * workload.subscriptionsPerTopic);
+        assertThat(result.messageSendErrors()).as("publish errors").isZero();
+        assertThat(result.endToEndLatencyMillis()).as("end-to-end latency").isFinite().isNotNegative();
     }
 }

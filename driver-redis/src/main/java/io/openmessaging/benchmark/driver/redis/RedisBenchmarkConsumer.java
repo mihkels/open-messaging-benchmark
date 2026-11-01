@@ -17,6 +17,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -30,10 +31,11 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.params.XReadGroupParams;
-import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.resps.StreamEntryBinary;
 
 public class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkConsumer.class);
+    private static final byte[] PAYLOAD_FIELD = "payload".getBytes(UTF_8);
 
     private final String topic;
     private final String subscriptionName;
@@ -50,6 +52,10 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
         this.topic = topic;
         this.subscriptionName = subscriptionName;
         this.executor = Executors.newSingleThreadExecutor();
+        byte[] groupName = subscriptionName.getBytes(UTF_8);
+        byte[] consumerName = consumerId.getBytes(UTF_8);
+        Map<byte[], StreamEntryID> streamQuery =
+                Collections.singletonMap(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
         this.consumerTask =
                 this.executor.submit(
@@ -57,29 +63,26 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
                             while (!closing) {
                                 // Get a fresh Jedis connection from the pool for each iteration
                                 try (Jedis jedis = pool.getResource()) {
-                                    Map<String, StreamEntryID> streamQuery =
-                                            Collections.singletonMap(topic, StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
-
                                     // Use block(1000) for 1 second timeout instead of block(0) which blocks
                                     // indefinitely
                                     // This allows the loop to check the closing flag periodically
-                                    List<Map.Entry<String, List<StreamEntry>>> range =
-                                            jedis.xreadGroup(
-                                                    subscriptionName,
-                                                    consumerId,
+                                    List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
+                                            jedis.xreadGroupBinary(
+                                                    groupName,
+                                                    consumerName,
                                                     XReadGroupParams.xReadGroupParams()
                                                             .count(100) // Read up to 100 messages at a time
                                                             .block(1000), // 1 second timeout
                                                     streamQuery);
 
                                     if (range != null && !range.isEmpty()) {
-                                        for (Map.Entry<String, List<StreamEntry>> streamEntries : range) {
-                                            for (StreamEntry entry : streamEntries.getValue()) {
+                                        for (var streamEntries : range) {
+                                            for (StreamEntryBinary entry : streamEntries.getValue()) {
                                                 if (closing) {
                                                     break;
                                                 }
                                                 long timestamp = entry.getID().getTime();
-                                                byte[] payload = entry.getFields().get("payload").getBytes(UTF_8);
+                                                byte[] payload = readPayload(entry);
                                                 consumerCallback.messageReceived(payload, timestamp);
 
                                                 // Acknowledge the message
@@ -105,6 +108,15 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
                             log.info(
                                     "Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
                         });
+    }
+
+    private static byte[] readPayload(StreamEntryBinary entry) {
+        for (var field : entry.getFields().entrySet()) {
+            if (Arrays.equals(field.getKey(), PAYLOAD_FIELD)) {
+                return field.getValue();
+            }
+        }
+        throw new IllegalStateException("Missing payload field in Redis stream entry " + entry.getID());
     }
 
     @Override

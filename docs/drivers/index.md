@@ -50,6 +50,10 @@ environment, and several of them share the same `name`. Each driver page explain
 
 ## Regression suite versions
 
+The opt-in [Testcontainers suite](../development/testing-a-driver.md#testcontainers-end-to-end-tests)
+defines a contract for each shipped plugin and records which contracts actually ran. It tests the local
+isolated-driver process; its results are separate from the distributed Compose cases below.
+
 The [Compose regression suite](../development/testing-a-driver.md) registers cases for every driver
 against the broker versions below. Registration is not a guarantee that every case passes in a
 particular environment, nor evidence of compatibility with other versions. These are functional

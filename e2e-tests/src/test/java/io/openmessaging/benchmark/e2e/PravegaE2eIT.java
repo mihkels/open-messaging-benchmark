@@ -13,186 +13,165 @@
  */
 package io.openmessaging.benchmark.e2e;
 
-import io.openmessaging.benchmark.TestResult;
-import io.openmessaging.benchmark.Workload;
-import io.openmessaging.benchmark.WorkloadGenerator;
-import io.openmessaging.benchmark.worker.ProcessWorker;
-import io.pravega.client.ClientConfig;
-import io.pravega.client.admin.StreamManager;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
+import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
+import org.testcontainers.utility.DockerImageName;
+import tools.jackson.databind.ObjectMapper;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * End-to-end tests for Pravega using a standalone container.
- */
-@Testcontainers
+/** End-to-end tests for Pravega on a private broker network. */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PravegaE2eIT extends BaseE2eIT {
-
-    private static final Logger log = LoggerFactory.getLogger(PravegaE2eIT.class);
-
     private static final String SCOPE = "ombscope";
 
-    @Container
-    static PravegaContainer pravega = new PravegaContainer()
-            .waitingFor(
-                    Wait.forLogMessage(".*Pravega Sandbox is running.*", 1)
-                            .withStartupTimeout(Duration.ofMinutes(5))
-            );
-
-    private static Path driverConfigFile;
+    private Network network;
+    private GenericContainer<?> pravega;
 
     @BeforeAll
-    static void setupDriver() throws Exception {
-        pravega.start();
-        var host = pravega.getHost();
-
-        log.info("Pravega controller URI: {}", pravega.getControllerURI());
-        log.info("Pravega segment store: {}:{}", host, pravega.getSegmentStoreEndpoint());
-
-        verifyPravegaConnection();
-
-        // Fixed config with proper structure from reference file
-        String driverConfig = """
-            name: Pravega
-            driverClass: io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver
-
-            client:
-              controllerURI: %s
-              scopeName: %s
-
-            writer:
-              enableConnectionPooling: true
-
-            includeTimestampInEvent: false
-            """.formatted(pravega.getControllerURI(), SCOPE);
-
-        Path configPath = Files.createTempFile("pravega-driver-", ".yaml");
-        Files.writeString(configPath, driverConfig);
-        driverConfigFile = configPath;
-        driverConfigFile.toFile().deleteOnExit();
-
-        log.info("Created Pravega driver config at: {}", driverConfigFile.toAbsolutePath());
-        log.info("Config content:\n{}", driverConfig);
-    }
-
-
-    private static void verifyPravegaConnection() {
-        var clientConfig = ClientConfig.builder()
-                .controllerURI(URI.create(pravega.getControllerURI()))
-                .build();
-        try (StreamManager streamManager = StreamManager.create(clientConfig)) {
-            boolean created = streamManager.createScope(SCOPE);
-            log.info("Scope '{}' ensure/create result: {}", SCOPE, created);
+    void startPravega() {
+        network = Network.newNetwork();
+        pravega =
+                new GenericContainer<>(DockerImageName.parse("pravega/pravega:0.13.0"))
+                        .withNetwork(network)
+                        .withNetworkAliases("pravega")
+                        .withCreateContainerCmdModifier(command -> command.withPlatform("linux/amd64"))
+                        .withEnv("HOST_IP", "pravega")
+                        .withEnv("JAVA_OPTS", "-Xmx1g -XX:MaxDirectMemorySize=1g")
+                        .withCommand("standalone")
+                        .withExposedPorts(9091)
+                        .waitingFor(
+                                new WaitAllStrategy()
+                                        .withStrategy(Wait.forLogMessage(".*Pravega Sandbox is running.*", 1))
+                                        .withStrategy(Wait.forHttp("/v1/scopes").forPort(9091))
+                                        .withStartupTimeout(Duration.ofMinutes(5)));
+        try {
+            pravega.start();
+        } catch (RuntimeException e) {
+            throw new IllegalStateException(
+                    "Pravega requires the linux/amd64 image and working amd64 emulation on ARM hosts",
+                    e);
         }
     }
 
     @AfterAll
-    static void tearDownDriver() {
-        if (driverConfigFile != null && Files.exists(driverConfigFile)) {
-            try {
-                Files.deleteIfExists(driverConfigFile);
-            } catch (IOException e) {
-                log.error("Failed to delete driver config file: {}", driverConfigFile, e);
-                throw new RuntimeException(e);
+    void stopPravega() {
+        try {
+            if (pravega != null) {
+                pravega.close();
+            }
+        } finally {
+            if (network != null) {
+                network.close();
             }
         }
     }
 
     @Test
-    void testSimpleProduceConsume() throws Exception {
-        Workload workload = createSimpleWorkload();
-        workload.topics = 1;
-        workload.partitionsPerTopic = 2;
-        workload.producersPerTopic = 2;
-        workload.consumerPerSubscription = 2;
-        workload.producerRate = 500;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
-
-        TestResult result = runBenchmark(workload);
-
-        // Debug logging before validation
-        log.info("Test result - Topics: {}", result.topics);
-        log.info("Publish rate size: {}, values: {}", result.publishRate.size(), result.publishRate);
-        log.info("Consume rate size: {}, values: {}", result.consumeRate.size(), result.consumeRate);
-        log.info("Aggregate publish: {} msg/s", result.publishRate.stream().reduce(0.0, Double::sum));
-
-        validateResults(result, workload);
-
-        var total = result.publishRate.stream().reduce(0.0, Double::sum);
-        assertThat(total)
-                .as("Should publish expected volume")
-                .isGreaterThan(workload.producerRate * workload.testDurationMinutes * 0.7);
-    }
-
-    @Test
-    void testMultipleStreams() throws Exception {
+    @DriverContract("pravega")
+    void testMultipleStreamsAndSegments() throws Exception {
         Workload workload = createSimpleWorkload();
         workload.topics = 3;
         workload.partitionsPerTopic = 2;
-        workload.producerRate = 300;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
-
-        TestResult result = runBenchmark(workload);
+        workload.producersPerTopic = 2;
+        workload.consumerPerSubscription = 2;
+        workload.keyDistributor = KeyDistributorType.KEY_ROUND_ROBIN;
+        Map<String, Integer> before = streams();
+        SmokeResult result = runPravega(workload, false);
         validateResults(result, workload);
-        assertThat(result.topics).isEqualTo(workload.topics);
+        Map<String, Integer> created = new HashMap<>(streams());
+        before.keySet().forEach(created::remove);
+        assertThat(created).hasSize(workload.topics);
+        assertThat(created.values())
+                .allSatisfy(segments -> assertThat(segments).isEqualTo(workload.partitionsPerTopic));
+        Path config = tempDir.resolve("pravega-probe.yaml");
+        Files.writeString(config, pravegaConfig(false));
+        try (NetworkBenchmark runner = new NetworkBenchmark(network)) {
+            runner.start();
+            runner.verifyOrderedPayloadsAndTimestamps(
+                    "pravega", "io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver", config);
+        }
     }
 
     @Test
-    void testHighThroughput() throws Exception {
+    void testTransactionCommitAndTimestamp() throws Exception {
         Workload workload = createSimpleWorkload();
-        workload.topics = 1;
         workload.partitionsPerTopic = 4;
-        workload.messageSize = 200;
-        workload.producersPerTopic = 4;
-        workload.consumerPerSubscription = 4;
-        workload.producerRate = 800;
-        workload.useRandomizedPayloads = true;
-        workload.randomizedPayloadPoolSize = 10;
-        workload.randomBytesRatio = 0.5;
-        workload.testDurationMinutes = 1;
-
-        TestResult result = runBenchmark(workload);
+        workload.keyDistributor = KeyDistributorType.KEY_ROUND_ROBIN;
+        SmokeResult result = runPravega(workload, true);
         validateResults(result, workload);
-
-        double total = result.publishRate.stream().reduce(0.0, Double::sum);
-        double actualRate = total / workload.testDurationMinutes;
-        log.info("Actual Pravega publish rate: {} msg/s", actualRate);
-        assertThat(actualRate).isGreaterThan(workload.producerRate * 0.5);
     }
 
-    private TestResult runBenchmark(Workload workload) throws Exception {
-        ProcessWorker worker = new ProcessWorker();
-        try {
-            worker.initializeDriver(driverConfigFile);
-            WorkloadGenerator generator = new WorkloadGenerator("Pravega", workload, worker);
-            TestResult result = generator.run();
-            generator.close();
-            return result;
-        } finally {
-            worker.stopAll();
-            worker.close();
+    private SmokeResult runPravega(Workload workload, boolean transactional) throws Exception {
+        try (NetworkBenchmark runner = new NetworkBenchmark(network)) {
+            runner.start();
+            return runner.run(pravegaConfig(transactional), workload);
         }
     }
+
+    private String pravegaConfig(boolean transactional) {
+        return """
+                name: Pravega
+                driverClass: io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver
+                client:
+                  controllerURI: tcp://pravega:9090
+                  scopeName: %s
+                writer:
+                  enableConnectionPooling: true
+                includeTimestampInEvent: true
+                deleteStreams: false
+                enableTransaction: %s
+                eventsPerTransaction: 10
+                """
+                .formatted(SCOPE, transactional);
+    }
+
+    private Map<String, Integer> streams() throws Exception {
+        URI uri =
+                URI.create(
+                        "http://"
+                                + pravega.getHost()
+                                + ":"
+                                + pravega.getMappedPort(9091)
+                                + "/v1/scopes/"
+                                + SCOPE
+                                + "/streams");
+        HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).GET().build();
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 404) {
+            return Map.of();
+        }
+        assertThat(response.statusCode()).as("Pravega stream list: %s", response.body()).isEqualTo(200);
+        var streams = new ObjectMapper().readTree(response.body()).get("streams");
+        assertThat(streams).isNotNull();
+        Map<String, Integer> segments = new HashMap<>();
+        streams.forEach(
+                stream -> {
+                    String name = stream.get("streamName").asString();
+                    var scaling = stream.get("scalingPolicy");
+                    assertThat(scaling).as("scaling policy for stream %s", name).isNotNull();
+                    var minimum = scaling.get("minSegments");
+                    assertThat(minimum).as("minimum segments for stream %s", name).isNotNull();
+                    segments.put(name, minimum.asInt());
+                });
+        return segments;
+    }
 }
-
-

@@ -329,3 +329,4 @@ Then run only the new stack until it passes, replacing `my-stack` with its ID:
 ```bash
 e2e-tests/compose/run-e2e.sh --stacks my-stack
 ```
+

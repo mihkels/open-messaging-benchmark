@@ -154,6 +154,13 @@ driverClass: com.example.omb.loopback.LoopbackBenchmarkDriver
 
 ## Compatibility rules
 
+The switch from `PrometheusMeterRegistry` to `MeterRegistry` in `BenchmarkDriver.initialize` is a
+one-time binary-incompatible change that retains `driverApiVersion: 1`. An older version-1 bundle's
+descriptor still matches, so discovery cannot detect that the bundle is stale. Rebuild the host and
+every plugin bundle, including delegates and the loopback example, together against the changed
+`driver-api`, then install the rebuilt bundles on every worker. Matching descriptor or artifact
+versions alone are not sufficient.
+
 All bundles run on top of the benchmark core in the driver JVM.
 [`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
 builds the classpath with the core first and checks every bundle jar that contains Maven metadata

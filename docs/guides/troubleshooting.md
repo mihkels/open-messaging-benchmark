@@ -94,7 +94,7 @@ mode.
 | End-to-end latency implausibly low or high            | Clocks of producer and consumer hosts are not synchronized; non-positive values are dropped |
 | Large periodic latency spikes                         | GC in the driver process or broker background work; see [Monitoring](monitoring.md)         |
 | Results overwritten                                   | `-o` used with several workloads or drivers                                                 |
-| Coordinator ends normally but a result is missing     | Look for `Failed to run the workload` in the log                                            |
+| Coordinator exits non-zero or a result is missing     | Check the first coordinator error and the worker logs; other successful results may exist   |
 
 ## Resource problems
 

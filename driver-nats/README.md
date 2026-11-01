@@ -58,8 +58,10 @@ e2e-tests/compose/run-e2e.sh --stacks nats
 ## Limitations
 
 - `partitionsPerTopic` and message keys are ignored: one stream and one subject per topic.
-- The publish timestamp is written into the first 8 bytes of the payload, so messages must be at least 8 bytes and
-  latency depends on synchronised worker clocks.
+- The publish timestamp replaces the first 8 bytes of a per-send payload copy; the caller's payload is unchanged.
+  Messages must be at least 8 bytes, and latency depends on synchronised worker clocks.
+- Closing a producer fails its unacknowledged sends and rejects new ones. In-flight publishes may still reach
+  JetStream; the shared connection remains owned by the driver.
 - `storageType` must be lower case (`file`, `memory`).
 - `maxBytes` is a 32-bit integer (at most about 2 GiB); `-1` means unlimited.
 - No authentication or TLS settings.

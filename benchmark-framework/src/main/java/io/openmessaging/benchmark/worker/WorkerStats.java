@@ -161,6 +161,7 @@ public class WorkerStats {
         messagesReceived.reset();
         bytesReceived.reset();
         totalMessagesSent.reset();
+        totalMessageSendErrors.reset();
         totalMessagesReceived.reset();
     }
 

@@ -53,11 +53,19 @@ Smoke check against Mosquitto started by Docker Compose (see [`e2e-tests/compose
 e2e-tests/compose/run-e2e.sh --stacks mqtt5
 ```
 
+Consumers are ready only after a successful connection and SUBACK for every requested filter. A
+connection or subscription failure is reported without retrying indefinitely and disconnects the partial client.
+Successfully created clients still reconnect automatically. Handle close waits
+up to five seconds for disconnect and reports failures. Closing a consumer from its own message
+callback is rejected; schedule close on another thread without waiting in the callback.
+Closing a producer from a callback running synchronously inside a send, or from one of its send-completion
+callbacks, is rejected; retry after the callback returns or schedule close on another thread without waiting
+in the callback.
+
 ## Limitations
 
 - `partitionsPerTopic` and message keys are ignored.
 - Plain TCP only; the `serverUri` scheme is ignored and a missing port means port 80.
-- A refused subscription is only logged; the consumer still counts as created.
 - End-to-end latency uses the producer's clock (user property `benchmark-publish-timestamp`).
 - Each producer and consumer uses its own connection.
 

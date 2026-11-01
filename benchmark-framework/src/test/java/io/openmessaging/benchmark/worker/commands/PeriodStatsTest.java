@@ -76,4 +76,29 @@ class PeriodStatsTest {
                             assertThat(r.endToEndLatency()).isEqualTo(two.endToEndLatency());
                         });
     }
+
+    @Test
+    void histogramSnapshotsAreDefensiveAndPreserveValues() {
+        Histogram publish = new Histogram(5);
+        Histogram delay = new Histogram(5);
+        Histogram endToEnd = new Histogram(5);
+        publish.recordValue(1_000);
+        delay.recordValue(200);
+        endToEnd.recordValue(3_000);
+        PeriodStats stats = new PeriodStats(1, 0, 0, 1, 0, 1, 0, 1, publish, delay, endToEnd);
+
+        publish.recordValue(5_000);
+        delay.recordValue(500);
+        endToEnd.recordValue(6_000);
+        stats.publishLatency().recordValue(7_000);
+        stats.publishDelayLatency().recordValue(700);
+        stats.endToEndLatency().recordValue(8_000);
+
+        assertThat(stats.publishLatency().getTotalCount()).isEqualTo(1);
+        assertThat(stats.publishLatency().getValueAtPercentile(99)).isEqualTo(1_000);
+        assertThat(stats.publishDelayLatency().getTotalCount()).isEqualTo(1);
+        assertThat(stats.publishDelayLatency().getValueAtPercentile(99)).isEqualTo(200);
+        assertThat(stats.endToEndLatency().getTotalCount()).isEqualTo(1);
+        assertThat(stats.endToEndLatency().getValueAtPercentile(99)).isEqualTo(3_000);
+    }
 }

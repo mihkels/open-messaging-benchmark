@@ -14,22 +14,30 @@
 package io.openmessaging.benchmark.driver.bookkeeper;
 
 import dlshade.org.apache.bookkeeper.stats.CachingStatsLogger;
+import dlshade.org.apache.distributedlog.DLSN;
 import dlshade.org.apache.distributedlog.DistributedLogConfiguration;
+import dlshade.org.apache.distributedlog.api.AsyncLogWriter;
 import dlshade.org.apache.distributedlog.api.DistributedLogManager;
+import dlshade.org.apache.distributedlog.api.LogReader;
 import dlshade.org.apache.distributedlog.api.namespace.Namespace;
 import dlshade.org.apache.distributedlog.api.namespace.NamespaceBuilder;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.bookkeeper.stats.StatsLoggerAdaptor;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Function;
 import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
@@ -50,9 +58,14 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     private Config config;
     private Namespace namespace;
 
+    public DlogBenchmarkDriver() {}
+
+    DlogBenchmarkDriver(Namespace namespace) {
+        this.namespace = namespace;
+    }
+
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry prometheusRegistry)
-            throws IOException {
+    public void initialize(Path configurationFile, MeterRegistry meterRegistry) throws IOException {
         config = reader.readValue(Files.newInputStream(configurationFile));
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
@@ -66,11 +79,11 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         }
         URI dlogUri = URI.create(config.dlogUri);
 
-        // Create a stats logger adaptor from the Micrometer registry
-        org.apache.bookkeeper.stats.StatsLogger micrometerStatsLogger =
+        // BookKeeper client metrics are not exported.
+        org.apache.bookkeeper.stats.StatsLogger noOpStatsLogger =
                 new org.apache.bookkeeper.stats.NullStatsLogger();
         dlshade.org.apache.bookkeeper.stats.StatsLogger dlStatsLogger =
-                new CachingStatsLogger(new StatsLoggerAdaptor(micrometerStatsLogger));
+                new CachingStatsLogger(new StatsLoggerAdaptor(noOpStatsLogger));
 
         namespace =
                 NamespaceBuilder.newBuilder().conf(conf).uri(dlogUri).statsLogger(dlStatsLogger).build();
@@ -108,34 +121,67 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        return CompletableFuture.supplyAsync(
-                        () -> {
-                            try {
-                                DistributedLogManager dlm = namespace.openLog(topic);
-                                log.info("Open stream {} for producer", topic);
-                                return dlm;
-                            } catch (IOException ioe) {
-                                throw new RuntimeException(ioe);
-                            }
-                        })
-                .thenCompose(dlm -> dlm.openAsyncLogWriter())
-                .thenApply(DlogBenchmarkProducer::new);
+        CompletableFuture<DistributedLogManager> manager = openLog(topic);
+        CompletableFuture<AsyncLogWriter> writer =
+                manager.thenComposeAsync(DistributedLogManager::openAsyncLogWriter);
+        CompletableFuture<AutoCloseable> ownedManager = manager.thenApply(dlm -> dlm);
+        // Abandoned writer cleanup must not block a DistributedLog completion thread.
+        CompletableFuture<AutoCloseable> ownedWriter = writer.thenApplyAsync(OwnedWriter::new);
+        return ResourceCreator.compose(
+                CompletableFuture.completedFuture(List.of(ownedManager, ownedWriter)),
+                Function.identity(),
+                resources ->
+                        new DlogBenchmarkProducer(
+                                (DistributedLogManager) resources.get(0),
+                                ((OwnedWriter) resources.get(1)).writer()));
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        return CompletableFuture.supplyAsync(
-                        () -> {
+        CompletableFuture<DistributedLogManager> manager = openLog(topic);
+        CompletableFuture<LogReader> initialReader =
+                manager.thenApplyAsync(
+                        dlm -> {
                             try {
-                                DistributedLogManager dlm = namespace.openLog(topic);
-                                log.info("Open stream {} for consumer", topic);
-                                return dlm;
-                            } catch (IOException ioe) {
-                                throw new RuntimeException(ioe);
+                                return Objects.requireNonNull(
+                                        dlm.openLogReader(DLSN.InitialDLSN), "initial log reader");
+                            } catch (IOException e) {
+                                throw new CompletionException(e);
                             }
-                        })
-                .thenApply(dlm -> new DlogBenchmarkConsumer(dlm, consumerCallback));
+                        });
+        CompletableFuture<AutoCloseable> ownedManager = manager.thenApply(dlm -> dlm);
+        CompletableFuture<AutoCloseable> ownedReader = initialReader.thenApply(reader -> reader);
+        return ResourceCreator.compose(
+                CompletableFuture.completedFuture(List.of(ownedManager, ownedReader)),
+                Function.identity(),
+                resources ->
+                        new DlogBenchmarkConsumer(
+                                (DistributedLogManager) resources.get(0),
+                                (LogReader) resources.get(1),
+                                consumerCallback));
+    }
+
+    private CompletableFuture<DistributedLogManager> openLog(String topic) {
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return Objects.requireNonNull(namespace.openLog(topic), "log manager");
+                    } catch (IOException e) {
+                        throw new CompletionException(e);
+                    }
+                });
+    }
+
+    private record OwnedWriter(AsyncLogWriter writer) implements AutoCloseable {
+        private OwnedWriter {
+            Objects.requireNonNull(writer, "log writer");
+        }
+
+        @Override
+        public void close() throws Exception {
+            writer.asyncClose().get();
+        }
     }
 
     @Override

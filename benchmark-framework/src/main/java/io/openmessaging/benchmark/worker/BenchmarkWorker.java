@@ -102,7 +102,7 @@ public final class BenchmarkWorker {
         Javalin app =
                 Javalin.create(
                                 config -> {
-                                    handler.registerRoutes(config.routes);
+                                    handler.configure(config);
                                     config.routes.get(
                                             "/metrics",
                                             ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));

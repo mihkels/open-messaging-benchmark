@@ -13,9 +13,25 @@
  */
 package io.openmessaging.benchmark.driver.nats;
 
+import io.nats.client.Connection;
+import io.nats.client.Dispatcher;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class NatsBenchmarkConsumer implements BenchmarkConsumer {
+public final class NatsBenchmarkConsumer implements BenchmarkConsumer {
+    private final Connection connection;
+    private final Dispatcher dispatcher;
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    NatsBenchmarkConsumer(Connection connection, Dispatcher dispatcher) {
+        this.connection = connection;
+        this.dispatcher = dispatcher;
+    }
+
     @Override
-    public void close() {}
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            connection.closeDispatcher(dispatcher);
+        }
+    }
 }

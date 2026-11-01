@@ -56,7 +56,15 @@ class ProcessWorkerTest {
         Path lib1 = compileJar(dir.resolve("v1/shared-lib.jar"), Map.of(LIB, lib("1")), List.of());
         Path lib2 = compileJar(dir.resolve("v2/shared-lib.jar"), Map.of(LIB, lib("2")), List.of());
 
-        bundle("alpha", "fixture.alpha.AlphaDriver", "\"alpha-v\" + " + isolation(), "", lib1);
+        bundle(
+                "alpha",
+                "fixture.alpha.AlphaDriver",
+                "\"alpha-v\" + " + isolation(),
+                "if (!registry.getClass().getName().equals("
+                        + "\"io.micrometer.prometheusmetrics.PrometheusMeterRegistry\"))"
+                        + " throw new java.io.IOException(\"expected Prometheus registry\");"
+                        + " registry.counter(\"fixture.driver.initialized\").increment();",
+                lib1);
         bundle("beta", "fixture.beta.BetaDriver", "\"beta-v\" + " + isolation(), "", lib2);
         bundle("crash", "fixture.crash.CrashDriver", "\"crash\"", "", lib1);
         bundle(
@@ -96,6 +104,20 @@ class ProcessWorkerTest {
                 "\"broken\"",
                 "throw new java.io.IOException(\"broken driver configuration\");",
                 lib1);
+        bundle(
+                "failing-close",
+                "fixture.failingclose.FailingCloseDriver",
+                "\"failing-close\"",
+                "",
+                "throw new IllegalStateException(\"fixture close failure\");",
+                lib1);
+        bundle(
+                "broken-close",
+                "fixture.brokenclose.BrokenCloseDriver",
+                "\"broken-close\"",
+                "throw new java.io.IOException(\"fixture initialization failure\");",
+                "throw new IllegalStateException(\"fixture initialization cleanup failure\");",
+                lib1);
     }
 
     @Test
@@ -107,7 +129,8 @@ class ProcessWorkerTest {
                     .singleElement()
                     .asString()
                     .startsWith("alpha-v1-isolated-");
-            assertThat(worker.scrapeMetrics()).contains("messages_sent_total");
+            assertThat(worker.scrapeMetrics())
+                    .contains("messages_sent_total", "fixture_driver_initialized_total");
             worker.stopAll();
             assertThat(worker.pid()).isEqualTo(alphaPid);
 
@@ -139,6 +162,39 @@ class ProcessWorkerTest {
                     .hasMessageContaining("fixture.missing.MissingDriver")
                     .hasMessageContaining("fixture.alpha.AlphaDriver");
         }
+    }
+
+    @Test
+    void preservesCleanupFailureWhenInitializationFails() throws Exception {
+        try (ProcessWorker worker = newWorker()) {
+            assertThatThrownBy(
+                            () -> worker.initializeDriver(config("fixture.brokenclose.BrokenCloseDriver")))
+                    .hasMessageContaining("fixture initialization failure")
+                    .hasStackTraceContaining("fixture initialization cleanup failure");
+            assertThat(worker.pid()).isNull();
+        }
+    }
+
+    @Test
+    void reportsStopFailureAndCanReplaceTheTerminatedDriverProcess() throws Exception {
+        try (ProcessWorker worker = newWorker()) {
+            worker.initializeDriver(config("fixture.failingclose.FailingCloseDriver"));
+            long failedPid = worker.pid();
+            assertThatThrownBy(worker::stopAll).hasMessageContaining("fixture close failure");
+            assertThat(worker.pid()).isNull();
+            assertThat(isAlive(failedPid)).isFalse();
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
+        }
+    }
+
+    @Test
+    void directCloseReportsDriverCleanupFailure() throws Exception {
+        ProcessWorker worker = newWorker();
+        worker.initializeDriver(config("fixture.failingclose.FailingCloseDriver"));
+        assertThatThrownBy(worker::close).hasMessageContaining("Failed to close ProcessWorker");
+        assertThat(worker.pid()).isNull();
+        worker.close();
     }
 
     @Test
@@ -285,7 +341,7 @@ class ProcessWorkerTest {
                 Javalin.create(
                         config -> {
                             config.startup.showJavalinBanner = false;
-                            handler.registerRoutes(config.routes);
+                            handler.configure(config);
                             config.routes.get("/metrics", ctx -> ctx.result(worker.scrapeMetrics()));
                         });
         try (worker;

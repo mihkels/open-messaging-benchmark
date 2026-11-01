@@ -111,13 +111,19 @@ the server creates the channel on first use. `partitionsPerTopic` has no effect.
 
 **Producers.** All producers of one worker share a single streaming connection with a random client ID. A send
 publishes asynchronously and completes when the server's publish acknowledgement arrives, that is after the server
-has stored the message in its configured store. Keys are ignored.
+has stored the message in its configured store. The driver owns the message bytes even if the send is canceled.
+Closing a producer handle waits for in-progress publish calls to return, then fails its pending sends without closing
+the shared connection. Closing from a callback executing synchronously inside a `sendAsync` call on that handle throws
+`IllegalStateException`. Closing from a send-completion callback running inline with a client acknowledgement or a
+close-induced failure is also rejected before it changes the handle's state. Retry after the call or callback returns,
+or schedule close on another thread without waiting for it in the callback. Keys are ignored.
 
 **Subscriptions and consumers.** Each consumer opens its own streaming connection with a random client ID and
 creates a queue subscription on the topic's channel, with the benchmark subscription name as the queue group.
 Consumers of the same subscription share messages; each subscription is its own queue group and receives every
 message, so multiple subscriptions per topic work. The subscriptions are not durable and use the default start
-position, so they receive only messages published after they subscribed.
+position, so they receive only messages published after they subscribed. Connection and subscription failures complete
+creation exceptionally with their cause; a connection opened for a failed subscription is closed.
 
 **Acknowledgement.** Subscriptions use the client's automatic acknowledgement mode: the client acknowledges each
 message after the benchmark callback returns. `maxInFlight` limits unacknowledged messages per member.
@@ -129,8 +135,9 @@ server and the workers adds directly to the result. See [Latency and backlog](..
 
 **Durability.** Determined by the server store (`-store memory` or `file`) and its sync settings, not by the driver.
 
-**Cleanup.** The driver does not delete channels. With the memory store they disappear when the server stops; with
-the file store they remain until removed by server channel limits or by deleting the store.
+**Cleanup.** Each consumer closes its connection; the driver closes the shared producer connection. The driver does
+not delete channels. With the memory store they disappear when the server stops; with the file store they remain until
+removed by server channel limits or by deleting the store.
 
 **Workload features.** Multiple topics, multiple subscriptions per topic and multiple consumers per subscription
 work. Partition counts and keys are ignored. For backlog workloads (`consumerBacklogSizeGB`) the framework blocks the
@@ -170,8 +177,7 @@ Common problems:
 
 - `nats streaming create producer exception` or `nats streaming create consumer exception` in the worker log:
   connecting failed. Typical causes are a wrong `natsHostUrl` or a `clusterId` that does not match the server's
-  `-cid` (the connect request times out). The driver logs the error and returns no producer or consumer, so the run
-  fails afterwards without a clearer message; check the worker log first.
+  `-cid` (the connect request times out). The creation future fails with the underlying error.
 - Connecting to a plain NATS or JetStream server: the NATS connection succeeds but the streaming connect request
   times out, because no NATS Streaming server answers.
 - No messages consumed: subscriptions start with new messages only; messages published before the consumers

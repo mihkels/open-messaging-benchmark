@@ -235,6 +235,10 @@ as published when the callback reports success, so what "published" means for du
 `commitAsync` after passing all its records to the benchmark. When it is `true`, the driver does not
 commit and the client's auto-commit is used. Both modes are at-least-once.
 
+Consumer creation completes after the group assignment and initial positions are ready. A consumer
+assigned no partitions is ready once topic metadata is available. Kafka's normal rebalance and
+offset-reset behavior still applies after creation.
+
 **End-to-end latency.** The consumer reports `ConsumerRecord.timestamp()` as the publish time. The
 producer does not set a timestamp, so with the default `message.timestamp.type=CreateTime` it is the
 producer host's wall clock when `send` was called. Latency between hosts therefore depends on clock
@@ -246,8 +250,9 @@ callback. During the pause, the consumer thread does not call `poll`. If the pau
 consumer's `max.poll.interval.ms` (Kafka default: 5 minutes), the client leaves its group and rejoins
 when the pause ends, causing a rebalance. See [Latency and backlog](../methodology/latency-and-backlog.md).
 
-**Cleanup.** At the end of a run the driver closes its producers, consumers and Admin client. It does
-not delete topics or consumer groups; remove them yourself or rely on retention.
+**Cleanup.** The benchmark closes each successfully created producer and consumer; the driver closes
+its Admin client. Failed or cancelled creation closes untransferred handles, including late arrivals.
+Topics and consumer groups are not deleted; remove them yourself or rely on retention.
 
 Workload features that work: several topics, partitions, keys (`keyDistributor`), several
 subscriptions per topic, several consumers per subscription, variable message sizes and backlog builds.

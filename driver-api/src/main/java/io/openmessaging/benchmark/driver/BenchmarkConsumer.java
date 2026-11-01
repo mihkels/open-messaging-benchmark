@@ -13,4 +13,10 @@
  */
 package io.openmessaging.benchmark.driver;
 
+/**
+ * A consumer handle owned by the caller after successful creation.
+ *
+ * <p>Closing it stops delivery and releases per-consumer resources. Shared clients and connections
+ * belong to the driver.
+ */
 public interface BenchmarkConsumer extends AutoCloseable {}

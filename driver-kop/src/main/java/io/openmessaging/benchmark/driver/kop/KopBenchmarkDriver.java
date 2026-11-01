@@ -13,11 +13,12 @@
  */
 package io.openmessaging.benchmark.driver.kop;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkConsumer;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkProducer;
 import io.openmessaging.benchmark.driver.kop.config.ClientType;
@@ -30,14 +31,11 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -70,9 +68,6 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .with(DeserializationFeature.USE_LONG_FOR_INTS);
 
-    private final List<BenchmarkProducer> producers = new CopyOnWriteArrayList<>();
-    private final List<BenchmarkConsumer> consumers = new CopyOnWriteArrayList<>();
-
     private Config config;
     private AdminClient admin;
     private Properties producerProperties;
@@ -86,8 +81,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         config = loadConfig(configurationFile);
         final Properties commonProperties = config.getKafkaProperties();
         admin = AdminClient.create(commonProperties);
@@ -155,16 +149,23 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
         if (config.producerType().equals(ClientType.KAFKA)) {
-            final BenchmarkProducer producer =
-                    new KafkaBenchmarkProducer(new KafkaProducer<>(producerProperties), topic);
-            producers.add(producer);
-            return CompletableFuture.completedFuture(producer);
+            KafkaProducer<String, byte[]> producer = null;
+            try {
+                producer = new KafkaProducer<>(producerProperties);
+                return CompletableFuture.completedFuture(new KafkaBenchmarkProducer(producer, topic));
+            } catch (RuntimeException error) {
+                closeAfterFailure(producer, error);
+                return CompletableFuture.failedFuture(error);
+            }
         } else if (config.producerType().equals(ClientType.PULSAR)) {
-            return producerBuilder
-                    .clone()
-                    .topic(topic)
-                    .createAsync()
-                    .thenApply(PulsarBenchmarkProducer::new);
+            try {
+                return ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.of(topic)),
+                        name -> producerBuilder.clone().topic(name).createAsync(),
+                        producers -> new PulsarBenchmarkProducer(producers.get(0)));
+            } catch (RuntimeException error) {
+                return CompletableFuture.failedFuture(error);
+            }
         } else {
             throw new IllegalArgumentException("producerType " + config.producerType() + " is invalid");
         }
@@ -179,46 +180,65 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
             properties.putAll(consumerProperties);
             properties.put(ConsumerConfig.GROUP_ID_CONFIG, subscriptionName);
             properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            final KafkaConsumer<String, byte[]> kafkaConsumer = new KafkaConsumer<>(properties);
-            kafkaConsumer.subscribe(Collections.singleton(topic));
-            final BenchmarkConsumer consumer =
-                    new KafkaBenchmarkConsumer(
-                            kafkaConsumer, properties, consumerCallback, config.pollTimeoutMs());
-            consumers.add(consumer);
-            return CompletableFuture.completedFuture(consumer);
+            KafkaConsumer<String, byte[]> kafkaConsumer = null;
+            try {
+                kafkaConsumer = new KafkaConsumer<>(properties);
+                return KafkaBenchmarkConsumer.create(
+                        kafkaConsumer, topic, properties, consumerCallback, config.pollTimeoutMs());
+            } catch (RuntimeException error) {
+                closeAfterFailure(kafkaConsumer, error);
+                return CompletableFuture.failedFuture(error);
+            }
         } else if (config.consumerType().equals(ClientType.PULSAR)) {
-            final List<CompletableFuture<Consumer<ByteBuffer>>> futures = new ArrayList<>();
-            return client
-                    .getPartitionsForTopic(topic, true)
-                    .thenCompose(
-                            partitions -> {
-                                partitions.forEach(
-                                        p ->
-                                                futures.add(
-                                                        createInternalPulsarConsumer(p, subscriptionName, consumerCallback)));
-                                return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
-                            })
-                    .thenApply(
-                            __ ->
-                                    new PulsarBenchmarkConsumer(
-                                            futures.stream().map(CompletableFuture::join).collect(Collectors.toList())));
+            try {
+                return ResourceCreator.compose(
+                        client.getPartitionsForTopic(topic, true),
+                        partition ->
+                                createInternalPulsarConsumer(partition, subscriptionName, consumerCallback),
+                        PulsarBenchmarkConsumer::new);
+            } catch (RuntimeException error) {
+                return CompletableFuture.failedFuture(error);
+            }
         } else {
             throw new IllegalArgumentException("consumerType " + config.consumerType() + " is invalid");
         }
     }
 
     @Override
-    public void close() throws Exception {
-        for (BenchmarkProducer producer : producers) {
-            producer.close();
+    public synchronized void close() throws Exception {
+        AdminClient ownedAdmin = admin;
+        PulsarClient ownedClient = client;
+        admin = null;
+        client = null;
+
+        Exception failure = closeResource(ownedAdmin, null);
+        failure = closeResource(ownedClient, failure);
+        if (failure != null) {
+            throw failure;
         }
-        for (BenchmarkConsumer consumer : consumers) {
-            consumer.close();
+    }
+
+    private static void closeAfterFailure(AutoCloseable resource, Exception failure) {
+        closeResource(resource, failure);
+    }
+
+    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception closeFailure) {
+                if (closeFailure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                if (failure == null) {
+                    return closeFailure;
+                }
+                if (failure != closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
         }
-        admin.close();
-        if (client != null) {
-            client.close();
-        }
+        return failure;
     }
 
     private PulsarClient getPulsarClient(String serviceUrl) throws PulsarClientException {

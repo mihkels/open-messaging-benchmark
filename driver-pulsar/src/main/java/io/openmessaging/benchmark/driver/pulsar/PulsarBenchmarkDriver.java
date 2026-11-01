@@ -13,31 +13,31 @@
  */
 package io.openmessaging.benchmark.driver.pulsar;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig.PersistenceConfiguration;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarConfig;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminBuilder;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.admin.PulsarAdminException.ConflictException;
 import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
+import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.ProducerBuilder;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.Schema;
@@ -57,17 +57,16 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 @SuppressWarnings("unused")
 public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
-    private PulsarClient client;
-    private PulsarAdmin adminClient;
+    private volatile PulsarClient client;
+    private volatile PulsarAdmin adminClient;
 
     private PulsarConfig config;
 
     private String namespace;
-    private ProducerBuilder<byte[]> producerBuilder;
+    private volatile ProducerBuilder<byte[]> producerBuilder;
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         this.config = readConfig(configurationFile);
         log.info("Pulsar driver configuration: {}", writer.writeValueAsString(config));
 
@@ -106,81 +105,87 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                     config.client.authentication.plugin, config.client.authentication.data);
         }
 
-        client = clientBuilder.build();
-
-        log.info("Created Pulsar client for service URL {}", config.client.serviceUrl);
-
-        adminClient = pulsarAdminBuilder.build();
-
-        log.info("Created Pulsar admin client for HTTP URL {}", config.client.httpUrl);
-
-        producerBuilder =
-                client
-                        .newProducer()
-                        .enableBatching(config.producer.batchingEnabled)
-                        .batchingMaxPublishDelay(
-                                config.producer.batchingMaxPublishDelayMs, TimeUnit.MILLISECONDS)
-                        .batchingMaxMessages(Integer.MAX_VALUE)
-                        .batchingMaxBytes(config.producer.batchingMaxBytes)
-                        .blockIfQueueFull(config.producer.blockIfQueueFull)
-                        .sendTimeout(0, TimeUnit.MILLISECONDS)
-                        .maxPendingMessages(config.producer.pendingQueueSize);
-
         try {
-            // Create namespace and set the configuration
-            String tenant = config.client.namespacePrefix.split("/")[0];
-            String cluster = config.client.clusterName;
-            if (!adminClient.tenants().getTenants().contains(tenant)) {
-                try {
-                    adminClient
-                            .tenants()
-                            .createTenant(
-                                    tenant,
-                                    TenantInfo.builder()
-                                            .adminRoles(Collections.emptySet())
-                                            .allowedClusters(Collections.singleton(cluster))
-                                            .build());
-                } catch (ConflictException e) {
-                    // Ignore. This can happen when multiple workers are initializing at the same time
-                } catch (PulsarAdminException e) {
-                    // Some metadata stores report the concurrent creation as a server error instead of
-                    // a conflict, so only fail when the tenant really does not exist
-                    if (!adminClient.tenants().getTenants().contains(tenant)) {
-                        throw e;
+            client = clientBuilder.build();
+
+            log.info("Created Pulsar client for service URL {}", config.client.serviceUrl);
+
+            adminClient = pulsarAdminBuilder.build();
+
+            log.info("Created Pulsar admin client for HTTP URL {}", config.client.httpUrl);
+
+            producerBuilder =
+                    client
+                            .newProducer()
+                            .enableBatching(config.producer.batchingEnabled)
+                            .batchingMaxPublishDelay(
+                                    config.producer.batchingMaxPublishDelayMs, TimeUnit.MILLISECONDS)
+                            .batchingMaxMessages(Integer.MAX_VALUE)
+                            .batchingMaxBytes(config.producer.batchingMaxBytes)
+                            .blockIfQueueFull(config.producer.blockIfQueueFull)
+                            .sendTimeout(0, TimeUnit.MILLISECONDS)
+                            .maxPendingMessages(config.producer.pendingQueueSize);
+
+            try {
+                // Create namespace and set the configuration
+                String tenant = config.client.namespacePrefix.split("/")[0];
+                String cluster = config.client.clusterName;
+                if (!adminClient.tenants().getTenants().contains(tenant)) {
+                    try {
+                        adminClient
+                                .tenants()
+                                .createTenant(
+                                        tenant,
+                                        TenantInfo.builder()
+                                                .adminRoles(Collections.emptySet())
+                                                .allowedClusters(Collections.singleton(cluster))
+                                                .build());
+                    } catch (ConflictException e) {
+                        // Ignore. This can happen when multiple workers are initializing at the same time
+                    } catch (PulsarAdminException e) {
+                        // Some metadata stores report the concurrent creation as a server error instead of
+                        // a conflict, so only fail when the tenant really does not exist
+                        if (!adminClient.tenants().getTenants().contains(tenant)) {
+                            throw e;
+                        }
                     }
                 }
+                log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);
+
+                this.namespace = config.client.namespacePrefix + "-" + getRandomString();
+                adminClient.namespaces().createNamespace(namespace);
+                log.info("Created Pulsar namespace {}", namespace);
+
+                PersistenceConfiguration p = config.client.persistence;
+                adminClient
+                        .namespaces()
+                        .setPersistence(
+                                namespace,
+                                new PersistencePolicies(p.ensembleSize, p.writeQuorum, p.ackQuorum, 1.0));
+
+                adminClient
+                        .namespaces()
+                        .setBacklogQuota(
+                                namespace,
+                                BacklogQuota.builder()
+                                        .limitSize(-1L)
+                                        .limitTime(-1)
+                                        .retentionPolicy(RetentionPolicy.producer_exception)
+                                        .build());
+                adminClient.namespaces().setDeduplicationStatus(namespace, p.deduplicationEnabled);
+                log.info(
+                        "Applied persistence configuration for namespace {}/{}/{}: {}",
+                        tenant,
+                        cluster,
+                        namespace,
+                        writer.writeValueAsString(p));
+
+            } catch (PulsarAdminException e) {
+                throw new IOException(e);
             }
-            log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);
-
-            this.namespace = config.client.namespacePrefix + "-" + getRandomString();
-            adminClient.namespaces().createNamespace(namespace);
-            log.info("Created Pulsar namespace {}", namespace);
-
-            PersistenceConfiguration p = config.client.persistence;
-            adminClient
-                    .namespaces()
-                    .setPersistence(
-                            namespace, new PersistencePolicies(p.ensembleSize, p.writeQuorum, p.ackQuorum, 1.0));
-
-            adminClient
-                    .namespaces()
-                    .setBacklogQuota(
-                            namespace,
-                            BacklogQuota.builder()
-                                    .limitSize(-1L)
-                                    .limitTime(-1)
-                                    .retentionPolicy(RetentionPolicy.producer_exception)
-                                    .build());
-            adminClient.namespaces().setDeduplicationStatus(namespace, p.deduplicationEnabled);
-            log.info(
-                    "Applied persistence configuration for namespace {}/{}/{}: {}",
-                    tenant,
-                    cluster,
-                    namespace,
-                    writer.writeValueAsString(p));
-
-        } catch (PulsarAdminException e) {
-            throw new IOException(e);
+        } catch (IOException | RuntimeException failure) {
+            closeClients(failure);
+            throw failure;
         }
     }
 
@@ -191,35 +196,40 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        if (partitions == 1) {
-            // No-op
-            return CompletableFuture.completedFuture(null);
+        try {
+            if (partitions == 1) {
+                // No-op
+                return CompletableFuture.completedFuture(null);
+            }
+            return adminClient.topics().createPartitionedTopicAsync(topic, partitions);
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
         }
-
-        return adminClient.topics().createPartitionedTopicAsync(topic, partitions);
     }
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        return producerBuilder.topic(topic).createAsync().thenApply(PulsarBenchmarkProducer::new);
+        try {
+            return ResourceCreator.<String, Producer<byte[]>, BenchmarkProducer>compose(
+                    CompletableFuture.completedFuture(List.of(topic)),
+                    name -> producerBuilder.clone().topic(name).createAsync(),
+                    producers -> new PulsarBenchmarkProducer(producers.getFirst()));
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        List<CompletableFuture<Consumer<ByteBuffer>>> futures = new ArrayList<>();
-        return client
-                .getPartitionsForTopic(topic, true)
-                .thenCompose(
-                        partitions -> {
-                            partitions.forEach(
-                                    p -> futures.add(createInternalConsumer(p, subscriptionName, consumerCallback)));
-                            return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
-                        })
-                .thenApply(
-                        __ ->
-                                new PulsarBenchmarkConsumer(
-                                        futures.stream().map(CompletableFuture::join).collect(Collectors.toList())));
+        try {
+            return ResourceCreator.<String, Consumer<ByteBuffer>, BenchmarkConsumer>compose(
+                    client.getPartitionsForTopic(topic, true),
+                    partition -> createInternalConsumer(partition, subscriptionName, consumerCallback),
+                    PulsarBenchmarkConsumer::new);
+        } catch (RuntimeException failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
     }
 
     CompletableFuture<Consumer<ByteBuffer>> createInternalConsumer(
@@ -249,15 +259,45 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     public void close() throws Exception {
         log.info("Shutting down Pulsar benchmark driver");
 
-        if (client != null) {
-            client.close();
-        }
-
-        if (adminClient != null) {
-            adminClient.close();
+        Exception failure = closeClients(null);
+        if (failure != null) {
+            throw failure;
         }
 
         log.info("Pulsar benchmark driver successfully shut down");
+    }
+
+    private Exception closeClients(Exception failure) {
+        PulsarClient clientToClose;
+        PulsarAdmin adminToClose;
+        synchronized (this) {
+            clientToClose = client;
+            adminToClose = adminClient;
+            client = null;
+            adminClient = null;
+            producerBuilder = null;
+        }
+        failure = closeResource(clientToClose, failure);
+        return closeResource(adminToClose, failure);
+    }
+
+    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception closeFailure) {
+                if (closeFailure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                if (failure == null) {
+                    return closeFailure;
+                }
+                if (failure != closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
+        }
+        return failure;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -267,7 +307,9 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static PulsarConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        try (var input = Files.newInputStream(configurationFile)) {
+            return reader.readValue(input);
+        }
     }
 
     private static final Random random = new Random();

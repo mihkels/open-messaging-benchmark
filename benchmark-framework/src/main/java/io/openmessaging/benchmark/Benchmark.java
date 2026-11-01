@@ -29,6 +29,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,58 +171,135 @@ public final class Benchmark {
             log.info("Using local driver process worker");
         }
 
-        workloads.forEach(
-                (workloadName, workload) ->
-                        arguments.drivers.forEach(
-                                driverConfig -> {
-                                    try {
-                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-                                        File driverConfigFile = new File(driverConfig);
-                                        DriverConfiguration driverConfiguration =
-                                                driverConfigurationReader.readValue(driverConfigFile);
-                                        log.info(
-                                                "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
-                                                workload.name,
-                                                driverConfiguration.name);
+        runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+    }
 
-                                        // Stop any leftover workload
-                                        worker.stopAll();
+    static void runWorkloads(
+            Arguments arguments,
+            Map<String, Workload> workloads,
+            Worker worker,
+            GeneratorFactory generatorFactory)
+            throws Exception {
+        Throwable failures = null;
+        boolean safeToContinue = true;
+        try {
+            try {
+                worker.stopAll();
+            } catch (Throwable e) {
+                failures = append(failures, e);
+                safeToContinue = canContinueAfterFailure(worker, null, e);
+                log.error("Failed to stop a previous workload", e);
+            }
 
-                                        var driverLocation =
-                                                arguments.legacyDriverName != null
-                                                        ? Path.of(arguments.legacyDriverName)
-                                                        : null;
+            combinations:
+            for (Map.Entry<String, Workload> entry : workloads.entrySet()) {
+                for (String driverConfig : arguments.drivers) {
+                    if (!safeToContinue) {
+                        log.error("Skipping remaining workloads because worker cleanup failed");
+                        break combinations;
+                    }
 
-                                        worker.initializeDriver(Path.of(driverConfig), driverLocation);
-                                        var generator =
-                                                new WorkloadGenerator(driverConfiguration.name, workload, worker);
-                                        var result = generator.run();
-                                        var useOutput = (arguments.output != null) && (!arguments.output.isEmpty());
-                                        var fileName =
-                                                useOutput
-                                                        ? arguments.output
-                                                        : String.format(
-                                                                "%s-%s-%s.json",
-                                                                workloadName,
-                                                                driverConfiguration.name,
-                                                                dateFormat.format(new Date()));
+                    Workload workload = entry.getValue();
+                    WorkloadRun generator = null;
+                    Throwable runFailure = null;
+                    try {
+                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+                        DriverConfiguration driverConfiguration =
+                                driverConfigurationReader.readValue(new File(driverConfig));
+                        log.info(
+                                "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
+                                workload.name,
+                                driverConfiguration.name);
+                        Path driverLocation =
+                                arguments.legacyDriverName != null ? Path.of(arguments.legacyDriverName) : null;
+                        worker.initializeDriver(Path.of(driverConfig), driverLocation);
+                        generator =
+                                Objects.requireNonNull(
+                                        generatorFactory.create(driverConfiguration.name, workload, worker));
+                        TestResult result = generator.run();
+                        boolean useOutput = arguments.output != null && !arguments.output.isEmpty();
+                        String timestamp = dateFormat.format(new Date());
+                        String fileName =
+                                useOutput
+                                        ? arguments.output
+                                        : String.format(
+                                                "%s-%s-%s.json", entry.getKey(), driverConfiguration.name, timestamp);
+                        log.info("Writing test result into {}", fileName);
+                        writer.writeValue(new File(fileName), result);
+                    } catch (Throwable e) {
+                        runFailure = e;
+                        if (e instanceof Error) {
+                            safeToContinue = false;
+                        }
+                    } finally {
+                        try {
+                            if (generator == null) {
+                                worker.stopAll();
+                            } else {
+                                generator.close();
+                            }
+                        } catch (Throwable e) {
+                            runFailure = append(runFailure, e);
+                            safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
+                        }
+                    }
+                    if (Thread.currentThread().isInterrupted()) {
+                        safeToContinue = false;
+                    }
+                    if (runFailure != null) {
+                        log.error(
+                                "Failed to run the workload '{}' for driver '{}'",
+                                workload.name,
+                                driverConfig,
+                                runFailure);
+                        failures = append(failures, runFailure);
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            failures = append(failures, e);
+            log.error("Failed to execute benchmark workloads", e);
+        } finally {
+            try {
+                worker.close();
+            } catch (Throwable e) {
+                log.error("Failed to close benchmark worker", e);
+                failures = append(failures, e);
+            }
+        }
+        if (failures != null) {
+            throw new IllegalStateException(
+                    "One or more workloads or required cleanup operations failed", failures);
+        }
+    }
 
-                                        log.info("Writing test result into {}", fileName);
-                                        writer.writeValue(new File(fileName), result);
+    @FunctionalInterface
+    interface GeneratorFactory {
+        WorkloadRun create(String driverName, Workload workload, Worker worker);
+    }
 
-                                        generator.close();
-                                    } catch (Exception e) {
-                                        log.error(
-                                                "Failed to run the workload '{}' for driver '{}'",
-                                                workload.name,
-                                                driverConfig,
-                                                e);
-                                    } finally {
-                                        worker.stopAll();
-                                    }
-                                }));
+    private static boolean canContinueAfterFailure(
+            Worker worker, WorkloadRun generator, Throwable failure) {
+        if (failure instanceof Error) {
+            return false;
+        }
+        try {
+            return worker.canReuseAfterFailure()
+                    && (generator == null || generator.isQuiescentAfterClose());
+        } catch (Throwable checkFailure) {
+            append(failure, checkFailure);
+            return false;
+        }
+    }
 
-        worker.close();
+    private static Throwable append(Throwable primary, Throwable next) {
+        if (primary == null) {
+            return next;
+        }
+        if (next != null && primary != next) {
+            primary.addSuppressed(next);
+        }
+        return primary;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

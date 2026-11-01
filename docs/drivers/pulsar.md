@@ -217,13 +217,18 @@ of the underlying settings, see the
   compares producer and consumer host clocks; see
   [Latency and backlog](../methodology/latency-and-backlog.md).
 - **Durability.** A send completes when the broker acknowledges it. For persistent topics, the broker
-  acknowledges after `ackQuorum` bookies have acknowledged the entry.
+  acknowledges after `ackQuorum` bookies have acknowledged the entry. The driver copies the payload
+  for each send so that cancellation cannot expose a caller-owned buffer to a pending write.
 - **Backlog workloads.** For `consumerBacklogSizeGB`, the benchmark framework blocks the consumer
   callback; the driver has no Pulsar-specific pause. The namespace backlog quota is unlimited, so a
   quota does not block producers.
-- **Cleanup.** The driver closes the client and the admin client. It does not delete topics,
-  subscriptions or namespaces, so each run leaves new namespaces under the tenant. Remove them with
-  `pulsar-admin` if needed.
+- **Cleanup.** The worker closes producer and consumer handles; the driver closes the shared client
+  and admin client. Partial or late producer and partition-consumer creations are closed on failure
+  or cancellation. Any send still pending after producer close fails instead of remaining unresolved,
+  including when close itself fails.
+  Closing a producer from its own completion callback is rejected and may be retried after the
+  callback returns. The driver does not delete topics, subscriptions or namespaces, so each run
+  leaves new namespaces under the tenant. Remove them with `pulsar-admin` if needed.
 
 ### What `pulsar-effectively-once.yaml` configures
 

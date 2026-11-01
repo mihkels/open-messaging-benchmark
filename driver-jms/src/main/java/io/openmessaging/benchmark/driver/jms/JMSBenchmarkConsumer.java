@@ -40,8 +40,8 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     /**
-     * Factory method to create JMSBenchmarkConsumer safely. This method handles all the
-     * exception-throwing initialization logic.
+     * Creates and starts a JMS consumer. The caller retains ownership of the supplied resources until
+     * this method succeeds and must close them if initialization fails.
      *
      * @param connection the JMS connection
      * @param session the JMS session
@@ -59,42 +59,19 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
             boolean useGetBody)
             throws Exception {
 
-        try {
-            consumer.setMessageListener(
-                    message -> {
-                        try {
-                            byte[] payload = getPayload(message, useGetBody);
-                            callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
-                            message.acknowledge();
-                        } catch (Throwable e) {
-                            log.warn("Failed to acknowledge message", e);
-                        }
-                    });
-            // Kafka JMS client does not allow you to add a listener after the connection has been started
-            connection.start();
-
-            // Create the consumer instance only after all operations succeed
-            return new JMSBenchmarkConsumer(connection, session, consumer, useGetBody);
-
-        } catch (Exception e) {
-            // Clean up resources if initialization fails
-            try {
-                consumer.close();
-            } catch (Exception closeException) {
-                log.warn("Failed to close consumer during cleanup", closeException);
-            }
-            try {
-                session.close();
-            } catch (Exception closeException) {
-                log.warn("Failed to close session during cleanup", closeException);
-            }
-            try {
-                connection.close();
-            } catch (Exception closeException) {
-                log.warn("Failed to close connection during cleanup", closeException);
-            }
-            throw e;
-        }
+        consumer.setMessageListener(
+                message -> {
+                    try {
+                        byte[] payload = getPayload(message, useGetBody);
+                        callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
+                        message.acknowledge();
+                    } catch (Throwable e) {
+                        log.warn("Failed to acknowledge message", e);
+                    }
+                });
+        // Kafka JMS client does not allow you to add a listener after the connection has been started.
+        connection.start();
+        return new JMSBenchmarkConsumer(connection, session, consumer, useGetBody);
     }
 
     @Override

@@ -38,7 +38,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -89,8 +92,11 @@ public class ProcessWorker implements Worker {
     private final Thread shutdownHook;
 
     private volatile boolean closed;
+    private volatile boolean unusable;
+    private volatile boolean initializing;
     private volatile Process process;
-    private HttpWorkerClient client;
+    private Process reportedCrash;
+    private volatile HttpWorkerClient client;
     private volatile Path workDir;
     private String endpoint;
     private String driverDescription;
@@ -115,6 +121,9 @@ public class ProcessWorker implements Worker {
     public synchronized void initializeDriver(Path driverConfigFile, Path driverLocation)
             throws Exception {
         ensureOpen();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("Interrupted before driver initialization");
+        }
         terminate();
 
         Map<String, Object> config;
@@ -147,17 +156,32 @@ public class ProcessWorker implements Worker {
                                 .collect(Collectors.joining(", "));
         log.info("Starting driver process for {}", driverDescription);
 
+        initializing = true;
         try {
             start(classpath.entries());
             client.initializeDriverFromLocalPath(driverConfigFile);
-        } catch (InterruptedException e) {
-            terminate();
-            throw e;
         } catch (Exception e) {
             String failure = describeFailure(e, process);
-            terminate();
+            if (client != null && process != null && process.isAlive() && !closed) {
+                try {
+                    client.stopAll();
+                } catch (Throwable cleanup) {
+                    e.addSuppressed(cleanup);
+                }
+            }
+            try {
+                terminate();
+            } catch (Throwable cleanup) {
+                e.addSuppressed(cleanup);
+            }
+            if (e instanceof InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw interrupted;
+            }
             throw new IllegalStateException(
                     "Failed to initialize driver " + driverDescription + ": " + failure, e);
+        } finally {
+            initializing = false;
         }
     }
 
@@ -195,8 +219,9 @@ public class ProcessWorker implements Worker {
         builder.environment().remove("CLASSPATH");
         log.debug("Driver process classpath: {}", classpath);
         process = builder.start();
+        reportedCrash = null;
         if (closed) {
-            closeDriverInput(process);
+            process.getOutputStream().close();
             ensureOpen();
         }
 
@@ -239,6 +264,9 @@ public class ProcessWorker implements Worker {
     private void ensureOpen() {
         if (closed) {
             throw new IllegalStateException("Cannot initialize a closed ProcessWorker");
+        }
+        if (unusable) {
+            throw new IllegalStateException("Cannot reuse a ProcessWorker whose cleanup failed");
         }
     }
 
@@ -321,6 +349,7 @@ public class ProcessWorker implements Worker {
                 return "";
             }
             if (!process.isAlive()) {
+                reportedCrash = process;
                 throw new IllegalStateException(
                         "Driver process for " + driverDescription + " exited with code " + process.exitValue());
             }
@@ -356,6 +385,7 @@ public class ProcessWorker implements Worker {
                 throw new IllegalStateException("No driver process is running; initialize a driver first");
             }
             if (!process.isAlive()) {
+                reportedCrash = process;
                 throw new IllegalStateException(
                         "Driver process for " + driverDescription + " exited with code " + process.exitValue());
             }
@@ -365,6 +395,11 @@ public class ProcessWorker implements Worker {
         } catch (IOException | RuntimeException e) {
             // A failed call is often the first sign of a crashed process; give it time to be reaped
             if (awaitExit(currentProcess, CRASH_DETECTION_TIMEOUT)) {
+                synchronized (this) {
+                    if (process == currentProcess) {
+                        reportedCrash = currentProcess;
+                    }
+                }
                 throw new IllegalStateException(
                         "Driver process for " + description + " exited with code " + currentProcess.exitValue(),
                         e);
@@ -482,18 +517,33 @@ public class ProcessWorker implements Worker {
         HttpWorkerClient current;
         Process currentProcess;
         String description;
+        boolean crashAlreadyReported;
         synchronized (this) {
             current = client;
             currentProcess = process;
             description = driverDescription;
-            if (current == null || !currentProcess.isAlive()) {
+            if (current == null) {
                 return;
             }
+            crashAlreadyReported = !currentProcess.isAlive() && currentProcess == reportedCrash;
+        }
+        if (crashAlreadyReported) {
+            terminate();
+            return;
         }
         try {
-            current.stopAll();
-        } catch (RuntimeException e) {
-            log.warn("Failed to stop driver {}: {}", description, describeFailure(e, currentProcess));
+            run(HttpWorkerClient::stopAll);
+        } catch (IOException | RuntimeException e) {
+            IllegalStateException failure =
+                    new IllegalStateException(
+                            "Failed to stop driver " + description + ": " + describeFailure(e, currentProcess),
+                            e);
+            try {
+                terminate();
+            } catch (Throwable cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
         }
     }
 
@@ -503,37 +553,70 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
+    public synchronized boolean canReuseAfterFailure() {
+        return !closed && !unusable && process == null && client == null && workDir == null;
+    }
+
+    @Override
     public void close() {
         closed = true;
+        Throwable failure = null;
+        if (!initializing && client != null) {
+            try {
+                stopAll();
+            } catch (Throwable t) {
+                failure = append(failure, t);
+            }
+        }
         Process current = process;
         if (current != null) {
-            closeDriverInput(current);
+            try {
+                current.getOutputStream().close();
+            } catch (IOException e) {
+                failure = append(failure, e);
+            }
         }
-        terminate();
+        try {
+            terminate();
+        } catch (Throwable t) {
+            failure = append(failure, t);
+        }
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
         } catch (IllegalStateException e) {
             // JVM is already shutting down
+        } catch (Throwable t) {
+            failure = append(failure, t);
+        }
+        if (failure != null) {
+            throw new IllegalStateException("Failed to close ProcessWorker", failure);
         }
     }
 
-    private static void deleteQuietly(Path path) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            log.debug("Failed to delete {}", path, e);
+    private static void deleteWorkDir(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
         }
-    }
-
-    private static void deleteWorkDir(Path directory) {
+        IOException failure = null;
         try (Stream<Path> files = Files.walk(directory)) {
-            files.sorted(Comparator.reverseOrder()).forEach(ProcessWorker::deleteQuietly);
-        } catch (IOException e) {
-            log.debug("Failed to delete {}", directory, e);
+            for (Path path : files.sorted(Comparator.reverseOrder()).toList()) {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    if (failure == null) {
+                        failure = e;
+                    } else {
+                        failure.addSuppressed(e);
+                    }
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 
-    private static void closeDriverInput(Process current) {
+    private static void closeDriverInputQuietly(Process current) {
         try {
             current.getOutputStream().close();
         } catch (IOException e) {
@@ -548,11 +631,11 @@ public class ProcessWorker implements Worker {
         Path directory = workDir;
         if (current == null) {
             if (directory != null) {
-                deleteWorkDir(directory);
+                deleteWorkDirQuietly(directory);
             }
             return;
         }
-        closeDriverInput(current);
+        closeDriverInputQuietly(current);
         try {
             if (!current.waitFor(5, TimeUnit.SECONDS)) {
                 log.warn("Driver process {} did not stop during shutdown, killing it", current.pid());
@@ -566,40 +649,133 @@ public class ProcessWorker implements Worker {
             Thread.currentThread().interrupt();
         }
         if (!current.isAlive() && directory != null) {
+            deleteWorkDirQuietly(directory);
+        }
+    }
+
+    private static void deleteWorkDirQuietly(Path directory) {
+        try {
             deleteWorkDir(directory);
+        } catch (IOException e) {
+            log.warn("Failed to delete driver work directory {}", directory, e);
         }
     }
 
     private synchronized void terminate() {
+        Throwable failure = null;
+        boolean interrupted = Thread.interrupted();
+        if (interrupted) {
+            failure = new InterruptedException("Interrupted before terminating driver process");
+        }
         if (client != null) {
-            try {
-                client.close();
-            } catch (Exception e) {
-                log.debug("Failed to close driver client", e);
-            }
+            HttpWorkerClient closing = client;
             client = null;
+            FutureTask<Void> closeTask =
+                    new FutureTask<>(
+                            () -> {
+                                closing.close();
+                                return null;
+                            });
+            Thread closeThread = Thread.ofVirtual().name("process-worker-client-close").start(closeTask);
+            try {
+                closeThread.join(TimeUnit.SECONDS.toMillis(10));
+                if (closeThread.isAlive()) {
+                    closeThread.interrupt();
+                    failure = append(failure, new TimeoutException("Driver HTTP client did not close"));
+                } else {
+                    closeTask.get();
+                }
+            } catch (InterruptedException e) {
+                interrupted = true;
+                closeThread.interrupt();
+                failure = append(failure, e);
+            } catch (ExecutionException e) {
+                failure = append(failure, e.getCause());
+            }
         }
         if (process != null) {
-            closeDriverInput(process);
+            Process closing = process;
+            boolean wasAlive = closing.isAlive();
             try {
-                if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                    process.destroy();
-                    if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                        log.warn("Driver process {} did not stop, killing it", process.pid());
-                        process.destroyForcibly();
-                        process.waitFor(10, TimeUnit.SECONDS);
+                closing.getOutputStream().close();
+            } catch (IOException e) {
+                failure = append(failure, e);
+            }
+            try {
+                if (!closing.waitFor(10, TimeUnit.SECONDS)) {
+                    failure =
+                            append(
+                                    failure,
+                                    new TimeoutException("Driver process " + closing.pid() + " did not stop"));
+                    closing.destroy();
+                    if (!closing.waitFor(5, TimeUnit.SECONDS)) {
+                        closing.destroyForcibly();
+                        if (!closing.waitFor(5, TimeUnit.SECONDS)) {
+                            String message =
+                                    "Driver process " + closing.pid() + " did not exit after being killed";
+                            failure = append(failure, new TimeoutException(message));
+                        }
                     }
                 }
             } catch (InterruptedException e) {
-                process.destroyForcibly();
-                Thread.currentThread().interrupt();
+                interrupted = true;
+                failure = append(failure, e);
+                closing.destroyForcibly();
+                try {
+                    if (!closing.waitFor(5, TimeUnit.SECONDS)) {
+                        failure =
+                                append(
+                                        failure,
+                                        new TimeoutException(
+                                                "Interrupted driver process did not exit after being killed"));
+                    }
+                } catch (InterruptedException second) {
+                    failure = append(failure, second);
+                }
             }
-            process = null;
+            if (!closing.isAlive()) {
+                if (wasAlive && closing.exitValue() != 0) {
+                    failure =
+                            append(
+                                    failure,
+                                    new IllegalStateException(
+                                            "Driver process "
+                                                    + closing.pid()
+                                                    + " exited with code "
+                                                    + closing.exitValue()));
+                }
+                process = null;
+            } else {
+                unusable = true;
+            }
         }
         endpoint = null;
-        if (workDir != null) {
-            deleteWorkDir(workDir);
-            workDir = null;
+        if (workDir != null && process == null) {
+            try {
+                deleteWorkDir(workDir);
+                workDir = null;
+            } catch (IOException e) {
+                failure = append(failure, e);
+            }
         }
+        if (failure != null) {
+            unusable = true;
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (failure != null) {
+            throw new IllegalStateException("Failed to terminate driver process", failure);
+        }
+    }
+
+    private static Throwable append(Throwable primary, Throwable next) {
+        if (primary == null) {
+            return next;
+        }
+        if (next != null && primary != next) {
+            primary.addSuppressed(next);
+        }
+        return primary;
     }
 }

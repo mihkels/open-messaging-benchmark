@@ -165,12 +165,30 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void stopAll() {
-        workers.parallelStream().forEach(Worker::stopAll);
+        List<Throwable> failures =
+                workers.parallelStream()
+                        .map(
+                                worker -> {
+                                    try {
+                                        worker.stopAll();
+                                        return (Throwable) null;
+                                    } catch (Throwable t) {
+                                        return t;
+                                    }
+                                })
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+        throwIfAny("Failed to stop one or more workers", failures);
     }
 
     @Override
     public String id() {
         return "Ensemble[" + workers.stream().map(Worker::id).collect(joining(",")) + "]";
+    }
+
+    @Override
+    public boolean canReuseAfterFailure() {
+        return workers.stream().allMatch(Worker::canReuseAfterFailure);
     }
 
     @Override
@@ -279,13 +297,32 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void close() throws Exception {
-        Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        List<Throwable> failures = new java.util.ArrayList<>();
+        try {
+            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        } catch (IllegalStateException e) {
+            // JVM shutdown is already in progress.
+        } catch (Throwable t) {
+            failures.add(t);
+        }
         for (Worker w : workers) {
             try {
                 w.close();
-            } catch (Exception ignored) {
-                log.trace("Ignored error while closing worker {}", w, ignored);
+            } catch (Throwable t) {
+                failures.add(t);
             }
+        }
+        throwIfAny("Failed to close one or more workers", failures);
+    }
+
+    private static void throwIfAny(String message, List<Throwable> failures) {
+        if (!failures.isEmpty()) {
+            Throwable primary = failures.getFirst();
+            failures.stream()
+                    .skip(1)
+                    .filter(failure -> failure != primary)
+                    .forEach(primary::addSuppressed);
+            throw new IllegalStateException(message, primary);
         }
     }
 

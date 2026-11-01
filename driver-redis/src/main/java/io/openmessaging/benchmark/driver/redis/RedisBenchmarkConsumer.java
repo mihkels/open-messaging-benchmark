@@ -17,14 +17,17 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -33,7 +36,7 @@ import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.params.XReadGroupParams;
 import redis.clients.jedis.resps.StreamEntryBinary;
 
-public class RedisBenchmarkConsumer implements BenchmarkConsumer {
+public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkConsumer.class);
     private static final byte[] PAYLOAD_FIELD = "payload".getBytes(UTF_8);
 
@@ -41,7 +44,9 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private final String subscriptionName;
     private final ExecutorService executor;
     private final Future<?> consumerTask;
+    private final long closeTimeoutNanos;
     private volatile boolean closing = false;
+    private volatile Thread consumerThread;
 
     public RedisBenchmarkConsumer(
             final String consumerId,
@@ -49,8 +54,22 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
             final String subscriptionName,
             final JedisPool pool,
             ConsumerCallback consumerCallback) {
+        this(consumerId, topic, subscriptionName, pool, consumerCallback, Duration.ofSeconds(5));
+    }
+
+    RedisBenchmarkConsumer(
+            final String consumerId,
+            final String topic,
+            final String subscriptionName,
+            final JedisPool pool,
+            ConsumerCallback consumerCallback,
+            Duration closeTimeout) {
         this.topic = topic;
         this.subscriptionName = subscriptionName;
+        this.closeTimeoutNanos = closeTimeout.toNanos();
+        if (closeTimeoutNanos <= 0) {
+            throw new IllegalArgumentException("Consumer close timeout must be positive");
+        }
         this.executor = Executors.newSingleThreadExecutor();
         byte[] groupName = subscriptionName.getBytes(UTF_8);
         byte[] consumerName = consumerId.getBytes(UTF_8);
@@ -60,6 +79,7 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
         this.consumerTask =
                 this.executor.submit(
                         () -> {
+                            consumerThread = Thread.currentThread();
                             while (!closing) {
                                 // Get a fresh Jedis connection from the pool for each iteration
                                 try (Jedis jedis = pool.getResource()) {
@@ -121,33 +141,65 @@ public class RedisBenchmarkConsumer implements BenchmarkConsumer {
 
     @Override
     public void close() throws Exception {
+        if (Thread.currentThread() == consumerThread) {
+            throw new IllegalStateException("Cannot close Redis consumer from its own callback");
+        }
         log.info("Closing Redis consumer for topic '{}' subscription '{}'", topic, subscriptionName);
         closing = true;
+        consumerTask.cancel(true);
+        executor.shutdownNow();
 
-        // Cancel the consumer task immediately
-        if (consumerTask != null) {
-            consumerTask.cancel(true);
-        }
-
-        // Shutdown the executor with a timeout
-        if (executor != null) {
-            executor.shutdown();
+        boolean interrupted = Thread.interrupted();
+        Exception failure =
+                interrupted ? new InterruptedException("Interrupted before consumer close") : null;
+        long deadline = System.nanoTime() + closeTimeoutNanos;
+        boolean terminated = false;
+        while (!terminated) {
             try {
-                if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
-                    log.warn("Executor did not terminate in time, forcing shutdown");
-                    executor.shutdownNow();
-                    // Wait a bit more for tasks to respond to being cancelled
-                    if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
-                        log.warn("Executor did not terminate after forced shutdown");
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0 || !executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
+                    Exception timeout = new TimeoutException("Redis consumer thread did not terminate");
+                    if (failure == null) {
+                        failure = timeout;
+                    } else {
+                        failure.addSuppressed(timeout);
                     }
+                    break;
                 }
+                terminated = true;
             } catch (InterruptedException e) {
-                log.warn("Interrupted while waiting for executor shutdown");
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
+                interrupted = true;
+                if (failure == null) {
+                    failure = e;
+                } else {
+                    failure.addSuppressed(e);
+                }
             }
         }
-
+        if (terminated && !consumerTask.isCancelled()) {
+            try {
+                consumerTask.get();
+            } catch (ExecutionException e) {
+                if (failure == null) {
+                    failure = e;
+                } else {
+                    failure.addSuppressed(e);
+                }
+            } catch (InterruptedException e) {
+                interrupted = true;
+                if (failure == null) {
+                    failure = e;
+                } else {
+                    failure.addSuppressed(e);
+                }
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (failure != null) {
+            throw failure;
+        }
         log.info("Redis consumer closed for topic '{}' subscription '{}'", topic, subscriptionName);
     }
 }

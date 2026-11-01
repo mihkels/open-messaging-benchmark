@@ -162,11 +162,17 @@ de-duplicate on the consumer side.
   each event with `System.currentTimeMillis()` and the consumer reads it back. Latency therefore
   compares producer and consumer host clocks; see
   [Latency and backlog](../methodology/latency-and-backlog.md). With `false`, the consumer reports a
-  fixed placeholder timestamp, and end-to-end latency figures are meaningless.
+  fixed placeholder timestamp, and end-to-end latency figures are meaningless. Each event uses an
+  owned buffer so pending writes and transactions cannot reuse caller-owned payloads; this adds an
+  allocation per send.
 - **Backlog workloads.** The framework blocks the consumer callback, so the reader stops reading
   until it is released.
-- **Cleanup.** When the leader's driver closes, it seals every stream it created and deletes it if
-  `deleteStreams` is true. Reader groups and the scope are not deleted.
+- **Cleanup.** Closing a non-transactional producer fails any send still pending after the writer
+  closes, including when close itself fails. Closing from that producer's own completion callback is
+  rejected and may be retried after the callback returns. When the leader's driver closes, it seals
+  every stream it created and deletes it if `deleteStreams` is true. Reader groups and the scope are
+  not deleted. Consumer close reports a timeout if the reader thread does not stop; closing from its
+  own callback is rejected and may be retried after the callback returns.
 
 ## Tuning examples
 

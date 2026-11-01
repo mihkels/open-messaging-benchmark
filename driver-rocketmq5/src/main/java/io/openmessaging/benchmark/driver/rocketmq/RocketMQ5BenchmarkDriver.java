@@ -14,7 +14,7 @@
 package io.openmessaging.benchmark.driver.rocketmq;
 
 import com.google.common.io.BaseEncoding;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -33,7 +33,6 @@ import org.apache.rocketmq.acl.common.AclClientRPCHook;
 import org.apache.rocketmq.acl.common.SessionCredentials;
 import org.apache.rocketmq.client.apis.ClientConfiguration;
 import org.apache.rocketmq.client.apis.ClientConfigurationBuilder;
-import org.apache.rocketmq.client.apis.ClientException;
 import org.apache.rocketmq.client.apis.ClientServiceProvider;
 import org.apache.rocketmq.client.apis.StaticSessionCredentialsProvider;
 import org.apache.rocketmq.client.apis.consumer.ConsumeResult;
@@ -45,6 +44,7 @@ import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.common.attribute.TopicMessageType;
+import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.exception.RemotingConnectException;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
@@ -53,8 +53,6 @@ import org.apache.rocketmq.shaded.commons.lang3.StringUtils;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
@@ -65,25 +63,37 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     private DefaultMQAdminExt rmqAdmin;
 
     @Override
-    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
+    public synchronized void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
+        RPCHook rpcHook = null;
         if (isAdminAclEnabled()) {
-            AclClientRPCHook rpcHook =
+            rpcHook =
                     new AclClientRPCHook(
                             new SessionCredentials(
                                     this.rmqClientConfig.adminAccessKey, this.rmqClientConfig.adminSecretKey));
-            this.rmqAdmin = new DefaultMQAdminExt(rpcHook);
-        } else {
-            this.rmqAdmin = new DefaultMQAdminExt();
         }
-        this.rmqAdmin.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-        this.rmqAdmin.setInstanceName("AdminInstance-" + getRandomString());
+        DefaultMQAdminExt admin = newAdmin(rpcHook);
         try {
-            this.rmqAdmin.start();
+            admin.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
+            admin.setInstanceName("AdminInstance-" + getRandomString());
+            admin.start();
         } catch (MQClientException e) {
-            log.error("Start the RocketMQ admin tool failed.");
+            shutdownAfterFailure(admin, e);
+            throw new IOException("Failed to start the RocketMQ admin tool", e);
+        } catch (RuntimeException e) {
+            shutdownAfterFailure(admin, e);
+            throw e;
         }
+        this.rmqAdmin = admin;
+    }
+
+    DefaultMQAdminExt newAdmin(RPCHook hook) {
+        return hook == null ? new DefaultMQAdminExt() : new DefaultMQAdminExt(hook);
+    }
+
+    ClientServiceProvider clientProvider() {
+        return ClientServiceProvider.loadService();
     }
 
     Map<String, Set<String>> cachedBrokerAddr = new ConcurrentHashMap<>();
@@ -153,34 +163,30 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
-
-        ClientServiceProvider provider = ClientServiceProvider.loadService();
-        ClientConfigurationBuilder builder =
-                ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
-        if (isAclEnabled()) {
-            builder.setCredentialProvider(
-                    new StaticSessionCredentialsProvider(
-                            this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
-        }
-        ClientConfiguration configuration = builder.build();
-
-        Producer rmqProducer;
         try {
-            rmqProducer =
+            ClientServiceProvider provider = clientProvider();
+            ClientConfigurationBuilder builder =
+                    ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
+            if (isAclEnabled()) {
+                builder.setCredentialProvider(
+                        new StaticSessionCredentialsProvider(
+                                this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
+            }
+            ClientConfiguration configuration = builder.build();
+            Producer rmqProducer =
                     provider
                             .newProducerBuilder()
                             .setTopics(topic)
                             .setClientConfiguration(configuration)
                             .build();
-        } catch (ClientException e) {
-            throw new RuntimeException(e);
-        }
-        if (this.rmqClientConfig.sendDelayMsg) {
-            return CompletableFuture.completedFuture(
-                    new RocketMQ5BenchmarkProducer(
-                            rmqProducer, topic, true, this.rmqClientConfig.delayTimeInSec));
-        } else {
+            if (this.rmqClientConfig.sendDelayMsg) {
+                return CompletableFuture.completedFuture(
+                        new RocketMQ5BenchmarkProducer(
+                                rmqProducer, topic, true, this.rmqClientConfig.delayTimeInSec));
+            }
             return CompletableFuture.completedFuture(new RocketMQ5BenchmarkProducer(rmqProducer, topic));
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
     }
 
@@ -206,32 +212,28 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             final String topic, final String subscriptionName, final ConsumerCallback consumerCallback) {
-        PushConsumer rmqConsumer;
-
-        // To avoid bench-tool encounter subscription relationship conflict when specifying multiple
-        // topics, let's add topic name as subscription name prefix.
-        String subPrefix;
-        if (topic.contains("%")) {
-            subPrefix = topic.split("%")[1];
-        } else {
-            subPrefix = topic;
-        }
-        String fullSubName = String.format("%s_%s", subPrefix, subscriptionName);
-        createSubscriptionGroup(fullSubName);
-
-        ClientServiceProvider provider = ClientServiceProvider.loadService();
-        ClientConfigurationBuilder builder =
-                ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
-        if (isAclEnabled()) {
-            builder.setCredentialProvider(
-                    new StaticSessionCredentialsProvider(
-                            this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
-        }
-        ClientConfiguration configuration = builder.build();
-        FilterExpression filterExpression = new FilterExpression("*", FilterExpressionType.TAG);
-
         try {
-            rmqConsumer =
+            // Prefix the group with the topic to avoid subscription relationship conflicts.
+            String subPrefix;
+            if (topic.contains("%")) {
+                subPrefix = topic.split("%")[1];
+            } else {
+                subPrefix = topic;
+            }
+            String fullSubName = String.format("%s_%s", subPrefix, subscriptionName);
+            createSubscriptionGroup(fullSubName);
+
+            ClientServiceProvider provider = clientProvider();
+            ClientConfigurationBuilder builder =
+                    ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
+            if (isAclEnabled()) {
+                builder.setCredentialProvider(
+                        new StaticSessionCredentialsProvider(
+                                this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
+            }
+            ClientConfiguration configuration = builder.build();
+            FilterExpression filterExpression = new FilterExpression("*", FilterExpressionType.TAG);
+            PushConsumer rmqConsumer =
                     provider
                             .newPushConsumerBuilder()
                             .setClientConfiguration(configuration)
@@ -247,10 +249,10 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
                                         return ConsumeResult.SUCCESS;
                                     })
                             .build();
-        } catch (ClientException e) {
-            throw new RuntimeException(e);
+            return CompletableFuture.completedFuture(new RocketMQ5BenchmarkConsumer(rmqConsumer));
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
-        return CompletableFuture.completedFuture(new RocketMQ5BenchmarkConsumer(rmqConsumer));
     }
 
     public boolean isAclEnabled() {
@@ -266,7 +268,23 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {}
+    public synchronized void close() {
+        if (rmqAdmin != null) {
+            DefaultMQAdminExt admin = rmqAdmin;
+            rmqAdmin = null;
+            admin.shutdown();
+        }
+    }
+
+    private static void shutdownAfterFailure(DefaultMQAdminExt admin, Throwable failure) {
+        try {
+            admin.shutdown();
+        } catch (RuntimeException closeFailure) {
+            if (closeFailure != failure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
+    }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
     private static final ObjectReader reader =
@@ -285,6 +303,4 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
         random.nextBytes(buffer);
         return BaseEncoding.base64Url().omitPadding().encode(buffer);
     }
-
-    private static final Logger log = LoggerFactory.getLogger(RocketMQ5BenchmarkDriver.class);
 }

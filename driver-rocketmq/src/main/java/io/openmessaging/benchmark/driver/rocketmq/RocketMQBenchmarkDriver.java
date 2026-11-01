@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.rocketmq;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
-import tools.jackson.databind.ObjectWriter;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class RocketMQBenchmarkDriver implements BenchmarkDriver {
@@ -61,9 +60,10 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     private RocketMQClientConfig rmqClientConfig;
     DefaultMQProducer rmqProducer;
     private RPCHook rpcHook;
+    private boolean closed;
 
     @Override
-    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
+    public synchronized void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
         if (isAclEnabled()) {
@@ -71,17 +71,34 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                     new AclClientRPCHook(
                             new SessionCredentials(
                                     this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
-            this.rmqAdmin = new DefaultMQAdminExt(rpcHook);
-        } else {
-            this.rmqAdmin = new DefaultMQAdminExt();
         }
-        this.rmqAdmin.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-        this.rmqAdmin.setInstanceName("AdminInstance-" + getRandomString());
+        DefaultMQAdminExt admin = newAdmin(rpcHook);
         try {
-            this.rmqAdmin.start();
+            admin.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
+            admin.setInstanceName("AdminInstance-" + getRandomString());
+            admin.start();
         } catch (MQClientException e) {
-            log.error("Start the RocketMQ admin tool failed.");
+            shutdownAfterFailure(admin::shutdown, e);
+            throw new IOException("Failed to start the RocketMQ admin tool", e);
+        } catch (RuntimeException e) {
+            shutdownAfterFailure(admin::shutdown, e);
+            throw e;
         }
+        this.rmqAdmin = admin;
+    }
+
+    DefaultMQAdminExt newAdmin(RPCHook hook) {
+        return hook == null ? new DefaultMQAdminExt() : new DefaultMQAdminExt(hook);
+    }
+
+    DefaultMQProducer newProducer(String group, RPCHook hook) {
+        return hook == null ? new DefaultMQProducer(group) : new DefaultMQProducer(group, hook);
+    }
+
+    DefaultMQPushConsumer newConsumer(String subscription, RPCHook hook) {
+        return hook == null
+                ? new DefaultMQPushConsumer(subscription)
+                : new DefaultMQPushConsumer(subscription, hook, new AllocateMessageQueueAveragely());
     }
 
     @Override
@@ -153,48 +170,51 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
+    public synchronized CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
+        if (closed) {
+            return CompletableFuture.failedFuture(new IllegalStateException("RocketMQ driver is closed"));
+        }
         if (rmqProducer == null) {
-            if (isAclEnabled()) {
-                rmqProducer = new DefaultMQProducer("ProducerGroup_" + getRandomString(), rpcHook);
-            } else {
-                rmqProducer = new DefaultMQProducer("ProducerGroup_" + getRandomString());
-            }
-            rmqProducer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-            rmqProducer.setInstanceName("ProducerInstance" + getRandomString());
-            if (null != this.rmqClientConfig.vipChannelEnabled) {
-                rmqProducer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
-            }
-            if (null != this.rmqClientConfig.maxMessageSize) {
-                rmqProducer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
-            }
-            if (null != this.rmqClientConfig.compressMsgBodyOverHowmuch) {
-                rmqProducer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
-            }
-
-            if (null != this.rmqClientConfig.autoBatch) {
-                rmqProducer.setAutoBatch(this.rmqClientConfig.autoBatch);
-            }
-            if (null != this.rmqClientConfig.batchMaxBytes) {
-                rmqProducer.batchMaxBytes(this.rmqClientConfig.batchMaxBytes);
-            }
-            if (null != this.rmqClientConfig.batchMaxDelayMs) {
-                rmqProducer.batchMaxDelayMs(this.rmqClientConfig.batchMaxDelayMs);
-            }
-            if (null != this.rmqClientConfig.totalBatchMaxBytes) {
-                rmqProducer.totalBatchMaxBytes(this.rmqClientConfig.totalBatchMaxBytes);
-            }
-            if (null != this.rmqClientConfig.enableBackpressure) {
-                rmqProducer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
-            }
-            if (null != this.rmqClientConfig.backpressureConcurrency) {
-                rmqProducer.setBackPressureForAsyncSendNum(this.rmqClientConfig.backpressureConcurrency);
-            }
-
+            DefaultMQProducer producer = null;
             try {
-                rmqProducer.start();
-            } catch (MQClientException e) {
-                log.error("Failed to start the created producer instance.", e);
+                producer = newProducer("ProducerGroup_" + getRandomString(), rpcHook);
+                producer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
+                producer.setInstanceName("ProducerInstance" + getRandomString());
+                if (null != this.rmqClientConfig.vipChannelEnabled) {
+                    producer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
+                }
+                if (null != this.rmqClientConfig.maxMessageSize) {
+                    producer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
+                }
+                if (null != this.rmqClientConfig.compressMsgBodyOverHowmuch) {
+                    producer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
+                }
+
+                if (null != this.rmqClientConfig.autoBatch) {
+                    producer.setAutoBatch(this.rmqClientConfig.autoBatch);
+                }
+                if (null != this.rmqClientConfig.batchMaxBytes) {
+                    producer.batchMaxBytes(this.rmqClientConfig.batchMaxBytes);
+                }
+                if (null != this.rmqClientConfig.batchMaxDelayMs) {
+                    producer.batchMaxDelayMs(this.rmqClientConfig.batchMaxDelayMs);
+                }
+                if (null != this.rmqClientConfig.totalBatchMaxBytes) {
+                    producer.totalBatchMaxBytes(this.rmqClientConfig.totalBatchMaxBytes);
+                }
+                if (null != this.rmqClientConfig.enableBackpressure) {
+                    producer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
+                }
+                if (null != this.rmqClientConfig.backpressureConcurrency) {
+                    producer.setBackPressureForAsyncSendNum(this.rmqClientConfig.backpressureConcurrency);
+                }
+                producer.start();
+                rmqProducer = producer;
+            } catch (Exception e) {
+                if (producer != null) {
+                    shutdownAfterFailure(producer::shutdown, e);
+                }
+                return CompletableFuture.failedFuture(e);
             }
         }
 
@@ -204,19 +224,14 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             final String topic, final String subscriptionName, final ConsumerCallback consumerCallback) {
-        DefaultMQPushConsumer rmqConsumer;
-        if (isAclEnabled()) {
-            rmqConsumer =
-                    new DefaultMQPushConsumer(subscriptionName, rpcHook, new AllocateMessageQueueAveragely());
-        } else {
-            rmqConsumer = new DefaultMQPushConsumer(subscriptionName);
-        }
-        rmqConsumer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-        rmqConsumer.setInstanceName("ConsumerInstance" + getRandomString());
-        if (null != this.rmqClientConfig.vipChannelEnabled) {
-            rmqConsumer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
-        }
+        DefaultMQPushConsumer rmqConsumer = null;
         try {
+            rmqConsumer = newConsumer(subscriptionName, rpcHook);
+            rmqConsumer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
+            rmqConsumer.setInstanceName("ConsumerInstance" + getRandomString());
+            if (null != this.rmqClientConfig.vipChannelEnabled) {
+                rmqConsumer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
+            }
             rmqConsumer.subscribe(topic, "*");
             rmqConsumer.registerMessageListener(
                     (MessageListenerConcurrently)
@@ -227,8 +242,11 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                                 return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
                             });
             rmqConsumer.start();
-        } catch (MQClientException e) {
-            log.error("Failed to create consumer instance.", e);
+        } catch (Exception e) {
+            if (rmqConsumer != null) {
+                shutdownAfterFailure(rmqConsumer::shutdown, e);
+            }
+            return CompletableFuture.failedFuture(e);
         }
 
         return CompletableFuture.completedFuture(new RocketMQBenchmarkConsumer(rmqConsumer));
@@ -240,11 +258,47 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {
-        if (this.rmqProducer != null) {
-            this.rmqProducer.shutdown();
+    public synchronized void close() {
+        if (closed) {
+            return;
         }
-        this.rmqAdmin.shutdown();
+        closed = true;
+        DefaultMQProducer producer = rmqProducer;
+        DefaultMQAdminExt admin = rmqAdmin;
+        rmqProducer = null;
+        rmqAdmin = null;
+        RuntimeException failure = null;
+        if (producer != null) {
+            try {
+                producer.shutdown();
+            } catch (RuntimeException e) {
+                failure = e;
+            }
+        }
+        if (admin != null) {
+            try {
+                admin.shutdown();
+            } catch (RuntimeException e) {
+                if (failure == null) {
+                    failure = e;
+                } else if (failure != e) {
+                    failure.addSuppressed(e);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private static void shutdownAfterFailure(Runnable shutdown, Throwable failure) {
+        try {
+            shutdown.run();
+        } catch (RuntimeException closeFailure) {
+            if (closeFailure != failure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -255,7 +309,9 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static RocketMQClientConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        try (var input = Files.newInputStream(configurationFile)) {
+            return reader.readValue(input);
+        }
     }
 
     private static final Random random = new Random();
@@ -266,6 +322,5 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Logger log = LoggerFactory.getLogger(RocketMQBenchmarkDriver.class);
 }

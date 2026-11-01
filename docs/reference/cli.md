@@ -52,8 +52,8 @@ Positional arguments are workload files.
   `--output` path. With `--output`, every combination overwrites the same file.
 - **Failures.** If a combination fails, the coordinator logs
   `Failed to run the workload '<name>' for driver '<config>'` with the cause and continues with the
-  next combination. The process exit status does not report the failure; check the log or the
-  presence of each result file.
+  next combination when it is safe to do so. The process exits with a non-zero status if any
+  combination or required cleanup fails; results from successful combinations remain available.
 - **Validation errors** such as unknown options, or `--workers` combined with `--workers-file`,
   print a message and exit with a non-zero status. `--help` also exits with a non-zero status.
 - **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.

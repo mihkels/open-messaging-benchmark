@@ -13,13 +13,14 @@
  */
 package io.openmessaging.benchmark.driver.jms;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.lang.reflect.Constructor;
 import java.nio.file.Files;
@@ -49,17 +50,17 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     private BenchmarkDriver delegateForAdminOperations;
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
+    public void initialize(Path configurationFile, MeterRegistry statsLogger)
+            throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
         log.info("JMS driver configuration: {}", writer.writeValueAsString(config));
 
-        if (config.delegateForAdminOperationsClassName != null
-                && !config.delegateForAdminOperationsClassName.isEmpty()) {
-            log.info(
-                    "Initializing Driver for Admin operations {}",
-                    config.delegateForAdminOperationsClassName);
-            try {
+        try {
+            if (config.delegateForAdminOperationsClassName != null
+                    && !config.delegateForAdminOperationsClassName.isEmpty()) {
+                log.info(
+                        "Initializing Driver for Admin operations {}",
+                        config.delegateForAdminOperationsClassName);
                 delegateForAdminOperations =
                         (BenchmarkDriver)
                                 Class.forName(
@@ -69,21 +70,24 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                                         .getConstructor()
                                         .newInstance();
                 delegateForAdminOperations.initialize(configurationFile, statsLogger);
-            } catch (Throwable e) {
-                log.error(
-                        "Cannot created delegate driver " + config.delegateForAdminOperationsClassName, e);
-                throw new IOException(e);
             }
-        }
 
-        try {
             connectionFactory = buildConnectionFactory();
             connection = connectionFactory.createConnection();
             connection.start();
-        } catch (Throwable t) {
-            log.error(
-                    "Cannot initialize connectionFactoryClassName = " + config.connectionFactoryClassName, t);
-            throw new IOException(t);
+        } catch (Exception t) {
+            try {
+                close();
+            } catch (Exception closeFailure) {
+                if (closeFailure != t) {
+                    t.addSuppressed(closeFailure);
+                }
+            }
+            if (t instanceof InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw interrupted;
+            }
+            throw new IOException("Cannot initialize JMS benchmark driver", t);
         }
     }
 
@@ -135,36 +139,38 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        Session session = null;
         try {
             if (config.sendWithTransactions) {
                 return CompletableFuture.completedFuture(
                         JMSBenchmarkTransactionProducer.create(
                                 connection, topic, config.use20api, config.properties));
             } else {
-                Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                 Destination destination = session.createTopic(topic);
                 return CompletableFuture.completedFuture(
                         JMSBenchmarkProducer.create(session, destination, config.use20api, config.properties));
             }
         } catch (Exception err) {
-            CompletableFuture<BenchmarkProducer> res = new CompletableFuture<>();
-            res.completeExceptionally(err);
-            return res;
+            closeAfterFailure(session, err);
+            return CompletableFuture.failedFuture(err);
         }
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        Connection consumerConnection = null;
+        Session session = null;
+        MessageConsumer durableConsumer = null;
         try {
             String selector =
                     config.messageSelector != null && !config.messageSelector.isEmpty()
                             ? config.messageSelector
                             : null;
-            Connection connection = connectionFactory.createConnection();
-            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            consumerConnection = connectionFactory.createConnection();
+            session = consumerConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Topic destination = session.createTopic(topic);
-            MessageConsumer durableConsumer;
             if (config.use20api) {
                 durableConsumer =
                         session.createSharedDurableConsumer(destination, subscriptionName, selector);
@@ -175,27 +181,58 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             }
             return CompletableFuture.completedFuture(
                     JMSBenchmarkConsumer.create(
-                            connection, session, durableConsumer, consumerCallback, config.use20api));
+                            consumerConnection, session, durableConsumer, consumerCallback, config.use20api));
         } catch (Exception err) {
-            CompletableFuture<BenchmarkConsumer> res = new CompletableFuture<>();
-            res.completeExceptionally(err);
-            return res;
+            closeAfterFailure(durableConsumer, err);
+            closeAfterFailure(session, err);
+            closeAfterFailure(consumerConnection, err);
+            return CompletableFuture.failedFuture(err);
         }
     }
 
     @Override
-    public void close() throws Exception {
+    public synchronized void close() throws Exception {
         log.info("Shutting down JMS benchmark driver");
+        Connection producerConnection = connection;
+        ConnectionFactory factory = connectionFactory;
+        BenchmarkDriver delegate = delegateForAdminOperations;
+        connection = null;
+        connectionFactory = null;
+        delegateForAdminOperations = null;
 
-        if (connectionFactory != null && (connectionFactory instanceof AutoCloseable)) {
-            ((AutoCloseable) connectionFactory).close();
+        Exception failure = closeResource(producerConnection, null);
+        if (factory instanceof AutoCloseable closeable) {
+            failure = closeResource(closeable, failure);
         }
+        failure = closeResource(delegate, failure);
 
+        if (failure != null) {
+            throw failure;
+        }
         log.info("JMS benchmark driver successfully shut down");
+    }
 
-        if (delegateForAdminOperations != null) {
-            delegateForAdminOperations.close();
+    private static void closeAfterFailure(AutoCloseable resource, Exception failure) {
+        closeResource(resource, failure);
+    }
+
+    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception closeFailure) {
+                if (closeFailure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                if (failure == null) {
+                    return closeFailure;
+                }
+                if (failure != closeFailure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
         }
+        return failure;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -203,7 +240,9 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             mapper.readerFor(JMSConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static JMSConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        try (InputStream input = Files.newInputStream(configurationFile)) {
+            return reader.readValue(input);
+        }
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

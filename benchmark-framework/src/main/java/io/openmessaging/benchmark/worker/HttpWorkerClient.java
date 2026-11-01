@@ -43,6 +43,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.Dsl;
 import org.asynchttpclient.Response;
@@ -51,16 +55,19 @@ import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 
-public class HttpWorkerClient implements Worker {
+public final class HttpWorkerClient implements Worker {
     private static final Logger log = LoggerFactory.getLogger(HttpWorkerClient.class);
 
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int HTTP_OK = 200;
+    private static final Duration STOP_TIMEOUT = Duration.ofMinutes(3);
+    private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
 
     private final AsyncHttpClient httpClient;
     private final String host;
+    private final long closeTimeoutNanos;
 
     public HttpWorkerClient(String host) {
         this(
@@ -72,8 +79,16 @@ public class HttpWorkerClient implements Worker {
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host) {
+        this(httpClient, host, CLOSE_TIMEOUT);
+    }
+
+    HttpWorkerClient(AsyncHttpClient httpClient, String host, Duration closeTimeout) {
         this.httpClient = httpClient;
         this.host = host;
+        this.closeTimeoutNanos = closeTimeout.toNanos();
+        if (closeTimeoutNanos <= 0) {
+            throw new IllegalArgumentException("HTTP client close timeout must be positive");
+        }
     }
 
     @Override
@@ -157,7 +172,15 @@ public class HttpWorkerClient implements Worker {
 
     @Override
     public void stopAll() {
-        sendPost(STOP_ALL);
+        httpClient
+                .preparePost(host + STOP_ALL)
+                .setBody(EMPTY_BODY)
+                .setRequestTimeout(STOP_TIMEOUT)
+                .setReadTimeout(STOP_TIMEOUT)
+                .execute()
+                .toCompletableFuture()
+                .thenAccept(response -> checkResponse("post", STOP_ALL, response))
+                .join();
     }
 
     @Override
@@ -167,7 +190,31 @@ public class HttpWorkerClient implements Worker {
 
     @Override
     public void close() throws Exception {
-        httpClient.close();
+        FutureTask<Void> task =
+                new FutureTask<>(
+                        () -> {
+                            httpClient.close();
+                            return null;
+                        });
+        Thread.ofVirtual().name("worker-http-client-close").start(task);
+        try {
+            task.get(closeTimeoutNanos, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            task.cancel(true);
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (TimeoutException e) {
+            task.cancel(true);
+            throw new IOException("Timed out closing HTTP worker client " + host, e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof Exception exception) {
+                throw exception;
+            }
+            if (e.getCause() instanceof Error error) {
+                throw error;
+            }
+            throw new IOException("Failed to close HTTP worker client " + host, e.getCause());
+        }
     }
 
     private void sendPost(String path) {

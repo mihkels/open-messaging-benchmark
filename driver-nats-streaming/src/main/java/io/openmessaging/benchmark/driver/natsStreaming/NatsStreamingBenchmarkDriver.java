@@ -15,7 +15,7 @@ package io.openmessaging.benchmark.driver.natsStreaming;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.streaming.AckHandler;
 import io.nats.streaming.Message;
 import io.nats.streaming.MessageHandler;
@@ -43,16 +43,33 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private static final String defaultClusterId = "test-cluster";
+    private final ConnectionFactory connectionFactory;
     private String clusterId;
     private NatsStreamingClientConfig config;
     private StreamingConnection natsStreamingPublisher;
     private SubscriptionOptions.Builder subBuilder = new SubscriptionOptions.Builder();
     private Options.Builder optsBuilder = new Options.Builder();
+    private volatile boolean closed;
+
+    public NatsStreamingBenchmarkDriver() {
+        this(NatsStreaming::connect);
+    }
+
+    NatsStreamingBenchmarkDriver(ConnectionFactory connectionFactory) {
+        this.connectionFactory = connectionFactory;
+    }
+
+    @FunctionalInterface
+    interface ConnectionFactory {
+        StreamingConnection connect(String clusterId, String clientId, Options options)
+                throws IOException, InterruptedException;
+    }
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
-        config = reader.readValue(Files.newInputStream(configurationFile));
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
+        try (var input = Files.newInputStream(configurationFile)) {
+            config = reader.readValue(input);
+        }
         log.info("read config file," + config.toString());
         if (config.clusterId != null) {
             clusterId = config.clusterId;
@@ -83,14 +100,22 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+    public synchronized CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        if (closed) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("NATS Streaming driver is closed"));
+        }
         if (natsStreamingPublisher == null) {
             String clientId = "ProducerInstance" + getRandomString();
             try {
-                natsStreamingPublisher = NatsStreaming.connect(clusterId, clientId, optsBuilder.build());
+                natsStreamingPublisher =
+                        connectionFactory.connect(clusterId, clientId, optsBuilder.build());
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.warn("nats streaming create producer exception", e);
-                return null;
+                return CompletableFuture.failedFuture(e);
             }
         }
 
@@ -101,11 +126,14 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        Subscription sub;
-        StreamingConnection streamingConnection;
+        if (closed) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("NATS Streaming driver is closed"));
+        }
+        StreamingConnection streamingConnection = null;
         String clientId = "ConsumerInstance" + getRandomString();
         try {
-            streamingConnection = NatsStreaming.connect(clusterId, clientId, optsBuilder.build());
+            streamingConnection = connectionFactory.connect(clusterId, clientId, optsBuilder.build());
             streamingConnection.subscribe(
                     topic,
                     subscriptionName,
@@ -119,18 +147,35 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
                     },
                     subBuilder.build());
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            if (streamingConnection != null) {
+                try {
+                    streamingConnection.close();
+                } catch (Exception closeFailure) {
+                    if (closeFailure instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    if (closeFailure != e) {
+                        e.addSuppressed(closeFailure);
+                    }
+                }
+            }
             log.warn("nats streaming create consumer exception", e);
-            return null;
+            return CompletableFuture.failedFuture(e);
         }
         return CompletableFuture.completedFuture(
                 new NatsStreamingBenchmarkConsumer(streamingConnection));
     }
 
     @Override
-    public void close() throws Exception {
+    public synchronized void close() throws Exception {
+        closed = true;
         if (natsStreamingPublisher != null) {
-            natsStreamingPublisher.close();
+            StreamingConnection publisher = natsStreamingPublisher;
             natsStreamingPublisher = null;
+            publisher.close();
         }
     }
 

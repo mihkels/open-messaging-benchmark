@@ -31,7 +31,7 @@ process. Once a driver is initialized, it includes:
 
 |              Metric              |  Type   |                   Meaning                   |
 |----------------------------------|---------|---------------------------------------------|
-| `messages_sent_total`            | Counter | Messages acknowledged by the broker         |
+| `messages_sent_total`            | Counter | Sends completed successfully by the driver  |
 | `message_send_errors_total`      | Counter | Failed sends                                |
 | `bytes_sent_total`               | Counter | Payload bytes sent                          |
 | `messages_recv_total`            | Counter | Messages received by consumers              |
@@ -40,6 +40,8 @@ process. Once a driver is initialized, it includes:
 | `producer_delay_latency_seconds` | Timer   | Delay between the scheduled and actual send |
 | `e2e_latency_seconds`            | Timer   | End-to-end latency                          |
 
+The driver's send-completion point depends on its broker and configuration; it is not always a
+broker acknowledgement. See [Publish latency](../methodology/latency-and-backlog.md#publish-latency).
 Timers expose `_count`, `_sum` and `_max` series. A minimal Prometheus scrape configuration:
 
 ```yaml

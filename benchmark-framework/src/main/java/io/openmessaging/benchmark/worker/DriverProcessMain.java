@@ -64,7 +64,7 @@ public final class DriverProcessMain {
                 Javalin.create(
                         config -> {
                             config.startup.showJavalinBanner = false;
-                            handler.registerRoutes(config.routes);
+                            handler.configure(config);
                             config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
                             config.routes.post(
                                     INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));

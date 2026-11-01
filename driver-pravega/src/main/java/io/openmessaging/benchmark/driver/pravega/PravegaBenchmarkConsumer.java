@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,14 +39,17 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final ExecutorService executor;
     private final EventStreamReader<ByteBuffer> reader;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final Object closeLock = new Object();
+    private volatile Thread readerThread;
+    private Exception closeFailure;
 
     /**
-     * Private constructor that is safe from exceptions.
+     * Constructs a consumer from owned resources.
      *
      * @param reader The Pravega event stream reader.
      * @param executor The executor service to run the reading task.
      */
-    private PravegaBenchmarkConsumer(EventStreamReader<ByteBuffer> reader, ExecutorService executor) {
+    PravegaBenchmarkConsumer(EventStreamReader<ByteBuffer> reader, ExecutorService executor) {
         this.reader = reader;
         this.executor = executor;
     }
@@ -95,27 +99,32 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         // Start a thread to read events.
         executor.submit(
                 () -> {
-                    while (!consumer.closed.get()) {
-                        try {
-                            final ByteBuffer event = reader.readNextEvent(1000).getEvent();
-                            if (event != null) {
-                                long eventTimestamp;
-                                if (includeTimestampInEvent) {
-                                    eventTimestamp = event.getLong();
-                                } else {
-                                    // This will result in an invalid end-to-end latency measurement of 0 seconds.
-                                    eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+                    consumer.readerThread = Thread.currentThread();
+                    try {
+                        while (!consumer.closed.get()) {
+                            try {
+                                final ByteBuffer event = reader.readNextEvent(1000).getEvent();
+                                if (event != null && !consumer.closed.get()) {
+                                    long eventTimestamp;
+                                    if (includeTimestampInEvent) {
+                                        eventTimestamp = event.getLong();
+                                    } else {
+                                        // This will result in an invalid end-to-end latency measurement of 0 seconds.
+                                        eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+                                    }
+                                    consumerCallback.messageReceived(event, eventTimestamp);
                                 }
-                                consumerCallback.messageReceived(event, eventTimestamp);
+                            } catch (ReinitializationRequiredException e) {
+                                log.error("Exception during read", e);
+                                throw e;
+                            } catch (RuntimeException e) {
+                                // The task's future is never inspected, so an escaping exception would stop
+                                // this reader silently and strand its segments for the rest of the run.
+                                log.error("Failed to process event; continuing to read", e);
                             }
-                        } catch (ReinitializationRequiredException e) {
-                            log.error("Exception during read", e);
-                            throw e;
-                        } catch (RuntimeException e) {
-                            // The task's future is never inspected, so an escaping exception would stop
-                            // this reader silently and strand its segments for the rest of the run.
-                            log.error("Failed to process event; continuing to read", e);
                         }
+                    } finally {
+                        consumer.readerThread = null;
                     }
                 });
         return consumer;
@@ -123,9 +132,59 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
 
     @Override
     public void close() throws Exception {
-        closed.set(true);
-        this.executor.shutdown();
-        this.executor.awaitTermination(1, TimeUnit.MINUTES);
-        reader.close();
+        if (Thread.currentThread() == readerThread) {
+            throw new IllegalStateException("Cannot close a Pravega consumer from its own callback");
+        }
+        synchronized (closeLock) {
+            if (closed.getAndSet(true)) {
+                if (closeFailure != null) {
+                    if (closeFailure instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    throw closeFailure;
+                }
+                return;
+            }
+            Exception failure = null;
+            boolean interrupted = false;
+            try {
+                executor.shutdown();
+                if (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
+                    failure = new TimeoutException("Timed out waiting for the Pravega reader to stop");
+                    executor.shutdownNow();
+                }
+            } catch (Exception shutdownFailure) {
+                if (failure == null) {
+                    failure = shutdownFailure;
+                } else {
+                    failure.addSuppressed(shutdownFailure);
+                }
+                if (shutdownFailure instanceof InterruptedException) {
+                    interrupted = true;
+                    try {
+                        executor.shutdownNow();
+                    } catch (RuntimeException additional) {
+                        failure.addSuppressed(additional);
+                    }
+                }
+            }
+            try {
+                reader.close();
+            } catch (Exception readerFailure) {
+                interrupted |= readerFailure instanceof InterruptedException;
+                if (failure == null) {
+                    failure = readerFailure;
+                } else if (failure != readerFailure) {
+                    failure.addSuppressed(readerFailure);
+                }
+            }
+            closeFailure = failure;
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            if (failure != null) {
+                throw failure;
+            }
+        }
     }
 }

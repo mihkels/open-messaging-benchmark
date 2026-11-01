@@ -19,8 +19,13 @@ package io.openmessaging.benchmark.driver;
  *
  * <p>Driver plugin bundles declare the contract they were built against in the {@code
  * driverApiVersion} field of their {@code plugin.yaml}. The benchmark host only launches bundles
- * declaring the contract it implements. The value changes only when the SPI changes incompatibly,
+ * declaring the contract it implements. Incompatible SPI changes normally increment the value,
  * independently of the project version.
+ *
+ * <p>As a one-time exception, the change from {@code PrometheusMeterRegistry} to {@code
+ * MeterRegistry} in {@link BenchmarkDriver#initialize} keeps version {@code 1}. Older version-1
+ * bundles are binary-incompatible even though their descriptor still matches, so this check cannot
+ * detect them. Rebuild the host and all plugin bundles together against the changed driver API.
  */
 public final class DriverApiVersion {
 

@@ -56,13 +56,16 @@ Smoke check against a server started by Docker Compose (see [`e2e-tests/compose/
 e2e-tests/compose/run-e2e.sh --stacks nats-streaming
 ```
 
+Connection and subscription failures complete creation futures exceptionally with the original cause.
+Producer handles settle pending sends on close; their shared connection is owned by the driver.
+Closing from a callback running synchronously inside a send on the same handle is rejected; retry after
+the send returns or schedule close on another thread without waiting in the callback.
+
 ## Limitations
 
 - `partitionsPerTopic` and message keys are ignored.
 - Subscriptions are non-durable queue subscriptions that receive only messages published after subscribing.
 - End-to-end latency uses the server-assigned message timestamp (server clock), not the producer's send time.
-- A connection failure is only logged (`nats streaming create producer exception` / `... consumer exception`); the
-  run then fails without a clearer error.
 - The driver does not delete channels.
 
 ## Further reading

@@ -54,13 +54,17 @@ This runs `rocketmq-contract` and `rocketmq-partitioned` against `apache/rocketm
 [Compose regression suite](../e2e-tests/compose/README.md). A passing case is a functional check, not
 a performance result.
 
+Admin startup failures abort initialization. Producer and consumer startup failures complete their
+creation futures exceptionally and close the partial client.
+Closing a producer from a callback running inside its own `sendAsync` call is rejected; retry after
+the send returns or schedule close on another thread without waiting in the callback.
+
 ## Limitations
 
 - Message keys are set as RocketMQ keys (indexed), not used to choose queues; per-key order is not
   kept.
 - Queues per broker are `max(1, partitionsPerTopic / number of broker addresses)`, and slave
   addresses count in that division.
-- Failures to start the admin client, producer or consumers are only logged.
 - Topics and consumer groups are not deleted after the run.
 
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),

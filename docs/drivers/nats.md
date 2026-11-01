@@ -121,8 +121,11 @@ Other stream and consumer settings are server and client defaults; see the
 replicas and `maxBytes`. Other stream settings (retention, discard policy, limits) are defaults. `partitionsPerTopic`
 is ignored: every topic is one stream with one subject.
 
-**Producers.** A send publishes to the topic's subject with JetStream `publishAsync` and completes when the
-server returns the publish acknowledgement, that is when the message is stored in the stream. Keys are ignored.
+**Producers.** A send publishes to the topic's subject with JetStream `publishAsync` and completes successfully
+when the server returns the publish acknowledgement, that is when the message is stored in the stream. Keys are
+ignored. Closing a producer fails its unacknowledged sends and rejects further sends without closing the shared
+JetStream connection. A publish in flight at close may still reach the stream even if its send future fails.
+Closing from a send completion callback is rejected and may be retried after the callback returns.
 
 **Subscriptions and consumers.** For each consumer the driver creates or updates a durable consumer named
 `durable-<subscription>` on the stream, filtered on the topic subject, with deliver subject
@@ -133,19 +136,21 @@ is its own durable consumer and receives every message, so multiple subscription
 **Acknowledgement.** Auto-ack is disabled. Each message is acknowledged with `ack()` after the benchmark callback.
 The ack policy, ack wait and maximum pending acknowledgements are consumer defaults.
 
-**End-to-end latency.** The producer writes `System.currentTimeMillis()` into the first 8 bytes of the payload
-(big-endian) before publishing, and the consumer reads them back. This overwrites the start of the payload, so
-messages must be at least 8 bytes and payload contents are not delivered unchanged. Latency is measured between the
-producer's and the consumer's clocks; synchronise worker clocks. See
+**End-to-end latency.** The producer copies the payload for each send and writes `System.currentTimeMillis()` into
+the first 8 bytes of the copy (big-endian), which the consumer reads back. The caller's payload is not modified;
+on the wire, the timestamp replaces its first 8 bytes and the remaining bytes are unchanged. Payloads shorter than
+8 bytes fail without being published. The per-send copy adds allocation and copying overhead, so compare throughput
+and allocation using equivalent workloads when evaluating performance. Latency is measured between the producer's
+and the consumer's clocks; synchronise worker clocks. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Durability.** `storageType: file` stores messages on disk, `memory` keeps them in server memory; both are
 replicated according to `replicationFactor`. The publish acknowledgement is returned after the server has stored the
 message according to these settings.
 
-**Cleanup.** Streams and durable consumers are not deleted after a run, and closing a benchmark consumer does not
-unsubscribe. Names contain random suffixes, so each run leaves new streams behind. Remove them, for example with the
-`nats` CLI (`nats stream rm`).
+**Cleanup.** Closing a benchmark consumer stops its dispatcher and unsubscribes its local delivery subscription
+without closing the shared connection. Streams and durable consumers are not deleted after a run. Names contain random
+suffixes, so each run leaves new streams behind. Remove them, for example with the `nats` CLI (`nats stream rm`).
 
 **Workload features.** Multiple topics, multiple subscriptions per topic and multiple consumers per subscription
 work. Partition counts and keys are ignored. For backlog workloads (`consumerBacklogSizeGB`) the framework blocks the
@@ -198,7 +203,7 @@ Common problems:
   the number of JetStream servers (the shipped `nats.yaml` uses 3).
 - Configuration error for `storageType`: use lower-case `file` or `memory`.
 - JetStream not enabled: the server was started without `-js` (or the account has no JetStream access).
-- `ArrayIndexOutOfBoundsException` on send: the message size is smaller than 8 bytes.
+- `NATS payload must be at least 8 bytes` on send: increase the message size to at least 8 bytes.
 - Driver fails to initialize: `natsHostUrl` is unreachable; the connection attempt times out after 5 s.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in

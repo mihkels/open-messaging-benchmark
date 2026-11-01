@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.rocketmq;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.rocketmq.client.apis.message.MessageBuilder;
@@ -25,6 +26,11 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
     private final String rmqTopic;
     private final Boolean sendDelayMsg;
     private final Long delayTimeInSec;
+    private final PendingSendTracker pending = new PendingSendTracker("RocketMQ 5 producer");
+    private final Object lifecycleLock = new Object();
+    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
+    private boolean closeComplete;
+    private int activePublications;
 
     public RocketMQ5BenchmarkProducer(final Producer rmqProducer, final String rmqTopic) {
         this.rmqProducer = rmqProducer;
@@ -46,37 +52,106 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(final Optional<String> key, final byte[] payload) {
-        MessageBuilder messageBuilder = new MessageBuilderImpl();
-        messageBuilder.setBody(payload);
-        messageBuilder.setTopic(this.rmqTopic);
-
-        key.ifPresent(messageBuilder::setKeys);
-
-        if (this.sendDelayMsg) {
-            // 延时消息，单位秒（s），在指定延迟时间（当前时间之后）进行投递，例如消息在10秒后投递。
-            long delayTime = System.currentTimeMillis() + this.delayTimeInSec * 1000;
-            // 设置消息需要被投递的时间。
-            messageBuilder.setDeliveryTimestamp(delayTime);
+        org.apache.rocketmq.client.apis.message.Message message;
+        try {
+            MessageBuilder messageBuilder = new MessageBuilderImpl();
+            messageBuilder.setBody(payload.clone());
+            messageBuilder.setTopic(this.rmqTopic);
+            key.ifPresent(messageBuilder::setKeys);
+            if (this.sendDelayMsg) {
+                long delayTime = System.currentTimeMillis() + this.delayTimeInSec * 1000;
+                messageBuilder.setDeliveryTimestamp(delayTime);
+            }
+            message = messageBuilder.build();
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        this.rmqProducer
-                .sendAsync(messageBuilder.build())
-                .whenComplete(
-                        (sendReceipt, throwable) -> {
-                            if (sendReceipt != null) {
-                                future.complete(null);
-                            } else {
-                                future.completeExceptionally(throwable);
-                            }
-                        });
+        CompletableFuture<Void> future;
+        synchronized (lifecycleLock) {
+            future = pending.register();
+            if (future.isDone()) {
+                return future;
+            }
+            activePublications++;
+            Integer depth = publishingDepth.get();
+            publishingDepth.set(depth == null ? 1 : depth + 1);
+        }
+        try {
+            this.rmqProducer
+                    .sendAsync(message)
+                    .whenComplete(
+                            (sendReceipt, throwable) -> {
+                                if (throwable != null) {
+                                    pending.completeFromClient(future, throwable);
+                                } else if (sendReceipt == null) {
+                                    pending.completeFromClient(
+                                            future, new IllegalStateException("Missing RocketMQ 5 send receipt"));
+                                } else {
+                                    pending.completeFromClient(future, null);
+                                }
+                            });
+        } catch (Exception failure) {
+            future.completeExceptionally(failure);
+        } finally {
+            int depth = publishingDepth.get() - 1;
+            if (depth == 0) {
+                publishingDepth.remove();
+            } else {
+                publishingDepth.set(depth);
+            }
+            synchronized (lifecycleLock) {
+                activePublications--;
+                lifecycleLock.notifyAll();
+            }
+        }
         return future;
     }
 
     @Override
     public void close() throws Exception {
-        if (rmqProducer != null) {
-            rmqProducer.close();
+        if (publishingDepth.get() != null) {
+            throw new IllegalStateException(
+                    "Cannot close a RocketMQ 5 producer while publishing on the same thread; "
+                            + "retry after sendAsync returns");
+        }
+        publishingDepth.remove();
+        boolean interrupted = false;
+        boolean closeOwner;
+        synchronized (lifecycleLock) {
+            closeOwner = pending.beginClose();
+            while (closeOwner ? activePublications != 0 : !closeComplete) {
+                try {
+                    lifecycleLock.wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+        }
+        Throwable closeFailure = null;
+        try {
+            if (closeOwner && rmqProducer != null) {
+                rmqProducer.close();
+            }
+        } catch (Exception | Error failure) {
+            closeFailure = failure;
+            throw failure;
+        } finally {
+            try {
+                if (closeOwner) {
+                    pending.failRemaining(closeFailure);
+                }
+            } finally {
+                if (closeOwner) {
+                    synchronized (lifecycleLock) {
+                        closeComplete = true;
+                        lifecycleLock.notifyAll();
+                    }
+                }
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
     }
 }

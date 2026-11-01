@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkProducer.class);
 
-    private TransactionalEventStreamWriter<ByteBuffer> transactionWriter;
+    private final TransactionalEventStreamWriter<ByteBuffer> transactionWriter;
 
     private final boolean includeTimestampInEvent;
 
@@ -41,7 +41,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
 
     private final int eventsPerTransaction;
     private int eventCount = 0;
-    private ByteBuffer timestampAndPayload;
+    private boolean closed;
 
     public PravegaBenchmarkTransactionProducer(
             String streamName,
@@ -63,7 +63,10 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     }
 
     @Override
-    public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+    public synchronized CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        if (closed) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Producer is closed"));
+        }
         try {
             if (transaction == null) {
                 transaction = transactionWriter.beginTxn();
@@ -72,35 +75,39 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                     key)) { // Populate probe transaction with the sufficient amount of events.
                 // Probe events must use the same encoding as regular events: readers expect the timestamp
                 while (eventCount < this.eventsPerTransaction - 1) {
-                    writeEvent(key, encode(payload));
+                    writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
                     eventCount++;
                 }
             }
-            writeEvent(key, encode(payload));
+            writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
             if (++eventCount >= eventsPerTransaction) {
                 eventCount = 0;
                 transaction.commit();
                 transaction = null;
             }
-        } catch (TxnFailedException e) {
-            throw new RuntimeException("Transaction Write data failed ", e);
+        } catch (Exception e) {
+            // Pravega can propagate checked controller failures from beginTxn without declaring them.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            Transaction<ByteBuffer> failed = transaction;
+            transaction = null;
+            eventCount = 0;
+            if (failed != null) {
+                try {
+                    failed.abort();
+                } catch (Exception abortFailure) {
+                    if (abortFailure instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    if (abortFailure != e) {
+                        e.addSuppressed(abortFailure);
+                    }
+                }
+            }
+            return CompletableFuture.failedFuture(e);
         }
-        CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
-        return future;
-    }
-
-    private ByteBuffer encode(byte[] payload) {
-        if (!includeTimestampInEvent) {
-            return ByteBuffer.wrap(payload);
-        }
-        if (timestampAndPayload == null
-                || timestampAndPayload.capacity() != Long.BYTES + payload.length) {
-            timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
-        } else {
-            timestampAndPayload.clear();
-        }
-        timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
-        return timestampAndPayload;
+        return CompletableFuture.completedFuture(null);
     }
 
     private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {
@@ -112,14 +119,18 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     }
 
     @Override
-    public void close() throws Exception {
-        synchronized (this) {
+    public synchronized void close() throws Exception {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        try (transactionWriter) {
             if (transaction != null) {
-                transaction.abort();
+                Transaction<ByteBuffer> open = transaction;
                 transaction = null;
+                open.abort();
             }
         }
-        transactionWriter.close();
     }
 
     /**

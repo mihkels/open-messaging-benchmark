@@ -41,22 +41,23 @@ coordinator searches for the maximum sustainable rate; see [Workloads](../guides
 Pub rate   500.0 msg/s /  0.5 MB/s | Pub err     0.0 err/s | Cons rate   500.2 msg/s /  0.5 MB/s | Backlog:  0.0 K | Pub Latency (ms) avg:  1.8 - 50%:  1.7 - 99%:  5.8 - 99.9%: 16.5 - Max: 24.7 | Pub Delay Latency (us) avg: 584.6 - 50%: 452.0 - 99%: 6428.0 - 99.9%: 16562.0 - Max: 22517.0
 ```
 
-|         Field          |                                                   Meaning                                                    |
-|------------------------|--------------------------------------------------------------------------------------------------------------|
-| Pub rate               | Messages and megabytes acknowledged by the broker per second, across all producers, over the last 10 seconds |
-| Pub err                | Failed sends per second                                                                                      |
-| Cons rate              | Messages and megabytes received per second across all consumers                                              |
-| Backlog                | Messages sent but not yet received, in thousands, counted per subscription                                   |
-| Pub Latency (ms)       | Time from the send call to the broker acknowledgement                                                        |
-| Pub Delay Latency (us) | How late each send started compared with its scheduled time                                                  |
+|         Field          |                                                   Meaning                                                   |
+|------------------------|-------------------------------------------------------------------------------------------------------------|
+| Pub rate               | Successfully completed sends and their megabytes per second, across all producers, over the last 10 seconds |
+| Pub err                | Failed sends per second                                                                                     |
+| Cons rate              | Messages and megabytes received per second across all consumers                                             |
+| Backlog                | Messages sent but not yet received, in thousands, counted per subscription                                  |
+| Pub Latency (ms)       | Time from the send call to successful completion                                                            |
+| Pub Delay Latency (us) | How late each send started compared with its scheduled time                                                 |
 
 The consume rate is the publish rate multiplied by `subscriptionsPerTopic` when consumers keep up.
 
 ## The three latencies
 
-**Publish latency** is measured by the producer from the moment it hands a message to the client
-library until the send is acknowledged. It reflects the client, the network and the broker's write
-path, including any batching (`linger.ms` in Kafka, for example).
+**Publish latency** is measured by the producer from the start of the send call until its future
+completes successfully. The completion point depends on the driver and its configuration: it may
+represent client acceptance, transaction buffering or a broker acknowledgement. See
+[Publish latency](../methodology/latency-and-backlog.md#publish-latency).
 
 **Publish delay latency** measures the load generator. Messages are scheduled at a uniform rate; if
 a producer cannot send on time because the client blocks or the worker is overloaded, the delay
@@ -109,9 +110,9 @@ Check these before using any number:
 - **No errors.** `publishErrorRate` is zero.
 - **The run is long enough.** A short run has too few samples for stable tail percentiles. The
   Quickstart workload is a smoke test, not a measurement.
-- **The coordinator did not log** `Failed to run the workload`. When one workload fails, the
-  coordinator logs the error and continues with the next workload or driver, so a multi-workload run
-  can still exit normally.
+- **The coordinator exited with status zero.** When a workload fails, the coordinator logs the
+  error and attempts remaining workloads or drivers when safe, but exits non-zero even if other
+  combinations produced results.
 
 ## Where logs go
 

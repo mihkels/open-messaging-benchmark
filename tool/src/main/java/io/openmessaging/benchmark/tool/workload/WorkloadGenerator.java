@@ -55,91 +55,33 @@ final class WorkloadGenerator {
 
         List<Workload> workloads = new ArrayList<>();
 
-        // Get parameter lists, using defaults if empty
-        List<Integer> topics = getOrDefault(template.topics(), List.of(1));
-        List<Integer> partitionsPerTopic = getOrDefault(template.partitionsPerTopic(), List.of(1));
-        List<Integer> messageSize = getOrDefault(template.messageSize(), List.of(1024));
-        List<Integer> subscriptionsPerTopic =
-                getOrDefault(template.subscriptionsPerTopic(), List.of(1));
-        List<Integer> producersPerTopic = getOrDefault(template.producersPerTopic(), List.of(1));
-        List<Integer> consumerPerSubscription =
-                getOrDefault(template.consumerPerSubscription(), List.of(1));
-        List<Integer> producerRate = getOrDefault(template.producerRate(), List.of(10000));
-
-        // Generate all combinations
-        for (int topicCount : topics) {
-            for (int partitions : partitionsPerTopic) {
-                for (int msgSize : messageSize) {
-                    for (int subscriptions : subscriptionsPerTopic) {
-                        for (int producers : producersPerTopic) {
-                            for (int consumers : consumerPerSubscription) {
-                                for (int rate : producerRate) {
-                                    Workload workload =
-                                            createWorkload(
-                                                    topicCount,
-                                                    partitions,
-                                                    msgSize,
-                                                    subscriptions,
-                                                    producers,
-                                                    consumers,
-                                                    rate);
-                                    workloads.add(workload);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        List<List<Integer>> values =
+                SupportedWorkloadFields.SWEEP_FIELDS.stream()
+                        .map(field -> field.valuesOrDefault(template))
+                        .toList();
+        generateCombinations(values, new int[values.size()], 0, workloads);
 
         log.info("Generated {} workloads", workloads.size());
         return workloads;
     }
 
-    /**
-     * Creates a single workload with the specified parameters.
-     *
-     * @param topics the number of topics
-     * @param partitionsPerTopic the number of partitions per topic
-     * @param messageSize the message size in bytes
-     * @param subscriptionsPerTopic the number of subscriptions per topic
-     * @param producersPerTopic the number of producers per topic
-     * @param consumerPerSubscription the number of consumers per subscription
-     * @param producerRate the producer rate
-     * @return a new workload instance with the specified parameters
-     */
-    private Workload createWorkload(
-            int topics,
-            int partitionsPerTopic,
-            int messageSize,
-            int subscriptionsPerTopic,
-            int producersPerTopic,
-            int consumerPerSubscription,
-            int producerRate) {
+    private void generateCombinations(
+            List<List<Integer>> values, int[] selected, int index, List<Workload> workloads) {
+        if (index == values.size()) {
+            Workload workload = new Workload();
+            for (int i = 0; i < selected.length; i++) {
+                SupportedWorkloadFields.SWEEP_FIELDS.get(i).assign().accept(workload, selected[i]);
+            }
+            SupportedWorkloadFields.applyFixedFields(template, workload);
+            workload.name = nameFormat.from(workload);
+            workloads.add(workload);
+            return;
+        }
 
-        Workload workload = new Workload();
-
-        // Set workload parameters
-        workload.topics = topics;
-        workload.partitionsPerTopic = partitionsPerTopic;
-        workload.messageSize = messageSize;
-        workload.subscriptionsPerTopic = subscriptionsPerTopic;
-        workload.producersPerTopic = producersPerTopic;
-        workload.consumerPerSubscription = consumerPerSubscription;
-        workload.producerRate = producerRate;
-
-        // Set template-level parameters
-        workload.keyDistributor = template.keyDistributor();
-        workload.payloadFile = template.payloadFile();
-        workload.useRandomizedPayloads = template.useRandomizedPayloads();
-        workload.randomBytesRatio = template.randomBytesRatio();
-        workload.randomizedPayloadPoolSize = template.randomizedPayloadPoolSize();
-        workload.consumerBacklogSizeGB = template.consumerBacklogSizeGB();
-        workload.testDurationMinutes = template.testDurationMinutes();
-        workload.warmupDurationMinutes = template.warmupDurationMinutes();
-        workload.name = nameFormat.from(workload);
-
-        return workload;
+        for (int value : values.get(index)) {
+            selected[index] = value;
+            generateCombinations(values, selected, index + 1, workloads);
+        }
     }
 
     /**
@@ -159,17 +101,5 @@ final class WorkloadGenerator {
 
         String serialized = mapper.writeValueAsString(workload);
         return reader.readValue(serialized);
-    }
-
-    /**
-     * Returns the provided list if it's not null and not empty, otherwise returns the default list.
-     *
-     * @param <T> the type of elements in the list
-     * @param list the list to check
-     * @param defaultValue the default list to return if the input list is null or empty
-     * @return the original list if not null/empty, otherwise the default list
-     */
-    private <T> List<T> getOrDefault(List<T> list, List<T> defaultValue) {
-        return (list != null && !list.isEmpty()) ? list : defaultValue;
     }
 }

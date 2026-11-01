@@ -18,6 +18,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import mock_open, patch
 
 import report
 
@@ -61,12 +62,40 @@ class ResultValidationTest(unittest.TestCase):
         workload_check = next(check for check in checks if check["name"] == "Workload completed")
         self.assertFalse(workload_check["passed"])
 
-    def test_workload_failure_after_other_errors_is_detected(self):
+    def test_unreadable_coordinator_log_fails(self):
+        open_file = open
+        failed_log = mock_open()
+        failed_log.return_value.__enter__.return_value.read.side_effect = OSError("read failed")
+
+        def open_with_failed_log(path, *args, **kwargs):
+            if str(path) == str(self.case_dir / "coordinator.log"):
+                return failed_log(path, *args, **kwargs)
+            return open_file(path, *args, **kwargs)
+
+        with patch("builtins.open", side_effect=open_with_failed_log):
+            checks = self.validate()
+        workload_check = next(check for check in checks if check["name"] == "Workload completed")
+        self.assertFalse(workload_check["passed"])
+
+    def test_workload_failure_is_detected_by_exit_code(self):
         (self.case_dir / "coordinator.log").write_text(
-            "ERROR unrelated message\n" * 200 + "ERROR Failed to run the workload\n",
+            "ERROR workload failed with different wording\n",
             encoding="utf-8",
         )
+        checks = self.validate({"coordinator_exit_code": "1"})
+        workload_check = next(check for check in checks if check["name"] == "Workload completed")
+        self.assertFalse(workload_check["passed"])
+
+    def test_workload_outcome_does_not_depend_on_log_wording(self):
+        (self.case_dir / "coordinator.log").write_text(
+            "ERROR Failed to run the workload\n", encoding="utf-8"
+        )
         checks = self.validate()
+        workload_check = next(check for check in checks if check["name"] == "Workload completed")
+        self.assertTrue(workload_check["passed"])
+
+    def test_timeout_fails_even_with_success_exit_code(self):
+        checks = self.validate({"coordinator_exit_code": "0", "timed_out": "true"})
         workload_check = next(check for check in checks if check["name"] == "Workload completed")
         self.assertFalse(workload_check["passed"])
 

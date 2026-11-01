@@ -14,16 +14,24 @@
 package io.openmessaging.benchmark.plugin;
 
 import static io.openmessaging.benchmark.plugin.PluginFixtures.artifactJar;
+import static io.openmessaging.benchmark.plugin.PluginFixtures.compileJar;
 import static io.openmessaging.benchmark.plugin.PluginFixtures.descriptor;
+import static io.openmessaging.benchmark.plugin.PluginFixtures.driverSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.openmessaging.benchmark.driver.BenchmarkDriver;
+import io.openmessaging.benchmark.driver.DriverApiVersion;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.JarFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -55,6 +63,52 @@ class PluginRegistryTest {
         assertThat(resolved.bundles()).extracting(PluginBundle::id).containsExactly("kafka");
         assertThat(real(resolved.primary().classpath()))
                 .containsExactly(kafka.resolve("kafka.jar").toRealPath(), lib.toRealPath());
+    }
+
+    @Test
+    void versionOneDescriptorStillAcceptsBinaryIncompatibleOlderDriver() throws Exception {
+        String oldDriver = "fixture.legacy.LegacyDriver";
+        String oldApi =
+                "package io.openmessaging.benchmark.driver;\n"
+                        + "public interface BenchmarkDriver extends AutoCloseable {\n"
+                        + "  void initialize(java.nio.file.Path config,"
+                        + " io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry)"
+                        + " throws java.io.IOException, InterruptedException;\n"
+                        + "}\n";
+        String oldDriverSource =
+                driverSource(oldDriver, "\"legacy\"", "")
+                        .replace(
+                                "io.micrometer.core.instrument.MeterRegistry registry",
+                                "io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry");
+        Path legacyBundle = descriptor(dir.resolve("drivers/legacy"), "legacy", List.of(oldDriver), "");
+        Path jar = legacyBundle.resolve("legacy.jar");
+        URL prometheusClasspath =
+                PrometheusMeterRegistry.class.getProtectionDomain().getCodeSource().getLocation();
+        compileJar(
+                jar,
+                Map.of(
+                        "io.openmessaging.benchmark.driver.BenchmarkDriver",
+                        oldApi,
+                        oldDriver,
+                        oldDriverSource),
+                List.of(Path.of(prometheusClasspath.toURI())));
+        String entry = "fixture/legacy/LegacyDriver.class";
+        byte[] legacyClass;
+        try (JarFile compiled = new JarFile(jar.toFile())) {
+            legacyClass = compiled.getInputStream(compiled.getJarEntry(entry)).readAllBytes();
+        }
+        PluginFixtures.writeJar(jar, Map.of(entry, legacyClass));
+
+        assertThat(DriverApiVersion.CURRENT).isEqualTo(1);
+        assertThat(discover().resolve(oldDriver, Map.of()).primary().id()).isEqualTo("legacy");
+        try (URLClassLoader loader =
+                new URLClassLoader(
+                        new URL[] {jar.toUri().toURL()}, BenchmarkDriver.class.getClassLoader())) {
+            BenchmarkDriver legacy =
+                    (BenchmarkDriver) loader.loadClass(oldDriver).getDeclaredConstructor().newInstance();
+            assertThatThrownBy(() -> legacy.initialize(Path.of("unused"), null))
+                    .isInstanceOf(AbstractMethodError.class);
+        }
     }
 
     @Test

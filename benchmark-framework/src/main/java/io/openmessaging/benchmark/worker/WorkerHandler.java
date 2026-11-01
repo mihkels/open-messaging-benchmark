@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.worker;
 
+import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -22,7 +23,11 @@ import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -31,6 +36,7 @@ import tools.jackson.databind.ObjectWriter;
 
 public class WorkerHandler implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
+    private static final Duration REQUEST_IDLE_TIMEOUT = Duration.ofMinutes(10);
 
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
@@ -64,6 +70,12 @@ public class WorkerHandler implements AutoCloseable {
         this.localWorker = worker;
     }
 
+    public void configure(JavalinConfig config) {
+        config.jetty.modifyHttpConfiguration(
+                http -> http.setIdleTimeout(REQUEST_IDLE_TIMEOUT.toMillis()));
+        registerRoutes(config.routes);
+    }
+
     public void registerRoutes(RoutesConfig routes) {
         routes.exception(
                 Exception.class,
@@ -95,16 +107,26 @@ public class WorkerHandler implements AutoCloseable {
 
     private static String describe(Throwable e) {
         StringBuilder message = new StringBuilder();
-        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
-            if (!message.isEmpty()) {
-                message.append(" | caused by: ");
-            }
-            message.append(t.getClass().getName());
-            if (t.getMessage() != null) {
-                message.append(": ").append(t.getMessage());
-            }
-        }
+        appendDescription(message, e, "", Collections.newSetFromMap(new IdentityHashMap<>()));
         return message.toString();
+    }
+
+    private static void appendDescription(
+            StringBuilder message, Throwable failure, String relation, Set<Throwable> visited) {
+        if (failure == null || !visited.add(failure)) {
+            return;
+        }
+        if (!message.isEmpty()) {
+            message.append(" | ");
+        }
+        message.append(relation).append(failure.getClass().getName());
+        if (failure.getMessage() != null) {
+            message.append(": ").append(failure.getMessage());
+        }
+        appendDescription(message, failure.getCause(), "caused by: ", visited);
+        for (Throwable suppressed : failure.getSuppressed()) {
+            appendDescription(message, suppressed, "suppressed: ", visited);
+        }
     }
 
     private void handleInitializeDriver(Context ctx) throws Exception {

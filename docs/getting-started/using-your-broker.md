@@ -127,7 +127,7 @@ For more load than one host can generate, start workers and pass `--workers`; se
 The run succeeded when:
 
 - the log contains `All consumers are ready` and, at the end, `Writing test result into ...`;
-- it does not contain `Failed to run the workload`;
+- the coordinator exits with status zero;
 - publish errors are zero and the consume rate matches the publish rate times the number of
   subscriptions per topic.
 

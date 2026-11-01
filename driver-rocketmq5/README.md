@@ -61,14 +61,17 @@ The `rocketmq5` stack adds a proxy (`sh mqproxy -n namesrv:9876`, `apache/rocket
 RocketMQ name server and broker. See the [Compose regression suite](../e2e-tests/compose/README.md).
 A passing case is a functional check, not a performance result.
 
+Admin startup failures abort initialization, and driver shutdown closes the admin client.
+Closing a producer from a callback running inside its own `sendAsync` call is rejected; retry after
+the send returns or schedule close on another thread without waiting in the callback.
+
 ## Limitations
 
-- `sendDelayMsg: true` without `delayTimeInSec` causes a `NullPointerException` on send. Delays
+- `sendDelayMsg: true` without `delayTimeInSec` fails the send with a `NullPointerException`. Delays
   count in end-to-end latency, and a delay near 60 seconds makes the readiness probe time out.
 - Message keys are set as RocketMQ keys (indexed), not used to choose queues.
 - Queues per broker are `max(1, partitionsPerTopic / number of broker addresses)`, slaves included.
-- The driver's `close()` does nothing: the admin client is not shut down, and topics and consumer
-  groups are not deleted.
+- Topics and consumer groups are not deleted.
 
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
 [results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),

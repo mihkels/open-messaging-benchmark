@@ -144,7 +144,9 @@ consumer settings.
 
 **Producing.** Messages are sent asynchronously and count as published when the broker confirms them
 through the `SendAcknowledgementHandler`. Messages are durable, so the broker persists them to its
-journal according to its own journal settings before confirming.
+journal according to its own journal settings before confirming. Closing a producer fails any sends
+that remain unconfirmed; they may still have reached the broker. Closing from that producer's
+acknowledgement callback is rejected and may be retried after the callback returns.
 
 **Consuming.** The message handler copies the body, calls the benchmark callback, and then acknowledges
 the message. Acknowledgements are asynchronous (`blockOnAcknowledge=false`) and may be batched by the
@@ -164,8 +166,9 @@ synchronization.
 [Latency and backlog](../methodology/latency-and-backlog.md)). Messages that are not delivered stay in
 the durable queue, subject to the broker's address-full policy (paging by default).
 
-**Cleanup.** The driver closes producers, consumers, sessions and the session factory at the end of a
-run. Addresses and queues are not deleted. Addresses are flagged as auto-created, so the broker's
+**Cleanup.** The worker closes each producer and consumer with its session at the end of a run; the
+driver closes its shared administrative session, session factory, and server locator at shutdown.
+Addresses and queues are not deleted. Addresses are flagged as auto-created, so the broker's
 auto-delete settings for addresses can remove them once they have no queues; the durable queues stay
 until you delete them.
 

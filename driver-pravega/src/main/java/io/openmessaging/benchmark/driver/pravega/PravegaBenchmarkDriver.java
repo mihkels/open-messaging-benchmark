@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.pravega;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -26,6 +26,7 @@ import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,19 +53,41 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private ReaderGroupManager readerGroupManager;
     private EventStreamClientFactory clientFactory;
     private final List<String> createdTopics = new ArrayList<>();
+    private int activeTopicCreations;
+    private boolean closing;
 
     @Override
-    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
-            throws IOException {
+    public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
+            throws IOException, InterruptedException {
         config = readConfig(configurationFile);
         log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
 
         ClientConfig clientConfig =
                 ClientConfig.builder().controllerURI(URI.create(config.client().controllerURI())).build();
         scopeName = config.client().scopeName();
-        streamManager = StreamManager.create(clientConfig);
-        readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
-        clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
+        try {
+            streamManager = StreamManager.create(clientConfig);
+            readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
+            clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
+        } catch (Exception failure) {
+            closeResource(clientFactory, failure);
+            closeResource(readerGroupManager, failure);
+            closeResource(streamManager, failure);
+            clientFactory = null;
+            readerGroupManager = null;
+            streamManager = null;
+            if (failure instanceof InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw interrupted;
+            }
+            if (failure instanceof IOException ioFailure) {
+                throw ioFailure;
+            }
+            if (failure instanceof RuntimeException runtimeFailure) {
+                throw runtimeFailure;
+            }
+            throw new IOException("Failed to initialize the Pravega driver", failure);
+        }
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
@@ -75,7 +98,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static PravegaConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        try (InputStream input = Files.newInputStream(configurationFile)) {
+            return reader.readValue(input);
+        }
     }
 
     private String cleanName(String name) {
@@ -89,97 +114,176 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        topic = cleanName(topic);
-        log.info("createTopic: topic={}, partitions={}", topic, partitions);
-        synchronized (createdTopics) {
-            createdTopics.add(topic);
+        synchronized (this) {
+            if (closing || streamManager == null) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
+            }
+            activeTopicCreations++;
         }
-        if (config.createScope()) {
-            streamManager.createScope(scopeName);
+        try {
+            topic = cleanName(topic);
+            log.info("createTopic: topic={}, partitions={}", topic, partitions);
+            if (config.createScope()) {
+                streamManager.createScope(scopeName);
+            }
+            ScalingPolicy scalingPolicy;
+            if (config.enableStreamAutoScaling()
+                    && (config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
+                            || config.kbytesPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE)) {
+                scalingPolicy =
+                        config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
+                                ? ScalingPolicy.byEventRate(config.eventsPerSecond(), 2, partitions)
+                                : ScalingPolicy.byDataRate(config.kbytesPerSecond(), 2, partitions);
+            } else {
+                scalingPolicy = ScalingPolicy.fixed(partitions);
+            }
+            streamManager.createStream(
+                    scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).build());
+            synchronized (this) {
+                createdTopics.add(topic);
+            }
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception failure) {
+            return failedCreation(failure);
+        } finally {
+            synchronized (this) {
+                activeTopicCreations--;
+                notifyAll();
+            }
         }
-        ScalingPolicy scalingPolicy;
-        if (config.enableStreamAutoScaling()
-                && (config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
-                        || config.kbytesPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE)) {
-            scalingPolicy =
-                    config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
-                            ? ScalingPolicy.byEventRate(config.eventsPerSecond(), 2, partitions)
-                            : ScalingPolicy.byDataRate(config.kbytesPerSecond(), 2, partitions);
-        } else {
-            scalingPolicy = ScalingPolicy.fixed(partitions);
-        }
-        streamManager.createStream(
-                scopeName, topic, StreamConfiguration.builder().scalingPolicy(scalingPolicy).build());
-        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        topic = cleanName(topic);
-        BenchmarkProducer producer;
-        if (config.enableTransaction()) {
-            producer =
-                    new PravegaBenchmarkTransactionProducer(
-                            topic,
-                            clientFactory,
-                            config.includeTimestampInEvent(),
-                            config.writer().enableConnectionPooling(),
-                            config.eventsPerTransaction());
-        } else {
-            producer =
-                    new PravegaBenchmarkProducer(
-                            topic,
-                            clientFactory,
-                            config.includeTimestampInEvent(),
-                            config.writer().enableConnectionPooling());
+        try {
+            topic = cleanName(topic);
+            BenchmarkProducer producer;
+            if (config.enableTransaction()) {
+                producer =
+                        new PravegaBenchmarkTransactionProducer(
+                                topic,
+                                clientFactory,
+                                config.includeTimestampInEvent(),
+                                config.writer().enableConnectionPooling(),
+                                config.eventsPerTransaction());
+            } else {
+                producer =
+                        new PravegaBenchmarkProducer(
+                                topic,
+                                clientFactory,
+                                config.includeTimestampInEvent(),
+                                config.writer().enableConnectionPooling());
+            }
+            return CompletableFuture.completedFuture(producer);
+        } catch (Exception failure) {
+            return failedCreation(failure);
         }
-        return CompletableFuture.completedFuture(producer);
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        topic = cleanName(topic);
-        subscriptionName = cleanName(subscriptionName);
-
-        // Use the new static factory method here
-        BenchmarkConsumer consumer =
-                PravegaBenchmarkConsumer.create(
-                        topic,
-                        scopeName,
-                        subscriptionName,
-                        consumerCallback,
-                        clientFactory,
-                        readerGroupManager,
-                        config.includeTimestampInEvent());
-
-        return CompletableFuture.completedFuture(consumer);
-    }
-
-    private void deleteTopics() {
-        synchronized (createdTopics) {
-            for (String topic : createdTopics) {
-                log.info("deleteTopics: topic={}", topic);
-                streamManager.sealStream(scopeName, topic);
-                if (config.deleteStreams()) {
-                    streamManager.deleteStream(scopeName, topic);
-                }
-            }
+        try {
+            topic = cleanName(topic);
+            subscriptionName = cleanName(subscriptionName);
+            BenchmarkConsumer consumer =
+                    PravegaBenchmarkConsumer.create(
+                            topic,
+                            scopeName,
+                            subscriptionName,
+                            consumerCallback,
+                            clientFactory,
+                            readerGroupManager,
+                            config.includeTimestampInEvent());
+            return CompletableFuture.completedFuture(consumer);
+        } catch (Exception failure) {
+            return failedCreation(failure);
         }
     }
 
     @Override
     public void close() throws Exception {
         log.info("close: Pravega driver is closing");
-        if (clientFactory != null) {
-            clientFactory.close();
+        EventStreamClientFactory factoryToClose;
+        ReaderGroupManager readerManagerToClose;
+        StreamManager streamManagerToClose;
+        List<String> topics;
+        InterruptedException interrupted = null;
+        synchronized (this) {
+            closing = true;
+            while (activeTopicCreations > 0) {
+                try {
+                    wait();
+                } catch (InterruptedException failure) {
+                    if (interrupted == null) {
+                        interrupted = failure;
+                    }
+                }
+            }
+            factoryToClose = clientFactory;
+            readerManagerToClose = readerGroupManager;
+            streamManagerToClose = streamManager;
+            clientFactory = null;
+            readerGroupManager = null;
+            streamManager = null;
+            topics = List.copyOf(createdTopics);
+            createdTopics.clear();
         }
-        if (readerGroupManager != null) {
-            readerGroupManager.close();
+        Exception failure = closeResource(factoryToClose, interrupted);
+        failure = closeResource(readerManagerToClose, failure);
+        if (streamManagerToClose != null) {
+            for (String topic : topics) {
+                try {
+                    log.info("deleteTopics: topic={}", topic);
+                    streamManagerToClose.sealStream(scopeName, topic);
+                    if (config.deleteStreams()) {
+                        streamManagerToClose.deleteStream(scopeName, topic);
+                    }
+                } catch (Exception topicFailure) {
+                    if (topicFailure instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    failure = addFailure(failure, topicFailure);
+                }
+            }
         }
-        if (streamManager != null) {
-            deleteTopics();
-            streamManager.close();
+        failure = closeResource(streamManagerToClose, failure);
+        if (interrupted != null) {
+            Thread.currentThread().interrupt();
         }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private static <T> CompletableFuture<T> failedCreation(Exception failure) {
+        if (failure instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        return CompletableFuture.failedFuture(failure);
+    }
+
+    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Exception closeFailure) {
+                if (closeFailure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                return addFailure(failure, closeFailure);
+            }
+        }
+        return failure;
+    }
+
+    private static Exception addFailure(Exception failure, Exception additional) {
+        if (failure == null) {
+            return additional;
+        }
+        if (failure != additional) {
+            failure.addSuppressed(additional);
+        }
+        return failure;
     }
 }

@@ -42,7 +42,7 @@ The records are nested in `BenchmarkDriver`. The full `BenchmarkDriver` interfac
 
 ```java
 public interface BenchmarkDriver extends AutoCloseable {
-    void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
+    void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException;
 
     String getTopicNamePrefix();
@@ -62,8 +62,17 @@ public interface BenchmarkDriver extends AutoCloseable {
 }
 ```
 
-The default `createTopics`, `createProducers` and `createConsumers` call the single-resource method
-for every entry and complete when all of them have completed.
+The default batch methods call the corresponding single-resource method for each entry.
+Producer and consumer batches succeed after every entry succeeds, or fail as soon as creation fails.
+
+The `initialize` parameter changed from `PrometheusMeterRegistry` to `MeterRegistry` without changing
+`driverApiVersion: 1`. Older version-1 bundles are binary-incompatible even though their descriptors
+still match. Rebuild the host and all plugin bundles together against the changed `driver-api`; the
+descriptor check cannot detect an old bundle. See
+[Compatibility rules](packaging-a-plugin.md#compatibility-rules).
+
+The requirements below define the SPI contract. Individual drivers must also meet the stated
+failure, cleanup, readiness and payload-ownership requirements.
 
 ## Lifecycle
 
@@ -93,8 +102,9 @@ no-argument constructor. It then calls `initialize(configurationFile, statsLogge
   `driverClass` from it (unknown properties are ignored), so the driver parses the rest. The in-tree
   drivers read it with Jackson's YAML mapper and disable `FAIL_ON_UNKNOWN_PROPERTIES`, so the shared
   keys do not cause errors.
-- `statsLogger` is the driver process's `PrometheusMeterRegistry`. Meters registered there are exposed
-  on the worker's `/metrics` endpoint (see [Monitoring](../guides/monitoring.md)).
+- `statsLogger` is a host-owned Micrometer `MeterRegistry`. The driver process supplies the same
+  `PrometheusMeterRegistry` used for worker statistics, so meters registered there are exposed on the
+  worker's `/metrics` endpoint (see [Monitoring](../guides/monitoring.md)). Do not close the registry.
 - Open broker connections and admin clients here. An exception fails driver initialization for the
   whole workload.
 
@@ -102,7 +112,7 @@ The loopback driver only logs:
 
 ```java
 @Override
-public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger) {
+public void initialize(Path configurationFile, MeterRegistry statsLogger) {
     log.info(
             "Loopback driver initialized from {} using bundled commons-lang3 {}",
             configurationFile,
@@ -129,13 +139,28 @@ Kafka driver does.
 ### Creating producers and consumers
 
 `createProducer(topic)` and `createConsumer(topic, subscriptionName, consumerCallback)` each return a
-future that completes once the resource is usable:
+non-null future that completes with a non-null handle once the resource is usable, or exceptionally
+with the cause if creation fails:
 
 - The benchmark creates consumers before producers.
+- A consumer is usable only after its subscription is ready to receive messages published after its
+  creation future completes. Report connection and subscription failures through that future.
 - Every subscription name must behave as an independent subscription that receives every message on
   the topic. Consumers that share a subscription name split the messages between them.
 - The `consumerCallback` passed in is the benchmark's statistics recorder. Keep the reference and call
   it for every message that the consumer receives.
+
+Single-resource creation hands a successfully created handle to its caller. For a batch, that caller
+is the batch operation: it owns each handle until the batch future succeeds and transfers the list to
+the worker. The worker then owns and closes those producer and consumer handles; the driver owns its
+shared clients, connections and other shared resources. On creation failure or cancellation, cancel
+pending work where possible and close every successfully created handle not handed off, including
+handles that complete late. Each handle must be closed by its owner exactly once.
+
+The default `createProducers` and `createConsumers` implementations close successful handles if any
+creation fails or the batch is cancelled, including handles that complete after the batch ends. They
+do not cancel individual creation futures: cancelling a `CompletableFuture` does not stop its supplier
+and can discard a handle the supplier creates later.
 
 The loopback consumer registers the callback on its subscription and removes it again on `close()`:
 
@@ -151,35 +176,29 @@ return CompletableFuture.completedFuture(consumer);
 
 For systems where creating many clients at once is slow or rate-limited, override `createProducers` /
 `createConsumers` and use `ResourceCreator`. It splits the list into batches of `maxBatchSize`, waits
-`interBatchDelayMs` between batches, and retries failed entries until all of them succeed, logging
-progress every 10 s. The RabbitMQ driver is an example:
+`interBatchDelayMs` before each batch, and retries each failed entry up to `maxRetries` times after
+the first attempt. It logs progress every 10 s, closes untransferred handles on failure or cancellation,
+and shuts down its scheduler when the operation ends. The RabbitMQ driver is an example:
 
 ```java
 return new ResourceCreator<ProducerInfo, BenchmarkProducer>(
                 "producer",
                 config.producerCreationBatchSize,
                 config.producerCreationDelay,
-                ps -> ps.stream().collect(toMap(p -> p, p -> createProducer(p.topic()))),
-                fc -> {
-                    try {
-                        return new CreationResult<>(fc.get(), true);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(e);
-                    } catch (ExecutionException e) {
-                        log.debug(e.getMessage());
-                        return new CreationResult<>(null, false);
-                    }
-                })
+                config.resourceCreationMaxRetries,
+                producer -> createProducer(producer.topic()))
         .create(producers);
 ```
 
-Because `ResourceCreator` retries indefinitely, a permanent failure such as wrong credentials keeps
-creation running instead of failing the workload.
+RabbitMQ defaults to 10 retries per failed resource (11 attempts in total). Set
+`resourceCreationMaxRetries: 0` to disable retries; negative values are invalid. An exhausted
+resource fails the batch with its original creation cause. Interruption is never retried.
 
 ## Asynchronous semantics
 
-All creation methods and `sendAsync` return `CompletableFuture`s:
+All creation methods and `sendAsync` return non-null `CompletableFuture`s. Operational failures must
+complete them exceptionally with a meaningful cause instead of returning `null`, hanging, or
+reporting success:
 
 - The worker waits (`join()`) on the futures from `createTopics`, `createProducers` and
   `createConsumers`. An exceptional completion fails the workload.
@@ -187,13 +206,16 @@ All creation methods and `sendAsync` return `CompletableFuture`s:
   `sendAsync`, and loops. Time spent inside `sendAsync` before it returns delays the producer's next
   send, so start the send and return without waiting for the broker.
 - The benchmark measures publish latency from the call to `sendAsync` until the returned future
-  completes. Complete the future only when the broker has acknowledged the message, according to the
-  durability settings of the driver configuration.
+  completes. Define and document the completion point for each driver and configuration: it may be
+  client acceptance or transaction buffering rather than a broker acknowledgement, and a broker
+  acknowledgement does not necessarily mean durable storage. For example, Pravega transactional
+  sends complete before the transaction commits; see [Pravega semantics](../drivers/pravega.md#semantics).
 - Complete the future exceptionally when a send fails. The benchmark counts it as a publish error and
   logs `Write error on message`. An exception thrown directly from `sendAsync` stops that producer's
   thread for the rest of the run (`Producer thread failed`).
 - `key` is empty when the workload uses `NO_KEY`. Otherwise it is the key that the workload's key
   distributor selected.
+- Cancellation does not guarantee that the broker did not receive the message.
 
 The loopback producer delivers synchronously and returns a completed future:
 
@@ -205,6 +227,15 @@ public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
     return CompletableFuture.completedFuture(null);
 }
 ```
+
+### Payload ownership
+
+The caller owns the `byte[]` supplied to `sendAsync`; a driver must treat it as read-only. The caller
+may share the same array across concurrent sends, but must not mutate it until **all** futures for
+those sends have completed. A driver may retain the array while its own send future is pending, but
+must stop using it when that future completes, including exceptional completion or cancellation.
+Copy into driver-owned storage before mutating bytes or retaining them beyond completion, including
+when an asynchronous client may continue using a payload after the future is cancelled.
 
 ## End-to-end publish timestamp
 
@@ -260,22 +291,26 @@ buffering messages without limit while the callback blocks.
 ## Error handling
 
 - Exceptions from `initialize`, from the creation futures, and from `close()` propagate to the
-  coordinator, which logs the failure and moves on to the next workload. The worker HTTP layer returns
-  the exception chain in the response body.
+  coordinator. It continues to the next workload only if cleanup leaves the worker safe to reuse;
+  otherwise it skips the remaining workloads. Any failure makes the benchmark exit unsuccessfully.
+  The worker HTTP layer returns the exception chain in the response body.
 - Report send failures through the `sendAsync` future, as described above.
 - Errors on the consumer side cannot be reported through the SPI. Log them. Missing messages show up
   as a lower consume rate and a growing backlog in the results.
 
 ## Resource cleanup
 
-At the end of each workload, `stopAll()` closes every producer, then every consumer, then the driver,
-and discards the driver instance. The next workload or driver gets a new instance through the
-constructor and `initialize`, in the same driver process unless the driver changes.
+On normal shutdown at the end of a workload, `stopAll()` closes handed-off producer and consumer
+handles, then the driver, and discards the driver instance. `ProcessWorker` starts a fresh isolated
+driver process on the next initialization. Handle closes run concurrently with a shared 45-second
+deadline; the driver close has a separate 45-second deadline. A timeout is reported as a failure and
+the worker is not reused.
 
-- `BenchmarkProducer.close()` should flush or abandon outstanding sends and release the client.
-- `BenchmarkConsumer.close()` should stop delivery to the callback and release the client.
+- `BenchmarkProducer.close()` must flush or abandon outstanding sends, settle their futures, and
+  release per-producer resources.
+- `BenchmarkConsumer.close()` must stop delivery to the callback and release the client.
 - `BenchmarkDriver.close()` should release shared connections, admin clients and thread pools. Leaked
-  threads or connections stay alive in the driver process for later workloads.
+  threads or connections consume resources until the driver process terminates.
 - The benchmark does not delete topics. Topic names include a random suffix, so later runs do not reuse
   them. Delete them on the broker, or in `close()` if the driver has a reason to.
 

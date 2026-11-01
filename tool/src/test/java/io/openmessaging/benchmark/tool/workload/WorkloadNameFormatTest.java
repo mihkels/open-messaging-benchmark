@@ -44,4 +44,32 @@ class WorkloadNameFormatTest {
         String name = new WorkloadNameFormat(nameFormat).from(workload);
         assertThat(name).isEqualTo("1k-topics-2k-partitions-617kb-45p-541c-1m");
     }
+
+    @Test
+    void retainsFormattingThresholdsAndUnabbreviatedDurations() {
+        Workload workload = new Workload();
+        workload.topics = -1234;
+        workload.messageSize = 999;
+        workload.producerRate = 9_999_999;
+        workload.consumerBacklogSizeGB = 1_234_567_890;
+        workload.testDurationMinutes = 1500;
+        WorkloadNameFormat format =
+                new WorkloadNameFormat(
+                        "${topics}|${messageSize}|${producerRate}|${consumerBacklogSizeGB}"
+                                + "|${testDurationMinutes}");
+
+        assertThat(format.from(workload)).isEqualTo("-1234|999|9m|1g|1500");
+
+        workload.messageSize = 1000;
+        workload.producerRate = 10_000_000;
+        assertThat(format.from(workload)).isEqualTo("-1234|1k|max-rate|1g|1500");
+    }
+
+    @Test
+    void leavesNullAndUnsupportedVariablesUnsubstituted() {
+        Workload workload = new Workload();
+        String format = "${payloadFile}|${messageSizeDistribution}|${backlogDrainRatio}|${unknown}";
+
+        assertThat(new WorkloadNameFormat(format).from(workload)).isEqualTo(format);
+    }
 }

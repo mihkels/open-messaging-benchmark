@@ -231,13 +231,19 @@ driver commits offsets with `commitAsync` after each non-empty poll. Because the
 benchmark callback. With a Failover subscription, only one consumer per partition receives messages;
 additional consumers on the same subscription are standbys.
 
+Kafka consumer creation waits for the initial group assignment and positions as in the
+[Kafka driver](kafka.md#semantics); normal subsequent rebalance and offset-reset behavior is unchanged.
+Pulsar consumer creation completes after all partition consumers have been created.
+
 **End-to-end latency.** Kafka consumers report `ConsumerRecord.timestamp()` as the publish time, which
 is the producer timestamp for Kafka producers and the timestamp KoP derives for Pulsar-produced
 messages. Pulsar consumers report the message's publish time (`Message.getPublishTime()`). Both are set
 from the producing host's clock, so cross-host latency depends on clock synchronization.
 
-**Cleanup.** The driver closes Kafka producers and consumers, the Admin client and the Pulsar client at
-the end of a run. Topics and subscriptions are not deleted; the stack disables inactive-topic deletion.
+**Cleanup.** The benchmark closes successfully created producer and consumer handles; the driver closes
+the shared Admin and Pulsar clients. Failed or cancelled creation closes untransferred handles,
+including late partition consumers. Topics and subscriptions are not deleted; the stack disables
+inactive-topic deletion.
 
 Workload features: the regression suite covers one topic with one partition and one subscription for
 each producer/consumer combination. Partitions, keys and several subscriptions are implemented as

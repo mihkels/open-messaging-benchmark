@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.plugin;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -199,7 +198,7 @@ public final class PluginFixtures {
                 + className.substring(dot + 1)
                 + " implements BenchmarkDriver {\n"
                 + "  public void initialize(java.nio.file.Path config,"
-                + " io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry) throws java.io.IOException {\n"
+                + " io.micrometer.core.instrument.MeterRegistry registry) throws java.io.IOException {\n"
                 + initializeBody
                 + "\n  }\n"
                 + "  public String getTopicNamePrefix() { return "
@@ -224,7 +223,7 @@ public final class PluginFixtures {
     }
 
     private static List<Path> driverApiClasspath() {
-        return Stream.of(BenchmarkDriver.class, PrometheusMeterRegistry.class, MeterRegistry.class)
+        return Stream.of(BenchmarkDriver.class, MeterRegistry.class)
                 .map(PluginFixtures::codeSource)
                 .distinct()
                 .toList();

@@ -244,7 +244,8 @@ Or copy the jar into the `ext/` directory of an installed distribution or contai
 **Producing.** With `use20api: true`, the driver sends with a JMS 2.0 `CompletionListener`, and a message
 counts as published when the provider confirms it. With `use20api: false`, `send` blocks until the
 provider returns, so each producer has one message in flight and the publish rate is limited by the send
-round trip.
+round trip. Closing a non-transactional producer fails any sends still unconfirmed and rejects new sends.
+Closing from its provider completion callback is rejected; retry after the callback returns.
 
 **Consuming.** The listener copies the body (`getBody(byte[].class)` in 2.0 mode, `BytesMessage.readBytes`
 in 1.1 mode), calls the benchmark callback and then `acknowledge()`. In an `AUTO_ACKNOWLEDGE` session the
@@ -263,9 +264,10 @@ depends on clock synchronization.
 [Latency and backlog](../methodology/latency-and-backlog.md)). Non-durable consumers in 1.1 mode can only
 build a backlog in the provider's consumer buffer.
 
-**Cleanup.** At the end of a run the driver closes producers, consumers and their connections, the
-connection factory (if it is `AutoCloseable`) and the delegate. Topics, durable subscriptions and
-delegate-created namespaces are not deleted.
+**Cleanup.** At the end of a run the worker closes producer and consumer handles, then the driver
+closes its shared producer connection, the connection factory (if it is `AutoCloseable`) and the
+delegate. Initialization and creation failures also close partially opened resources. Topics, durable
+subscriptions and delegate-created namespaces are not deleted.
 
 ### Selectors and message properties
 
@@ -282,7 +284,10 @@ With `sendWithTransactions: true`, every `sendAsync` opens a new transacted sess
 one message, commits and closes them. Each transaction contains exactly one message, so the results
 measure per-message commit cost, not batched transactional throughput. With `use20api: true`, the commit
 happens after the asynchronous send completes; with `use20api: false`, send and commit are synchronous.
-Consumers are not transacted.
+Consumers are not transacted. Cancelling a transactional send or closing its producer settles the send
+future and closes its per-send producer and session; new sends after close fail. A late provider
+acknowledgement cannot restart or commit that send. Cancellation does not guarantee that the broker did
+not receive the message.
 
 For Pulsar, also set `"enableTransaction": "true"` in the connection factory parameter and enable the
 transaction coordinator on the broker (`transactionCoordinatorEnabled=true`, `systemTopicEnabled=true`).
@@ -319,16 +324,16 @@ e2e-tests/compose/run-e2e.sh --cases jms-pulsar-selectors
 A passing case is a functional check at a low rate, not a performance result. See the
 [Compose regression suite README](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/README.md).
 
-|                                Symptom                                 |                                                            Cause and fix                                                             |
-|------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `ClassNotFoundException` for the connection factory class              | The provider jar is not in the plugin's `ext/` directory on this host, or the process was started before it was added.               |
-| `ClassNotFoundException` or `NoClassDefFoundError` for `jakarta.jms.*` | The provider implements `jakarta.jms` (for example `pulsar-jms-all` 7.x). Use a `javax.jms` release.                                 |
-| `Cannot find a suitable constructor`                                   | The factory has neither a `String` nor a `Properties` constructor.                                                                   |
-| `Cannot created delegate driver`                                       | The delegate's plugin (`kafka` or `pulsar`) is missing, or its keys are missing from the file (for Kafka, all four property blocks). |
-| Plugin fails to load with conflicting classes                          | The provider jar bundles libraries that conflict with the delegate plugin, for example an unshaded Pulsar client.                    |
-| Pulsar transacted sends fail                                           | Transactions are not enabled on the broker or `enableTransaction` is missing in the factory parameter.                               |
-| Kafka JMS lane reported as `blocked`                                   | The fat jar was not supplied.                                                                                                        |
-| Topic names start with `-`                                             | No delegate and no `topicNamePrefix`.                                                                                                |
+|                                Symptom                                 |                                                        Cause and fix                                                        |
+|------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `ClassNotFoundException` for the connection factory class              | The provider jar is not in the plugin's `ext/` directory on this host, or the process was started before it was added.      |
+| `ClassNotFoundException` or `NoClassDefFoundError` for `jakarta.jms.*` | The provider implements `jakarta.jms` (for example `pulsar-jms-all` 7.x). Use a `javax.jms` release.                        |
+| `Cannot find a suitable constructor`                                   | The factory has neither a `String` nor a `Properties` constructor.                                                          |
+| `Cannot initialize JMS benchmark driver`                               | Inspect the cause: the provider or delegate plugin may be missing, its settings invalid, or the connection unable to start. |
+| Plugin fails to load with conflicting classes                          | The provider jar bundles libraries that conflict with the delegate plugin, for example an unshaded Pulsar client.           |
+| Pulsar transacted sends fail                                           | Transactions are not enabled on the broker or `enableTransaction` is missing in the factory parameter.                      |
+| Kafka JMS lane reported as `blocked`                                   | The fat jar was not supplied.                                                                                               |
+| Topic names start with `-`                                             | No delegate and no `topicNamePrefix`.                                                                                       |
 
 See also [Troubleshooting](../guides/troubleshooting.md).
 

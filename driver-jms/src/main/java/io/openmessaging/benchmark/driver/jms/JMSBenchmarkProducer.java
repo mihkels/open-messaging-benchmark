@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.jms;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.Collections;
 import java.util.List;
@@ -36,6 +37,8 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
     private final MessageProducer producer;
     private final boolean useAsyncSend;
     private final List<JMSConfig.AddProperty> properties;
+    private final Object lifecycleLock = new Object();
+    private final PendingSendTracker pending = new PendingSendTracker("JMS producer");
 
     // Private constructor - cannot throw exceptions
     private JMSBenchmarkProducer(
@@ -83,6 +86,9 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
                 try {
                     tempProducer.close();
                 } catch (Exception closeException) {
+                    if (closeException != e) {
+                        e.addSuppressed(closeException);
+                    }
                     log.warn("Failed to close producer during cleanup", closeException);
                 }
             }
@@ -92,45 +98,74 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        session.close();
+        boolean closeSession = pending.beginClose();
+        Exception closeFailure = null;
+        try {
+            if (closeSession) {
+                Session sessionToClose;
+                synchronized (lifecycleLock) {
+                    // Wait for a send that started before close to finish using the session.
+                    sessionToClose = session;
+                }
+                sessionToClose.close();
+            }
+        } catch (Exception e) {
+            closeFailure = e;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw e;
+        } finally {
+            pending.failRemaining(closeFailure);
+        }
     }
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        CompletableFuture<Void> res = new CompletableFuture<>();
-        try {
-            BytesMessage bytesMessage = session.createBytesMessage();
-            bytesMessage.writeBytes(payload);
-            if (key.isPresent()) {
-                // a behaviour similar to https://activemq.apache.org/message-groups
-                bytesMessage.setStringProperty("JMSXGroupID", key.get());
+        CompletableFuture<Void> res;
+        synchronized (lifecycleLock) {
+            res = pending.register();
+            if (res.isDone()) {
+                return res;
             }
-            for (JMSConfig.AddProperty prop : properties) {
-                bytesMessage.setStringProperty(prop.name, prop.value);
-            }
-            // Add a timer property for end to end
-            bytesMessage.setLongProperty("E2EStartMillis", System.currentTimeMillis());
-            if (useAsyncSend) {
-                producer.send(
-                        bytesMessage,
-                        new CompletionListener() {
-                            @Override
-                            public void onCompletion(Message message) {
-                                res.complete(null);
-                            }
+            try {
+                BytesMessage bytesMessage = session.createBytesMessage();
+                bytesMessage.writeBytes(payload);
+                if (key.isPresent()) {
+                    // a behaviour similar to https://activemq.apache.org/message-groups
+                    bytesMessage.setStringProperty("JMSXGroupID", key.get());
+                }
+                for (JMSConfig.AddProperty prop : properties) {
+                    bytesMessage.setStringProperty(prop.name, prop.value);
+                }
+                // Add a timer property for end to end
+                bytesMessage.setLongProperty("E2EStartMillis", System.currentTimeMillis());
+                if (useAsyncSend) {
+                    producer.send(
+                            bytesMessage,
+                            new CompletionListener() {
+                                @Override
+                                public void onCompletion(Message message) {
+                                    pending.completeFromClient(res, null);
+                                }
 
-                            @Override
-                            public void onException(Message message, Exception exception) {
-                                log.error("send completed with error", exception);
-                                res.completeExceptionally(exception);
-                            }
-                        });
-            } else {
-                producer.send(bytesMessage);
-                res.complete(null);
+                                @Override
+                                public void onException(Message message, Exception exception) {
+                                    Exception failure = exception;
+                                    if (failure == null) {
+                                        failure = new JMSException("JMS provider reported a failure without a cause");
+                                    }
+                                    log.error("send completed with error", failure);
+                                    pending.completeFromClient(res, failure);
+                                }
+                            });
+                } else {
+                    producer.send(bytesMessage);
+                    res.complete(null);
+                }
+            } catch (JMSException | RuntimeException err) {
+                res.completeExceptionally(err);
             }
-        } catch (JMSException err) {
-            res.completeExceptionally(err);
         }
         return res;
     }

@@ -66,5 +66,15 @@ public interface Worker extends AutoCloseable {
 
     void stopAll();
 
+    /**
+     * Whether cleanup has left this worker in a known state suitable for another driver. The
+     * conservative default prevents reusing remote or custom workers after a cleanup failure.
+     *
+     * @return true only when reuse after a failed cleanup is known to be safe
+     */
+    default boolean canReuseAfterFailure() {
+        return false;
+    }
+
     String id();
 }

@@ -19,6 +19,7 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperties;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -30,8 +31,13 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     private final String topic;
     private final MqttQos qos;
-    private Mqtt5AsyncClient client;
-    private volatile boolean closed = false;
+    private volatile Mqtt5AsyncClient client;
+    private final PendingSendTracker pending = new PendingSendTracker("MQTT producer");
+    private final Object lifecycleLock = new Object();
+    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
+    private volatile boolean closed;
+    private boolean closeComplete;
+    private int activePublications;
 
     public MqttBenchmarkProducer(String topic, int qosCode) {
         this.topic = topic;
@@ -40,42 +46,123 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-
-        Mqtt5UserProperties properties =
-                Mqtt5UserProperties.builder()
-                        .add(
-                                MqttBenchmarkDriver.USER_PROPERTY_KEY_PUBLISH_TIMESTAMP,
-                                MqttUtf8String.of(String.valueOf(System.currentTimeMillis())))
-                        .build();
-        Mqtt5Publish message =
-                Mqtt5Publish.builder()
-                        .topic(topic)
-                        .payload(payload)
-                        .qos(qos)
-                        .userProperties(properties)
-                        .build();
-
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        this.client
-                .publish(message)
-                .whenComplete(
-                        ((result, ex) -> {
-                            if (ex != null || result.getError().isPresent()) {
-                                Throwable error = ex != null ? ex : result.getError().get();
-                                future.completeExceptionally(error);
-                                log.error("Client[{}] failed to publish MQTT message, topic={}", topic, error);
-                            } else {
-                                future.complete(null);
-                            }
-                        }));
+        Mqtt5Publish message;
+        try {
+            Mqtt5UserProperties properties =
+                    Mqtt5UserProperties.builder()
+                            .add(
+                                    MqttBenchmarkDriver.USER_PROPERTY_KEY_PUBLISH_TIMESTAMP,
+                                    MqttUtf8String.of(String.valueOf(System.currentTimeMillis())))
+                            .build();
+            message =
+                    Mqtt5Publish.builder()
+                            .topic(topic)
+                            .payload(payload.clone())
+                            .qos(qos)
+                            .userProperties(properties)
+                            .build();
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+        CompletableFuture<Void> future;
+        synchronized (lifecycleLock) {
+            future = pending.register();
+            if (future.isDone()) {
+                return future;
+            }
+            activePublications++;
+            Integer depth = publishingDepth.get();
+            publishingDepth.set(depth == null ? 1 : depth + 1);
+        }
+        try {
+            this.client
+                    .publish(message)
+                    .whenComplete(
+                            (result, ex) -> {
+                                try {
+                                    if (ex != null) {
+                                        pending.completeFromClient(future, ex);
+                                        log.error("Failed to publish MQTT message, topic={}", topic, ex);
+                                    } else if (result == null) {
+                                        pending.completeFromClient(
+                                                future, new IllegalStateException("Missing MQTT publish result"));
+                                    } else if (result.getError().isPresent()) {
+                                        Throwable error = result.getError().get();
+                                        pending.completeFromClient(future, error);
+                                        log.error("Failed to publish MQTT message, topic={}", topic, error);
+                                    } else {
+                                        pending.completeFromClient(future, null);
+                                    }
+                                } catch (Exception failure) {
+                                    pending.completeFromClient(future, failure);
+                                }
+                            });
+        } catch (Exception failure) {
+            future.completeExceptionally(failure);
+        } finally {
+            int depth = publishingDepth.get() - 1;
+            if (depth == 0) {
+                publishingDepth.remove();
+            } else {
+                publishingDepth.set(depth);
+            }
+            synchronized (lifecycleLock) {
+                activePublications--;
+                lifecycleLock.notifyAll();
+            }
+        }
 
         return future;
     }
 
     @Override
     public void close() throws Exception {
-        MqttBenchmarkDriver.closeClient(client);
-        closed = true;
+        if (publishingDepth.get() != null) {
+            throw new IllegalStateException(
+                    "Cannot close an MQTT producer while publishing on the same thread; "
+                            + "retry after sendAsync returns");
+        }
+        publishingDepth.remove();
+        boolean interrupted = false;
+        boolean closeOwner;
+        synchronized (lifecycleLock) {
+            closeOwner = pending.beginClose();
+            if (closeOwner) {
+                closed = true;
+            }
+            while (closeOwner ? activePublications != 0 : !closeComplete) {
+                try {
+                    lifecycleLock.wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+        }
+        Throwable closeFailure = null;
+        try {
+            if (closeOwner) {
+                MqttBenchmarkDriver.closeClient(client);
+            }
+        } catch (Exception | Error failure) {
+            closeFailure = failure;
+            throw failure;
+        } finally {
+            try {
+                if (closeOwner) {
+                    pending.failRemaining(closeFailure);
+                }
+            } finally {
+                if (closeOwner) {
+                    synchronized (lifecycleLock) {
+                        closeComplete = true;
+                        lifecycleLock.notifyAll();
+                    }
+                }
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
     }
 
     public void setClient(Mqtt5AsyncClient client) {

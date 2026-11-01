@@ -39,7 +39,9 @@ record CounterAdaptor(Counter counter) implements dlshade.org.apache.bookkeeper.
     }
 
     @Override
-    public void addLatency(long eventLatency, TimeUnit unit) {}
+    public void addLatency(long eventLatency, TimeUnit unit) {
+        counter.addLatency(eventLatency, unit);
+    }
 
     @Override
     public Long get() {

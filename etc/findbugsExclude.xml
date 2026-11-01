@@ -42,6 +42,32 @@
     <Class name="io.openmessaging.benchmark.driver.pravega.config.PravegaClientConfig" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
   </Match>
+  <!-- Pravega can propagate checked controller/client failures without declaring them. -->
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver" />
+    <Method name="initialize" />
+    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF,BC_VACUOUS_INSTANCEOF" />
+  </Match>
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver" />
+    <Method name="close" />
+    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
+  </Match>
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkConsumer" />
+    <Method name="close" />
+    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
+  </Match>
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkProducer" />
+    <Method name="close" />
+    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
+  </Match>
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkTransactionProducer" />
+    <Method name="sendAsync" />
+    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
+  </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkProducer" />
     <Bug pattern="RV_RETURN_VALUE_OF_PUTIFABSENT_IGNORED" />

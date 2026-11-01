@@ -13,51 +13,49 @@
  */
 package io.openmessaging.benchmark.worker;
 
-import static io.openmessaging.benchmark.utils.UniformRateLimiter.uninterruptibleSleepNs;
+import static io.openmessaging.benchmark.utils.UniformRateLimiter.interruptibleSleepNs;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.LongSupplier;
 
 public class MessageProducer {
 
-    private final WorkerStats stats;
+    private final RunCallbacks callbacks;
     private final UniformRateLimiter rateLimiter;
-    private final Supplier<Long> nanoClock;
+    private final LongSupplier nanoClock;
 
-    MessageProducer(UniformRateLimiter rateLimiter, WorkerStats stats) {
-        this(System::nanoTime, rateLimiter, stats);
+    MessageProducer(UniformRateLimiter rateLimiter, RunCallbacks callbacks) {
+        this(System::nanoTime, rateLimiter, callbacks);
     }
 
-    MessageProducer(Supplier<Long> nanoClock, UniformRateLimiter rateLimiter, WorkerStats stats) {
+    MessageProducer(LongSupplier nanoClock, UniformRateLimiter rateLimiter, RunCallbacks callbacks) {
         this.nanoClock = nanoClock;
         this.rateLimiter = rateLimiter;
-        this.stats = stats;
+        this.callbacks = callbacks;
     }
 
-    public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload) {
+    public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload)
+            throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();
-        uninterruptibleSleepNs(intendedSendTime);
-        final long sendTime = nanoClock.get();
-        producer
-                .sendAsync(key, payload)
-                .thenRun(() -> success(payload.length, intendedSendTime, sendTime))
-                .exceptionally(this::failure);
+        interruptibleSleepNs(intendedSendTime);
+        if (!callbacks.beginSend()) {
+            return;
+        }
+        try {
+            final long sendTime = nanoClock.getAsLong();
+            CompletableFuture<Void> send =
+                    Objects.requireNonNull(producer.sendAsync(key, payload), "sendAsync returned null");
+            send.whenComplete(
+                    (ignored, failure) ->
+                            callbacks.completeSend(
+                                    payload.length, intendedSendTime, sendTime, nanoClock, failure));
+        } catch (Throwable t) {
+            callbacks.abortSend();
+            throw t;
+        }
     }
-
-    private void success(long payloadLength, long intendedSendTime, long sendTime) {
-        long nowNs = nanoClock.get();
-        stats.recordProducerSuccess(payloadLength, intendedSendTime, sendTime, nowNs);
-    }
-
-    private Void failure(Throwable t) {
-        stats.recordProducerFailure();
-        log.warn("Write error on message", t);
-        return null;
-    }
-
-    private static final Logger log = LoggerFactory.getLogger(MessageProducer.class);
 }

@@ -20,16 +20,16 @@ directly. Topics are created with the admin API; producers send asynchronously a
 push consumers in a consumer group. For the gRPC client that connects through the RocketMQ 5 proxy,
 see [RocketMQ 5](rocketmq5.md).
 
-|       Item        |                                                                       Value                                                                       |
-|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID         | `rocketmq`                                                                                                                                        |
-| Module            | `driver-rocketmq`                                                                                                                                 |
-| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver`                                                                              |
-| Shipped config    | `driver-rocketmq/rocketmq.yaml`                                                                                                                   |
-| Client library    | `rocketmq-client` and `rocketmq-tools` 5.5.1, `rocketmq-acl` 5.3.2                                                                                |
-| Tested broker     | `apache/rocketmq:5.3.2`: one name server and one broker (Compose stack `rocketmq`)                                                                |
-| Regression cases  | `rocketmq-contract`, `rocketmq-partitioned`                                                                                                       |
-| Known limitations | Keys do not select queues; queue count is divided across all broker addresses (masters and slaves); some start errors are only logged; no cleanup |
+|       Item        |                                                      Value                                                       |
+|-------------------|------------------------------------------------------------------------------------------------------------------|
+| Plugin ID         | `rocketmq`                                                                                                       |
+| Module            | `driver-rocketmq`                                                                                                |
+| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver`                                             |
+| Shipped config    | `driver-rocketmq/rocketmq.yaml`                                                                                  |
+| Client library    | `rocketmq-client` and `rocketmq-tools` 5.5.1, `rocketmq-acl` 5.3.2                                               |
+| Tested broker     | `apache/rocketmq:5.3.2`: one name server and one broker (Compose stack `rocketmq`)                               |
+| Regression cases  | `rocketmq-contract`, `rocketmq-partitioned`                                                                      |
+| Known limitations | Keys do not select queues; queue count is divided across all broker addresses; topics and groups are not deleted |
 
 ## Prerequisites and broker setup
 
@@ -136,6 +136,7 @@ leaves the client default unchanged. `namesrvAddr` and `clusterName` are needed 
   therefore differ from `partitionsPerTopic`, and slave addresses also count in the division.
 - **Producers.** One `DefaultMQProducer` (with a random producer group) is shared by all benchmark
   producers of a worker. Each send is asynchronous and completes when the broker acknowledges it.
+  The driver owns the message bytes even if the send is canceled.
 - **Keys.** A message key is set as the RocketMQ message key, which the broker indexes for lookup.
   It does not choose the queue: the producer spreads messages across queues regardless of the key,
   so per-key ordering is not preserved.
@@ -150,11 +151,15 @@ leaves the client default unchanged. `namesrvAddr` and `clusterName` are needed 
   [Latency and backlog](../methodology/latency-and-backlog.md).
 - **Backlog workloads.** The framework blocks the consumer callback, which holds the push consumer's
   consume threads until it is released.
-- **Errors.** A failure to start the admin client, the producer or a consumer is logged and the
-  benchmark continues; the run then fails later, for example while creating topics or waiting for
-  consumers.
-- **Cleanup.** Producers, consumers and the admin client are shut down. Topics and consumer groups
-  are not deleted.
+- **Errors.** Admin startup failures abort initialization with their cause. Producer and consumer
+  startup failures complete creation exceptionally and shut down the partially created client.
+- **Cleanup.** Closing a producer handle fails its pending sends without shutting down the shared
+  client. The driver shuts down the shared producer and admin client; each consumer owns its client.
+  Closing a handle from a callback running synchronously inside its own `sendAsync` invocation or
+  from a send-completion callback running inline with a client acknowledgement or close-induced
+  failure throws `IllegalStateException` before changing the handle's state. Retry after the call
+  or callback returns, or schedule close on another thread without waiting for it in the callback.
+  Topics and consumer groups are not deleted.
 
 ## Tuning examples
 
@@ -186,13 +191,14 @@ functional check at a low fixed rate. It is not a performance result.
 
 Common problems:
 
+- **`Failed to start the RocketMQ admin tool`.** Check the name server address and admin credentials;
+  initialization reports the startup cause.
 - **`get brokerAddr return null, clusterName: ...` or `Failed to create topic`.** `clusterName` does
-  not match the brokers, the admin client could not start, or the name server is unreachable.
+  not match the brokers, or the name server is unreachable.
 - **Sends time out after topics are created.** The broker advertises an address (`brokerIP1`) the
   workers cannot reach, or `vipChannelEnabled: true` with the VIP port not published.
-- **`Timed out waiting for consumers to be ready`.** A consumer failed to start (check the worker log
-  for `Failed to create consumer instance`), or the broker does not create subscription groups
-  automatically.
+- **Consumer creation fails or readiness times out.** Check the reported startup cause and whether
+  the broker creates subscription groups automatically.
 - **ACL errors.** Both `accessKey` and `secretKey` must be set; with one of them blank, requests are
   unsigned.
 

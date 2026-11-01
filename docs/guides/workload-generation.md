@@ -44,6 +44,9 @@ These fields are lists, and the tool writes the Cartesian product of their value
 `topics`, `partitionsPerTopic`, `messageSize`, `subscriptionsPerTopic`, `producersPerTopic`,
 `consumerPerSubscription`, `producerRate`.
 
+An empty or omitted list defaults to `1` for the topic, partition, subscription, producer, and
+consumer counts, `1024` for `messageSize`, and `10000` for `producerRate`.
+
 The other fields are single values copied into every workload. The example produces
 `1 × 1 × 1 × 1 × 3 × 3 × 2 = 18` files. The template does not support `messageSizeDistribution` or
 `backlogDrainRatio`; add them to the generated files by hand if needed. With a fixed
@@ -51,10 +54,11 @@ The other fields are single values copied into every workload. The example produ
 
 ## Names
 
-`nameFormat` builds each workload's `name` and its file name, `<name>.yaml`. Any template field can
-be used as `${field}`. Counts are abbreviated (`50000` becomes `50k`, `2000000` becomes `2m`), and a
-`producerRate` of 10,000,000 or more is written as `max-rate`. Without `nameFormat`, the default is
-the format shown above.
+`nameFormat` builds each workload's `name` and its file name, `<name>.yaml`. Every supported workload
+field in the template can be used as `${field}`; `nameFormat` itself and the unsupported fields cannot.
+Counts are abbreviated (`50000` becomes `50k`, `2000000` becomes `2m`), and a `producerRate` of
+10,000,000 or more is written as `max-rate`. Without `nameFormat`, the default is the format shown
+above.
 
 Because results are named after the workload file, a descriptive format makes result files easy to
 group later.

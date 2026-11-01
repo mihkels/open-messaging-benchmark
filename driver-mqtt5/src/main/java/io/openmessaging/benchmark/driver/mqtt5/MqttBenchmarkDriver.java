@@ -18,9 +18,11 @@ import com.google.common.base.Splitter;
 import com.google.common.io.BaseEncoding;
 import com.google.common.net.HostAndPort;
 import com.hivemq.client.mqtt.MqttClientConfig;
+import com.hivemq.client.mqtt.MqttClientState;
 import com.hivemq.client.mqtt.MqttClientTransportConfig;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.datatypes.MqttUtf8String;
+import com.hivemq.client.mqtt.exceptions.MqttClientStateException;
 import com.hivemq.client.mqtt.lifecycle.MqttClientAutoReconnect;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
@@ -30,8 +32,9 @@ import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperty;
 import com.hivemq.client.mqtt.mqtt5.message.connect.connack.Mqtt5ConnAck;
 import com.hivemq.client.mqtt.mqtt5.message.connect.connack.Mqtt5ConnAckReasonCode;
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscription;
+import com.hivemq.client.mqtt.mqtt5.message.subscribe.suback.Mqtt5SubAck;
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.suback.Mqtt5SubAckReasonCode;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -43,8 +46,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -72,8 +77,14 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     private MqttConfig config;
 
+    public MqttBenchmarkDriver() {}
+
+    MqttBenchmarkDriver(MqttConfig config) {
+        this.config = config;
+    }
+
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
+    public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
         log.info("MqttBenchmarkDriver configuration: {}", writer.writeValueAsString(config));
@@ -92,22 +103,40 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        CompletableFuture<BenchmarkProducer> future = new CompletableFuture<>();
-
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer(topic, config.client.qos);
-        Mqtt5ClientBuilder clientBuilder =
-                getClientBuilder(buildPublisherClientId(), producer::isClosed);
-        Mqtt5AsyncClient client = clientBuilder.buildAsync();
-        client
-                .connect()
-                .whenComplete(
-                        ((connAck, ex) -> {
-                            if (handleConnResult(client, connAck, ex, future)) {
-                                return;
-                            }
-                            producer.setClient(client);
-                            future.complete(producer);
-                        }));
+        MqttBenchmarkProducer producer;
+        try {
+            producer = new MqttBenchmarkProducer(topic, config.client.qos);
+        } catch (Throwable failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+        MqttCreationFuture<BenchmarkProducer> future = new MqttCreationFuture<>(producer);
+        try {
+            Mqtt5AsyncClient client =
+                    createClient(
+                            buildPublisherClientId(),
+                            () -> producer.isClosed() || future.stopReconnectOnDisconnect());
+            producer.setClient(client);
+            Objects.requireNonNull(client.connect(), "MQTT connection future")
+                    .whenComplete(
+                            (connAck, ex) -> {
+                                try {
+                                    Throwable failure = connectionFailure(connAck, ex);
+                                    if (failure != null) {
+                                        future.fail(failure);
+                                    } else {
+                                        future.connected();
+                                        future.succeed();
+                                    }
+                                } catch (Exception failure) {
+                                    future.fail(failure);
+                                } finally {
+                                    future.finished();
+                                }
+                            });
+        } catch (Exception failure) {
+            future.fail(failure);
+            future.finished();
+        }
 
         return future;
     }
@@ -115,31 +144,114 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
-
-        MqttQos qos = intToQoS(config.client.qos);
-        List<Mqtt5Subscription> subscriptions = new ArrayList<>();
-        Splitter.on(",")
-                .split(topic)
-                .forEach(
-                        topicFilter -> {
-                            topicFilter = topicFilter.trim();
-                            if (!topicFilter.isEmpty()) {
-                                Mqtt5Subscription subscription =
-                                        Mqtt5Subscription.builder()
-                                                // Use subscriptionName as shared subscription group name
-                                                .topicFilter(toSharedSubscription(topicFilter, subscriptionName))
-                                                .qos(qos)
-                                                .build();
-                                subscriptions.add(subscription);
-                            }
-                        });
-
         MqttBenchmarkConsumer consumer = new MqttBenchmarkConsumer();
-        Mqtt5ClientBuilder clientBuilder =
-                getClientBuilder(buildSubscriberClientId(), consumer::isClosed);
-        Mqtt5AsyncClient client = clientBuilder.buildAsync();
-        client
+        MqttCreationFuture<BenchmarkConsumer> future = new MqttCreationFuture<>(consumer);
+        try {
+            MqttQos qos = intToQoS(config.client.qos);
+            List<Mqtt5Subscription> subscriptions = new ArrayList<>();
+            Splitter.on(",")
+                    .split(topic)
+                    .forEach(
+                            topicFilter -> {
+                                topicFilter = topicFilter.trim();
+                                if (!topicFilter.isEmpty()) {
+                                    subscriptions.add(
+                                            Mqtt5Subscription.builder()
+                                                    .topicFilter(toSharedSubscription(topicFilter, subscriptionName))
+                                                    .qos(qos)
+                                                    .build());
+                                }
+                            });
+
+            Mqtt5AsyncClient client =
+                    createClient(
+                            buildSubscriberClientId(),
+                            () -> consumer.isClosed() || future.stopReconnectOnDisconnect());
+            consumer.setClient(client);
+            Objects.requireNonNull(connectConsumer(client), "MQTT connection future")
+                    .whenComplete(
+                            (connAck, ex) -> {
+                                try {
+                                    Throwable failure = connectionFailure(connAck, ex);
+                                    if (failure != null) {
+                                        future.fail(failure);
+                                        return;
+                                    }
+                                    future.connected();
+                                    if (future.isCancelled()) {
+                                        return;
+                                    }
+                                    ConsumerCallback guardedCallback = consumer.guardedCallback(consumerCallback);
+                                    CompletableFuture<Mqtt5SubAck> subscription =
+                                            Objects.requireNonNull(
+                                                    subscribeConsumer(client, subscriptions, guardedCallback),
+                                                    "MQTT subscription future");
+                                    future.retain();
+                                    try {
+                                        subscription.whenComplete(
+                                                (subAck, error) ->
+                                                        completeSubscription(future, subscriptions, subAck, error));
+                                    } catch (Throwable registrationFailure) {
+                                        future.finished();
+                                        throw registrationFailure;
+                                    }
+                                } catch (Throwable failureDuringConnection) {
+                                    future.fail(failureDuringConnection);
+                                } finally {
+                                    future.finished();
+                                }
+                            });
+        } catch (Exception failure) {
+            future.fail(failure);
+            future.finished();
+        }
+
+        return future;
+    }
+
+    private static void completeSubscription(
+            MqttCreationFuture<BenchmarkConsumer> future,
+            List<Mqtt5Subscription> subscriptions,
+            Mqtt5SubAck subAck,
+            Throwable subscribeFailure) {
+        try {
+            if (future.isCancelled()) {
+                return;
+            }
+            Throwable rejection = subscriptionFailure(subAck, subscribeFailure, subscriptions);
+            if (rejection != null) {
+                future.fail(rejection);
+            } else {
+                future.succeed();
+            }
+        } catch (Throwable failureDuringSubscription) {
+            future.fail(failureDuringSubscription);
+        } finally {
+            future.finished();
+        }
+    }
+
+    Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+        return getClientBuilder(clientId, closed).buildAsync();
+    }
+
+    CompletableFuture<Mqtt5ConnAck> connectConsumer(Mqtt5AsyncClient client) {
+        return client
+                .connectWith()
+                .cleanStart(config.consumer.cleanSession)
+                .sessionExpiryInterval(
+                        config.consumer.cleanSession ? 0 : config.consumer.sessionExpiryInterval)
+                .restrictions()
+                .receiveMaximum(config.consumer.receiveMaximum)
+                .applyRestrictions()
+                .send();
+    }
+
+    CompletableFuture<Mqtt5SubAck> subscribeConsumer(
+            Mqtt5AsyncClient client,
+            List<Mqtt5Subscription> subscriptions,
+            ConsumerCallback consumerCallback) {
+        return client
                 .subscribeWith()
                 .addSubscriptions(subscriptions)
                 .callback(
@@ -149,88 +261,41 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                             message.acknowledge();
                         })
                 .manualAcknowledgement(true)
-                .send()
-                .whenComplete(
-                        ((subAck, ex) -> {
-                            String clientId = extractClientId(client.getConfig());
-                            if (ex != null) {
-                                log.error(
-                                        "Client[{}] failed to subscribe, subscriptions={}",
-                                        clientId,
-                                        subscriptions,
-                                        ex);
-                            } else if (subAck == null || subAck.getReasonCodes().size() != subscriptions.size()) {
-                                log.error(
-                                        "Client[{}] received invalid subAck={}, subscriptions={}",
-                                        clientId,
-                                        subAck,
-                                        subscriptions);
-                            } else {
-                                int size = subAck.getReasonCodes().size();
-                                for (int i = 0; i < size; i++) {
-                                    Mqtt5SubAckReasonCode reasonCode = subAck.getReasonCodes().get(i);
-                                    Mqtt5Subscription subscription = subscriptions.get(i);
-                                    if (reasonCode == Mqtt5SubAckReasonCode.GRANTED_QOS_0
-                                            || reasonCode == Mqtt5SubAckReasonCode.GRANTED_QOS_1
-                                            || reasonCode == Mqtt5SubAckReasonCode.GRANTED_QOS_2) {
-                                        log.info(
-                                                "Client[{}] subscribed topic-filters={}, qos={}, granted-qos={}",
-                                                clientId,
-                                                subscription.getTopicFilter(),
-                                                subscription.getQos().getCode(),
-                                                reasonCode.getCode());
-                                    } else {
-                                        log.warn(
-                                                "Client[{}] failed to subscribe topic-filters={}, qos={}, "
-                                                        + "reason-code={}",
-                                                clientId,
-                                                subscription.getTopicFilter(),
-                                                subscription.getQos().getCode(),
-                                                reasonCode.name());
-                                    }
-                                }
-                            }
-                        }));
-
-        client
-                .connectWith()
-                .cleanStart(config.consumer.cleanSession)
-                .sessionExpiryInterval(
-                        config.consumer.cleanSession ? 0 : config.consumer.sessionExpiryInterval)
-                .restrictions()
-                .receiveMaximum(config.consumer.receiveMaximum)
-                .applyRestrictions()
-                .send()
-                .whenComplete(
-                        ((connAck, ex) -> {
-                            if (handleConnResult(client, connAck, ex, future)) {
-                                return;
-                            }
-                            consumer.setClient(client);
-                            future.complete(consumer);
-                        }));
-
-        return future;
+                .send();
     }
 
-    private boolean handleConnResult(
-            Mqtt5AsyncClient client, Mqtt5ConnAck connAck, Throwable ex, CompletableFuture<?> future) {
+    private static Throwable connectionFailure(Mqtt5ConnAck connAck, Throwable ex) {
         if (ex != null) {
-            future.completeExceptionally(ex);
-            log.error(
-                    "Client[{}] failed to connect to MQTT broker", extractClientId(client.getConfig()), ex);
-            return true;
+            return ex;
         }
-        if (connAck.getReasonCode() != Mqtt5ConnAckReasonCode.SUCCESS) {
-            future.completeExceptionally(
-                    new RuntimeException("ConnAck-ReasonCode: " + connAck.getReasonCode()));
-            log.warn(
-                    "Client[{}] was rejected by MQTT broker, ConnAck-ReasonCode={}",
-                    extractClientId(client.getConfig()),
-                    connAck.getReasonCode());
-            return true;
+        if (connAck == null || connAck.getReasonCode() != Mqtt5ConnAckReasonCode.SUCCESS) {
+            return new IllegalStateException(
+                    "ConnAck-ReasonCode: " + (connAck == null ? "missing" : connAck.getReasonCode()));
         }
-        return false;
+        return null;
+    }
+
+    private static Throwable subscriptionFailure(
+            Mqtt5SubAck subAck, Throwable ex, List<Mqtt5Subscription> subscriptions) {
+        if (ex != null) {
+            return ex;
+        }
+        if (subAck == null
+                || subAck.getReasonCodes() == null
+                || subAck.getReasonCodes().size() != subscriptions.size()
+                || subscriptions.isEmpty()) {
+            return new IllegalStateException("Invalid SUBACK for subscriptions: " + subscriptions);
+        }
+        for (int i = 0; i < subscriptions.size(); i++) {
+            Mqtt5SubAckReasonCode reason = subAck.getReasonCodes().get(i);
+            if (reason != Mqtt5SubAckReasonCode.GRANTED_QOS_0
+                    && reason != Mqtt5SubAckReasonCode.GRANTED_QOS_1
+                    && reason != Mqtt5SubAckReasonCode.GRANTED_QOS_2) {
+                return new IllegalStateException(
+                        "Subscription rejected for " + subscriptions.get(i).getTopicFilter() + ": " + reason);
+            }
+        }
+        return null;
     }
 
     private Mqtt5ClientBuilder getClientBuilder(String clientId, Supplier<Boolean> closed) {
@@ -377,17 +442,30 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return qos;
     }
 
-    public static void closeClient(Mqtt5AsyncClient client) {
+    public static void closeClient(Mqtt5AsyncClient client) throws Exception {
         if (client != null) {
             String clientId = String.valueOf(client.getConfig().getClientIdentifier());
             log.info("Client[{}] disconnecting...", clientId);
-            client
-                    .disconnect()
-                    .exceptionally(
-                            ex -> {
-                                log.error("Client[{}] failed to disconnect", clientId, ex);
-                                return null;
-                            });
+            try {
+                Objects.requireNonNull(client.disconnect(), "MQTT disconnect future")
+                        .get(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof MqttClientStateException
+                        && client.getState() == MqttClientState.DISCONNECTED) {
+                    log.debug("Client[{}] is already disconnected", clientId);
+                    return;
+                }
+                if (e.getCause() instanceof Exception failure) {
+                    throw failure;
+                }
+                if (e.getCause() instanceof Error failure) {
+                    throw failure;
+                }
+                throw e;
+            }
         }
     }
 }

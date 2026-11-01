@@ -214,6 +214,10 @@ an ambiguous plugin id or driver class fails with a description of the conflicti
 
 ### Compatibility rules
 
+- The change from `PrometheusMeterRegistry` to `MeterRegistry` in `BenchmarkDriver.initialize` is
+  binary-incompatible but retains `driverApiVersion: 1`. Older version-1 bundles still pass the
+  descriptor check; rebuild the host and all plugin bundles together, then install the rebuilt
+  bundles on every worker.
 - Plugins compile against `driver-api` with `provided` scope and must not bundle it.
 - `driver-api`, Micrometer and the Prometheus metrics libraries are shared with the benchmark
   runtime. A bundle containing a different version of these is rejected.

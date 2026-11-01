@@ -27,6 +27,7 @@
 package io.openmessaging.benchmark.driver.kafka;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.Producer;
@@ -36,6 +37,8 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
 
     private final Producer<String, byte[]> producer;
     private final String topic;
+    private final PendingSendTracker pending = new PendingSendTracker("Kafka producer");
+    private final ThreadLocal<Boolean> closingOnThread = new ThreadLocal<>();
 
     public KafkaBenchmarkProducer(Producer<String, byte[]> producer, String topic) {
         this.producer = producer;
@@ -44,24 +47,42 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload);
-        var future = new CompletableFuture<Void>();
-
-        producer.send(
-                producerRecord,
-                (metadata, exception) -> {
-                    if (exception != null) {
-                        future.completeExceptionally(exception);
-                    } else {
-                        future.complete(null);
-                    }
-                });
+        CompletableFuture<Void> future = pending.register();
+        if (future.isDone()) {
+            return future;
+        }
+        try {
+            var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload.clone());
+            producer.send(
+                    producerRecord, (metadata, exception) -> pending.completeFromClient(future, exception));
+        } catch (RuntimeException error) {
+            future.completeExceptionally(error);
+        }
 
         return future;
     }
 
     @Override
     public void close() throws Exception {
-        producer.close();
+        if (Boolean.TRUE.equals(closingOnThread.get())) {
+            throw new IllegalStateException("Cannot close Kafka producer reentrantly");
+        }
+        boolean closeProducer = pending.beginClose();
+        closingOnThread.set(true);
+        Exception failure = null;
+        try {
+            if (closeProducer) {
+                producer.close();
+            }
+        } catch (Exception closeFailure) {
+            failure = closeFailure;
+            throw closeFailure;
+        } finally {
+            try {
+                pending.failRemaining(failure);
+            } finally {
+                closingOnThread.remove();
+            }
+        }
     }
 }

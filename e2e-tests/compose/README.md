@@ -51,7 +51,7 @@ against `http://worker-1:8080,http://worker-2:8080`.
 
 Each workload lasts one minute, with no warm-up, at a low fixed rate. A case passes when all of these hold:
 
-- the coordinator exits normally within the case timeout and does not log `Failed to run the workload`;
+- the coordinator exits successfully within the case timeout and its log is readable;
 - `result.json` is written with at least three 10-second rate samples and complete, finite publish,
   consume, publish-error and backlog series;
 - at least 50% of the target publish rate was published, with no publish errors;

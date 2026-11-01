@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.rocketmq;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.rocketmq.client.producer.MQProducer;
@@ -24,6 +25,11 @@ import org.apache.rocketmq.common.message.Message;
 public class RocketMQBenchmarkProducer implements BenchmarkProducer {
     private final MQProducer rmqProducer;
     private final String rmqTopic;
+    private final PendingSendTracker pending = new PendingSendTracker("RocketMQ producer");
+    private final Object lifecycleLock = new Object();
+    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
+    private boolean closeComplete;
+    private int activePublications;
 
     public RocketMQBenchmarkProducer(final MQProducer rmqProducer, final String rmqTopic) {
         this.rmqProducer = rmqProducer;
@@ -32,34 +38,98 @@ public class RocketMQBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(final Optional<String> key, final byte[] payload) {
-        Message message = new Message(this.rmqTopic, payload);
-        if (key.isPresent()) {
-            message.setKeys(key.get());
+        Message message;
+        try {
+            message = new Message(this.rmqTopic, payload.clone());
+            if (key.isPresent()) {
+                message.setKeys(key.get());
+            }
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
         }
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
+        CompletableFuture<Void> future;
+        synchronized (lifecycleLock) {
+            future = pending.register();
+            if (future.isDone()) {
+                return future;
+            }
+            activePublications++;
+            Integer depth = publishingDepth.get();
+            publishingDepth.set(depth == null ? 1 : depth + 1);
+        }
         try {
-            this.rmqProducer.send(
-                    message,
-                    new SendCallback() {
-                        @Override
-                        public void onSuccess(final SendResult sendResult) {
-                            future.complete(null);
-                        }
+            if (!future.isDone()) {
+                this.rmqProducer.send(
+                        message,
+                        new SendCallback() {
+                            @Override
+                            public void onSuccess(final SendResult sendResult) {
+                                pending.completeFromClient(future, null);
+                            }
 
-                        @Override
-                        public void onException(final Throwable e) {
-                            future.completeExceptionally(e);
-                        }
-                    });
+                            @Override
+                            public void onException(final Throwable e) {
+                                pending.completeFromClient(
+                                        future,
+                                        e != null ? e : new IllegalStateException("Missing RocketMQ send failure"));
+                            }
+                        });
+            }
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             future.completeExceptionally(e);
+        } finally {
+            int depth = publishingDepth.get() - 1;
+            if (depth == 0) {
+                publishingDepth.remove();
+            } else {
+                publishingDepth.set(depth);
+            }
+            synchronized (lifecycleLock) {
+                activePublications--;
+                lifecycleLock.notifyAll();
+            }
         }
         return future;
     }
 
     @Override
-    public void close() throws Exception {
-        // Close in Driver
+    public void close() {
+        if (publishingDepth.get() != null) {
+            throw new IllegalStateException(
+                    "Cannot close a RocketMQ producer while publishing on the same thread; "
+                            + "retry after sendAsync returns");
+        }
+        publishingDepth.remove();
+        boolean interrupted = false;
+        boolean closeOwner;
+        synchronized (lifecycleLock) {
+            closeOwner = pending.beginClose();
+            while (closeOwner ? activePublications != 0 : !closeComplete) {
+                try {
+                    lifecycleLock.wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+        }
+        try {
+            if (closeOwner) {
+                pending.failRemaining();
+            }
+        } finally {
+            if (closeOwner) {
+                synchronized (lifecycleLock) {
+                    closeComplete = true;
+                    lifecycleLock.notifyAll();
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 }

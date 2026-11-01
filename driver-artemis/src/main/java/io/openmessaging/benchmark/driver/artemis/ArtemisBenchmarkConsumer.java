@@ -82,20 +82,23 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             // Create the consumer instance only after all operations succeed
             return new ArtemisBenchmarkConsumer(tempSession, tempConsumer);
 
-        } catch (ActiveMQException e) {
-            // Clean up resources if initialization fails
+        } catch (ActiveMQException | RuntimeException e) {
             if (tempConsumer != null) {
                 try {
                     tempConsumer.close();
-                } catch (ActiveMQException closeException) {
-                    log.warn("Failed to close consumer during cleanup", closeException);
+                } catch (ActiveMQException | RuntimeException closeException) {
+                    if (closeException != e) {
+                        e.addSuppressed(closeException);
+                    }
                 }
             }
             if (tempSession != null) {
                 try {
                     tempSession.close();
-                } catch (ActiveMQException closeException) {
-                    log.warn("Failed to close session during cleanup", closeException);
+                } catch (ActiveMQException | RuntimeException closeException) {
+                    if (closeException != e) {
+                        e.addSuppressed(closeException);
+                    }
                 }
             }
             throw e;
@@ -104,11 +107,8 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
 
     @Override
     public void close() throws Exception {
-        if (consumer != null) {
+        try (session) {
             consumer.close();
-        }
-        if (session != null) {
-            session.close();
         }
     }
 

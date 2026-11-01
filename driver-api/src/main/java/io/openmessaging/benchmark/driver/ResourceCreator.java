@@ -13,228 +13,271 @@
  */
 package io.openmessaging.benchmark.driver;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static java.util.stream.Collectors.toMap;
-
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.Objects;
+import java.util.Queue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Generic resource creator that handles batch creation of resources with retry logic, progress
- * logging, and configurable delays between batches.
+ * Creates closeable resources in batches with a bounded number of retries per resource.
  *
- * @param <R> the type of resource request/input
- * @param <C> the type of created resource/output
+ * <p>Each operation owns its scheduler and its individual results until the returned future
+ * succeeds. Cancellation and failure close untransferred results, including late completions;
+ * individual creation futures are not cancelled because doing so could discard their eventual
+ * results.
+ *
+ * @param <R> the type of resource request
+ * @param <C> the type of created resource
  */
-public class ResourceCreator<R, C> {
+public final class ResourceCreator<R, C extends AutoCloseable> {
     private static final Logger log = LoggerFactory.getLogger(ResourceCreator.class);
 
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private final String name;
     private final int maxBatchSize;
     private final long interBatchDelayMs;
-    private final Function<List<R>, Map<R, CompletableFuture<C>>> invokeBatchFn;
-    private final Function<CompletableFuture<C>, CreationResult<C>> complete;
+    private final int maxRetries;
+    private final Function<R, CompletableFuture<C>> createOne;
 
     /**
-     * Creates a new ResourceCreator with the specified configuration.
+     * Configures a batched resource creator.
      *
-     * @param name the name of the resource type being created (for logging)
-     * @param maxBatchSize maximum number of resources to process in a single batch
-     * @param interBatchDelayMs delay in milliseconds between batch executions
-     * @param invokeBatchFn function that takes a batch of resources and returns a map of futures
-     * @param complete function that converts a CompletableFuture to a CreationResult
+     * @param name resource type used in progress logs
+     * @param maxBatchSize maximum number of concurrent requests in a batch
+     * @param interBatchDelayMs delay before each batch, including the first
+     * @param maxRetries retries per failed resource after the first attempt; zero disables retries
+     * @param createOne creates one resource and returns its completion future
      */
     public ResourceCreator(
             String name,
             int maxBatchSize,
             long interBatchDelayMs,
-            Function<List<R>, Map<R, CompletableFuture<C>>> invokeBatchFn,
-            Function<CompletableFuture<C>, CreationResult<C>> complete) {
-        this.name = name;
+            int maxRetries,
+            Function<R, CompletableFuture<C>> createOne) {
+        this.name = Objects.requireNonNull(name, "name");
+        if (maxBatchSize <= 0) {
+            throw new IllegalArgumentException("maxBatchSize must be positive");
+        }
+        if (interBatchDelayMs < 0) {
+            throw new IllegalArgumentException("interBatchDelayMs must not be negative");
+        }
+        if (maxRetries < 0) {
+            throw new IllegalArgumentException("maxRetries must not be negative");
+        }
         this.maxBatchSize = maxBatchSize;
         this.interBatchDelayMs = interBatchDelayMs;
-        this.invokeBatchFn = invokeBatchFn;
-        this.complete = complete;
+        this.maxRetries = maxRetries;
+        this.createOne = Objects.requireNonNull(createOne, "createOne");
     }
 
     /**
-     * Creates all requested resources asynchronously.
+     * Creates all requested resources, preserving input order in the successful result.
      *
-     * @param resources the list of resources to create
-     * @return a CompletableFuture containing the list of successfully created resources
+     * @param resources resource requests
+     * @return the batch future, which transfers ownership only on success
      */
     public CompletableFuture<List<C>> create(List<R> resources) {
-        return CompletableFuture.supplyAsync(() -> createBlocking(resources));
+        List<R> requests = List.copyOf(resources);
+        if (requests.isEmpty()) {
+            return ResourceBatch.completed(List.of());
+        }
+        return new Operation(requests).start();
     }
 
     /**
-     * Creates all requested resources synchronously with batching and retry logic. Failed resources
-     * are retried until all resources are successfully created.
+     * Creates an aggregate handle from asynchronously discovered resource requests, without
+     * scheduling or retries. The aggregate takes ownership of all individual resources on success. On
+     * failure or cancellation, every untransferred resource, including late completions, is closed.
+     * Individual creation futures are not cancelled.
      *
-     * @param resources the list of resources to create
-     * @return the list of successfully created resources
+     * @param requests asynchronous ordered list of resource requests
+     * @param createOne creates one resource for each request
+     * @param aggregate constructs a handle owning the complete ordered list of resources
+     * @return the aggregate handle's creation future
+     * @param <R> request type
+     * @param <C> individually created resource type
+     * @param <T> aggregate handle type
      */
-    private List<C> createBlocking(List<R> resources) {
-        if (resources.isEmpty()) {
-            return List.of();
-        }
+    public static <R, C extends AutoCloseable, T extends AutoCloseable> CompletableFuture<T> compose(
+            CompletableFuture<List<R>> requests,
+            Function<R, CompletableFuture<C>> createOne,
+            Function<List<C>, T> aggregate) {
+        return ResourceBatch.compose(requests, createOne, aggregate);
+    }
 
-        BlockingQueue<R> queue = new ArrayBlockingQueue<>(resources.size(), true, resources);
-        List<R> batch = new ArrayList<>();
-        List<C> created = new ArrayList<>();
-        AtomicInteger succeeded = new AtomicInteger();
+    private final class Operation {
+        private final Queue<Attempt> pending = new ArrayDeque<>();
+        private final ScheduledThreadPoolExecutor executor;
+        private final ResourceBatch<C> batch;
+        private final AtomicInteger succeeded = new AtomicInteger();
+        private final int total;
+        private volatile Thread workerThread;
+        private int inFlight;
+        private boolean stopping;
 
-        ScheduledFuture<?> loggingFuture = scheduleProgressLogging(succeeded, resources.size());
-
-        try {
-            while (succeeded.get() < resources.size()) {
-                int batchSize = queue.drainTo(batch, maxBatchSize);
-                if (batchSize > 0) {
-                    processBatch(batch, queue, created, succeeded);
-                    batch.clear();
-                } else {
-                    // No items to process, avoid busy waiting
-                    sleepSafely(100);
-                }
+        private Operation(List<R> requests) {
+            total = requests.size();
+            for (int i = 0; i < requests.size(); i++) {
+                pending.add(new Attempt(i, requests.get(i)));
             }
-        } finally {
-            loggingFuture.cancel(true);
-        }
-
-        log.info("Successfully created all {} {}s", resources.size(), name);
-        return created;
-    }
-
-    /**
-     * Processes a single batch of resources, handling successes and failures.
-     *
-     * @param batch the batch of resources to process
-     * @param retryQueue the queue to put failed resources for retry
-     * @param created the list to add successfully created resources to
-     * @param succeeded the counter for successfully created resources
-     */
-    private void processBatch(
-            List<R> batch, BlockingQueue<R> retryQueue, List<C> created, AtomicInteger succeeded) {
-
-        try {
-            Map<R, CreationResult<C>> results = executeBatch(batch);
-
-            results.forEach(
-                    (resource, result) -> {
-                        if (result.success()) {
-                            created.add(result.created());
-                            succeeded.incrementAndGet();
-                        } else {
-                            // Re-queue failed resources for retry
-                            if (!retryQueue.offer(resource)) {
-                                log.warn("Failed to re-queue resource for retry: {}", resource);
+            executor =
+                    new ScheduledThreadPoolExecutor(
+                            1,
+                            runnable -> {
+                                Thread thread = new Thread(runnable, "resource-creation-" + name);
+                                thread.setDaemon(true);
+                                workerThread = thread;
+                                return thread;
+                            }) {
+                        @Override
+                        protected void terminated() {
+                            try {
+                                batch.finishedStarting();
+                            } finally {
+                                super.terminated();
                             }
                         }
-                    });
-        } catch (Exception e) {
-            log.warn("Batch execution failed, re-queuing all resources in batch", e);
-            // Re-queue all resources in the batch for retry
-            batch.forEach(
-                    resource -> {
-                        if (!retryQueue.offer(resource)) {
-                            log.warn("Failed to re-queue resource after batch failure: {}", resource);
+                    };
+            executor.setRemoveOnCancelPolicy(true);
+            executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+            batch = new ResourceBatch<>(requests.size(), this::shutdown);
+        }
+
+        private CompletableFuture<List<C>> start() {
+            try {
+                executor.scheduleAtFixedRate(
+                        () -> log.info("Created {}s {}/{}", name, succeeded.get(), total),
+                        10,
+                        10,
+                        TimeUnit.SECONDS);
+                scheduleNextBatch();
+            } catch (Throwable error) {
+                batch.fail(error);
+            }
+            return batch.future();
+        }
+
+        private void scheduleNextBatch() {
+            synchronized (this) {
+                if (!stopping && batch.isActive()) {
+                    executor.schedule(this::startBatch, interBatchDelayMs, TimeUnit.MILLISECONDS);
+                }
+            }
+        }
+
+        private void startBatch() {
+            List<Attempt> current = new ArrayList<>();
+            synchronized (this) {
+                if (stopping || !batch.isActive()) {
+                    return;
+                }
+                while (current.size() < maxBatchSize && !pending.isEmpty()) {
+                    current.add(pending.remove());
+                }
+                inFlight = current.size();
+            }
+
+            log.debug("Executing {} creation batch, size: {}", name, current.size());
+            for (Attempt attempt : current) {
+                if (!batch.isActive()) {
+                    break;
+                }
+                try {
+                    CompletableFuture<C> result =
+                            Objects.requireNonNull(createOne.apply(attempt.request), "creation future");
+                    batch.watch(result, (resource, error) -> completed(attempt, resource, error));
+                } catch (Throwable error) {
+                    completed(attempt, null, error);
+                }
+            }
+        }
+
+        private void completed(Attempt attempt, C resource, Throwable error) {
+            Throwable cause =
+                    error == null && resource == null
+                            ? new NullPointerException("creation completed with a null resource")
+                            : error == null ? null : ResourceBatch.unwrap(error);
+            if (cause == null) {
+                succeeded.incrementAndGet();
+                batch.succeed(attempt.index, resource);
+            }
+
+            Throwable terminalFailure = null;
+            boolean schedule = false;
+            synchronized (this) {
+                inFlight--;
+                if (stopping || !batch.isActive()) {
+                    return;
+                }
+                if (cause != null) {
+                    if (attempt.firstFailure == null) {
+                        attempt.firstFailure = cause;
+                    }
+                    boolean interrupted = isInterruption(cause);
+                    if (interrupted || cause instanceof CancellationException) {
+                        if (interrupted && Thread.currentThread() == workerThread) {
+                            Thread.currentThread().interrupt();
                         }
-                    });
+                        stopping = true;
+                        terminalFailure = cause;
+                    } else if (attempt.retries < maxRetries) {
+                        attempt.retries++;
+                        pending.add(attempt);
+                        log.debug("Retrying {} creation after failure", name, cause);
+                    } else {
+                        stopping = true;
+                        terminalFailure = attempt.firstFailure;
+                    }
+                }
+                schedule = terminalFailure == null && inFlight == 0;
+            }
+
+            if (terminalFailure != null) {
+                batch.fail(terminalFailure);
+            } else if (schedule) {
+                try {
+                    scheduleNextBatch();
+                } catch (Throwable scheduleFailure) {
+                    batch.fail(scheduleFailure);
+                }
+            }
+        }
+
+        private void shutdown() {
+            if (Thread.currentThread() == workerThread) {
+                executor.shutdown();
+            } else {
+                executor.shutdownNow();
+            }
+        }
+
+        private final class Attempt {
+            private final int index;
+            private final R request;
+            private int retries;
+            private Throwable firstFailure;
+
+            private Attempt(int index, R request) {
+                this.index = index;
+                this.request = request;
+            }
         }
     }
 
-    /**
-     * Executes a single batch with the configured delay.
-     *
-     * @param batch the batch of resources to process
-     * @return a map of resources to their creation results
-     * @throws InterruptedException if the thread is interrupted during delay
-     */
-    private Map<R, CreationResult<C>> executeBatch(List<R> batch) throws InterruptedException {
-        log.debug("Executing batch, size: {}", batch.size());
-
-        if (interBatchDelayMs > 0) {
-            Thread.sleep(interBatchDelayMs);
+    private static boolean isInterruption(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof InterruptedException) {
+                return true;
+            }
         }
-
-        return invokeBatchFn.apply(batch).entrySet().stream()
-                .collect(toMap(Map.Entry::getKey, e -> complete.apply(e.getValue())));
-    }
-
-    /**
-     * Schedules periodic progress logging.
-     *
-     * @param succeeded the atomic counter for successful creations
-     * @param total the total number of resources to create
-     * @return the scheduled future for the logging task
-     */
-    private ScheduledFuture<?> scheduleProgressLogging(AtomicInteger succeeded, int total) {
-        return executor.scheduleAtFixedRate(
-                () -> log.info("Created {}s {}/{}", name, succeeded.get(), total), 10, 10, SECONDS);
-    }
-
-    /**
-     * Safe sleep method that handles InterruptedException properly.
-     *
-     * @param millis the number of milliseconds to sleep
-     */
-    private void sleepSafely(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Thread interrupted during resource creation", e);
-        }
-    }
-
-    /**
-     * Shuts down the internal executor service. Should be called when the ResourceCreator is no
-     * longer needed.
-     */
-    public void shutdown() {
-        executor.shutdown();
-    }
-
-    /**
-     * Result of a resource creation attempt.
-     *
-     * @param created the created resource (may be null if creation failed)
-     * @param success whether the creation was successful
-     * @param <C> the type of the created resource
-     */
-    public record CreationResult<C>(C created, boolean success) {
-
-        /**
-         * Creates a successful creation result.
-         *
-         * @param created the successfully created resource
-         * @param <C> the type of the created resource
-         * @return a successful CreationResult
-         */
-        public static <C> CreationResult<C> success(C created) {
-            return new CreationResult<>(created, true);
-        }
-
-        /**
-         * Creates a failed creation result.
-         *
-         * @param <C> the type of the created resource
-         * @return a failed CreationResult
-         */
-        public static <C> CreationResult<C> failure() {
-            return new CreationResult<>(null, false);
-        }
+        return false;
     }
 }

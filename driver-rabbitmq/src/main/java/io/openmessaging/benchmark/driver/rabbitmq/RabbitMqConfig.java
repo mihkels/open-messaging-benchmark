@@ -29,6 +29,19 @@ public class RabbitMqConfig {
     public int producerCreationBatchSize = 5;
     public long consumerCreationDelay = 100;
     public int consumerCreationBatchSize = 5;
+    public int resourceCreationMaxRetries = 10;
+
+    void validate() {
+        if (resourceCreationMaxRetries < 0) {
+            throw new IllegalArgumentException("resourceCreationMaxRetries must not be negative");
+        }
+        if (producerCreationBatchSize <= 0 || consumerCreationBatchSize <= 0) {
+            throw new IllegalArgumentException("Resource creation batch sizes must be positive");
+        }
+        if (producerCreationDelay < 0 || consumerCreationDelay < 0) {
+            throw new IllegalArgumentException("Resource creation delays must not be negative");
+        }
+    }
 
     public enum QueueType {
         CLASSIC {

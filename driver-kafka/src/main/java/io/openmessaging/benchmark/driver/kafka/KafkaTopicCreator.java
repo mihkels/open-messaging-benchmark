@@ -25,6 +25,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -44,7 +45,6 @@ class KafkaTopicCreator {
             6; // Number of times to retry entire creation process
     private static final long ATTEMPT_TIMEOUT_MS = 60_000; // 1 minute per attempt
 
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private final AdminClient admin;
     private final Map<String, String> topicConfigs;
     private final short replicationFactor;
@@ -66,19 +66,97 @@ class KafkaTopicCreator {
     }
 
     CompletableFuture<Void> create(List<TopicInfo> topicInfos) {
-        return CompletableFuture.runAsync(() -> createWithRetry(topicInfos));
+        if (topicInfos.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        ExecutorService worker =
+                Executors.newSingleThreadExecutor(
+                        runnable -> {
+                            Thread thread = new Thread(runnable, "kafka-topic-creation");
+                            thread.setDaemon(true);
+                            return thread;
+                        });
+        ScheduledExecutorService progress =
+                Executors.newSingleThreadScheduledExecutor(
+                        runnable -> {
+                            Thread thread = new Thread(runnable, "kafka-topic-progress");
+                            thread.setDaemon(true);
+                            return thread;
+                        });
+        class CreationFuture extends CompletableFuture<Void> {
+            private boolean terminal;
+            private boolean cancelled;
+
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                synchronized (this) {
+                    if (terminal) {
+                        return cancelled;
+                    }
+                    terminal = true;
+                    cancelled = true;
+                }
+                try {
+                    worker.shutdownNow();
+                    progress.shutdownNow();
+                } finally {
+                    super.cancel(mayInterruptIfRunning);
+                }
+                return true;
+            }
+
+            void finish(Throwable error) {
+                synchronized (this) {
+                    if (terminal) {
+                        return;
+                    }
+                    terminal = true;
+                }
+                if (error == null) {
+                    super.complete(null);
+                } else {
+                    super.completeExceptionally(error);
+                }
+            }
+        }
+        CreationFuture result = new CreationFuture();
+        try {
+            worker.execute(
+                    () -> {
+                        Throwable failure = null;
+                        try {
+                            createWithRetry(topicInfos, progress);
+                        } catch (Throwable error) {
+                            failure = error;
+                        } finally {
+                            progress.shutdownNow();
+                            worker.shutdown();
+                        }
+                        result.finish(failure);
+                    });
+        } catch (RuntimeException error) {
+            worker.shutdownNow();
+            progress.shutdownNow();
+            result.finish(error);
+        }
+        return result;
     }
 
-    private void createWithRetry(List<TopicInfo> topicInfos) {
+    private void createWithRetry(List<TopicInfo> topicInfos, ScheduledExecutorService progress) {
         RuntimeException lastException = null;
 
         for (int attempt = 1; attempt <= MAX_CREATION_ATTEMPTS; attempt++) {
             try {
                 log.info("Topic creation attempt {}/{}", attempt, MAX_CREATION_ATTEMPTS);
-                createBlocking(topicInfos);
+                createBlocking(topicInfos, progress);
                 log.info("Successfully created all {} topics", topicInfos.size());
                 return; // Success!
             } catch (RuntimeException e) {
+                if (Thread.currentThread().isInterrupted() || isInterruption(e)) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
                 lastException = e;
                 log.warn(
                         "Topic creation attempt {}/{} failed: {}",
@@ -98,7 +176,14 @@ class KafkaTopicCreator {
                             return;
                         }
                         log.info("{}/{} topics already exist", alreadyCreated, topicNames.size());
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Topic creation interrupted", interrupted);
                     } catch (Exception checkException) {
+                        if (isInterruption(checkException)) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException("Topic creation interrupted", checkException);
+                        }
                         log.warn("Failed to check existing topics: {}", checkException.getMessage());
                     }
 
@@ -121,7 +206,7 @@ class KafkaTopicCreator {
                 lastException);
     }
 
-    private void createBlocking(List<TopicInfo> topicInfos) {
+    private void createBlocking(List<TopicInfo> topicInfos, ScheduledExecutorService progress) {
         BlockingQueue<TopicInfo> queue = new ArrayBlockingQueue<>(topicInfos.size(), true, topicInfos);
         List<TopicInfo> batch = new ArrayList<>();
         AtomicInteger succeeded = new AtomicInteger();
@@ -129,7 +214,7 @@ class KafkaTopicCreator {
         long startTime = System.currentTimeMillis();
 
         ScheduledFuture<?> loggingFuture =
-                executor.scheduleAtFixedRate(
+                progress.scheduleAtFixedRate(
                         () -> log.info("Created topics {}/{}", succeeded.get(), topicInfos.size()),
                         10,
                         10,
@@ -184,6 +269,10 @@ class KafkaTopicCreator {
             return admin.createTopics(newTopics).values().entrySet().stream()
                     .collect(toMap(e -> lookup.get(e.getKey()), e -> isSuccess(e.getValue())));
         } catch (Exception e) {
+            if (Thread.currentThread().isInterrupted() || isInterruption(e)) {
+                Thread.currentThread().interrupt();
+                throw e instanceof RuntimeException runtime ? runtime : new RuntimeException(e);
+            }
             log.error(
                     "Failed to execute batch creation for topics: {}",
                     batch.stream().map(TopicInfo::topic).toList(),
@@ -212,5 +301,14 @@ class KafkaTopicCreator {
             return e.getCause() instanceof TopicExistsException;
         }
         return true;
+    }
+
+    private static boolean isInterruption(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof InterruptedException) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -40,7 +40,7 @@ public class StatsLoggerAdaptor implements dlshade.org.apache.bookkeeper.stats.S
 
     @Override
     public OpStatsLogger getThreadScopedOpStatsLogger(String name) {
-        return null;
+        return new OpStatsLoggerAdaptor(statsLogger.getThreadScopedOpStatsLogger(name));
     }
 
     @Override
@@ -50,7 +50,7 @@ public class StatsLoggerAdaptor implements dlshade.org.apache.bookkeeper.stats.S
 
     @Override
     public Counter getThreadScopedCounter(String name) {
-        return null;
+        return new CounterAdaptor(statsLogger.getThreadScopedCounter(name));
     }
 
     @Override

@@ -18,15 +18,15 @@ The NSQ driver benchmarks [NSQ](https://nsq.io/). Producers publish to one `nsqd
 `nsqd` through `nsqlookupd` and read from a channel. Each benchmark topic is an NSQ topic and each subscription is an
 NSQ channel. It uses the `com.github.brainlag:nsq-client` library (1.0.0.RC4).
 
-|          Item          |                                                                                                         Value                                                                                                         |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `nsq`                                                                                                                                                                                                                 |
-| Module                 | `driver-nsq`                                                                                                                                                                                                          |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                                                                                                                            |
-| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                                                                                                                        |
-| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                                                                                                                  |
-| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                                                                                |
-| Known limitations      | Partitions are not supported (ignored); keys are ignored; one `nsqd` for publishing; fixed TCP 4150 and lookup HTTP 4161 ports; publish errors are not reported as errors; end-to-end latency uses the nsqd timestamp |
+|          Item          |                                                                              Value                                                                              |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `nsq`                                                                                                                                                           |
+| Module                 | `driver-nsq`                                                                                                                                                    |
+| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                                                                      |
+| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                                                                  |
+| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                                                            |
+| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                          |
+| Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; fixed TCP 4150 and lookup HTTP 4161 ports; `nsqdHost` must identify the same daemon on HTTP and TCP |
 
 ## Prerequisites and broker setup
 
@@ -43,6 +43,8 @@ In addition:
 - `nsqd` must register with `nsqlookupd` (`--lookupd-tcp-address`) so that consumers can find it.
 - The address `nsqd` announces to `nsqlookupd` (`--broadcast-address`, default the host name) must be reachable from
   the workers on port 4150. Consumers connect to that announced address, not to `nsqdHost`.
+- `nsqdHost:nsqdHttpPort` and `nsqdHost:4150` must reach the same single publishing daemon. Consumers read its
+  advertised identity from the `nsqd` HTTP `/info` endpoint and wait for `nsqlookupd` to discover it.
 
 The regression suite starts NSQ from
 [`e2e-tests/compose/stacks/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nsq.yaml),
@@ -103,8 +105,9 @@ All keys are read by `NsqConfig`. Unknown keys are ignored.
 | `nsqdHttpPort` | int    | `4151`   | `nsqd` HTTP port used for topic creation. Must be from 1 to 65535; other values fail initialization. |
 | `lookupHost`   | string | required | Host of `nsqlookupd`; consumers query its HTTP API on port 4161.                                     |
 
-There are no pass-through client properties. Client settings such as max-in-flight, timeouts, authentication and TLS
-are the defaults of the [nsq-client library](https://github.com/brainlag/JavaNSQClient).
+There are no pass-through client properties. The consumer uses the
+[nsq-client library](https://github.com/brainlag/JavaNSQClient) defaults, including 200 messages per batch; the
+driver bounds consumer readiness to 30 seconds and each discovery HTTP request to three seconds.
 
 ## Semantics
 
@@ -116,18 +119,26 @@ look it up; otherwise consumers would only find it at their next periodic lookup
 
 **Producers.** Each producer has its own NSQ producer connected to `nsqdHost:4150`. A send is handed to a thread pool
 that performs a blocking publish; up to 1000 sends per producer can be outstanding, after which `sendAsync` waits.
-The send completes after the publish call returns. Keys are ignored.
+The send completes after the publish call returns. The driver owns a copy of the message bytes, so caller buffers may
+be reused after completion or cancellation. Keys are ignored.
 
-**Publish errors.** When a publish fails (NSQ error or timeout), the driver logs `send exception` but still completes
-the send successfully. Failed publishes are therefore counted as published, not as publish errors. Check worker logs
-and compare published and consumed counts.
+**Publish errors.** Exceptions and timeouts reported by the NSQ client, interrupted capacity waits, executor rejection
+and producer shutdown complete sends exceptionally. They are counted as publish errors rather than successful sends.
 
 **Subscriptions and consumers.** Each consumer queries `nsqlookupd` at `lookupHost:4161` for the topic and connects
 to the announced `nsqd` instances. The benchmark subscription name is used as the NSQ channel. Consumers of the same
 channel share messages; each channel receives a copy of every message in the topic, so multiple subscriptions per
-topic work.
+topic work. Consumer creation waits until the publishing daemon appears in discovery, every node in the discovery
+snapshot has acknowledged the actual consumer connection's `SUB`, and its `RDY` command has been sent. A rejected
+`SUB` fails creation; empty discovery, unavailable nodes or a missing acknowledgement time out after 30 seconds.
+Cancellation closes partial connections, including those still being established. Once ready, consumers recheck
+discovery every minute; an empty result retains healthy connections, and changed nodes are reconnected. Cancelling a
+batch requests abandonment without waiting for connection cleanup; its creation-quiescence barrier tracks late
+connections, callbacks, scheduled work and scoped-channel closure, and reports cleanup failures. The barrier may
+remain pending if client code does not stop, so callers should use a bounded wait.
 
-**Acknowledgement.** Each message is finished (`FIN`) after the benchmark callback returns. Requeueing is not used.
+**Acknowledgement.** Each message is finished (`FIN`) after the benchmark callback returns. The client requeues a
+message if its callback executor rejects delivery; a callback that throws does not send `FIN`.
 
 **End-to-end latency.** The consumer uses the message timestamp, which `nsqd` assigns when it receives the message,
 as the publish time. Latency is measured from the `nsqd` clock and excludes the time from producer to `nsqd`. Clock
@@ -137,7 +148,13 @@ offset between the `nsqd` host and the workers adds directly to the result. See
 **Durability.** Messages are held in `nsqd` memory and written to disk (`--data-path`) when the in-memory queue is
 full, according to `nsqd` settings. The driver does not change this.
 
-**Cleanup.** Topics and channels are not deleted after a run. Remove them through the `nsqd` HTTP API
+**Cleanup.** Each producer closes its client and executor and fails its pending sends. Each consumer sends `CLS`,
+waits up to 15 seconds for running callbacks to finish and send `FIN`, and closes its connections. Consumer close
+waits at most 30 seconds; connection, `CLS` timeout and drain failures are reported, and cleanup can continue after a timeout.
+Calling consumer `close()` from its own callback is rejected to avoid a deadlock; retry from another thread after
+the callback returns. The driver owns the shared consumer I/O event loop and HTTP client, cancels unfinished consumer
+creations, and closes those shared resources after the handles. Topics and channels are not deleted after a run. Remove
+them through the `nsqd` HTTP API
 (`/topic/delete`) or by restarting a disposable `nsqd`.
 
 **Workload features.** Multiple topics, multiple subscriptions per topic and multiple consumers per subscription
@@ -182,7 +199,10 @@ Common problems:
 - Messages are published but nothing is consumed: consumers cannot reach the address `nsqd` announced to
   `nsqlookupd` (check `--broadcast-address`), `nsqd` is not registered with `nsqlookupd`, or `lookupHost` is wrong.
   `http://<lookupHost>:4161/lookup?topic=<topic>` shows what consumers receive.
-- `send exception` in worker logs: publishes failed but were counted as successful; see Publish errors above.
+- A consumer readiness timeout means discovery, publisher identity, a connection, `SUB` acknowledgement or `RDY`
+  did not become ready in 30 seconds. Compare `/info` on the publishing `nsqd` with the lookup result, and check
+  broadcast addresses and broker logs. A rejected `SUB` is reported immediately with the broker's error.
+- Publish errors or timeouts fail the corresponding sends. Check broker connectivity and the worker's reported cause.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in
 [Results](../guides/results.md).

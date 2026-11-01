@@ -15,17 +15,75 @@ package io.openmessaging.benchmark.driver.mqtt5;
 
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MqttBenchmarkConsumer implements BenchmarkConsumer {
-    private Mqtt5AsyncClient client;
-    private volatile boolean closed = false;
+    private volatile Mqtt5AsyncClient client;
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final CompletableFuture<Void> closeCompletion = new CompletableFuture<>();
+    private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
 
     public MqttBenchmarkConsumer() {}
 
     @Override
     public void close() throws Exception {
-        MqttBenchmarkDriver.closeClient(client);
-        closed = true;
+        if (Boolean.TRUE.equals(inCallback.get())) {
+            throw new IllegalStateException("Cannot close MQTT consumer from its own callback");
+        }
+        if (closed.compareAndSet(false, true)) {
+            try {
+                MqttBenchmarkDriver.closeClient(client);
+                closeCompletion.complete(null);
+            } catch (Exception | Error failure) {
+                closeCompletion.completeExceptionally(failure);
+            }
+        }
+        try {
+            closeCompletion.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof Exception failure) {
+                throw failure;
+            }
+            if (e.getCause() instanceof Error failure) {
+                throw failure;
+            }
+            throw e;
+        }
+    }
+
+    ConsumerCallback guardedCallback(ConsumerCallback callback) {
+        return new ConsumerCallback() {
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp) {
+                invokeCallback(() -> callback.messageReceived(payload, publishTimestamp));
+            }
+
+            @Override
+            public void messageReceived(ByteBuffer payload, long publishTimestamp) {
+                invokeCallback(() -> callback.messageReceived(payload, publishTimestamp));
+            }
+        };
+    }
+
+    private void invokeCallback(Runnable callback) {
+        Boolean previous = inCallback.get();
+        inCallback.set(true);
+        try {
+            callback.run();
+        } finally {
+            if (previous == null) {
+                inCallback.remove();
+            } else {
+                inCallback.set(previous);
+            }
+        }
     }
 
     public void setClient(Mqtt5AsyncClient client) {
@@ -33,6 +91,6 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     public boolean isClosed() {
-        return closed;
+        return closed.get();
     }
 }

@@ -13,25 +13,46 @@
  */
 package io.openmessaging.benchmark.driver.pulsar;
 
-import static java.util.Collections.unmodifiableList;
-
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import java.nio.ByteBuffer;
 import java.util.List;
 import org.apache.pulsar.client.api.Consumer;
 
-public class PulsarBenchmarkConsumer implements BenchmarkConsumer {
+public final class PulsarBenchmarkConsumer implements BenchmarkConsumer {
 
     private final List<Consumer<ByteBuffer>> consumer;
+    private boolean closed;
 
     public PulsarBenchmarkConsumer(List<Consumer<ByteBuffer>> consumer) {
-        this.consumer = unmodifiableList(consumer);
+        this.consumer = List.copyOf(consumer);
+        if (this.consumer.isEmpty()) {
+            throw new IllegalArgumentException("A Pulsar consumer must own at least one partition");
+        }
     }
 
     @Override
-    public void close() throws Exception {
+    public synchronized void close() throws Exception {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        Exception failure = null;
         for (Consumer<?> c : consumer) {
-            c.close();
+            try {
+                c.close();
+            } catch (Exception error) {
+                if (error instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                if (failure == null) {
+                    failure = error;
+                } else if (failure != error) {
+                    failure.addSuppressed(error);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 }

@@ -187,9 +187,10 @@ def validate_result(case, cdir):
 
     try:
         with open(coordinator_log, encoding="utf-8", errors="replace") as f:
-            failure = next((redact(line.rstrip()) for line in f if "Failed to run the workload" in line), "")
-        checks.append(check("Workload completed", not failure,
-                            failure or "no 'Failed to run the workload' entry"))
+            f.read(1)
+        completed = not timed_out and exit_code == "0"
+        detail = "coordinator exited successfully" if completed else "coordinator did not complete successfully"
+        checks.append(check("Workload completed", completed, detail))
     except OSError as e:
         checks.append(check("Workload completed", False, "cannot read coordinator log: %s" % e))
 

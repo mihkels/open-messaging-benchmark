@@ -29,6 +29,8 @@ Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/
 - `nsqd` reachable on TCP 4150 (fixed) and on its HTTP port (`nsqdHttpPort`, default 4151, used to create topics).
 - `nsqlookupd` reachable on HTTP 4161 (fixed), with `nsqd` registered to it.
 - `nsqd` must announce (`--broadcast-address`) an address the workers can reach; consumers connect to that address.
+- `nsqdHost:nsqdHttpPort` and `nsqdHost:4150` must reach the same single daemon. The driver reads its `/info`
+  identity and waits for that node to appear in discovery.
 - The `nsq` plugin bundle installed on the coordinator (local mode) and on every worker.
 
 A local test setup for a benchmark running on the Docker host:
@@ -55,11 +57,19 @@ Smoke check against NSQ started by Docker Compose (see [`e2e-tests/compose/READM
 e2e-tests/compose/run-e2e.sh --stacks nsq
 ```
 
+Send futures report publish failures and timeouts surfaced by the client, interrupted capacity waits,
+and producer shutdown. Consumer creation waits for discovery and actual `SUB` acknowledgements, with a 30-second
+readiness timeout. Batch cancellation requests partial cleanup without blocking; the creation-quiescence barrier
+tracks late connections and cleanup failures. Use a bounded wait for non-cooperative client code. Rediscovery
+continues once per minute.
+
 ## Limitations
 
 - Partitions are not supported: `partitionsPerTopic` is ignored. Keys are ignored.
 - All producers publish to the single `nsqdHost`.
-- Failed publishes are only logged (`send exception`) and are counted as successful sends.
+- Closing a consumer from its own callback is rejected to avoid deadlock; retry on another thread. Consumer close
+  waits up to 15 seconds for callbacks to finish and send `FIN`, and at most 30 seconds overall. Close failures and
+  timeouts are reported; cleanup can continue after a timeout.
 - End-to-end latency uses the timestamp `nsqd` assigns on receipt (nsqd clock).
 - Topics and channels are not deleted after a run.
 

@@ -126,16 +126,17 @@ assigns that ID from the server clock when `XADD` runs, so end-to-end latency is
 clock, not from the producer's send time. Clock offset between the Redis host and the consumer workers adds
 directly to the reported value. See [Latency and backlog](../methodology/latency-and-backlog.md).
 
-**Payloads.** Payloads are written as bytes. On the consumer side Jedis decodes the field as a UTF-8 string and the
-driver re-encodes it, so non-UTF-8 binary payloads (for example random payloads) can arrive with a different byte
-length than was sent. Message counts are unaffected, but consumed byte totals can differ from published byte totals.
+**Payloads.** Payloads are written and read as bytes, including non-UTF-8 binary payloads.
 
 **Durability.** Durability is whatever the Redis server is configured for (RDB snapshots, AOF, replication). The
 driver does not wait for replication (`WAIT`) or persistence.
 
-**Cleanup.** Streams and consumer groups are not deleted after a run, and streams are not trimmed. Data written in
-a run stays in Redis memory until you delete the keys (for example `redis-cli --scan --pattern 'redis-openmessaging-benchmark*'`
-and `DEL`, or `FLUSHDB` on a dedicated server).
+**Cleanup.** Producer close waits for its synchronous sends, and consumer close waits for its reader
+thread with a bounded timeout. The driver owns the shared pool; handles do not close it. Streams and
+consumer groups are not deleted after a run, and streams are not trimmed. Data written in a run
+stays in Redis memory until you delete the keys (for example
+`redis-cli --scan --pattern 'redis-openmessaging-benchmark*'` and `DEL`, or `FLUSHDB` on a dedicated
+server).
 
 **Workload features.** Multiple topics, multiple subscriptions per topic and multiple consumers per subscription
 work. Partition counts and keys are ignored. Backlog workloads (`consumerBacklogSizeGB`) are handled by the framework

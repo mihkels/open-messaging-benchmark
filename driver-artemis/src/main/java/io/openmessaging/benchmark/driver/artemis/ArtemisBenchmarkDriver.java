@@ -14,7 +14,7 @@
 package io.openmessaging.benchmark.driver.artemis;
 
 // import tools.jackson.databind.DeserializationFeature;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.CompletionException;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
 import org.apache.activemq.artemis.api.core.RoutingType;
 import org.apache.activemq.artemis.api.core.SimpleString;
@@ -42,16 +42,17 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ArtemisConfig config;
 
+    private ServerLocator serverLocator;
     private ClientSessionFactory sessionFactory;
     private ClientSession session;
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
+    public synchronized void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException {
         this.config = readConfig(configurationFile);
         log.info("ActiveMQ Artemis driver configuration: {}", writer.writeValueAsString(config));
         try {
-            ServerLocator serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);
+            serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);
             // confirmation window size is in bytes, set to 1MB
             serverLocator.setConfirmationWindowSize(1024 * 1024);
             // use asynchronous sending of messages where SendAcknowledgementHandler reports
@@ -64,6 +65,13 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
             sessionFactory = serverLocator.createSessionFactory();
             session = sessionFactory.createSession();
         } catch (Exception e) {
+            try {
+                close();
+            } catch (Exception closeFailure) {
+                if (closeFailure != e) {
+                    e.addSuppressed(closeFailure);
+                }
+            }
             throw new IOException(e);
         }
     }
@@ -75,25 +83,23 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
         if (partitions != 1) {
-            future.completeExceptionally(
+            return CompletableFuture.failedFuture(
                     new IllegalArgumentException("Partitions are not supported in Artemis"));
-            return future;
         }
 
-        ForkJoinPool.commonPool()
-                .submit(
-                        () -> {
-                            try {
-                                session.createAddress(SimpleString.of(topic), RoutingType.MULTICAST, true);
-                                future.complete(null);
-                            } catch (ActiveMQException e) {
-                                future.completeExceptionally(e);
-                            }
-                        });
-
-        return future;
+        try {
+            return CompletableFuture.runAsync(
+                    () -> {
+                        try {
+                            session.createAddress(SimpleString.of(topic), RoutingType.MULTICAST, true);
+                        } catch (ActiveMQException e) {
+                            throw new CompletionException(e);
+                        }
+                    });
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     @Override
@@ -101,10 +107,8 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         try {
             return CompletableFuture.completedFuture(
                     ArtemisBenchmarkProducer.create(topic, sessionFactory));
-        } catch (ActiveMQException e) {
-            CompletableFuture<BenchmarkProducer> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
+        } catch (ActiveMQException | RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
         }
     }
 
@@ -112,19 +116,37 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
-        ForkJoinPool.commonPool()
-                .submit(
-                        () -> {
-                            try {
-                                String queueName = topic + "-" + subscriptionName;
-                                BenchmarkConsumer consumer =
-                                        ArtemisBenchmarkConsumer.create(
-                                                topic, queueName, sessionFactory, consumerCallback);
-                                future.complete(consumer);
-                            } catch (ActiveMQException e) {
-                                future.completeExceptionally(e);
-                            }
-                        });
+        try {
+            CompletableFuture.runAsync(
+                            () -> {
+                                try {
+                                    String queueName = topic + "-" + subscriptionName;
+                                    BenchmarkConsumer consumer =
+                                            ArtemisBenchmarkConsumer.create(
+                                                    topic, queueName, sessionFactory, consumerCallback);
+                                    if (!future.complete(consumer)) {
+                                        try {
+                                            consumer.close();
+                                        } catch (Exception closeFailure) {
+                                            if (closeFailure instanceof InterruptedException) {
+                                                Thread.currentThread().interrupt();
+                                            }
+                                            log.warn("Failed to close an untransferred Artemis consumer", closeFailure);
+                                        }
+                                    }
+                                } catch (ActiveMQException e) {
+                                    throw new CompletionException(e);
+                                }
+                            })
+                    .whenComplete(
+                            (unused, failure) -> {
+                                if (failure != null) {
+                                    future.completeExceptionally(failure);
+                                }
+                            });
+        } catch (RuntimeException e) {
+            future.completeExceptionally(e);
+        }
 
         return future;
     }
@@ -133,15 +155,46 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     public void close() throws Exception {
         log.info("Shutting down ActiveMQ Artemis benchmark driver");
 
-        if (session != null) {
-            session.close();
+        ClientSession sessionToClose;
+        ClientSessionFactory factoryToClose;
+        ServerLocator locatorToClose;
+        synchronized (this) {
+            sessionToClose = session;
+            factoryToClose = sessionFactory;
+            locatorToClose = serverLocator;
+            session = null;
+            sessionFactory = null;
+            serverLocator = null;
         }
 
-        if (sessionFactory != null) {
-            sessionFactory.close();
+        Exception failure = closeResource(sessionToClose, null);
+        failure = closeResource(factoryToClose, failure);
+        failure = closeResource(locatorToClose, failure);
+        if (failure != null) {
+            throw failure;
         }
 
         log.info("ActiveMQ Artemis benchmark driver successfully shut down");
+    }
+
+    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+        if (resource == null) {
+            return failure;
+        }
+        try {
+            resource.close();
+        } catch (Exception closeFailure) {
+            if (closeFailure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            if (failure == null) {
+                return closeFailure;
+            }
+            if (failure != closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
+        return failure;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

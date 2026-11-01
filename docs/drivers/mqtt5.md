@@ -19,15 +19,15 @@ The MQTT 5 driver benchmarks MQTT 5 brokers with the [HiveMQ MQTT client](https:
 regression suite tests it against Eclipse Mosquitto; other brokers that support MQTT 5 shared subscriptions should
 work but are not tested here.
 
-|          Item          |                                                             Value                                                              |
-|------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `mqtt5`                                                                                                                        |
-| Module                 | `driver-mqtt5`                                                                                                                 |
-| `driverClass`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                                                                  |
-| Example config shipped | `driver-mqtt5/mqtt5.yaml` (`tcp://localhost:1883`, no authentication)                                                          |
-| Tested broker          | `eclipse-mosquitto:2.0.22`, anonymous listener on 1883 (Compose stack `mqtt5`)                                                 |
-| Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                                                         |
-| Known limitations      | No TLS or WebSocket; partitions and keys are ignored; subscription failures are only logged; latency uses the producer's clock |
+|          Item          |                                          Value                                          |
+|------------------------|-----------------------------------------------------------------------------------------|
+| Plugin ID              | `mqtt5`                                                                                 |
+| Module                 | `driver-mqtt5`                                                                          |
+| `driverClass`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                           |
+| Example config shipped | `driver-mqtt5/mqtt5.yaml` (`tcp://localhost:1883`, no authentication)                   |
+| Tested broker          | `eclipse-mosquitto:2.0.22`, anonymous listener on 1883 (Compose stack `mqtt5`)          |
+| Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                  |
+| Known limitations      | No TLS or WebSocket; partitions and keys are ignored; latency uses the producer's clock |
 
 ## Prerequisites and broker setup
 
@@ -116,14 +116,16 @@ WebSocket transport are not configurable; TLS and WebSocket are not supported.
 **Producers.** Each producer opens its own MQTT connection with a random client ID (`benchmark_pub_...`) and
 publishes to its topic with the configured QoS, without the retain flag. Keys are ignored. A send completes when the
 publish is finished for that QoS: immediately after sending for QoS 0, at PUBACK for QoS 1 and at PUBCOMP for QoS 2.
-Errors reported by the broker fail the send.
+Errors reported by the broker fail the send. The driver owns the message bytes even if the send is canceled.
 
 **Subscriptions and consumers.** Each consumer opens its own connection with a random client ID (`benchmark_sub_...`)
 and subscribes to `$share/<subscriptionName>/<topic>` with the configured QoS. Consumers with the same subscription
 name form one shared subscription group, and the broker distributes the topic's messages among them. Different
 subscriptions are different groups, and each receives every message. MQTT 5 shared subscriptions are therefore what
 makes the benchmark's subscription model (several consumers sharing one subscription, several subscriptions per
-topic) work on MQTT.
+topic) work on MQTT. Consumer creation completes only after a successful CONNACK and a SUBACK granting every requested
+filter. Connection errors, rejected or malformed SUBACKs, and canceled creation fail the operation and disconnect
+the partial client.
 
 **Acknowledgement.** Subscriptions use manual acknowledgement: the client sends PUBACK (QoS 1) or completes the
 PUBREC/PUBREL/PUBCOMP exchange (QoS 2) after the benchmark callback returns. With QoS 0 there is no acknowledgement.
@@ -131,8 +133,9 @@ PUBREC/PUBREL/PUBCOMP exchange (QoS 2) after the benchmark callback returns. Wit
 **Sessions.** With `cleanSession: true` (default) every consumer starts a new session that ends when it disconnects.
 With `cleanSession: false` the broker keeps the session for `sessionExpiryInterval` seconds after a disconnect, so
 messages for an interrupted consumer are kept until it reconnects. Client IDs are random for every run, so a later
-run never resumes an earlier session; expired sessions are removed by the broker. All clients reconnect
-automatically, starting after 100 ms and backing off up to 10 seconds.
+run never resumes an earlier session; expired sessions are removed by the broker. Successfully created clients
+reconnect automatically, starting after 100 ms and backing off up to 10 seconds. A disconnect before the handle is
+ready fails creation instead of retrying indefinitely.
 
 **End-to-end latency.** Each publish carries the producer's wall-clock time in the user property
 `benchmark-publish-timestamp`; the consumer uses it as the publish time. Latency therefore covers the full path from
@@ -142,8 +145,13 @@ receive time is used. See [Latency and backlog](../methodology/latency-and-backl
 **Durability.** Determined by the QoS and by broker persistence settings. With QoS 0 messages can be lost; the
 regression broker does not persist anything.
 
-**Cleanup.** Nothing is created on the broker that outlives the run except sessions with `cleanSession: false`,
-which expire after `sessionExpiryInterval`. No retained messages are published.
+**Cleanup.** Each producer or consumer handle waits up to five seconds for its own client to disconnect and reports
+disconnect errors or timeouts; producer close also fails pending sends. Closing a consumer from its own message callback
+is rejected. Closing a producer from a callback executing synchronously inside a `sendAsync` call on that handle,
+or from any of its send-completion callbacks (including asynchronous acknowledgements and close-induced failures),
+throws `IllegalStateException` before changing the handle's state. Retry after the call or callback returns, or schedule
+close on another thread without waiting for it in the callback. Nothing is created on the broker that outlives the run
+except sessions with `cleanSession: false`, which expire after `sessionExpiryInterval`. No retained messages are published.
 
 **Workload features.** Multiple topics, multiple subscriptions per topic and multiple consumers per subscription
 work. Partition counts and keys are ignored. For backlog workloads (`consumerBacklogSizeGB`) the framework blocks the
@@ -190,14 +198,12 @@ A passing case is a functional check at a low rate, not a performance result.
 
 Common problems:
 
-- `failed to connect to MQTT broker` with a connection timeout: wrong host or port; check whether `serverUri`
-  includes the port (without it the driver uses port 80), and whether the broker listens on a non-loopback
-  interface.
-- `was rejected by MQTT broker, ConnAck-ReasonCode=NOT_AUTHORIZED` or `BAD_USER_NAME_OR_PASSWORD`: authentication
-  failed, or the broker requires credentials and only one of `username` and `password` is set.
-- `failed to subscribe` or `received invalid subAck` in worker logs, and no messages consumed: the subscription was
-  refused, for example because the broker does not support shared subscriptions or the user lacks permission. The
-  consumer is still reported as created, so the run continues without consuming.
+- A connection timeout: check the host, whether `serverUri` includes the port (without it the driver uses port 80),
+  and whether the broker listens on a non-loopback interface.
+- `ConnAck-ReasonCode: NOT_AUTHORIZED` or `BAD_USER_NAME_OR_PASSWORD`: authentication failed, or the broker
+  requires credentials and only one of `username` and `password` is set.
+- `Subscription rejected` or `Invalid SUBACK`: consumer creation failed. The broker may not support shared
+  subscriptions, the user may lack permission, or the SUBACK may not match the requested filters.
 - A TLS port (8883) does not work: the driver only connects over plain TCP.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in

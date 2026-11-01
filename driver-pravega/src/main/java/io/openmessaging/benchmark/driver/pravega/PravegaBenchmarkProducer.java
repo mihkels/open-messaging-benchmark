@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.pravega;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.stream.EventStreamWriter;
 import io.pravega.client.stream.EventWriterConfig;
@@ -29,7 +30,8 @@ public class PravegaBenchmarkProducer implements BenchmarkProducer {
 
     private final EventStreamWriter<ByteBuffer> writer;
     private final boolean includeTimestampInEvent;
-    private ByteBuffer timestampAndPayload;
+    private final Object lifecycleLock = new Object();
+    private final PendingSendTracker pending = new PendingSendTracker("Pravega producer");
 
     public PravegaBenchmarkProducer(
             String streamName,
@@ -47,17 +49,24 @@ public class PravegaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        if (includeTimestampInEvent) {
-            if (timestampAndPayload == null
-                    || timestampAndPayload.limit() != Long.BYTES + payload.length) {
-                timestampAndPayload = ByteBuffer.allocate(Long.BYTES + payload.length);
-            } else {
-                timestampAndPayload.position(0);
+        ByteBuffer message = PravegaMessageEncoder.encode(payload, includeTimestampInEvent);
+        CompletableFuture<Void> write;
+        CompletableFuture<Void> result;
+        synchronized (lifecycleLock) {
+            result = pending.register();
+            if (result.isDone()) {
+                return result;
             }
-            timestampAndPayload.putLong(System.currentTimeMillis()).put(payload).flip();
-            return writeEvent(key, timestampAndPayload);
+            try {
+                write = writeEvent(key, message);
+            } catch (RuntimeException e) {
+                result.completeExceptionally(e);
+                return result;
+            }
         }
-        return writeEvent(key, ByteBuffer.wrap(payload));
+
+        write.whenComplete((unused, error) -> pending.completeFromClient(result, error));
+        return result;
     }
 
     private CompletableFuture<Void> writeEvent(Optional<String> key, ByteBuffer payload) {
@@ -66,6 +75,25 @@ public class PravegaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        writer.close();
+        boolean closeWriter = pending.beginClose();
+        Exception closeFailure = null;
+        try {
+            if (closeWriter) {
+                EventStreamWriter<ByteBuffer> writerToClose;
+                synchronized (lifecycleLock) {
+                    // Wait for a publish that started before close to finish using the writer.
+                    writerToClose = writer;
+                }
+                writerToClose.close();
+            }
+        } catch (Exception e) {
+            closeFailure = e;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw e;
+        } finally {
+            pending.failRemaining(closeFailure);
+        }
     }
 }

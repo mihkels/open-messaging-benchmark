@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.tool.workload;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -94,7 +95,8 @@ class WorkloadGenerationToolTest {
                 producersPerTopic: [5]
                 consumerPerSubscription: [6]
                 producerRate: [700]
-                keyDistributor: NO_KEY
+                keyDistributor: KEY_ROUND_ROBIN
+                payloadFile: "payload/custom.data"
                 useRandomizedPayloads: true
                 randomBytesRatio: 0.5
                 randomizedPayloadPoolSize: 10
@@ -129,11 +131,60 @@ class WorkloadGenerationToolTest {
         assertThat(workload.producersPerTopic).isEqualTo(5);
         assertThat(workload.consumerPerSubscription).isEqualTo(6);
         assertThat(workload.producerRate).isEqualTo(700);
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.KEY_ROUND_ROBIN);
+        assertThat(workload.payloadFile).isEqualTo("payload/custom.data");
         assertThat(workload.useRandomizedPayloads).isTrue();
         assertThat(workload.randomBytesRatio).isEqualTo(0.5);
         assertThat(workload.randomizedPayloadPoolSize).isEqualTo(10);
         assertThat(workload.consumerBacklogSizeGB).isEqualTo(7);
         assertThat(workload.testDurationMinutes).isEqualTo(8);
         assertThat(workload.warmupDurationMinutes).isEqualTo(9);
+        assertThat(workload.messageSizeDistribution).isNull();
+        assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+        var document = YAML_MAPPER.readTree(yaml);
+        assertThat(document.get("messageSizeDistribution").isNull()).isTrue();
+        assertThat(document.get("backlogDrainRatio").asDouble()).isEqualTo(1.0);
+    }
+
+    @Test
+    void ignoresUnsupportedTemplateFieldsAndKeepsWorkloadDefaults() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+        Files.writeString(
+                templateFile,
+                """
+                nameFormat: "unsupported-fields"
+                messageSize: []
+                keyDistributor: NO_KEY
+                useRandomizedPayloads: false
+                randomBytesRatio: 0.0
+                randomizedPayloadPoolSize: 0
+                consumerBacklogSizeGB: 0
+                testDurationMinutes: 5
+                warmupDurationMinutes: 1
+                messageSizeDistribution:
+                  "32": 100
+                backlogDrainRatio: 0.25
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        Workload workload =
+                YAML_MAPPER.readValue(
+                        outputDir.resolve("unsupported-fields.yaml").toFile(), Workload.class);
+        assertThat(workload.topics).isEqualTo(1);
+        assertThat(workload.partitionsPerTopic).isEqualTo(1);
+        assertThat(workload.messageSize).isEqualTo(1024);
+        assertThat(workload.subscriptionsPerTopic).isEqualTo(1);
+        assertThat(workload.producersPerTopic).isEqualTo(1);
+        assertThat(workload.consumerPerSubscription).isEqualTo(1);
+        assertThat(workload.producerRate).isEqualTo(10000);
+        assertThat(workload.messageSizeDistribution).isNull();
+        assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
     }
 }

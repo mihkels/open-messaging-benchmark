@@ -15,7 +15,6 @@ package io.openmessaging.benchmark;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-import io.netty.util.concurrent.DefaultThreadFactory;
 import io.openmessaging.benchmark.utils.PaddingDecimalFormat;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
@@ -31,38 +30,103 @@ import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.HdrHistogram.Histogram;
 import org.apache.commons.lang3.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WorkloadGenerator implements AutoCloseable {
+public final class WorkloadGenerator implements WorkloadRun {
 
     private final String driverName;
     private final Workload workload;
     private final Worker worker;
 
     private final ExecutorService executor =
-            Executors.newCachedThreadPool(new DefaultThreadFactory("messaging-benchmark"));
+            Executors.newThreadPerTaskExecutor(
+                    Thread.ofVirtual().name("messaging-benchmark-", 0).factory());
+    private final Object controllerLock = new Object();
+    private final List<Future<?>> controllers = new ArrayList<>();
+    private final CompletableFuture<Throwable> controllerFailureSignal = new CompletableFuture<>();
+    private final CountDownLatch runExited = new CountDownLatch(1);
+    private final long reportIntervalNanos;
+    private final long controlPeriodMillis;
+    private final long shutdownTimeoutNanos;
 
     private volatile boolean runCompleted = false;
     private volatile boolean needToWaitForBacklogDraining = false;
+    private volatile boolean closed;
+    private volatile boolean quiescentAfterClose;
+    private volatile Thread runThread;
+    private boolean started;
+    private Throwable controllerFailure;
+    private boolean controllerFailureReported;
 
     private volatile double targetPublishRate;
 
     public WorkloadGenerator(String driverName, Workload workload, Worker worker) {
+        this(
+                driverName,
+                workload,
+                worker,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(3),
+                Duration.ofSeconds(10));
+    }
+
+    WorkloadGenerator(
+            String driverName,
+            Workload workload,
+            Worker worker,
+            Duration reportInterval,
+            Duration controlPeriod,
+            Duration shutdownTimeout) {
         this.driverName = driverName;
         this.workload = workload;
         this.worker = worker;
+        reportIntervalNanos = reportInterval.toNanos();
+        controlPeriodMillis = controlPeriod.toMillis();
+        shutdownTimeoutNanos = shutdownTimeout.toNanos();
+        if (reportIntervalNanos <= 0 || controlPeriodMillis <= 0 || shutdownTimeoutNanos <= 0) {
+            throw new IllegalArgumentException(
+                    "Controller intervals and shutdown timeout must be positive");
+        }
     }
 
+    @Override
     public TestResult run() throws Exception {
+        synchronized (this) {
+            if (closed || started) {
+                throw new IllegalStateException("Workload generator is closed or has already run");
+            }
+            started = true;
+            runThread = Thread.currentThread();
+        }
+        try {
+            return runWorkload();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        } finally {
+            runCompleted = true;
+            runExited.countDown();
+            runThread = null;
+        }
+    }
+
+    private TestResult runWorkload() throws Exception {
         if (workload.consumerBacklogSizeGB > 0 && workload.producerRate == 0) {
             throw new IllegalArgumentException(
                     "Cannot probe producer sustainable rate when building backlog");
@@ -84,15 +148,8 @@ public class WorkloadGenerator implements AutoCloseable {
             // Producer rate is 0 and we need to discover the sustainable rate
             targetPublishRate = 10000;
 
-            executor.execute(
-                    () -> {
-                        // Run background controller to adjust rate
-                        try {
-                            findMaximumSustainableRate(targetPublishRate);
-                        } catch (IOException e) {
-                            log.warn("Failure in finding max sustainable rate", e);
-                        }
-                    });
+            startController(
+                    "sustainable rate", () -> findMaximumSustainableRate(targetPublishRate), false);
         }
 
         List<byte[]> payloads = new ArrayList<>();
@@ -141,6 +198,7 @@ public class WorkloadGenerator implements AutoCloseable {
                 workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile,
                 timer.elapsedMillis());
         worker.startLoad(producerWorkAssignment);
+        checkControllerFailure();
 
         if (workload.warmupDurationMinutes > 0) {
             log.info("----- Starting warm-up traffic ({}m) ------", workload.warmupDurationMinutes);
@@ -148,27 +206,19 @@ public class WorkloadGenerator implements AutoCloseable {
         }
 
         if (workload.consumerBacklogSizeGB > 0) {
-            executor.execute(
-                    () -> {
-                        try {
-                            buildAndDrainBacklog(workload.testDurationMinutes);
-                        } catch (IOException e) {
-                            log.error("Error building and draining backlog: {}", e.getMessage(), e);
-                        }
-                    });
+            needToWaitForBacklogDraining = true;
+            startController("backlog", () -> buildAndDrainBacklog(workload.testDurationMinutes), true);
         }
 
         worker.resetStats();
         log.info("----- Starting benchmark traffic ({}m)------", workload.testDurationMinutes);
 
         var result = printAndCollectStats(workload.testDurationMinutes, TimeUnit.MINUTES);
-        runCompleted = true;
-
-        worker.stopAll();
+        checkControllerFailure();
         return result;
     }
 
-    private void ensureTopicsAreReady() throws IOException {
+    private void ensureTopicsAreReady() throws IOException, InterruptedException {
         log.info("Waiting for consumers to be ready");
         // This is work around the fact that there's no way to have a consumer ready in Kafka without
         // first publishing
@@ -179,30 +229,23 @@ public class WorkloadGenerator implements AutoCloseable {
         // In this case we just publish 1 message and then wait for consumers to receive the data
         worker.probeProducers();
 
-        long start = System.currentTimeMillis();
-        long end = start + 60 * 1000;
-        while (System.currentTimeMillis() < end) {
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+        while (true) {
             CountersStats stats = worker.getCountersStats();
 
             log.info(
                     "Waiting for topics to be ready -- Sent: {}, Received: {}",
                     stats.messagesSent(),
                     stats.messagesReceived());
-            if (stats.messagesReceived() < expectedMessages) {
-                try {
-                    Thread.sleep(2_000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            } else {
-                break;
+            if (stats.messagesReceived() >= expectedMessages) {
+                log.info("All consumers are ready");
+                return;
             }
-        }
-
-        if (System.currentTimeMillis() >= end) {
-            throw new RuntimeException("Timed out waiting for consumers to be ready");
-        } else {
-            log.info("All consumers are ready");
+            long remaining = end - System.nanoTime();
+            if (remaining <= 0) {
+                throw new IOException("Timed out waiting for consumers to be ready");
+            }
+            TimeUnit.NANOSECONDS.sleep(Math.min(remaining, TimeUnit.SECONDS.toNanos(2)));
         }
     }
 
@@ -212,19 +255,18 @@ public class WorkloadGenerator implements AutoCloseable {
      *
      * @param currentRate
      */
-    private void findMaximumSustainableRate(double currentRate) throws IOException {
+    private void findMaximumSustainableRate(double currentRate)
+            throws IOException, InterruptedException {
         CountersStats stats = worker.getCountersStats();
 
-        int controlPeriodMillis = 3000;
         long lastControlTimestamp = System.nanoTime();
 
         RateController rateController = new RateController();
 
         while (!runCompleted) {
             // Check every few seconds and adjust the rate
-            try {
-                Thread.sleep(controlPeriodMillis);
-            } catch (InterruptedException e) {
+            Thread.sleep(controlPeriodMillis);
+            if (runCompleted) {
                 return;
             }
 
@@ -242,10 +284,141 @@ public class WorkloadGenerator implements AutoCloseable {
         }
     }
 
+    private void startController(String name, Controller controller, boolean backlog) {
+        synchronized (controllerLock) {
+            if (closed) {
+                throw new IllegalStateException("Workload generator is closed");
+            }
+            controllers.add(
+                    executor.submit(
+                            () -> {
+                                try {
+                                    controller.run();
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    if (!runCompleted) {
+                                        recordControllerFailure(name, e);
+                                    }
+                                } catch (Throwable t) {
+                                    recordControllerFailure(name, t);
+                                } finally {
+                                    if (backlog) {
+                                        needToWaitForBacklogDraining = false;
+                                    }
+                                }
+                            }));
+        }
+    }
+
+    private void recordControllerFailure(String name, Throwable cause) {
+        Throwable failure = new IllegalStateException(name + " controller failed", cause);
+        synchronized (controllerLock) {
+            controllerFailure = append(controllerFailure, failure);
+            controllerFailureSignal.complete(controllerFailure);
+        }
+    }
+
+    private void checkControllerFailure() throws IOException {
+        synchronized (controllerLock) {
+            if (controllerFailure != null) {
+                controllerFailureReported = true;
+                throw new IOException("Background workload controller failed", controllerFailure);
+            }
+        }
+    }
+
+    private void waitForReportInterval() throws IOException, InterruptedException {
+        try {
+            controllerFailureSignal.get(reportIntervalNanos, TimeUnit.NANOSECONDS);
+            checkControllerFailure();
+        } catch (TimeoutException ignored) {
+            checkControllerFailure();
+        } catch (ExecutionException e) {
+            throw new IOException("Could not monitor workload controllers", e.getCause());
+        }
+    }
+
+    @FunctionalInterface
+    private interface Controller {
+        void run() throws Exception;
+    }
+
+    private static Throwable append(Throwable primary, Throwable next) {
+        if (primary == null) {
+            return next;
+        }
+        if (next != null && primary != next) {
+            primary.addSuppressed(next);
+        }
+        return primary;
+    }
+
     @Override
-    public void close() {
-        worker.stopAll();
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        runCompleted = true;
+        Thread active = runThread;
+        if (active != null && active != Thread.currentThread()) {
+            active.interrupt();
+        }
+        synchronized (controllerLock) {
+            controllers.forEach(controller -> controller.cancel(true));
+        }
         executor.shutdownNow();
+
+        Throwable failure = null;
+        boolean interrupted = Thread.interrupted();
+        boolean runQuiescent = active == null;
+        boolean controllersQuiescent = false;
+        if (interrupted) {
+            failure = new InterruptedException("Interrupted before stopping workload controllers");
+        }
+        if (active != null && active != Thread.currentThread()) {
+            try {
+                runQuiescent = runExited.await(shutdownTimeoutNanos, TimeUnit.NANOSECONDS);
+                if (!runQuiescent) {
+                    failure = append(failure, new TimeoutException("Workload run did not exit"));
+                }
+            } catch (InterruptedException e) {
+                interrupted = true;
+                failure = append(failure, e);
+            }
+        }
+        try {
+            controllersQuiescent = executor.awaitTermination(shutdownTimeoutNanos, TimeUnit.NANOSECONDS);
+            if (!controllersQuiescent) {
+                failure = append(failure, new TimeoutException("Workload controllers did not terminate"));
+            }
+        } catch (InterruptedException e) {
+            interrupted = true;
+            failure = append(failure, e);
+        }
+        synchronized (controllerLock) {
+            if (controllerFailure != null && !controllerFailureReported) {
+                failure = append(failure, controllerFailure);
+                controllerFailureReported = true;
+            }
+        }
+        try {
+            worker.stopAll();
+        } catch (Throwable t) {
+            failure = append(failure, t);
+        }
+        quiescentAfterClose = runQuiescent && controllersQuiescent;
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (failure != null) {
+            throw new IllegalStateException("Failed to close workload", failure);
+        }
+    }
+
+    @Override
+    public boolean isQuiescentAfterClose() {
+        return quiescentAfterClose;
     }
 
     private void createConsumers(List<String> topics) throws IOException {
@@ -289,12 +462,11 @@ public class WorkloadGenerator implements AutoCloseable {
         log.info("Created {} producers in {} ms", fullListOfTopics.size(), timer.elapsedMillis());
     }
 
-    private void buildAndDrainBacklog(int testDurationMinutes) throws IOException {
+    private void buildAndDrainBacklog(int testDurationMinutes)
+            throws IOException, InterruptedException {
         Timer timer = new Timer();
         log.info("Stopping all consumers to build backlog");
         worker.pauseConsumers();
-
-        this.needToWaitForBacklogDraining = true;
 
         int effectiveMessageSize = effectiveMessageSize();
         if (effectiveMessageSize <= 0) {
@@ -312,11 +484,7 @@ public class WorkloadGenerator implements AutoCloseable {
                 break;
             }
 
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            Thread.sleep(1000);
         }
 
         log.info("--- Completed backlog build in {} s ---", timer.elapsedSeconds());
@@ -336,26 +504,18 @@ public class WorkloadGenerator implements AutoCloseable {
             if (currentBacklog <= minBacklog) {
                 log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
 
-                try {
-                    Thread.sleep(MINUTES.toMillis(testDurationMinutes));
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+                Thread.sleep(MINUTES.toMillis(testDurationMinutes));
 
-                needToWaitForBacklogDraining = false;
                 return;
             }
 
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            Thread.sleep(100);
         }
     }
 
     @SuppressWarnings({"checkstyle:LineLength", "checkstyle:MethodLength"})
-    private TestResult printAndCollectStats(long testDurations, TimeUnit unit) throws IOException {
+    TestResult printAndCollectStats(long testDurations, TimeUnit unit)
+            throws IOException, InterruptedException {
         long startTime = System.nanoTime();
 
         // Print report stats
@@ -373,11 +533,7 @@ public class WorkloadGenerator implements AutoCloseable {
         result.consumersPerTopic = workload.consumerPerSubscription;
 
         while (true) {
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException e) {
-                break;
-            }
+            waitForReportInterval();
 
             PeriodStats stats = worker.getPeriodStats();
 
@@ -397,6 +553,10 @@ public class WorkloadGenerator implements AutoCloseable {
                             workload.subscriptionsPerTopic * stats.totalMessagesSent()
                                     - stats.totalMessagesReceived());
 
+            Histogram publishLatency = stats.publishLatency();
+            Histogram publishDelayLatency = stats.publishDelayLatency();
+            Histogram endToEndLatency = stats.endToEndLatency();
+
             log.info(
                     "Pub rate {} msg/s / {} MB/s | Pub err {} err/s | Cons rate {} msg/s / {} MB/s | Backlog: {} K | Pub Latency (ms) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {} | Pub Delay Latency (us) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {}",
                     rateFormat.format(publishRate),
@@ -405,60 +565,48 @@ public class WorkloadGenerator implements AutoCloseable {
                     rateFormat.format(consumeRate),
                     throughputFormat.format(consumeThroughput),
                     dec.format(currentBacklog / 1000.0), //
-                    dec.format(microsToMillis(stats.publishLatency().getMean())),
-                    dec.format(microsToMillis(stats.publishLatency().getValueAtPercentile(50))),
-                    dec.format(microsToMillis(stats.publishLatency().getValueAtPercentile(99))),
-                    dec.format(microsToMillis(stats.publishLatency().getValueAtPercentile(99.9))),
-                    throughputFormat.format(microsToMillis(stats.publishLatency().getMaxValue())),
-                    dec.format(stats.publishDelayLatency().getMean()),
-                    dec.format(stats.publishDelayLatency().getValueAtPercentile(50)),
-                    dec.format(stats.publishDelayLatency().getValueAtPercentile(99)),
-                    dec.format(stats.publishDelayLatency().getValueAtPercentile(99.9)),
-                    throughputFormat.format(stats.publishDelayLatency().getMaxValue()));
+                    dec.format(microsToMillis(publishLatency.getMean())),
+                    dec.format(microsToMillis(publishLatency.getValueAtPercentile(50))),
+                    dec.format(microsToMillis(publishLatency.getValueAtPercentile(99))),
+                    dec.format(microsToMillis(publishLatency.getValueAtPercentile(99.9))),
+                    throughputFormat.format(microsToMillis(publishLatency.getMaxValue())),
+                    dec.format(publishDelayLatency.getMean()),
+                    dec.format(publishDelayLatency.getValueAtPercentile(50)),
+                    dec.format(publishDelayLatency.getValueAtPercentile(99)),
+                    dec.format(publishDelayLatency.getValueAtPercentile(99.9)),
+                    throughputFormat.format(publishDelayLatency.getMaxValue()));
 
             result.publishRate.add(publishRate);
             result.publishErrorRate.add(errorRate);
             result.consumeRate.add(consumeRate);
             result.backlog.add(currentBacklog);
-            result.publishLatencyAvg.add(microsToMillis(stats.publishLatency().getMean()));
-            result.publishLatency50pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(50)));
-            result.publishLatency75pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(75)));
-            result.publishLatency95pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(95)));
-            result.publishLatency99pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(99)));
-            result.publishLatency999pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(99.9)));
-            result.publishLatency9999pct.add(
-                    microsToMillis(stats.publishLatency().getValueAtPercentile(99.99)));
-            result.publishLatencyMax.add(microsToMillis(stats.publishLatency().getMaxValue()));
+            result.publishLatencyAvg.add(microsToMillis(publishLatency.getMean()));
+            result.publishLatency50pct.add(microsToMillis(publishLatency.getValueAtPercentile(50)));
+            result.publishLatency75pct.add(microsToMillis(publishLatency.getValueAtPercentile(75)));
+            result.publishLatency95pct.add(microsToMillis(publishLatency.getValueAtPercentile(95)));
+            result.publishLatency99pct.add(microsToMillis(publishLatency.getValueAtPercentile(99)));
+            result.publishLatency999pct.add(microsToMillis(publishLatency.getValueAtPercentile(99.9)));
+            result.publishLatency9999pct.add(microsToMillis(publishLatency.getValueAtPercentile(99.99)));
+            result.publishLatencyMax.add(microsToMillis(publishLatency.getMaxValue()));
 
-            result.publishDelayLatencyAvg.add(stats.publishDelayLatency().getMean());
-            result.publishDelayLatency50pct.add(stats.publishDelayLatency().getValueAtPercentile(50));
-            result.publishDelayLatency75pct.add(stats.publishDelayLatency().getValueAtPercentile(75));
-            result.publishDelayLatency95pct.add(stats.publishDelayLatency().getValueAtPercentile(95));
-            result.publishDelayLatency99pct.add(stats.publishDelayLatency().getValueAtPercentile(99));
-            result.publishDelayLatency999pct.add(stats.publishDelayLatency().getValueAtPercentile(99.9));
-            result.publishDelayLatency9999pct.add(
-                    stats.publishDelayLatency().getValueAtPercentile(99.99));
-            result.publishDelayLatencyMax.add(stats.publishDelayLatency().getMaxValue());
+            result.publishDelayLatencyAvg.add(publishDelayLatency.getMean());
+            result.publishDelayLatency50pct.add(publishDelayLatency.getValueAtPercentile(50));
+            result.publishDelayLatency75pct.add(publishDelayLatency.getValueAtPercentile(75));
+            result.publishDelayLatency95pct.add(publishDelayLatency.getValueAtPercentile(95));
+            result.publishDelayLatency99pct.add(publishDelayLatency.getValueAtPercentile(99));
+            result.publishDelayLatency999pct.add(publishDelayLatency.getValueAtPercentile(99.9));
+            result.publishDelayLatency9999pct.add(publishDelayLatency.getValueAtPercentile(99.99));
+            result.publishDelayLatencyMax.add(publishDelayLatency.getMaxValue());
 
-            result.endToEndLatencyAvg.add(microsToMillis(stats.endToEndLatency().getMean()));
-            result.endToEndLatency50pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(50)));
-            result.endToEndLatency75pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(75)));
-            result.endToEndLatency95pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(95)));
-            result.endToEndLatency99pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(99)));
-            result.endToEndLatency999pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(99.9)));
+            result.endToEndLatencyAvg.add(microsToMillis(endToEndLatency.getMean()));
+            result.endToEndLatency50pct.add(microsToMillis(endToEndLatency.getValueAtPercentile(50)));
+            result.endToEndLatency75pct.add(microsToMillis(endToEndLatency.getValueAtPercentile(75)));
+            result.endToEndLatency95pct.add(microsToMillis(endToEndLatency.getValueAtPercentile(95)));
+            result.endToEndLatency99pct.add(microsToMillis(endToEndLatency.getValueAtPercentile(99)));
+            result.endToEndLatency999pct.add(microsToMillis(endToEndLatency.getValueAtPercentile(99.9)));
             result.endToEndLatency9999pct.add(
-                    microsToMillis(stats.endToEndLatency().getValueAtPercentile(99.99)));
-            result.endToEndLatencyMax.add(microsToMillis(stats.endToEndLatency().getMaxValue()));
+                    microsToMillis(endToEndLatency.getValueAtPercentile(99.99)));
+            result.endToEndLatencyMax.add(microsToMillis(endToEndLatency.getMaxValue()));
 
             if (now >= testEndTime && !needToWaitForBacklogDraining) {
                 CumulativeLatencies agg = worker.getCumulativeLatencies();

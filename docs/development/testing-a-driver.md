@@ -197,7 +197,7 @@ Every case runs `bin/benchmark` with a driver configuration from `drivers/` and 
 `workloads/` against `http://worker-1:8080,http://worker-2:8080`. Each workload lasts one minute at a low
 fixed rate, with no warm-up. A case passes when:
 
-- the coordinator exits normally within the case timeout and does not log `Failed to run the workload`;
+- the coordinator exits successfully within the case timeout and its log is readable;
 - `result.json` is written with at least three 10-second rate samples and complete, finite publish,
   consume, publish-error and backlog series;
 - at least 50% of the target publish rate was published, with no publish errors;

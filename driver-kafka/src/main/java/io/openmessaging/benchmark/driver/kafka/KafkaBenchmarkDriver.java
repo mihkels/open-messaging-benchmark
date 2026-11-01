@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.kafka;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,9 +52,6 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private static final String KAFKA_CLIENT_ID = "client.id";
     private Config config;
 
-    private final List<BenchmarkProducer> producers = Collections.synchronizedList(new ArrayList<>());
-    private final List<BenchmarkConsumer> consumers = Collections.synchronizedList(new ArrayList<>());
-
     private Properties topicProperties;
     private Properties producerProperties;
     private Properties consumerProperties;
@@ -63,8 +59,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private AdminClient admin;
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         config = reader.readValue(Files.newInputStream(configurationFile));
 
         Properties commonProperties = new Properties();
@@ -120,17 +115,13 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        KafkaProducer<String, byte[]> kafkaProducer = new KafkaProducer<>(producerProperties);
-        BenchmarkProducer benchmarkProducer = new KafkaBenchmarkProducer(kafkaProducer, topic);
+        KafkaProducer<String, byte[]> kafkaProducer = null;
         try {
-            // Add to producer list to close later
-            producers.add(benchmarkProducer);
-            return CompletableFuture.completedFuture(benchmarkProducer);
+            kafkaProducer = new KafkaProducer<>(producerProperties);
+            return CompletableFuture.completedFuture(new KafkaBenchmarkProducer(kafkaProducer, topic));
         } catch (Throwable t) {
-            kafkaProducer.close();
-            CompletableFuture<BenchmarkProducer> future = new CompletableFuture<>();
-            future.completeExceptionally(t);
-            return future;
+            closeAfterFailure(kafkaProducer, t);
+            return CompletableFuture.failedFuture(t);
         }
     }
 
@@ -140,32 +131,36 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         Properties properties = new Properties();
         properties.putAll(consumerProperties);
         properties.put(ConsumerConfig.GROUP_ID_CONFIG, subscriptionName);
-        KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(properties);
+        KafkaConsumer<String, byte[]> consumer = null;
         try {
-            consumer.subscribe(Collections.singletonList(topic));
-            BenchmarkConsumer benchmarkConsumer =
-                    new KafkaBenchmarkConsumer(consumer, consumerProperties, consumerCallback);
-            // Add to consumer list to close later
-            consumers.add(benchmarkConsumer);
-            return CompletableFuture.completedFuture(benchmarkConsumer);
+            consumer = new KafkaConsumer<>(properties);
+            return KafkaBenchmarkConsumer.create(
+                    consumer, topic, consumerProperties, consumerCallback, 100L);
         } catch (Throwable t) {
-            consumer.close();
-            CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
-            future.completeExceptionally(t);
-            return future;
+            closeAfterFailure(consumer, t);
+            return CompletableFuture.failedFuture(t);
         }
     }
 
     @Override
-    public void close() throws Exception {
-        for (BenchmarkProducer producer : producers) {
-            producer.close();
+    public synchronized void close() {
+        if (admin != null) {
+            AdminClient toClose = admin;
+            admin = null;
+            toClose.close();
         }
+    }
 
-        for (BenchmarkConsumer consumer : consumers) {
-            consumer.close();
+    private static void closeAfterFailure(AutoCloseable resource, Throwable failure) {
+        if (resource != null) {
+            try {
+                resource.close();
+            } catch (Throwable closeFailure) {
+                if (closeFailure != failure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
         }
-        admin.close();
     }
 
     private static String applyZoneId(String clientId, String zoneId) {

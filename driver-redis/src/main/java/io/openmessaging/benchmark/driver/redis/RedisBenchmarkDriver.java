@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.redis;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -39,9 +39,10 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 public class RedisBenchmarkDriver implements BenchmarkDriver {
     JedisPool jedisPool;
     private RedisClientConfig clientConfig;
+    private boolean closed;
 
     @Override
-    public void initialize(final Path configurationFile, final PrometheusMeterRegistry statsLogger)
+    public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.clientConfig = readConfig(configurationFile);
     }
@@ -53,58 +54,65 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(final String topic, final int partitions) {
-        return CompletableFuture.runAsync(() -> {});
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
-        if (jedisPool == null) {
-            setupJedisConn();
+        try {
+            return CompletableFuture.completedFuture(new RedisBenchmarkProducer(pool(), topic));
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
         }
-        return CompletableFuture.completedFuture(new RedisBenchmarkProducer(jedisPool, topic));
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             final String topic, final String subscriptionName, final ConsumerCallback consumerCallback) {
         String consumerId = "consumer-" + getRandomString();
-        if (jedisPool == null) {
-            setupJedisConn();
-        }
-        try (Jedis jedis = this.jedisPool.getResource()) {
-            try {
-                jedis.xgroupCreate(topic, subscriptionName, null, true);
-                log.info("Created consumer group '{}' for topic '{}'", subscriptionName, topic);
-            } catch (redis.clients.jedis.exceptions.JedisDataException e) {
-                // Check if the error is because the consumer group already exists
-                if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
-                    log.info(
-                            "Consumer group '{}' already exists for topic '{}', reusing it",
-                            subscriptionName,
-                            topic);
-                } else {
-                    // Re-throw if it's a different error
-                    log.error(
-                            "Failed to create consumer group '{}' for topic '{}'", subscriptionName, topic, e);
-                    throw e;
+        try {
+            JedisPool sharedPool = pool();
+            try (Jedis jedis = sharedPool.getResource()) {
+                try {
+                    jedis.xgroupCreate(topic, subscriptionName, null, true);
+                    log.info("Created consumer group '{}' for topic '{}'", subscriptionName, topic);
+                } catch (redis.clients.jedis.exceptions.JedisDataException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
+                        log.info(
+                                "Consumer group '{}' already exists for topic '{}', reusing it",
+                                subscriptionName,
+                                topic);
+                    } else {
+                        log.error(
+                                "Failed to create consumer group '{}' for topic '{}'", subscriptionName, topic, e);
+                        throw e;
+                    }
                 }
             }
+            return CompletableFuture.completedFuture(
+                    new RedisBenchmarkConsumer(
+                            consumerId, topic, subscriptionName, sharedPool, consumerCallback));
         } catch (Exception e) {
             log.error(
                     "Failed to create consumer instance for topic '{}' and subscription '{}'",
                     topic,
                     subscriptionName,
                     e);
-            CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
+            return CompletableFuture.failedFuture(e);
         }
-        return CompletableFuture.completedFuture(
-                new RedisBenchmarkConsumer(
-                        consumerId, topic, subscriptionName, jedisPool, consumerCallback));
     }
 
-    private void setupJedisConn() {
+    private synchronized JedisPool pool() {
+        if (closed) {
+            throw new IllegalStateException("Redis driver is closed");
+        }
+        if (jedisPool == null) {
+            setupJedisConn();
+        }
+        return jedisPool;
+    }
+
+    private synchronized void setupJedisConn() {
         GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(this.clientConfig.jedisPoolMaxTotal);
         poolConfig.setMaxIdle(this.clientConfig.jedisPoolMaxIdle);
@@ -134,9 +142,18 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {
-        if (this.jedisPool != null) {
-            this.jedisPool.close();
+    public void close() {
+        JedisPool toClose;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            toClose = jedisPool;
+            jedisPool = null;
+        }
+        if (toClose != null) {
+            toClose.close();
         }
     }
 
@@ -147,7 +164,9 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static RedisClientConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        try (var input = Files.newInputStream(configurationFile)) {
+            return reader.readValue(input);
+        }
     }
 
     private static final Random random = new Random();

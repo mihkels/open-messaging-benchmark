@@ -13,11 +13,11 @@
  */
 package io.openmessaging.benchmark.driver.nsq;
 
-import com.github.brainlag.nsq.NSQConsumer;
 import com.github.brainlag.nsq.NSQProducer;
-import com.github.brainlag.nsq.lookup.DefaultNSQLookup;
-import com.github.brainlag.nsq.lookup.NSQLookup;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -31,7 +31,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
@@ -41,12 +48,16 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NsqBenchmarkDriver implements BenchmarkDriver {
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations = new HashSet<>();
     private NsqConfig config;
+    private EventLoopGroup consumerEventLoops;
+    private boolean closed;
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger)
-            throws IOException {
-        config = reader.readValue(Files.newInputStream(configurationFile));
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
+        try (var input = Files.newInputStream(configurationFile)) {
+            config = reader.readValue(input);
+        }
         if (config.nsqdHttpPort < 1 || config.nsqdHttpPort > 65535) {
             throw new IllegalArgumentException("nsqdHttpPort must be between 1 and 65535");
         }
@@ -96,44 +107,148 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
-        NSQProducer nsqProducer = new NSQProducer();
-        nsqProducer.addAddress(config.nsqdHost, 4150);
-        nsqProducer.start();
-        log.info("start a nsq producer");
+        NSQProducer nsqProducer = null;
+        try {
+            nsqProducer = newProducer();
+            nsqProducer.addAddress(config.nsqdHost, 4150);
+            nsqProducer.start();
+            log.info("start a nsq producer");
+            return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
+        } catch (Exception failure) {
+            if (nsqProducer != null) {
+                shutdownAfterFailure(nsqProducer::shutdown, failure);
+            }
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
 
-        return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
+    NSQProducer newProducer() {
+        return new NSQProducer();
     }
 
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        // Channel can be treat as subscriptionName
-        NSQLookup lookup = new DefaultNSQLookup();
-        lookup.addLookupAddress(config.lookupHost, 4161);
-        NSQConsumer nsqConsumer =
-                new NSQConsumer(
-                        lookup,
-                        topic,
-                        subscriptionName,
-                        (message) -> {
-                            // now mark the message as finished.
-                            consumerCallback.messageReceived(
-                                    message.getMessage(), message.getTimestamp().getTime());
-                            message.finished();
-
-                            // or you could requeue it, which indicates a failure and puts it back on the queue.
-                            // message.requeue();
+        NsqBenchmarkConsumer consumer = null;
+        NsqEventLoopGroup scope = null;
+        try {
+            NsqLookup lookup =
+                    new NsqLookup(httpClient, Duration.ofSeconds(3), config.nsqdHost, config.nsqdHttpPort);
+            lookup.addLookupAddress(config.lookupHost, 4161);
+            scope = new NsqEventLoopGroup(consumerEventLoops());
+            consumer = newConsumer(lookup, topic, subscriptionName, consumerCallback, scope);
+            CompletableFuture<BenchmarkConsumer> creation;
+            boolean cancel;
+            synchronized (this) {
+                if (closed) {
+                    return consumer.failBeforeStart(new IllegalStateException("NSQ driver is closed"));
+                }
+                creation = Objects.requireNonNull(consumer.startAsync(), "NSQ consumer creation future");
+                cancel = closed;
+                if (!cancel) {
+                    consumerCreations.add(creation);
+                }
+            }
+            if (cancel) {
+                if (!creation.cancel(true) && !creation.isCompletedExceptionally()) {
+                    IllegalStateException failure = new IllegalStateException("NSQ driver is closed");
+                    BenchmarkConsumer handle = creation.getNow(null);
+                    if (handle != null) {
+                        closeAfterFailure(handle, failure);
+                    }
+                    if (handle != consumer) {
+                        closeAfterFailure(consumer, failure);
+                    }
+                    shutdownAfterFailure(scope::closeChannels, failure);
+                    return CompletableFuture.failedFuture(failure);
+                }
+            } else {
+                creation.whenComplete(
+                        (handle, failure) -> {
+                            synchronized (this) {
+                                consumerCreations.remove(creation);
+                            }
                         });
+            }
+            return creation;
+        } catch (Exception failure) {
+            if (consumer != null) {
+                closeAfterFailure(consumer, failure);
+            }
+            if (scope != null) {
+                shutdownAfterFailure(scope::closeChannels, failure);
+            }
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
 
-        nsqConsumer.start();
-        log.info("start a nsq consumer");
+    NsqBenchmarkConsumer newConsumer(
+            NsqLookup lookup,
+            String topic,
+            String subscriptionName,
+            ConsumerCallback consumerCallback,
+            NsqEventLoopGroup scope) {
+        return new NsqBenchmarkConsumer(
+                lookup, topic, subscriptionName, consumerCallback, lookup::includesPublishingNode, scope);
+    }
 
-        return CompletableFuture.completedFuture(new NsqBenchmarkConsumer(nsqConsumer));
+    private synchronized EventLoopGroup consumerEventLoops() {
+        if (closed) {
+            throw new IllegalStateException("NSQ driver is closed");
+        }
+        if (consumerEventLoops == null) {
+            consumerEventLoops =
+                    new MultiThreadIoEventLoopGroup(
+                            0,
+                            task -> {
+                                Thread thread = new Thread(task, "nsq-consumer-io");
+                                thread.setDaemon(true);
+                                return thread;
+                            },
+                            NioIoHandler.newFactory());
+        }
+        return consumerEventLoops;
+    }
+
+    private static void shutdownAfterFailure(Runnable shutdown, Throwable failure) {
+        try {
+            shutdown.run();
+        } catch (RuntimeException closeFailure) {
+            if (closeFailure != failure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
+    }
+
+    private static void closeAfterFailure(AutoCloseable resource, Throwable failure) {
+        try {
+            resource.close();
+        } catch (Exception closeFailure) {
+            if (closeFailure != failure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
     }
 
     @Override
     public void close() throws Exception {
-        httpClient.close();
+        EventLoopGroup eventLoops;
+        List<CompletableFuture<BenchmarkConsumer>> pending;
+        synchronized (this) {
+            closed = true;
+            eventLoops = consumerEventLoops;
+            consumerEventLoops = null;
+            pending = new ArrayList<>(consumerCreations);
+            consumerCreations.clear();
+        }
+        pending.forEach(creation -> creation.cancel(true));
+        try {
+            if (eventLoops != null) {
+                eventLoops.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
+            }
+        } finally {
+            httpClient.close();
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(NsqBenchmarkDriver.class);

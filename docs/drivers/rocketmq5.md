@@ -19,16 +19,16 @@ The RocketMQ 5 plugin benchmarks Apache RocketMQ through the RocketMQ 5 gRPC cli
 Topic and consumer group creation still uses the classic admin API, which talks to the name server
 and the brokers directly. For the classic remoting client, see [RocketMQ](rocketmq.md).
 
-|       Item        |                                                                           Value                                                                           |
-|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID         | `rocketmq5`                                                                                                                                               |
-| Module            | `driver-rocketmq5`                                                                                                                                        |
-| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver`                                                                                     |
-| Shipped config    | `driver-rocketmq5/rocketmq.yaml` (the file is named `rocketmq.yaml`, like the classic plugin's)                                                           |
-| Client library    | `rocketmq-client-java` 5.0.7 (gRPC); `rocketmq-tools` 5.1.0 for administration                                                                            |
-| Tested broker     | `apache/rocketmq:5.3.2`: name server, one broker and a proxy (Compose stack `rocketmq5`)                                                                  |
-| Regression cases  | `rocketmq5-contract`                                                                                                                                      |
-| Known limitations | No client tuning options; keys do not select queues; `sendDelayMsg: true` without `delayTimeInSec` fails; the admin client is never shut down; no cleanup |
+|       Item        |                                                                    Value                                                                    |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID         | `rocketmq5`                                                                                                                                 |
+| Module            | `driver-rocketmq5`                                                                                                                          |
+| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver`                                                                       |
+| Shipped config    | `driver-rocketmq5/rocketmq.yaml` (the file is named `rocketmq.yaml`, like the classic plugin's)                                             |
+| Client library    | `rocketmq-client-java` 5.0.7 (gRPC); `rocketmq-tools` 5.1.0 for administration                                                              |
+| Tested broker     | `apache/rocketmq:5.3.2`: name server, one broker and a proxy (Compose stack `rocketmq5`)                                                    |
+| Regression cases  | `rocketmq5-contract`                                                                                                                        |
+| Known limitations | No client tuning options; keys do not select queues; `sendDelayMsg: true` without `delayTimeInSec` fails; topics and groups are not deleted |
 
 ## Differences from the classic RocketMQ plugin
 
@@ -127,7 +127,8 @@ Unknown keys are ignored.
   `max(1, partitionsPerTopic / number of broker addresses)` read and write queues per broker. The
   topic attribute `+message.type` is `NORMAL`, or `DELAY` with `sendDelayMsg: true`.
 - **Producers.** Each benchmark producer is its own gRPC producer bound to its topic. Sends are
-  asynchronous and complete when the proxy returns a send receipt.
+  asynchronous and complete when the proxy returns a send receipt. The driver owns the message
+  bytes even if the send is canceled.
 - **Keys.** A message key is set as the RocketMQ message key (indexed for lookup). It does not
   choose the queue, so per-key ordering is not preserved.
 - **Delay messages.** With `sendDelayMsg: true`, each message gets a delivery timestamp of the send
@@ -145,10 +146,15 @@ Unknown keys are ignored.
   [Latency and backlog](../methodology/latency-and-backlog.md).
 - **Backlog workloads.** The framework blocks the consumer callback, which holds the push consumer's
   consumption threads until it is released.
-- **Errors.** A failure to start the admin client is only logged; topic creation then fails.
-  Producer and consumer creation errors fail the run.
-- **Cleanup.** Producers and consumers are closed. The driver's `close()` does nothing: the admin
-  client is not shut down, and topics and consumer groups are not deleted.
+- **Errors.** Admin startup failures abort initialization with their cause; producer and consumer
+  creation errors complete their futures exceptionally.
+- **Cleanup.** Each producer handle closes its own client, then fails any sends still pending,
+  retaining a client-close failure as their cause; consumers close their clients. Closing a handle
+  from a callback running synchronously inside its own `sendAsync` invocation or from any
+  send-completion callback running inline with a client acknowledgement or close-induced failure
+  throws `IllegalStateException` before changing the handle's state. Retry after the call or
+  callback returns, or schedule close on another thread without waiting for it in the callback.
+  The driver shuts down its admin client. Topics and consumer groups are not deleted.
 
 ## Tuning examples
 
@@ -180,9 +186,10 @@ low fixed rate. It is not a performance result.
 
 Common problems:
 
+- **`Failed to start the RocketMQ admin tool`.** Check the name server address and admin credentials;
+  initialization reports the startup cause.
 - **`Failed to create topic` or `Failed to create subscription`.** The admin client could not reach
-  the name server or a broker address, `clusterName` is wrong, or the admin credentials are
-  missing.
+  the name server or a broker address, `clusterName` is wrong, or the admin credentials are missing.
 - **Producer or consumer creation fails.** The proxy at `grpcEndpoint` is unreachable, does not know
   the topic yet, or rejects the client credentials.
 - **`NullPointerException` when sending.** `sendDelayMsg` is true and `delayTimeInSec` is not set.

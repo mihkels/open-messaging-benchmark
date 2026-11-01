@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.artemis;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
@@ -23,13 +24,13 @@ import org.apache.activemq.artemis.api.core.client.ClientProducer;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
 import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.apache.activemq.artemis.api.core.client.SendAcknowledgementHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
 
     private final ClientSession session;
     private final ClientProducer producer;
+    private final Object lifecycleLock = new Object();
+    private final PendingSendTracker pending = new PendingSendTracker("Artemis producer");
 
     // Private constructor - cannot throw exceptions
     private ArtemisBenchmarkProducer(ClientSession session, ClientProducer producer) {
@@ -60,20 +61,23 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
             // Create the producer instance only after all operations succeed
             return new ArtemisBenchmarkProducer(tempSession, tempProducer);
 
-        } catch (ActiveMQException e) {
-            // Clean up resources if initialization fails
+        } catch (ActiveMQException | RuntimeException e) {
             if (tempProducer != null) {
                 try {
                     tempProducer.close();
-                } catch (ActiveMQException closeException) {
-                    log.warn("Failed to close producer during cleanup", closeException);
+                } catch (ActiveMQException | RuntimeException closeException) {
+                    if (closeException != e) {
+                        e.addSuppressed(closeException);
+                    }
                 }
             }
             if (tempSession != null) {
                 try {
                     tempSession.close();
-                } catch (ActiveMQException closeException) {
-                    log.warn("Failed to close session during cleanup", closeException);
+                } catch (ActiveMQException | RuntimeException closeException) {
+                    if (closeException != e) {
+                        e.addSuppressed(closeException);
+                    }
                 }
             }
             throw e;
@@ -82,41 +86,67 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        if (producer != null) {
-            producer.close();
-        }
-        if (session != null) {
-            session.close();
+        boolean closeResources = pending.beginClose();
+        Exception closeFailure = null;
+        try {
+            if (closeResources) {
+                ClientSession sessionToClose;
+                ClientProducer producerToClose;
+                synchronized (lifecycleLock) {
+                    // Wait for a send that started before close to finish using the session.
+                    sessionToClose = session;
+                    producerToClose = producer;
+                }
+                try (sessionToClose) {
+                    producerToClose.close();
+                }
+            }
+        } catch (Exception e) {
+            closeFailure = e;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw e;
+        } finally {
+            pending.failRemaining(closeFailure);
         }
     }
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        ClientMessage msg = session.createMessage(true /* durable */);
-        msg.setTimestamp(System.currentTimeMillis());
-        msg.getBodyBuffer().writeBytes(payload);
+        CompletableFuture<Void> future;
+        synchronized (lifecycleLock) {
+            future = pending.register();
+            if (future.isDone()) {
+                return future;
+            }
+            try {
+                ClientMessage msg = session.createMessage(true /* durable */);
+                msg.setTimestamp(System.currentTimeMillis());
+                msg.getBodyBuffer().writeBytes(payload);
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        try {
-            producer.send(
-                    msg,
-                    new SendAcknowledgementHandler() {
-                        @Override
-                        public void sendAcknowledged(Message message) {
-                            future.complete(null);
-                        }
+                producer.send(
+                        msg,
+                        new SendAcknowledgementHandler() {
+                            @Override
+                            public void sendAcknowledged(Message message) {
+                                pending.completeFromClient(future, null);
+                            }
 
-                        @Override
-                        public void sendFailed(Message message, Exception e) {
-                            future.completeExceptionally(e);
-                        }
-                    });
-        } catch (ActiveMQException e) {
-            future.completeExceptionally(e);
+                            @Override
+                            public void sendFailed(Message message, Exception e) {
+                                Throwable failure =
+                                        e != null
+                                                ? e
+                                                : new IllegalStateException(
+                                                        "Artemis provider reported a failure without a cause");
+                                pending.completeFromClient(future, failure);
+                            }
+                        });
+            } catch (ActiveMQException | RuntimeException e) {
+                future.completeExceptionally(e);
+            }
         }
-
         return future;
     }
-
-    private static final Logger log = LoggerFactory.getLogger(ArtemisBenchmarkProducer.class);
 }

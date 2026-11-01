@@ -66,6 +66,8 @@ check, not a performance result.
 
 - Subscription names are ignored: every consumer reads the whole stream from the beginning, so
   several consumers in one subscription each receive every message.
+- A consumer is ready only after its initial reader opens. Later read failures reopen at the last
+  read position, which can replay a record.
 - With more than one partition, extra `<topic>/NNNNNN` logs are created but never used.
 - Message keys are ignored.
 - The end-to-end timestamp is the producer's wall-clock time (record transaction ID).

@@ -47,7 +47,19 @@ class OpStatsLoggerAdaptor implements dlshade.org.apache.bookkeeper.stats.OpStat
 
     @Override
     public OpStatsData toOpStatsData() {
-        throw new UnsupportedOperationException("toOpStatsData is not supported");
+        org.apache.bookkeeper.stats.OpStatsData data = statsLogger.toOpStatsData();
+        return new OpStatsData(
+                data.getNumSuccessfulEvents(),
+                data.getNumFailedEvents(),
+                data.getAvgLatencyMillis(),
+                new long[] {
+                    data.getP10Latency(),
+                    data.getP50Latency(),
+                    data.getP90Latency(),
+                    data.getP99Latency(),
+                    data.getP999Latency(),
+                    data.getP9999Latency()
+                });
     }
 
     @Override

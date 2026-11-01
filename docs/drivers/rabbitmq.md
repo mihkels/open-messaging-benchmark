@@ -63,6 +63,7 @@ producerCreationDelay: 100
 producerCreationBatchSize: 5
 consumerCreationDelay: 100
 consumerCreationBatchSize: 5
+resourceCreationMaxRetries: 10
 
 amqpUris:
   - amqp://localhost
@@ -97,15 +98,16 @@ The plugin bundle must be installed on every worker, see [Runtime and plugins](.
 
 All keys are read by `RabbitMqConfig`. Unknown keys are ignored.
 
-|             Key             |      Type       |  Default   |                                                                Description                                                                 |
-|-----------------------------|-----------------|------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `amqpUris`                  | list of strings | empty list | Required. AMQP URIs `amqp://[user:password@]host[:port]`. Only host, port, user and password are used; path, query and scheme are ignored. |
-| `queueType`                 | enum            | `CLASSIC`  | `CLASSIC`, `QUORUM` or `STREAM`, upper case. Sets the `x-queue-type` queue argument (none for `CLASSIC`).                                  |
-| `messagePersistence`        | boolean         | `false`    | When `true`, messages are published with delivery mode 2 (persistent).                                                                     |
-| `producerCreationBatchSize` | int             | `5`        | Producers created per batch.                                                                                                               |
-| `producerCreationDelay`     | long            | `100`      | Delay between producer creation batches, in milliseconds.                                                                                  |
-| `consumerCreationBatchSize` | int             | `5`        | Consumers created per batch.                                                                                                               |
-| `consumerCreationDelay`     | long            | `100`      | Delay between consumer creation batches, in milliseconds.                                                                                  |
+|             Key              |      Type       |  Default   |                                                                Description                                                                 |
+|------------------------------|-----------------|------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `amqpUris`                   | list of strings | empty list | Required. AMQP URIs `amqp://[user:password@]host[:port]`. Only host, port, user and password are used; path, query and scheme are ignored. |
+| `queueType`                  | enum            | `CLASSIC`  | `CLASSIC`, `QUORUM` or `STREAM`, upper case. Sets the `x-queue-type` queue argument (none for `CLASSIC`).                                  |
+| `messagePersistence`         | boolean         | `false`    | When `true`, messages are published with delivery mode 2 (persistent).                                                                     |
+| `producerCreationBatchSize`  | int             | `5`        | Producers created per batch.                                                                                                               |
+| `producerCreationDelay`      | long            | `100`      | Delay between producer creation batches, in milliseconds.                                                                                  |
+| `consumerCreationBatchSize`  | int             | `5`        | Consumers created per batch.                                                                                                               |
+| `consumerCreationDelay`      | long            | `100`      | Delay between consumer creation batches, in milliseconds.                                                                                  |
+| `resourceCreationMaxRetries` | int             | `10`       | Retries per failed producer or consumer after the initial attempt; `0` disables retries. Negative values are invalid.                      |
 
 There are no pass-through client properties. Other connection settings (heartbeat, TLS, virtual host, frame size)
 are defaults of the [RabbitMQ Java client](https://www.rabbitmq.com/client-libraries/java-api-guide). Automatic
@@ -125,7 +127,9 @@ broker; the remaining URIs are passed as fallback addresses for reconnection.
 **Producers.** Each producer opens a channel, declares the topic's exchange as a durable `fanout` exchange and
 enables publisher confirms. A send completes when the broker confirms the message and fails when the broker
 negatively acknowledges it. The message key is passed as the routing key, but fanout exchanges ignore routing keys,
-so keys have no effect on delivery or ordering.
+so keys have no effect on delivery or ordering. Closing a producer from a send completion callback or
+from within a reentrant publish call is rejected to avoid recursion or a client deadlock; retry the
+close after the callback or publish returns.
 
 **Subscriptions and consumers.** Each consumer opens a channel, declares the exchange and a durable, non-exclusive,
 non-auto-delete queue named `<exchange>-<subscription>`, and binds the queue to the exchange. Consumers of the same
@@ -195,7 +199,10 @@ Producers and consumers of a topic connect to one primary broker chosen round ro
 leader may be on a different node from the one the client is connected to.
 
 With many producers or consumers, `producerCreationBatchSize`, `consumerCreationBatchSize` and the two delay keys
-trade setup time against the rate at which connections and channels are opened on the broker.
+trade setup time against the rate at which connections and channels are opened on the broker. Failed resources
+are retried independently, up to `resourceCreationMaxRetries` times after the first attempt. The default is
+therefore at most 11 attempts per resource; interruption is not retried. Exhaustion fails the batch with the
+original creation cause and closes successfully created handles that were not handed to the worker.
 
 ## Troubleshooting and verification
 
@@ -212,9 +219,8 @@ A passing case is a functional check at a low rate, not a performance result.
 Common problems:
 
 - `Cannot create topic with partitions in RabbitMQ`: the workload sets `partitionsPerTopic` greater than 1.
-- The run stays in producer or consumer creation: failed creations (for example an unreachable host or rejected
-  credentials) are retried until they succeed, and the failure is logged only at debug level. Check broker
-  reachability and the credentials in `amqpUris`.
+- Producer or consumer creation fails after retries: check the reported creation cause, broker reachability and
+  the credentials in `amqpUris`. Tune `resourceCreationMaxRetries` for transient broker failures if needed.
 - `ACCESS_REFUSED` or login failures: on a default broker installation `guest` may only connect from localhost; use
   a dedicated user in the URI.
 - `PRECONDITION_FAILED` when declaring a queue: a queue with the same name already exists with different arguments.

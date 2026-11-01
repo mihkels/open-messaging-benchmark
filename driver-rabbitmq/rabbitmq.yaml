@@ -22,6 +22,8 @@ producerCreationDelay: 100
 producerCreationBatchSize: 5
 consumerCreationDelay: 100
 consumerCreationBatchSize: 5
+# Retries per failed resource after the first attempt; 0 disables retries.
+resourceCreationMaxRetries: 10
 
 amqpUris:
   - amqp://localhost

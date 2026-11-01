@@ -73,10 +73,16 @@ public final class UniformRateLimiter {
         return start + currOpIndex * intervalNs;
     }
 
-    public static void uninterruptibleSleepNs(final long intendedTime) {
+    public static void interruptibleSleepNs(final long intendedTime) throws InterruptedException {
         long sleepNs;
         while ((sleepNs = (intendedTime - System.nanoTime())) > 0) {
+            if (Thread.interrupted()) {
+                throw new InterruptedException("Interrupted while waiting for the next send");
+            }
             LockSupport.parkNanos(sleepNs);
+        }
+        if (Thread.interrupted()) {
+            throw new InterruptedException("Interrupted while waiting for the next send");
         }
     }
 }

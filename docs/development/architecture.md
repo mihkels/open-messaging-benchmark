@@ -244,6 +244,11 @@ error that names both bundles. A bundle that declares `classReferenceProperties`
 bundles of the classes named by those driver YAML properties, and they are all loaded into the same
 driver process.
 
+The SPI's `initialize` now accepts Micrometer `MeterRegistry` rather than
+`PrometheusMeterRegistry`. This one-time binary-incompatible change retains `driverApiVersion: 1`:
+an older version-1 bundle still passes the descriptor check. Rebuild the host and every plugin bundle
+together; the version check alone cannot identify stale bundles.
+
 [`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
 puts the benchmark core first, followed by the bundle jars. The core is the artifact list recorded at
 build time in `META-INF/omb/worker-runtime-artifacts.txt` (read by `HostRuntime`).
@@ -271,8 +276,8 @@ The statistics used for results (`PeriodStats`, `CumulativeLatencies`, `Counters
 Prometheus metrics are split between processes:
 
 - The driver process owns a `PrometheusMeterRegistry`. `WorkerStats` registers its meters there, and
-  the same registry is passed to `BenchmarkDriver.initialize(...)` as `statsLogger` so the driver can
-  add its own metrics. The driver process serves this registry at `/metrics` on its loopback port.
+  the same registry is passed to `BenchmarkDriver.initialize(...)` as a `MeterRegistry` so the driver
+  can add its own metrics. The driver process serves this registry at `/metrics` on its loopback port.
 - The supervisor's `GET /metrics` returns the supervisor's own registry followed by a scrape of the
   driver process's `/metrics`. Before any driver has started, the driver part is empty.
 - In local mode there is no supervisor HTTP server, so `/metrics` cannot be reached from outside the

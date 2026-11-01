@@ -14,16 +14,51 @@
 package io.openmessaging.benchmark.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class DistributedWorkersEnsembleTest {
+
+    @Test
+    void attemptsEveryWorkerAndReportsStopAndCloseFailures() throws Exception {
+        Worker first = mock(Worker.class);
+        Worker second = mock(Worker.class);
+        doThrow(new IllegalStateException("first stop")).when(first).stopAll();
+        doThrow(new IllegalStateException("second stop")).when(second).stopAll();
+        doThrow(new IOException("first close")).when(first).close();
+        doThrow(new IOException("second close")).when(second).close();
+        DistributedWorkersEnsemble ensemble =
+                new DistributedWorkersEnsemble(List.of(first, second), false);
+
+        Throwable stopFailure = catchThrowable(ensemble::stopAll);
+        assertThat(stopFailure.getCause().getMessage()).isEqualTo("first stop");
+        assertThat(stopFailure.getCause().getSuppressed())
+                .singleElement()
+                .extracting(Throwable::getMessage)
+                .isEqualTo("second stop");
+        verify(first).stopAll();
+        verify(second).stopAll();
+
+        Throwable closeFailure = catchThrowable(ensemble::close);
+        assertThat(closeFailure.getCause().getMessage()).isEqualTo("first close");
+        assertThat(closeFailure.getCause().getSuppressed())
+                .singleElement()
+                .extracting(Throwable::getMessage)
+                .isEqualTo("second close");
+        verify(first).close();
+        verify(second).close();
+    }
 
     @ParameterizedTest
     @MethodSource("producerCountExpectations")

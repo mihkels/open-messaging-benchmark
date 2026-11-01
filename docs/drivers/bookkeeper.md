@@ -167,13 +167,16 @@ For all properties and their defaults, see the
   one DL log record whose transaction ID comes from a time-based sequencer (the current time in
   milliseconds, kept monotonic per writer). A send completes when DistributedLog acknowledges the
   record, that is after the buffered entry containing it has been written to `bkcAckQuorumSize`
-  bookies.
+  bookies. The driver copies the payload for each send so that cancellation cannot expose a
+  caller-owned buffer to a pending write.
 - **Multiple producers per topic.** DistributedLog is designed for one writer per log. The shipped
   configuration disables the write lock (`writeLockEnabled=false`), but the regression suite only
   tests one producer per topic.
 - **Keys.** Message keys are ignored.
 - **Consumers and subscriptions.** The subscription name is ignored. Every benchmark consumer
   starts its own reader at the beginning of the log (`DLSN.InitialDLSN`) and reads every record.
+  Consumer creation succeeds only after that initial reader opens; an initial open failure fails
+  creation.
   - Several subscriptions per topic work as independent full readers.
   - Several consumers in one subscription each receive every message, so the consumed count is
     multiplied by `consumerPerSubscription`. Use `consumerPerSubscription: 1`.
@@ -187,8 +190,15 @@ For all properties and their defaults, see the
   until the callback is released.
 - **Metrics.** BookKeeper and DistributedLog client statistics are not exported (the driver uses a
   null stats logger).
-- **Cleanup.** The driver closes its writers, readers and the namespace. It does not delete logs;
-  their segments are kept according to `logSegmentRetentionHours`.
+- **Cleanup.** The worker closes each producer's writer and log manager and each consumer's reader
+  and log manager; the driver closes the shared namespace. Failed or cancelled creation also closes
+  resources that opened only after the operation was abandoned. Any send still pending after writer
+  close fails instead of remaining unresolved, including when close itself fails. Closing a producer
+  or consumer from its own callback is rejected and can be retried after the callback returns.
+  Consumer close allows five seconds for reader and manager cleanup and the reader thread to stop.
+  If that wait times out, in-progress cleanup continues on daemon threads, including cleanup of a
+  reader opened by a late reconnect. The driver does not delete logs; their segments are kept
+  according to `logSegmentRetentionHours`.
 
 ## Tuning examples
 

@@ -93,6 +93,12 @@ drivers/driver-jms/
 Invalid bundles are reported with every problem found. See
 [Packaging a plugin](../development/packaging-a-plugin.md) for building one.
 
+**Version-1 rebuild required:** `BenchmarkDriver.initialize` changed its registry parameter from
+`PrometheusMeterRegistry` to `MeterRegistry` without changing `driverApiVersion`. Older version-1
+bundles are binary-incompatible, but their descriptors still match and cannot identify them as stale.
+Rebuild the host and all plugin bundles together against the changed `driver-api`, and deploy the
+rebuilt bundles to every worker. Matching descriptor or artifact versions alone are not sufficient.
+
 ### Adding provider jars
 
 The JMS plugin loads `ext/*.jar` from its bundle. Copy a JMS provider's client jars into

@@ -17,9 +17,13 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
@@ -46,12 +50,41 @@ class UniformRateLimiterTest {
     }
 
     @Test
-    void uninterruptibleSleepNs() {
+    void interruptibleSleepNs() throws InterruptedException {
         long start = System.nanoTime();
         long expectedEnd = start + MILLISECONDS.toNanos(100);
-        UniformRateLimiter.uninterruptibleSleepNs(expectedEnd);
+        UniformRateLimiter.interruptibleSleepNs(expectedEnd);
         long end = System.nanoTime();
-        assertThat(end).isGreaterThan(expectedEnd);
+        assertThat(end).isGreaterThanOrEqualTo(expectedEnd);
+    }
+
+    @Test
+    void rateWaitExitsPromptlyWhenInterrupted() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        AtomicBoolean interrupted = new AtomicBoolean();
+        Thread waiter =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    started.countDown();
+                                    try {
+                                        UniformRateLimiter.interruptibleSleepNs(
+                                                System.nanoTime() + SECONDS.toNanos(30));
+                                    } catch (InterruptedException e) {
+                                        interrupted.set(true);
+                                    }
+                                });
+        assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
+        waiter.interrupt();
+        waiter.join(1000);
+        assertThat(waiter.isAlive()).isFalse();
+        assertThat(interrupted).isTrue();
+        assertThatThrownBy(
+                        () -> {
+                            Thread.currentThread().interrupt();
+                            UniformRateLimiter.interruptibleSleepNs(System.nanoTime());
+                        })
+                .isInstanceOf(InterruptedException.class);
     }
 
     @Test

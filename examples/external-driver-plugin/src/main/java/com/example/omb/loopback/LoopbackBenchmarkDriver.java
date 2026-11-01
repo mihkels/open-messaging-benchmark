@@ -13,7 +13,7 @@
  */
 package com.example.omb.loopback;
 
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -41,7 +41,7 @@ public class LoopbackBenchmarkDriver implements BenchmarkDriver {
     private final Map<String, Map<String, Subscription>> topics = new ConcurrentHashMap<>();
 
     @Override
-    public void initialize(Path configurationFile, PrometheusMeterRegistry statsLogger) {
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) {
         log.info(
                 "Loopback driver initialized from {} using bundled commons-lang3 {}",
                 configurationFile,

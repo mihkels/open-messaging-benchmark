@@ -228,7 +228,7 @@ public final class PluginRegistry {
 
     /**
      * Resolves {@code driverClass} using an explicitly given bundle directory or jar, as selected
-     * with {@code --legacy-driver-name}. A directory without {@code plugin.yaml} is treated as an
+     * with {@code --driver-location}. A directory without {@code plugin.yaml} is treated as an
      * unpackaged driver: {@code target/classes}, {@code *.jar} and {@code lib/*.jar} are loaded.
      *
      * @param driverClass the driver class selected by the driver configuration

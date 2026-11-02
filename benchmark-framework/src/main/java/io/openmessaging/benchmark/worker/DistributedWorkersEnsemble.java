@@ -16,7 +16,6 @@ package io.openmessaging.benchmark.worker;
 import static java.util.Collections.unmodifiableList;
 import static java.util.stream.Collectors.joining;
 
-import com.beust.jcommander.internal.Maps;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -29,10 +28,17 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,19 +83,16 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void initializeDriver(Path configurationFile) throws Exception {
-        workers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.initializeDriver(configurationFile);
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        callAll(
+                workers,
+                worker -> {
+                    worker.initializeDriver(configurationFile);
+                    return null;
+                });
     }
 
     @Override
-    public List<String> createTopics(TopicsInfo topicsInfo) throws IOException {
+    public List<String> createTopics(TopicsInfo topicsInfo) {
         return leader.createTopics(topicsInfo);
     }
 
@@ -97,7 +100,7 @@ public final class DistributedWorkersEnsemble implements Worker {
     public void createProducers(List<String> topics) {
         List<List<String>> topicsPerProducer =
                 ListPartition.partitionList(topics, producerWorkers.size());
-        Map<Worker, List<String>> topicsPerProducerMap = Maps.newHashMap();
+        Map<Worker, List<String>> topicsPerProducerMap = new LinkedHashMap<>();
         int i = 0;
         for (List<String> assignedTopics : topicsPerProducer) {
             topicsPerProducerMap.put(producerWorkers.get(i++), assignedTopics);
@@ -108,15 +111,9 @@ public final class DistributedWorkersEnsemble implements Worker {
                 (int) topicsPerProducerMap.values().stream().filter(t -> !t.isEmpty()).count();
         log.debug(
                 "Producing worker count: {} of {}", numberOfUsedProducerWorkers, producerWorkers.size());
-        topicsPerProducerMap.entrySet().parallelStream()
-                .forEach(
-                        e -> {
-                            try {
-                                e.getKey().createProducers(e.getValue());
-                            } catch (IOException ex) {
-                                throw new RuntimeException(ex);
-                            }
-                        });
+        forAll(
+                List.copyOf(topicsPerProducerMap.entrySet()),
+                entry -> entry.getKey().createProducers(entry.getValue()));
     }
 
     @Override
@@ -124,62 +121,29 @@ public final class DistributedWorkersEnsemble implements Worker {
         // Reduce the publish rate across all the brokers
         double newRate = producerWorkAssignment.publishRate() / numberOfUsedProducerWorkers;
         log.debug("Setting worker assigned publish rate to {} msgs/sec", newRate);
-        // Reduce the publish rate across all the brokers
-        producerWorkers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.startLoad(producerWorkAssignment.withPublishRate(newRate));
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        ProducerWorkAssignment assignment = producerWorkAssignment.withPublishRate(newRate);
+        forAll(producerWorkers, worker -> worker.startLoad(assignment));
     }
 
     @Override
     public void probeProducers() {
-        producerWorkers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.probeProducers();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        forAll(producerWorkers, Worker::probeProducers);
     }
 
     @Override
     public void adjustPublishRate(double publishRate) {
         double newRate = publishRate / numberOfUsedProducerWorkers;
         log.debug("Adjusting producer publish rate to {} msgs/sec", newRate);
-        producerWorkers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.adjustPublishRate(newRate);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        forAll(producerWorkers, worker -> worker.adjustPublishRate(newRate));
     }
 
     @Override
     public void stopAll() {
-        List<Throwable> failures =
-                workers.parallelStream()
-                        .map(
-                                worker -> {
-                                    try {
-                                        worker.stopAll();
-                                        return (Throwable) null;
-                                    } catch (Throwable t) {
-                                        return t;
-                                    }
-                                })
-                        .filter(java.util.Objects::nonNull)
-                        .toList();
-        throwIfAny("Failed to stop one or more workers", failures);
+        try {
+            forAll(workers, Worker::stopAll);
+        } catch (RuntimeException | Error e) {
+            throw new IllegalStateException("Failed to stop one or more workers", e);
+        }
     }
 
     @Override
@@ -194,28 +158,12 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void pauseConsumers() {
-        consumerWorkers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.pauseConsumers();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        forAll(consumerWorkers, Worker::pauseConsumers);
     }
 
     @Override
     public void resumeConsumers() {
-        consumerWorkers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.resumeConsumers();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        forAll(consumerWorkers, Worker::resumeConsumers);
     }
 
     @Override
@@ -223,82 +171,44 @@ public final class DistributedWorkersEnsemble implements Worker {
         List<List<TopicSubscription>> subscriptionsPerConsumer =
                 ListPartition.partitionList(
                         overallConsumerAssignment.topicsSubscriptions, consumerWorkers.size());
-        Map<Worker, ConsumerAssignment> topicsPerWorkerMap = Maps.newHashMap();
+        Map<Worker, ConsumerAssignment> topicsPerWorkerMap = new LinkedHashMap<>();
         int i = 0;
         for (List<TopicSubscription> tsl : subscriptionsPerConsumer) {
             ConsumerAssignment individualAssignment = new ConsumerAssignment();
             individualAssignment.topicsSubscriptions = tsl;
             topicsPerWorkerMap.put(consumerWorkers.get(i++), individualAssignment);
         }
-        topicsPerWorkerMap.entrySet().parallelStream()
-                .forEach(
-                        e -> {
-                            try {
-                                e.getKey().createConsumers(e.getValue());
-                            } catch (IOException ex) {
-                                throw new RuntimeException(ex);
-                            }
-                        });
+        forAll(
+                List.copyOf(topicsPerWorkerMap.entrySet()),
+                entry -> entry.getKey().createConsumers(entry.getValue()));
     }
 
     @Override
     public PeriodStats getPeriodStats() {
-        return workers.parallelStream()
-                .map(
-                        w -> {
-                            try {
-                                return w.getPeriodStats();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
+        return mapAll(workers, Worker::getPeriodStats).stream()
                 .reduce(new PeriodStats(), PeriodStats::plus);
     }
 
     @Override
     public CumulativeLatencies getCumulativeLatencies() {
-        return workers.parallelStream()
-                .map(
-                        w -> {
-                            try {
-                                return w.getCumulativeLatencies();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
+        return mapAll(workers, Worker::getCumulativeLatencies).stream()
                 .reduce(new CumulativeLatencies(), CumulativeLatencies::plus);
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
-        return workers.parallelStream()
-                .map(
-                        w -> {
-                            try {
-                                return w.getCountersStats();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
+    public CountersStats getCountersStats() {
+        return mapAll(workers, Worker::getCountersStats).stream()
                 .reduce(new CountersStats(), CountersStats::plus);
     }
 
     @Override
-    public void resetStats() throws IOException {
-        workers.parallelStream()
-                .forEach(
-                        w -> {
-                            try {
-                                w.resetStats();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+    public void resetStats() {
+        forAll(workers, Worker::resetStats);
     }
 
     @Override
     public void close() throws Exception {
-        List<Throwable> failures = new java.util.ArrayList<>();
+        Failures failures = new Failures();
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
         } catch (IllegalStateException e) {
@@ -306,20 +216,57 @@ public final class DistributedWorkersEnsemble implements Worker {
         } catch (Throwable t) {
             failures.add(t);
         }
-        for (Worker w : workers) {
-            try {
-                w.close();
-            } catch (Throwable t) {
-                failures.add(t);
-            }
-        }
-        throwIfAny("Failed to close one or more workers", failures);
+        workers.forEach(failures::close);
+        failures.throwIfAny("Failed to close one or more workers");
     }
 
-    private static void throwIfAny(String message, List<Throwable> failures) {
-        Failures collected = new Failures();
-        failures.forEach(collected::add);
-        collected.throwIfAny(message);
+    private static <T> void forAll(List<T> targets, Consumer<T> action) {
+        mapAll(
+                targets,
+                target -> {
+                    action.accept(target);
+                    return null;
+                });
+    }
+
+    private static <T, R> List<R> mapAll(List<T> targets, Function<T, R> action) {
+        try {
+            return callAll(targets, action::apply);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // Calls every target concurrently, since each call is a blocking request to a remote worker. All
+    // calls finish before this returns; the first failure in target order is thrown with the others
+    // suppressed into it.
+    private static <T, R> List<R> callAll(List<T> targets, Call<T, R> action) throws Exception {
+        Failures failures = new Failures();
+        List<R> results = new ArrayList<>();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<R>> calls =
+                    targets.stream().map(target -> executor.submit(() -> action.call(target))).toList();
+            for (Future<R> call : calls) {
+                try {
+                    results.add(call.get());
+                } catch (ExecutionException e) {
+                    failures.add(e.getCause());
+                } catch (InterruptedException e) {
+                    failures.addInterruption(e);
+                    calls.forEach(pending -> pending.cancel(true));
+                    break;
+                }
+            }
+        }
+        failures.throwIfAny();
+        return results;
+    }
+
+    @FunctionalInterface
+    private interface Call<T, R> {
+        R call(T target) throws Exception;
     }
 
     private static final Logger log = LoggerFactory.getLogger(DistributedWorkersEnsemble.class);

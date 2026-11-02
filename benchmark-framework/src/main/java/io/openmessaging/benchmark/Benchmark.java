@@ -76,11 +76,12 @@ public final class Benchmark {
         boolean extraConsumers;
 
         @Parameter(
-                names = {"--legacy-driver-name"},
+                names = {"--driver-location", "--legacy-driver-name"},
                 description =
                         "Load the driver from this plugin bundle directory, unpackaged driver module"
-                                + " directory or jar instead of the installed plugin bundles (local runs only)")
-        public String legacyDriverName;
+                                + " directory or jar instead of the installed plugin bundles (local runs only)."
+                                + " --legacy-driver-name is a deprecated alias")
+        public String driverLocation;
 
         @Parameter(description = "Workloads")
         public List<String> workloads;
@@ -178,14 +179,16 @@ public final class Benchmark {
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
             worker = new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
             log.info("Using distributed workers ensemble");
-            if (arguments.legacyDriverName != null) {
+            if (arguments.driverLocation != null) {
                 log.warn(
-                        "--legacy-driver-name is ignored with remote workers; they load drivers from their"
+                        "--driver-location is ignored with remote workers; they load drivers from their"
                                 + " own installed plugin bundles");
             }
         } else {
             // Run the driver in a child JVM with only its plugin bundle on the classpath
-            worker = new ProcessWorker();
+            worker =
+                    new ProcessWorker(
+                            arguments.driverLocation == null ? null : Path.of(arguments.driverLocation));
             log.info("Using local driver process worker");
         }
 
@@ -228,9 +231,7 @@ public final class Benchmark {
                                 "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                                 workload.name,
                                 driverConfiguration.name);
-                        Path driverLocation =
-                                arguments.legacyDriverName != null ? Path.of(arguments.legacyDriverName) : null;
-                        worker.initializeDriver(Path.of(driverConfig), driverLocation);
+                        worker.initializeDriver(Path.of(driverConfig));
                         generator =
                                 Objects.requireNonNull(
                                         generatorFactory.create(driverConfiguration.name, workload, worker));

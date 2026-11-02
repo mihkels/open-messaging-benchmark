@@ -40,7 +40,6 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -193,20 +192,6 @@ public final class LocalWorker implements Worker {
                         }));
     }
 
-    /**
-     * Drivers always run on this JVM's classpath. Use {@link ProcessWorker} to run a driver from its
-     * own plugin bundle.
-     */
-    @Override
-    public void initializeDriver(Path driverConfigFile, Path driverLocation) throws Exception {
-        if (driverLocation != null) {
-            throw new IllegalArgumentException(
-                    "LocalWorker loads drivers from its own classpath; use ProcessWorker for "
-                            + driverLocation);
-        }
-        initializeDriver(driverConfigFile);
-    }
-
     @Override
     public List<String> createTopics(TopicsInfo topicsInfo) {
         Run current = requireRun();
@@ -351,7 +336,7 @@ public final class LocalWorker implements Worker {
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         Run current = requireRun();
         List<BenchmarkProducer> producers;
         synchronized (current.monitor) {
@@ -412,9 +397,9 @@ public final class LocalWorker implements Worker {
             succeeded = true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while probing producers", e);
+            throw new IllegalStateException("Interrupted while probing producers", e);
         } catch (Exception e) {
-            throw new IOException("Producer readiness probe failed", unwrap(e));
+            throw new IllegalStateException("Producer readiness probe failed", unwrap(e));
         } finally {
             if (!succeeded) {
                 probes.forEach(probe -> probe.cancel(true));
@@ -499,19 +484,19 @@ public final class LocalWorker implements Worker {
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         requireRun().callbacks.pause();
         log.info("Pausing consumers");
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         requireRun().callbacks.resume();
         log.info("Resuming consumers");
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         requireRun().checkFailure();
         stats.resetLatencies();
     }

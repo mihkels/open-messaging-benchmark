@@ -54,9 +54,9 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /**
  * A {@link Worker} that runs the selected driver in a dedicated child JVM whose classpath contains
- * only the benchmark core and the driver's plugin bundle(s). Every {@link #initializeDriver(Path,
- * Path)} starts a fresh process, so different drivers and different versions of their client
- * libraries never share a classpath.
+ * only the benchmark core and the driver's plugin bundle(s). Every {@link #initializeDriver(Path)}
+ * starts a fresh process, so different drivers and different versions of their client libraries
+ * never share a classpath.
  *
  * <p>The child JVM options are taken from the {@value #JVM_OPTS_PROPERTY} system property or the
  * {@value #JVM_OPTS_ENV} environment variable, falling back to {@link #DEFAULT_JVM_OPTS}.
@@ -88,6 +88,7 @@ public class ProcessWorker implements Worker {
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
 
+    private final Path driverLocation;
     private final Supplier<PluginRegistry> registry;
     private final Supplier<HostRuntime> hostRuntime;
     private final Thread shutdownHook;
@@ -103,10 +104,27 @@ public class ProcessWorker implements Worker {
     private String driverDescription;
 
     public ProcessWorker() {
-        this(PluginRegistry::discover, HostRuntime::current);
+        this(null);
+    }
+
+    /**
+     * Creates a worker that loads every driver from an explicit location instead of the installed
+     * plugin bundles.
+     *
+     * @param driverLocation a plugin bundle directory, unpackaged driver module directory or jar, or
+     *     {@code null} to use the installed plugin bundles
+     */
+    public ProcessWorker(Path driverLocation) {
+        this(driverLocation, PluginRegistry::discover, HostRuntime::current);
     }
 
     ProcessWorker(Supplier<PluginRegistry> registry, Supplier<HostRuntime> hostRuntime) {
+        this(null, registry, hostRuntime);
+    }
+
+    ProcessWorker(
+            Path driverLocation, Supplier<PluginRegistry> registry, Supplier<HostRuntime> hostRuntime) {
+        this.driverLocation = driverLocation;
         this.registry = registry;
         this.hostRuntime = hostRuntime;
         this.shutdownHook = new Thread(this::shutdownDriverProcess, "process-worker-shutdown");
@@ -114,13 +132,7 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
-    public void initializeDriver(Path driverConfigFile) throws Exception {
-        initializeDriver(driverConfigFile, null);
-    }
-
-    @Override
-    public synchronized void initializeDriver(Path driverConfigFile, Path driverLocation)
-            throws Exception {
+    public synchronized void initializeDriver(Path driverConfigFile) throws Exception {
         ensureOpen();
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("Interrupted before driver initialization");
@@ -374,7 +386,7 @@ public class ProcessWorker implements Worker {
         }
     }
 
-    private <T> T call(ClientCall<T> action) throws IOException {
+    private <T> T call(ClientCall<T> action) {
         HttpWorkerClient current;
         Process currentProcess;
         String description;
@@ -393,7 +405,7 @@ public class ProcessWorker implements Worker {
         }
         try {
             return action.apply(current);
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             // A failed call is often the first sign of a crashed process; give it time to be reaped
             if (awaitExit(currentProcess, CRASH_DETECTION_TIMEOUT)) {
                 synchronized (this) {
@@ -418,7 +430,7 @@ public class ProcessWorker implements Worker {
         }
     }
 
-    private void run(ClientAction action) throws IOException {
+    private void run(ClientAction action) {
         call(
                 c -> {
                     action.run(c);
@@ -428,12 +440,12 @@ public class ProcessWorker implements Worker {
 
     @FunctionalInterface
     private interface ClientCall<T> {
-        T apply(HttpWorkerClient client) throws IOException;
+        T apply(HttpWorkerClient client);
     }
 
     @FunctionalInterface
     private interface ClientAction {
-        void run(HttpWorkerClient client) throws IOException;
+        void run(HttpWorkerClient client);
     }
 
     private static String describeFailure(Throwable e, Process process) {
@@ -449,62 +461,62 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
-    public List<String> createTopics(TopicsInfo topicsInfo) throws IOException {
+    public List<String> createTopics(TopicsInfo topicsInfo) {
         return call(c -> c.createTopics(topicsInfo));
     }
 
     @Override
-    public void createProducers(List<String> topics) throws IOException {
+    public void createProducers(List<String> topics) {
         run(c -> c.createProducers(topics));
     }
 
     @Override
-    public void createConsumers(ConsumerAssignment consumerAssignment) throws IOException {
+    public void createConsumers(ConsumerAssignment consumerAssignment) {
         run(c -> c.createConsumers(consumerAssignment));
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         run(c -> c.probeProducers());
     }
 
     @Override
-    public void startLoad(ProducerWorkAssignment producerWorkAssignment) throws IOException {
+    public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         run(c -> c.startLoad(producerWorkAssignment));
     }
 
     @Override
-    public void adjustPublishRate(double publishRate) throws IOException {
+    public void adjustPublishRate(double publishRate) {
         run(c -> c.adjustPublishRate(publishRate));
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         run(c -> c.pauseConsumers());
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         run(c -> c.resumeConsumers());
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
+    public CountersStats getCountersStats() {
         return call(c -> c.getCountersStats());
     }
 
     @Override
-    public PeriodStats getPeriodStats() throws IOException {
+    public PeriodStats getPeriodStats() {
         return call(c -> c.getPeriodStats());
     }
 
     @Override
-    public CumulativeLatencies getCumulativeLatencies() throws IOException {
+    public CumulativeLatencies getCumulativeLatencies() {
         return call(c -> c.getCumulativeLatencies());
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         run(c -> c.resetStats());
     }
 
@@ -534,7 +546,7 @@ public class ProcessWorker implements Worker {
         }
         try {
             run(HttpWorkerClient::stopAll);
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             IllegalStateException failure =
                     new IllegalStateException(
                             "Failed to stop driver " + description + ": " + describeFailure(e, currentProcess),

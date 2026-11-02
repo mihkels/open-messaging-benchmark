@@ -224,11 +224,11 @@ bundles on every driver initialization, so no restart is needed. See
 [Distributed runs](../getting-started/distributed-runs.md) and
 [Containers and Kubernetes](../guides/containers-and-kubernetes.md).
 
-## `--legacy-driver-name`
+## `--driver-location`
 
-The coordinator option `--legacy-driver-name <path>` loads the driver from a given location instead of
-from discovery. It is applied in **local mode only**; with `--workers` or `--workers-file` it is ignored
-and a warning is logged.
+The coordinator option `--driver-location <path>` loads the driver from a given location instead of
+from discovery. It is applied in **local mode only**; with `--workers` or `--workers-file` it is
+ignored and a warning is logged. `--legacy-driver-name` is a deprecated alias.
 
 |            Location             |                                  What is loaded                                   |
 |---------------------------------|-----------------------------------------------------------------------------------|

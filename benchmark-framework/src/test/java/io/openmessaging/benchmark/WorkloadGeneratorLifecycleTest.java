@@ -29,7 +29,6 @@ import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -186,7 +185,7 @@ class WorkloadGeneratorLifecycleTest {
     @Test
     void propagatesReadinessFailureAndStillStopsWorker() throws Exception {
         Worker worker = worker();
-        doThrow(new IOException("probe rejected")).when(worker).probeProducers();
+        doThrow(new IllegalStateException("probe rejected")).when(worker).probeProducers();
         try (WorkloadGenerator generator = generator(workload(), worker, Duration.ofSeconds(2))) {
             assertThatThrownBy(generator::run).hasMessage("probe rejected");
             verify(worker, never()).startLoad(any());
@@ -197,7 +196,7 @@ class WorkloadGeneratorLifecycleTest {
     @Test
     void backlogControllerFailureWakesTheRunImmediately() throws Exception {
         Worker worker = worker();
-        doThrow(new IOException("pause failed")).when(worker).pauseConsumers();
+        doThrow(new IllegalStateException("pause failed")).when(worker).pauseConsumers();
         Workload workload = workload();
         workload.consumerBacklogSizeGB = 1;
         try (WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2))) {
@@ -213,7 +212,7 @@ class WorkloadGeneratorLifecycleTest {
         Worker worker = worker();
         when(worker.getCountersStats())
                 .thenReturn(new CountersStats())
-                .thenThrow(new IOException("rate controller failed"));
+                .thenThrow(new IllegalStateException("rate controller failed"));
         Workload workload = workload();
         workload.producerRate = 0;
         try (WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2))) {

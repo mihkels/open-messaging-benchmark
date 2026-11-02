@@ -73,7 +73,7 @@ class BenchmarkOutcomesTest {
                                                 }));
         assertThat(messages(failure)).contains("first failed", "last failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("successful");
-        verify(worker, times(3)).initializeDriver(any(), any());
+        verify(worker, times(3)).initializeDriver(any());
         verify(first).close();
         verify(success).close();
         verify(last).close();
@@ -98,7 +98,7 @@ class BenchmarkOutcomesTest {
                                 Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
         assertThat(messages(failure)).contains("run cleanup failed", "worker close failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("completed");
-        verify(worker, times(1)).initializeDriver(any(), any());
+        verify(worker, times(1)).initializeDriver(any());
         verify(generator, times(1)).close();
         verify(worker).close();
     }
@@ -128,7 +128,7 @@ class BenchmarkOutcomesTest {
                                                 workload.name.equals("first") ? failedCleanup : next))
                 .hasRootCauseMessage("driver cleanup failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("second");
-        verify(worker, times(2)).initializeDriver(any(), any());
+        verify(worker, times(2)).initializeDriver(any());
         verify(next).close();
         verify(worker).close();
     }
@@ -149,7 +149,7 @@ class BenchmarkOutcomesTest {
                         () ->
                                 Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
                 .hasRootCauseMessage("controller did not exit");
-        verify(worker, times(1)).initializeDriver(any(), any());
+        verify(worker, times(1)).initializeDriver(any());
         verify(worker).close();
     }
 
@@ -171,7 +171,7 @@ class BenchmarkOutcomesTest {
                                 Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
         assertThat(messages(failure))
                 .contains("fatal run failure", "run close failed", "worker close failed");
-        verify(worker, times(1)).initializeDriver(any(), any());
+        verify(worker, times(1)).initializeDriver(any());
         verify(worker).close();
     }
 
@@ -202,7 +202,7 @@ class BenchmarkOutcomesTest {
         doThrow(new IOException("initialization failed"))
                 .doNothing()
                 .when(worker)
-                .initializeDriver(any(), any());
+                .initializeDriver(any());
         WorkloadRun generator = mock(WorkloadRun.class);
         when(generator.run()).thenReturn(result("second"));
         Map<String, Workload> workloads = new LinkedHashMap<>();
@@ -214,7 +214,7 @@ class BenchmarkOutcomesTest {
                                 Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
                 .hasRootCauseMessage("initialization failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("second");
-        verify(worker, times(2)).initializeDriver(any(), any());
+        verify(worker, times(2)).initializeDriver(any());
         verify(worker, times(2)).stopAll();
         verify(worker).close();
     }

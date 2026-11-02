@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.Map;
 
 public class Workload {
@@ -73,4 +74,35 @@ public class Workload {
     public int testDurationMinutes;
 
     public int warmupDurationMinutes = 1;
+
+    /**
+     * The message size used for backlog and result calculations.
+     *
+     * @return the distribution's weighted average size, or {@link #messageSize}
+     */
+    public int effectiveMessageSize() {
+        return usesMessageSizeDistribution()
+                ? new MessageSizeDistribution(messageSizeDistribution).getAvgSize()
+                : messageSize;
+    }
+
+    /**
+     * Rejects settings that would otherwise fail only after broker resources are created.
+     *
+     * @throws IllegalArgumentException if the workload is invalid
+     */
+    public void validate() {
+        if (usesMessageSizeDistribution()) {
+            new MessageSizeDistribution(messageSizeDistribution);
+        }
+        if (consumerBacklogSizeGB > 0) {
+            if (producerRate == 0) {
+                throw new IllegalArgumentException(
+                        "Cannot probe producer sustainable rate when building backlog");
+            }
+            if (effectiveMessageSize() <= 0) {
+                throw new IllegalArgumentException("Message size must be positive when building a backlog");
+            }
+        }
+    }
 }

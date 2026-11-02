@@ -127,10 +127,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     }
 
     private TestResult runWorkload() throws Exception {
-        if (workload.consumerBacklogSizeGB > 0 && workload.producerRate == 0) {
-            throw new IllegalArgumentException(
-                    "Cannot probe producer sustainable rate when building backlog");
-        }
+        workload.validate();
 
         var timer = new Timer();
         List<String> topics =
@@ -468,10 +465,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         log.info("Stopping all consumers to build backlog");
         worker.pauseConsumers();
 
-        int effectiveMessageSize = effectiveMessageSize();
-        if (effectiveMessageSize <= 0) {
-            throw new IllegalArgumentException("Message size must be positive when building a backlog");
-        }
+        int effectiveMessageSize = workload.effectiveMessageSize();
         long requestedBacklogSize = workload.consumerBacklogSizeGB * 1024 * 1024 * 1024;
 
         while (true) {
@@ -528,7 +522,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         result.driver = driverName;
         result.topics = workload.topics;
         result.partitions = workload.partitionsPerTopic;
-        result.messageSize = effectiveMessageSize();
+        result.messageSize = workload.effectiveMessageSize();
         result.producersPerTopic = workload.producersPerTopic;
         result.consumersPerTopic = workload.consumerPerSubscription;
 
@@ -699,12 +693,6 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
 
         return result;
-    }
-
-    private int effectiveMessageSize() {
-        return workload.usesMessageSizeDistribution()
-                ? new MessageSizeDistribution(workload.messageSizeDistribution).getAvgSize()
-                : workload.messageSize;
     }
 
     private static final DecimalFormat rateFormat = new PaddingDecimalFormat("0.0", 7);

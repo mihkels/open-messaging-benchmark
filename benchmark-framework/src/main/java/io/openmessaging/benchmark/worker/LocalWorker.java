@@ -24,12 +24,12 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ConsumerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -38,16 +38,13 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -71,7 +68,7 @@ import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
-public final class LocalWorker implements Worker, ConsumerCallback {
+public final class LocalWorker implements Worker {
 
     private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration DEFAULT_RESOURCE_CLOSE_TIMEOUT = Duration.ofSeconds(45);
@@ -304,8 +301,6 @@ public final class LocalWorker implements Worker, ConsumerCallback {
                 producers.size(),
                 producerWorkAssignment.publishRate());
 
-        int processors = Runtime.getRuntime().availableProcessors();
-
         updateMessageProducer(current, producerWorkAssignment.publishRate());
         List<byte[]> payloads = producerWorkAssignment.payloadData();
         if (payloads.isEmpty()) {
@@ -344,28 +339,13 @@ public final class LocalWorker implements Worker, ConsumerCallback {
             current.loadStarted = true;
         }
 
-        Map<Integer, List<BenchmarkProducer>> processorAssignment = new TreeMap<>();
-
-        int processorIdx = 0;
-        for (BenchmarkProducer p : producers) {
-            processorAssignment
-                    .computeIfAbsent(processorIdx, x -> new ArrayList<BenchmarkProducer>())
-                    .add(p);
-
-            processorIdx = (processorIdx + 1) % processors;
-        }
-
-        processorAssignment
-                .values()
-                .forEach(
-                        benchmarkProducers ->
-                                submitProducersToExecutor(
-                                        current,
-                                        benchmarkProducers,
-                                        KeyDistributor.build(producerWorkAssignment.keyDistributorType()),
-                                        payloads,
-                                        payloadCumulativeWeights,
-                                        payloadTotalWeight));
+        submitProducersToExecutor(
+                current,
+                producers,
+                producerWorkAssignment.keyDistributorType(),
+                payloads,
+                payloadCumulativeWeights,
+                payloadTotalWeight);
     }
 
     @Override
@@ -443,13 +423,15 @@ public final class LocalWorker implements Worker, ConsumerCallback {
     private void submitProducersToExecutor(
             Run current,
             List<BenchmarkProducer> producers,
-            KeyDistributor keyDistributor,
+            KeyDistributorType keyDistributorType,
             List<byte[]> payloads,
             int[] cumulativeWeights,
             int totalWeight) {
         log.info("Submitting {} producers to executor", producers.size());
 
         for (BenchmarkProducer p : producers) {
+            // Each producer runs on its own thread, and distributors are not thread-safe
+            KeyDistributor keyDistributor = KeyDistributor.build(keyDistributorType);
             submit(
                     current,
                     "producer task",
@@ -512,29 +494,6 @@ public final class LocalWorker implements Worker, ConsumerCallback {
     public CountersStats getCountersStats() {
         requireRun().checkFailure();
         return stats.toCountersStats();
-    }
-
-    @Override
-    public void messageReceived(byte[] data, long publishTimestamp) {
-        Run current = run;
-        if (current != null) {
-            current.callbacks.messageReceived(data, publishTimestamp);
-        }
-    }
-
-    @Override
-    public void messageReceived(ByteBuffer data, long publishTimestamp) {
-        Run current = run;
-        if (current != null) {
-            current.callbacks.messageReceived(data, publishTimestamp);
-        }
-    }
-
-    public void internalMessageReceived(int size, long publishTimestamp) {
-        Run current = run;
-        if (current != null) {
-            current.callbacks.receive(size, publishTimestamp);
-        }
     }
 
     @Override
@@ -638,7 +597,8 @@ public final class LocalWorker implements Worker, ConsumerCallback {
                 cleanup.add(current.cleanupFailure);
             }
 
-            // A worker with failed cleanup is already unusable and may still receive stats from stuck resources.
+            // A worker with failed cleanup is already unusable and may still receive stats from stuck
+            // resources.
             if (!cleanup.hasFailure() && tasksExited && creationsFinished && callbacksFinished) {
                 interrupted |= resetStatistics(cleanup);
             }

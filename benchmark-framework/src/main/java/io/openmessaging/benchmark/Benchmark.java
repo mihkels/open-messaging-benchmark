@@ -56,8 +56,7 @@ public final class Benchmark {
 
         @Parameter(
                 names = {"-d", "--drivers"},
-                description =
-                        "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml") // , required = true)
+                description = "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml")
         public List<String> drivers;
 
         @Parameter(
@@ -82,7 +81,7 @@ public final class Benchmark {
                                 + " directory or jar instead of the installed plugin bundles (local runs only)")
         public String legacyDriverName;
 
-        @Parameter(description = "Workloads") // , required = true)
+        @Parameter(description = "Workloads")
         public List<String> workloads;
 
         @Parameter(
@@ -121,6 +120,18 @@ public final class Benchmark {
             System.exit(0);
         }
 
+        // Not required by JCommander because --csv needs neither
+        if (arguments.workloads == null || arguments.workloads.isEmpty()) {
+            System.err.println("At least one workload file is required");
+            jc.usage();
+            System.exit(-1);
+        }
+        if (arguments.drivers == null || arguments.drivers.isEmpty()) {
+            System.err.println("At least one driver must be given with --drivers");
+            jc.usage();
+            System.exit(-1);
+        }
+
         if (arguments.workers != null && arguments.workersFile != null) {
             System.err.println("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
@@ -148,7 +159,13 @@ public final class Benchmark {
             File file = new File(path);
             String name = file.getName().substring(0, file.getName().lastIndexOf('.'));
 
-            workloads.put(name, workloadReader.readValue(file));
+            Workload workload = workloadReader.readValue(file);
+            try {
+                workload.validate();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid workload " + path + ": " + e.getMessage(), e);
+            }
+            workloads.put(name, workload);
         }
 
         log.info("Workloads: {}", writer.writeValueAsString(workloads));

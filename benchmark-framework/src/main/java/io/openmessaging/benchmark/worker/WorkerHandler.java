@@ -174,14 +174,14 @@ public class WorkerHandler implements AutoCloseable {
     }
 
     private void handleStartLoad(Context ctx) throws IOException {
-        ProducerWorkAssignment producerWorkAssignment;
-        producerWorkAssignment = mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
+        ProducerWorkAssignment producerWorkAssignment =
+                mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
 
-        log.info("Info received:{}", producerWorkAssignment.payloadData());
+        // The worker validates the payloads, so an empty list must not fail here first
         log.info(
-                "Start load publish-rate: {} msg/s -- payload-size: {}",
+                "Start load publish-rate: {} msg/s -- payloads: {}",
                 producerWorkAssignment.publishRate(),
-                producerWorkAssignment.payloadData().getFirst().length);
+                producerWorkAssignment.payloadData().size());
 
         localWorker.startLoad(producerWorkAssignment);
     }

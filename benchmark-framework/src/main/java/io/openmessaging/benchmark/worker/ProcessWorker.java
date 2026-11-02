@@ -24,28 +24,19 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -59,31 +50,16 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
  * never share a classpath.
  *
  * <p>The child JVM options are taken from the {@value #JVM_OPTS_PROPERTY} system property or the
- * {@value #JVM_OPTS_ENV} environment variable, falling back to {@link #DEFAULT_JVM_OPTS}.
+ * {@value #JVM_OPTS_ENV} environment variable, falling back to {@link JvmOptions#DEFAULTS}.
  */
 public class ProcessWorker implements Worker {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessWorker.class);
 
-    public static final String JVM_OPTS_PROPERTY = "omb.driver.jvmOpts";
-    public static final String JVM_OPTS_ENV = "OMB_DRIVER_JVM_OPTS";
+    public static final String JVM_OPTS_PROPERTY = JvmOptions.PROPERTY;
+    public static final String JVM_OPTS_ENV = JvmOptions.ENV;
     public static final String STARTUP_TIMEOUT_PROPERTY = "omb.driver.startupTimeoutSeconds";
 
-    static final List<String> DEFAULT_JVM_OPTS =
-            List.of(
-                    "-XX:+UseG1GC",
-                    "--enable-native-access=ALL-UNNAMED",
-                    "--add-opens=java.base/java.nio=ALL-UNNAMED",
-                    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
-                    "--add-opens=java.base/java.util.zip=ALL-UNNAMED",
-                    "-Dio.netty.tryReflectionSetAccessible=true",
-                    "-Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true",
-                    "-Dio.netty.leakDetection.level=disabled");
-
-    private static final List<String> FORWARDED_PROPERTIES =
-            List.of("log4j.configurationFile", "log4j2.configurationFile", "zone.id");
-    private static final String LOG_NAME_PROPERTY = "omb.log.name";
-    private static final String DRIVER_LOG_NAME = "benchmark-driver";
     private static final Duration CRASH_DETECTION_TIMEOUT = Duration.ofSeconds(2);
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
@@ -96,12 +72,8 @@ public class ProcessWorker implements Worker {
     private volatile boolean closed;
     private volatile boolean unusable;
     private volatile boolean initializing;
-    private volatile Process process;
-    private Process reportedCrash;
-    private volatile HttpWorkerClient client;
-    private volatile Path workDir;
-    private String endpoint;
-    private String driverDescription;
+    // The current driver process, kept until it is fully stopped so that termination can be retried
+    private volatile DriverProcess current;
 
     public ProcessWorker() {
         this(null);
@@ -161,23 +133,26 @@ public class ProcessWorker implements Worker {
         RuntimeClasspath classpath = RuntimeClasspath.compose(hostRuntime.get(), resolved);
         classpath.warnings().forEach(w -> log.warn("{}", w));
 
-        driverDescription =
+        String description =
                 resolved.driverClass()
                         + " from "
                         + resolved.bundles().stream()
                                 .map(b -> "'" + b.id() + "' (" + b.directory() + ")")
                                 .collect(Collectors.joining(", "));
-        log.info("Starting driver process for {}", driverDescription);
+        log.info("Starting driver process for {}", description);
 
+        DriverProcess starting = new DriverProcess(description);
+        current = starting;
         initializing = true;
         try {
-            start(classpath.entries());
-            client.initializeDriverFromLocalPath(driverConfigFile);
+            ensureOpen();
+            starting.start(classpath.entries(), () -> closed);
+            starting.client().initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
-            String failure = describeFailure(e, process);
-            if (client != null && process != null && process.isAlive() && !closed) {
+            String failure = starting.describeFailure(e);
+            if (starting.isRunning() && !closed) {
                 try {
-                    client.stopAll();
+                    starting.client().stopAll();
                 } catch (Throwable cleanup) {
                     e.addSuppressed(cleanup);
                 }
@@ -192,86 +167,10 @@ public class ProcessWorker implements Worker {
                 throw interrupted;
             }
             throw new IllegalStateException(
-                    "Failed to initialize driver " + driverDescription + ": " + failure, e);
+                    "Failed to initialize driver " + description + ": " + failure, e);
         } finally {
             initializing = false;
         }
-    }
-
-    private void start(List<Path> classpath) throws IOException, InterruptedException {
-        ensureOpen();
-        workDir = Files.createTempDirectory("omb-driver-");
-        Path portFile = workDir.resolve("port");
-        Path argFile = workDir.resolve("java.args");
-
-        List<String> jvmArgs = new ArrayList<>();
-        for (String property : FORWARDED_PROPERTIES) {
-            String value = System.getProperty(property);
-            if (value != null) {
-                jvmArgs.add("-D" + property + "=" + value);
-            }
-        }
-        jvmArgs.addAll(jvmOptions());
-        jvmArgs.add("-D" + LOG_NAME_PROPERTY + "=" + DRIVER_LOG_NAME);
-        jvmArgs.add("-cp");
-        jvmArgs.add(
-                classpath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
-        jvmArgs.add(DriverProcessMain.class.getName());
-        jvmArgs.add("--port-file");
-        jvmArgs.add(portFile.toString());
-        // An argument file keeps long classpaths clear of command line length limits
-        Files.write(
-                argFile, jvmArgs.stream().map(ProcessWorker::quote).toList(), StandardCharsets.UTF_8);
-
-        Path java = Path.of(System.getProperty("java.home"), "bin", "java");
-        ProcessBuilder builder =
-                new ProcessBuilder(java.toString(), "@" + argFile)
-                        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-                        .redirectError(ProcessBuilder.Redirect.INHERIT)
-                        .redirectInput(ProcessBuilder.Redirect.PIPE);
-        builder.environment().remove("CLASSPATH");
-        log.debug("Driver process classpath: {}", classpath);
-        process = builder.start();
-        reportedCrash = null;
-        if (closed) {
-            process.getOutputStream().close();
-            ensureOpen();
-        }
-
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(startupTimeoutSeconds());
-        while (!Files.isRegularFile(portFile)) {
-            if (!process.isAlive()) {
-                int exitCode = process.exitValue();
-                throw new IllegalStateException(
-                        "Driver process for "
-                                + driverDescription
-                                + " exited during startup with code "
-                                + exitCode
-                                + "; see its output above");
-            }
-            if (System.nanoTime() > deadline) {
-                throw new IllegalStateException(
-                        "Driver process for "
-                                + driverDescription
-                                + " did not start within "
-                                + startupTimeoutSeconds()
-                                + "s");
-            }
-            Thread.sleep(50);
-        }
-        int port = Integer.parseInt(Files.readString(portFile, StandardCharsets.US_ASCII).trim());
-        endpoint = "http://127.0.0.1:" + port;
-        client = new HttpWorkerClient(endpoint);
-        log.info(
-                "Driver process pid {} is serving {} on {}", process.pid(), driverDescription, endpoint);
-    }
-
-    static List<String> jvmOptions() {
-        String configured = System.getProperty(JVM_OPTS_PROPERTY, System.getenv(JVM_OPTS_ENV));
-        if (configured == null || configured.isBlank()) {
-            return DEFAULT_JVM_OPTS;
-        }
-        return splitJvmOptions(configured);
     }
 
     private void ensureOpen() {
@@ -283,70 +182,14 @@ public class ProcessWorker implements Worker {
         }
     }
 
-    private static List<String> splitJvmOptions(String options) {
-        List<String> result = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        char quote = 0;
-        boolean started = false;
-        for (int i = 0; i < options.length(); i++) {
-            char c = options.charAt(i);
-            if (c == '\\' && quote != '\'' && i + 1 < options.length()) {
-                char next = options.charAt(i + 1);
-                boolean escaped =
-                        quote == '"'
-                                ? next == '"' || next == '\\'
-                                : Character.isWhitespace(next) || next == '"' || next == '\'';
-                if (escaped) {
-                    current.append(next);
-                    started = true;
-                    i++;
-                    continue;
-                }
-            }
-            if (quote != 0) {
-                if (c == quote) {
-                    quote = 0;
-                } else {
-                    current.append(c);
-                }
-            } else if (c == '"' || c == '\'') {
-                quote = c;
-                started = true;
-            } else if (Character.isWhitespace(c)) {
-                if (started) {
-                    result.add(current.toString());
-                    current.setLength(0);
-                    started = false;
-                }
-            } else {
-                current.append(c);
-                started = true;
-            }
-        }
-        if (quote != 0) {
-            throw new IllegalArgumentException("Unterminated quote in driver JVM options");
-        }
-        if (started) {
-            result.add(current.toString());
-        }
-        return List.copyOf(result);
-    }
-
-    private static long startupTimeoutSeconds() {
-        return Long.getLong(STARTUP_TIMEOUT_PROPERTY, 120);
-    }
-
-    static String quote(String argument) {
-        return "\"" + argument.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-
     /**
      * The pid of the running driver process.
      *
      * @return the pid, or {@code null} if no driver process is running
      */
     public synchronized Long pid() {
-        return process == null ? null : process.pid();
+        DriverProcess running = current;
+        return running == null ? null : running.pid();
     }
 
     /**
@@ -358,15 +201,14 @@ public class ProcessWorker implements Worker {
     public String scrapeMetrics() {
         String url;
         synchronized (this) {
-            if (endpoint == null || process == null) {
+            DriverProcess running = current;
+            if (running == null || running.endpoint() == null) {
                 return "";
             }
-            if (!process.isAlive()) {
-                reportedCrash = process;
-                throw new IllegalStateException(
-                        "Driver process for " + driverDescription + " exited with code " + process.exitValue());
+            if (running.hasExited()) {
+                throw running.crashed(null);
             }
-            url = endpoint + "/metrics";
+            url = running.endpoint() + "/metrics";
         }
         try (HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
             HttpResponse<String> response =
@@ -386,78 +228,37 @@ public class ProcessWorker implements Worker {
         }
     }
 
-    private <T> T call(ClientCall<T> action) {
-        HttpWorkerClient current;
-        Process currentProcess;
-        String description;
+    // Forwards a call to the driver process and reports a crash instead of the failed call.
+    private <T> T call(Function<HttpWorkerClient, T> action) {
+        DriverProcess running;
+        HttpWorkerClient client;
         synchronized (this) {
-            current = client;
-            currentProcess = process;
-            description = driverDescription;
-            if (current == null) {
+            running = current;
+            client = running == null ? null : running.client();
+            if (client == null) {
                 throw new IllegalStateException("No driver process is running; initialize a driver first");
             }
-            if (!process.isAlive()) {
-                reportedCrash = process;
-                throw new IllegalStateException(
-                        "Driver process for " + driverDescription + " exited with code " + process.exitValue());
+            if (running.hasExited()) {
+                throw running.crashed(null);
             }
         }
         try {
-            return action.apply(current);
+            return action.apply(client);
         } catch (RuntimeException e) {
             // A failed call is often the first sign of a crashed process; give it time to be reaped
-            if (awaitExit(currentProcess, CRASH_DETECTION_TIMEOUT)) {
-                synchronized (this) {
-                    if (process == currentProcess) {
-                        reportedCrash = currentProcess;
-                    }
-                }
-                throw new IllegalStateException(
-                        "Driver process for " + description + " exited with code " + currentProcess.exitValue(),
-                        e);
+            if (running.awaitExit(CRASH_DETECTION_TIMEOUT)) {
+                throw running.crashed(e);
             }
             throw e;
         }
     }
 
-    private static boolean awaitExit(Process process, Duration timeout) {
-        try {
-            return process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return !process.isAlive();
-        }
-    }
-
-    private void run(ClientAction action) {
+    private void run(Consumer<HttpWorkerClient> action) {
         call(
-                c -> {
-                    action.run(c);
+                client -> {
+                    action.accept(client);
                     return null;
                 });
-    }
-
-    @FunctionalInterface
-    private interface ClientCall<T> {
-        T apply(HttpWorkerClient client);
-    }
-
-    @FunctionalInterface
-    private interface ClientAction {
-        void run(HttpWorkerClient client);
-    }
-
-    private static String describeFailure(Throwable e, Process process) {
-        Throwable cause = e;
-        while (cause instanceof CompletionException && cause.getCause() != null) {
-            cause = cause.getCause();
-        }
-        String message = cause.getMessage() == null ? cause.toString() : cause.getMessage();
-        if (process != null && !process.isAlive()) {
-            message += " (driver process exited with code " + process.exitValue() + ")";
-        }
-        return message;
     }
 
     @Override
@@ -477,7 +278,7 @@ public class ProcessWorker implements Worker {
 
     @Override
     public void probeProducers() {
-        run(c -> c.probeProducers());
+        run(HttpWorkerClient::probeProducers);
     }
 
     @Override
@@ -492,32 +293,32 @@ public class ProcessWorker implements Worker {
 
     @Override
     public void pauseConsumers() {
-        run(c -> c.pauseConsumers());
+        run(HttpWorkerClient::pauseConsumers);
     }
 
     @Override
     public void resumeConsumers() {
-        run(c -> c.resumeConsumers());
+        run(HttpWorkerClient::resumeConsumers);
     }
 
     @Override
     public CountersStats getCountersStats() {
-        return call(c -> c.getCountersStats());
+        return call(HttpWorkerClient::getCountersStats);
     }
 
     @Override
     public PeriodStats getPeriodStats() {
-        return call(c -> c.getPeriodStats());
+        return call(HttpWorkerClient::getPeriodStats);
     }
 
     @Override
     public CumulativeLatencies getCumulativeLatencies() {
-        return call(c -> c.getCumulativeLatencies());
+        return call(HttpWorkerClient::getCumulativeLatencies);
     }
 
     @Override
     public void resetStats() {
-        run(c -> c.resetStats());
+        run(HttpWorkerClient::resetStats);
     }
 
     /**
@@ -527,18 +328,14 @@ public class ProcessWorker implements Worker {
      */
     @Override
     public void stopAll() {
-        HttpWorkerClient current;
-        Process currentProcess;
-        String description;
+        DriverProcess running;
         boolean crashAlreadyReported;
         synchronized (this) {
-            current = client;
-            currentProcess = process;
-            description = driverDescription;
-            if (current == null) {
+            running = current;
+            if (running == null || running.client() == null) {
                 return;
             }
-            crashAlreadyReported = !currentProcess.isAlive() && currentProcess == reportedCrash;
+            crashAlreadyReported = running.hasExited() && running.crashReported();
         }
         if (crashAlreadyReported) {
             terminate();
@@ -549,7 +346,7 @@ public class ProcessWorker implements Worker {
         } catch (RuntimeException e) {
             IllegalStateException failure =
                     new IllegalStateException(
-                            "Failed to stop driver " + description + ": " + describeFailure(e, currentProcess),
+                            "Failed to stop driver " + running.description() + ": " + running.describeFailure(e),
                             e);
             try {
                 terminate();
@@ -567,23 +364,24 @@ public class ProcessWorker implements Worker {
 
     @Override
     public synchronized boolean canReuseAfterFailure() {
-        return !closed && !unusable && process == null && client == null && workDir == null;
+        return !closed && !unusable && current == null;
     }
 
     @Override
     public void close() {
         closed = true;
         Failures failures = new Failures();
-        if (!initializing && client != null) {
+        DriverProcess running = current;
+        if (!initializing && running != null && running.client() != null) {
             try {
                 stopAll();
             } catch (Throwable t) {
                 failures.add(t);
             }
         }
-        Process current = process;
-        if (current != null) {
-            failures.close(current.getOutputStream());
+        running = current;
+        if (running != null) {
+            running.closeInput(failures);
         }
         try {
             terminate();
@@ -600,149 +398,25 @@ public class ProcessWorker implements Worker {
         failures.throwIfAny("Failed to close ProcessWorker");
     }
 
-    private static void deleteWorkDir(Path directory) throws IOException {
-        if (!Files.exists(directory)) {
-            return;
-        }
-        IOException failure = null;
-        try (Stream<Path> files = Files.walk(directory)) {
-            for (Path path : files.sorted(Comparator.reverseOrder()).toList()) {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException e) {
-                    if (failure == null) {
-                        failure = e;
-                    } else {
-                        failure.addSuppressed(e);
-                    }
-                }
-            }
-        }
-        if (failure != null) {
-            throw failure;
-        }
-    }
-
-    private static void closeDriverInputQuietly(Process current) {
-        try {
-            current.getOutputStream().close();
-        } catch (IOException e) {
-            log.debug("Failed to close driver process input", e);
-        }
-    }
-
     private void shutdownDriverProcess() {
         // Initialization holds the worker monitor while awaiting the child, so this hook cannot use it.
         closed = true;
-        Process current = process;
-        Path directory = workDir;
-        if (current == null) {
-            if (directory != null) {
-                deleteWorkDirQuietly(directory);
-            }
-            return;
-        }
-        closeDriverInputQuietly(current);
-        try {
-            if (!current.waitFor(5, TimeUnit.SECONDS)) {
-                log.warn("Driver process {} did not stop during shutdown, killing it", current.pid());
-                current.destroyForcibly();
-                if (!current.waitFor(5, TimeUnit.SECONDS)) {
-                    log.error("Driver process {} did not exit after being killed", current.pid());
-                }
-            }
-        } catch (InterruptedException e) {
-            current.destroyForcibly();
-            Thread.currentThread().interrupt();
-        }
-        if (!current.isAlive() && directory != null) {
-            deleteWorkDirQuietly(directory);
-        }
-    }
-
-    private static void deleteWorkDirQuietly(Path directory) {
-        try {
-            deleteWorkDir(directory);
-        } catch (IOException e) {
-            log.warn("Failed to delete driver work directory {}", directory, e);
+        DriverProcess running = current;
+        if (running != null) {
+            running.stopOnShutdown();
         }
     }
 
     private synchronized void terminate() {
         Failures failures = new Failures();
         failures.deferInterrupt("Interrupted before terminating driver process");
-        if (client != null) {
-            HttpWorkerClient closing = client;
-            client = null;
-            FutureTask<Void> closeTask =
-                    new FutureTask<>(
-                            () -> {
-                                closing.close();
-                                return null;
-                            });
-            Thread closeThread = Thread.ofVirtual().name("process-worker-client-close").start(closeTask);
-            try {
-                closeThread.join(TimeUnit.SECONDS.toMillis(10));
-                if (closeThread.isAlive()) {
-                    closeThread.interrupt();
-                    failures.add(new TimeoutException("Driver HTTP client did not close"));
-                } else {
-                    closeTask.get();
-                }
-            } catch (InterruptedException e) {
-                closeThread.interrupt();
-                failures.addInterruption(e);
-            } catch (ExecutionException e) {
-                failures.add(e.getCause());
-            }
-        }
-        if (process != null) {
-            Process closing = process;
-            boolean wasAlive = closing.isAlive();
-            failures.close(closing.getOutputStream());
-            try {
-                if (!closing.waitFor(10, TimeUnit.SECONDS)) {
-                    failures.add(new TimeoutException("Driver process " + closing.pid() + " did not stop"));
-                    closing.destroy();
-                    if (!closing.waitFor(5, TimeUnit.SECONDS)) {
-                        closing.destroyForcibly();
-                        if (!closing.waitFor(5, TimeUnit.SECONDS)) {
-                            String message =
-                                    "Driver process " + closing.pid() + " did not exit after being killed";
-                            failures.add(new TimeoutException(message));
-                        }
-                    }
-                }
-            } catch (InterruptedException e) {
-                failures.addInterruption(e);
-                closing.destroyForcibly();
-                try {
-                    if (!closing.waitFor(5, TimeUnit.SECONDS)) {
-                        failures.add(
-                                new TimeoutException("Interrupted driver process did not exit after being killed"));
-                    }
-                } catch (InterruptedException second) {
-                    failures.addInterruption(second);
-                }
-            }
-            if (!closing.isAlive()) {
-                if (wasAlive && closing.exitValue() != 0) {
-                    failures.add(
-                            new IllegalStateException(
-                                    "Driver process " + closing.pid() + " exited with code " + closing.exitValue()));
-                }
-                process = null;
+        DriverProcess stopping = current;
+        if (stopping != null) {
+            stopping.stop(failures);
+            if (stopping.isStopped()) {
+                current = null;
             } else {
                 unusable = true;
-            }
-        }
-        endpoint = null;
-        if (workDir != null && process == null) {
-            try {
-                deleteWorkDir(workDir);
-                workDir = null;
-            } catch (IOException e) {
-                failures.add(e);
             }
         }
         if (failures.hasFailure()) {

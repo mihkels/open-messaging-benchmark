@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.driver;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,6 +38,43 @@ class PendingSendTrackerTest {
         assertThrows(CompletionException.class, unresolved::join);
         assertThrows(CompletionException.class, () -> tracker.register().join());
         assertFalse(tracker.beginClose());
+    }
+
+    @Test
+    void closesTheClientOnceAndFailsUnsettledSends() throws Exception {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        CompletableFuture<Void> unresolved = tracker.register();
+        int[] closes = new int[1];
+
+        tracker.close(() -> closes[0]++);
+        tracker.close(() -> closes[0]++);
+
+        assertEquals(1, closes[0]);
+        assertThrows(CompletionException.class, unresolved::join);
+    }
+
+    @Test
+    void attachesTheCloseFailureAndRestoresAnInterrupt() {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        CompletableFuture<Void> unresolved = tracker.register();
+        InterruptedException interrupted = new InterruptedException("close interrupted");
+
+        try {
+            assertSame(
+                    interrupted,
+                    assertThrows(
+                            InterruptedException.class,
+                            () ->
+                                    tracker.close(
+                                            () -> {
+                                                throw interrupted;
+                                            })));
+            assertTrue(Thread.currentThread().isInterrupted());
+            CompletionException failure = assertThrows(CompletionException.class, unresolved::join);
+            assertSame(interrupted, failure.getCause().getCause());
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test

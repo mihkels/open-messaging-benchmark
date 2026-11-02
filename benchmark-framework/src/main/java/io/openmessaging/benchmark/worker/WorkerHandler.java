@@ -21,7 +21,6 @@ import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Collections;
@@ -140,24 +139,24 @@ public class WorkerHandler implements AutoCloseable {
         }
     }
 
-    private void handleCreateTopics(Context ctx) throws IOException {
+    private void handleCreateTopics(Context ctx) {
         TopicsInfo topicsInfo = mapper.readValue(ctx.body(), TopicsInfo.class);
         log.info("Received create topics request for topics: {}", ctx.body());
         List<String> topics = localWorker.createTopics(topicsInfo);
         ctx.result(writer.writeValueAsString(topics));
     }
 
-    private void handleCreateProducers(Context ctx) throws IOException {
+    private void handleCreateProducers(Context ctx) {
         var topics = mapper.readValue(ctx.body(), new TypeReference<List<String>>() {});
         log.info("Received create producers request for topics: {}", topics);
         localWorker.createProducers(topics);
     }
 
-    private void handleProbeProducers(Context ctx) throws IOException {
+    private void handleProbeProducers(Context ctx) {
         localWorker.probeProducers();
     }
 
-    private void handleCreateConsumers(Context ctx) throws IOException {
+    private void handleCreateConsumers(Context ctx) {
         var consumerAssignment = mapper.readValue(ctx.body(), ConsumerAssignment.class);
 
         log.info(
@@ -165,28 +164,28 @@ public class WorkerHandler implements AutoCloseable {
         localWorker.createConsumers(consumerAssignment);
     }
 
-    private void handlePauseConsumers(Context ctx) throws IOException {
+    private void handlePauseConsumers(Context ctx) {
         localWorker.pauseConsumers();
     }
 
-    private void handleResumeConsumers(Context ctx) throws IOException {
+    private void handleResumeConsumers(Context ctx) {
         localWorker.resumeConsumers();
     }
 
-    private void handleStartLoad(Context ctx) throws IOException {
-        ProducerWorkAssignment producerWorkAssignment;
-        producerWorkAssignment = mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
+    private void handleStartLoad(Context ctx) {
+        ProducerWorkAssignment producerWorkAssignment =
+                mapper.readValue(ctx.body(), ProducerWorkAssignment.class);
 
-        log.info("Info received:{}", producerWorkAssignment.payloadData());
+        // The worker validates the payloads, so an empty list must not fail here first
         log.info(
-                "Start load publish-rate: {} msg/s -- payload-size: {}",
+                "Start load publish-rate: {} msg/s -- payloads: {}",
                 producerWorkAssignment.publishRate(),
-                producerWorkAssignment.payloadData().getFirst().length);
+                producerWorkAssignment.payloadData().size());
 
         localWorker.startLoad(producerWorkAssignment);
     }
 
-    private void handleAdjustPublishRate(Context ctx) throws IOException {
+    private void handleAdjustPublishRate(Context ctx) {
         Double publishRate = mapper.readValue(ctx.body(), Double.class);
         log.info("Adjust publish-rate: {} msg/s", publishRate);
         localWorker.adjustPublishRate(publishRate);
@@ -197,15 +196,15 @@ public class WorkerHandler implements AutoCloseable {
         localWorker.stopAll();
     }
 
-    private void handlePeriodStats(Context ctx) throws IOException {
+    private void handlePeriodStats(Context ctx) {
         ctx.result(writer.writeValueAsString(localWorker.getPeriodStats()));
     }
 
-    private void handleCumulativeLatencies(Context ctx) throws IOException {
+    private void handleCumulativeLatencies(Context ctx) {
         ctx.result(writer.writeValueAsString(localWorker.getCumulativeLatencies()));
     }
 
-    private void handleCountersStats(Context ctx) throws IOException {
+    private void handleCountersStats(Context ctx) {
         var stats = localWorker.getCountersStats();
         log.info(
                 "Worker returning stats - sent: {}, errors: {}, received: {}",
@@ -215,7 +214,7 @@ public class WorkerHandler implements AutoCloseable {
         ctx.result(writer.writeValueAsString(stats));
     }
 
-    private void handleResetStats(Context ctx) throws IOException {
+    private void handleResetStats(Context ctx) {
         log.info("Reset stats");
         localWorker.resetStats();
     }

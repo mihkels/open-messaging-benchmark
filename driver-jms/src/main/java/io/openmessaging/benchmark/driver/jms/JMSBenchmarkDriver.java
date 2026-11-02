@@ -18,12 +18,11 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.StringReader;
 import java.lang.reflect.Constructor;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
@@ -36,11 +35,8 @@ import javax.jms.Session;
 import javax.jms.Topic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class JMSBenchmarkDriver implements BenchmarkDriver {
 
@@ -235,14 +231,8 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         return failure;
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper.readerFor(JMSConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static JMSConfig readConfig(Path configurationFile) throws IOException {
-        try (InputStream input = Files.newInputStream(configurationFile)) {
-            return reader.readValue(input);
-        }
+        return DriverConfigs.read(configurationFile, JMSConfig.class);
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

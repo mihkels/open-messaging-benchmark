@@ -100,6 +100,33 @@ public final class PendingSendTracker {
         }
     }
 
+    /**
+     * Runs the whole close sequence of a producer whose client can be closed directly: begins
+     * closing, closes the client only for the first caller, and then fails every send the client did
+     * not settle, attaching any close failure as their cause.
+     *
+     * @param closeClient closes the underlying client
+     * @throws Exception the client's close failure; an interruption also restores the interrupt
+     *     status
+     */
+    public void close(AutoCloseable closeClient) throws Exception {
+        boolean closeNow = beginClose();
+        Exception closeFailure = null;
+        try {
+            if (closeNow) {
+                closeClient.close();
+            }
+        } catch (Exception e) {
+            closeFailure = e;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw e;
+        } finally {
+            failRemaining(closeFailure);
+        }
+    }
+
     /** Fails sends still pending after the client has been asked to close. */
     public void failRemaining() {
         failRemaining(null);

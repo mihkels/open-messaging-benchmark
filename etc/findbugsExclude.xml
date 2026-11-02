@@ -14,6 +14,17 @@
 
 -->
 <FindBugsFilter>
+  <!-- TestResult's public fields are the documented result JSON schema; it also fills them itself. -->
+  <Match>
+    <Class name="io.openmessaging.benchmark.TestResult" />
+    <Bug pattern="PA_PUBLIC_PRIMITIVE_ATTRIBUTE" />
+  </Match>
+  <!-- Failures hands out the recorded failure itself so callers can rethrow or suppress into it. -->
+  <Match>
+    <Class name="io.openmessaging.benchmark.driver.Failures" />
+    <Method name="failure" />
+    <Bug pattern="EI_EXPOSE_REP" />
+  </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig$AuthenticationConfiguration" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
@@ -55,11 +66,6 @@
   </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkConsumer" />
-    <Method name="close" />
-    <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
-  </Match>
-  <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkProducer" />
     <Method name="close" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>

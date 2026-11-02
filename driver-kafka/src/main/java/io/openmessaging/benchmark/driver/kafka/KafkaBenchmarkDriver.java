@@ -18,9 +18,9 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import java.io.IOException;
 import java.io.StringReader;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,10 +37,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private static final String ZONE_ID_CONFIG = "zone.id";
@@ -56,7 +52,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
-        config = reader.readValue(Files.newInputStream(configurationFile));
+        config = DriverConfigs.read(configurationFile, Config.class);
 
         Properties commonProperties = new Properties();
         commonProperties.load(new StringReader(config.commonConfig()));
@@ -165,8 +161,4 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         }
         return clientId.replace(ZONE_ID_TEMPLATE, zoneId);
     }
-
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper.readerFor(Config.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 }

@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import static io.openmessaging.benchmark.driver.Failures.append;
 import static java.util.stream.Collectors.toList;
 
 import com.beust.jcommander.JCommander;
@@ -56,8 +57,7 @@ public final class Benchmark {
 
         @Parameter(
                 names = {"-d", "--drivers"},
-                description =
-                        "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml") // , required = true)
+                description = "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml")
         public List<String> drivers;
 
         @Parameter(
@@ -76,13 +76,14 @@ public final class Benchmark {
         boolean extraConsumers;
 
         @Parameter(
-                names = {"--legacy-driver-name"},
+                names = {"--driver-location", "--legacy-driver-name"},
                 description =
                         "Load the driver from this plugin bundle directory, unpackaged driver module"
-                                + " directory or jar instead of the installed plugin bundles (local runs only)")
-        public String legacyDriverName;
+                                + " directory or jar instead of the installed plugin bundles (local runs only)."
+                                + " --legacy-driver-name is a deprecated alias")
+        public String driverLocation;
 
-        @Parameter(description = "Workloads") // , required = true)
+        @Parameter(description = "Workloads")
         public List<String> workloads;
 
         @Parameter(
@@ -121,6 +122,18 @@ public final class Benchmark {
             System.exit(0);
         }
 
+        // Not required by JCommander because --csv needs neither
+        if (arguments.workloads == null || arguments.workloads.isEmpty()) {
+            System.err.println("At least one workload file is required");
+            jc.usage();
+            System.exit(-1);
+        }
+        if (arguments.drivers == null || arguments.drivers.isEmpty()) {
+            System.err.println("At least one driver must be given with --drivers");
+            jc.usage();
+            System.exit(-1);
+        }
+
         if (arguments.workers != null && arguments.workersFile != null) {
             System.err.println("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
@@ -148,7 +161,13 @@ public final class Benchmark {
             File file = new File(path);
             String name = file.getName().substring(0, file.getName().lastIndexOf('.'));
 
-            workloads.put(name, workloadReader.readValue(file));
+            Workload workload = workloadReader.readValue(file);
+            try {
+                workload.validate();
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid workload " + path + ": " + e.getMessage(), e);
+            }
+            workloads.put(name, workload);
         }
 
         log.info("Workloads: {}", writer.writeValueAsString(workloads));
@@ -160,14 +179,16 @@ public final class Benchmark {
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
             worker = new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
             log.info("Using distributed workers ensemble");
-            if (arguments.legacyDriverName != null) {
+            if (arguments.driverLocation != null) {
                 log.warn(
-                        "--legacy-driver-name is ignored with remote workers; they load drivers from their"
+                        "--driver-location is ignored with remote workers; they load drivers from their"
                                 + " own installed plugin bundles");
             }
         } else {
             // Run the driver in a child JVM with only its plugin bundle on the classpath
-            worker = new ProcessWorker();
+            worker =
+                    new ProcessWorker(
+                            arguments.driverLocation == null ? null : Path.of(arguments.driverLocation));
             log.info("Using local driver process worker");
         }
 
@@ -210,9 +231,7 @@ public final class Benchmark {
                                 "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                                 workload.name,
                                 driverConfiguration.name);
-                        Path driverLocation =
-                                arguments.legacyDriverName != null ? Path.of(arguments.legacyDriverName) : null;
-                        worker.initializeDriver(Path.of(driverConfig), driverLocation);
+                        worker.initializeDriver(Path.of(driverConfig));
                         generator =
                                 Objects.requireNonNull(
                                         generatorFactory.create(driverConfiguration.name, workload, worker));
@@ -290,16 +309,6 @@ public final class Benchmark {
             append(failure, checkFailure);
             return false;
         }
-    }
-
-    private static Throwable append(Throwable primary, Throwable next) {
-        if (primary == null) {
-            return next;
-        }
-        if (next != null && primary != next) {
-            primary.addSuppressed(next);
-        }
-        return primary;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

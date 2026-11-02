@@ -43,6 +43,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
@@ -105,27 +107,27 @@ public final class HttpWorkerClient implements Worker {
 
     @SuppressWarnings("unchecked")
     @Override
-    public List<String> createTopics(TopicsInfo topicsInfo) throws IOException {
+    public List<String> createTopics(TopicsInfo topicsInfo) {
         return post(CREATE_TOPICS, writer.writeValueAsBytes(topicsInfo), List.class);
     }
 
     @Override
-    public void createProducers(List<String> topics) throws IOException {
+    public void createProducers(List<String> topics) {
         sendPost(CREATE_PRODUCERS, writer.writeValueAsBytes(topics));
     }
 
     @Override
-    public void createConsumers(ConsumerAssignment consumerAssignment) throws IOException {
+    public void createConsumers(ConsumerAssignment consumerAssignment) {
         sendPost(CREATE_CONSUMERS, writer.writeValueAsBytes(consumerAssignment));
     }
 
     @Override
-    public void probeProducers() throws IOException {
+    public void probeProducers() {
         sendPost(PROBE_PRODUCERS);
     }
 
     @Override
-    public void startLoad(ProducerWorkAssignment producerWorkAssignment) throws IOException {
+    public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         log.debug(
                 "Setting worker assigned publish rate to {} msgs/sec",
                 producerWorkAssignment.publishRate());
@@ -133,54 +135,54 @@ public final class HttpWorkerClient implements Worker {
     }
 
     @Override
-    public void adjustPublishRate(double publishRate) throws IOException {
+    public void adjustPublishRate(double publishRate) {
         log.debug("Adjusting worker publish rate to {} msgs/sec", publishRate);
         sendPost(ADJUST_PUBLISH_RATE, writer.writeValueAsBytes(publishRate));
     }
 
     @Override
-    public void pauseConsumers() throws IOException {
+    public void pauseConsumers() {
         log.info("Pausing consumers");
         sendPost(PAUSE_CONSUMERS);
     }
 
     @Override
-    public void resumeConsumers() throws IOException {
+    public void resumeConsumers() {
         log.info("Resuming consumers");
         sendPost(RESUME_CONSUMERS);
     }
 
     @Override
-    public CountersStats getCountersStats() throws IOException {
+    public CountersStats getCountersStats() {
         return get(COUNTERS_STATS, CountersStats.class);
     }
 
     @Override
-    public PeriodStats getPeriodStats() throws IOException {
+    public PeriodStats getPeriodStats() {
         return get(PERIOD_STATS, PeriodStats.class);
     }
 
     @Override
-    public CumulativeLatencies getCumulativeLatencies() throws IOException {
+    public CumulativeLatencies getCumulativeLatencies() {
         return get(CUMULATIVE_LATENCIES, CumulativeLatencies.class);
     }
 
     @Override
-    public void resetStats() throws IOException {
+    public void resetStats() {
         sendPost(RESET_STATS);
     }
 
     @Override
     public void stopAll() {
-        httpClient
-                .preparePost(host + STOP_ALL)
-                .setBody(EMPTY_BODY)
-                .setRequestTimeout(STOP_TIMEOUT)
-                .setReadTimeout(STOP_TIMEOUT)
-                .execute()
-                .toCompletableFuture()
-                .thenAccept(response -> checkResponse("post", STOP_ALL, response))
-                .join();
+        await(
+                httpClient
+                        .preparePost(host + STOP_ALL)
+                        .setBody(EMPTY_BODY)
+                        .setRequestTimeout(STOP_TIMEOUT)
+                        .setReadTimeout(STOP_TIMEOUT)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenAccept(response -> checkResponse("post", STOP_ALL, response)));
     }
 
     @Override
@@ -222,46 +224,63 @@ public final class HttpWorkerClient implements Worker {
     }
 
     private void sendPost(String path, byte[] body) {
-        httpClient
-                .preparePost(host + path)
-                .setBody(body)
-                .execute()
-                .toCompletableFuture()
-                .thenApply(
-                        response -> {
-                            checkResponse("post", path, response);
-                            return null;
-                        })
-                .join();
+        await(
+                httpClient
+                        .preparePost(host + path)
+                        .setBody(body)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenApply(
+                                response -> {
+                                    checkResponse("post", path, response);
+                                    return null;
+                                }));
     }
 
     private <T> T get(String path, Class<T> clazz) {
-        return httpClient
-                .prepareGet(host + path)
-                .execute()
-                .toCompletableFuture()
-                .thenApply(
-                        r -> {
-                            checkResponse("get", path, r);
-                            var value = mapper.readValue(r.getResponseBody(), clazz);
-                            log.debug("Received response: {}", value);
-                            return value;
-                        })
-                .join();
+        return await(
+                httpClient
+                        .prepareGet(host + path)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenApply(
+                                r -> {
+                                    checkResponse("get", path, r);
+                                    var value = mapper.readValue(r.getResponseBody(), clazz);
+                                    log.debug("Received response: {}", value);
+                                    return value;
+                                }));
     }
 
     private <T> T post(String path, byte[] body, Class<T> clazz) {
-        return httpClient
-                .preparePost(host + path)
-                .setBody(body)
-                .execute()
-                .toCompletableFuture()
-                .thenApply(
-                        response -> {
-                            checkResponse("post", path, response);
-                            return mapper.readValue(response.getResponseBody(), clazz);
-                        })
-                .join();
+        return await(
+                httpClient
+                        .preparePost(host + path)
+                        .setBody(body)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenApply(
+                                response -> {
+                                    checkResponse("post", path, response);
+                                    return mapper.readValue(response.getResponseBody(), clazz);
+                                }));
+    }
+
+    // Rethrows a request's failure without the CompletionException wrapper, so callers see the HTTP
+    // or connection failure itself.
+    private <T> T await(CompletableFuture<T> request) {
+        try {
+            return request.join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("HTTP request to worker " + host + " failed", cause);
+        }
     }
 
     private void checkResponse(String method, String path, Response response) {

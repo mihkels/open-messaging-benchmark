@@ -18,17 +18,16 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
+import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig.PersistenceConfiguration;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarConfig;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.apache.pulsar.client.admin.PulsarAdmin;
@@ -48,11 +47,8 @@ import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 @SuppressWarnings("unused")
 public class PulsarBenchmarkDriver implements BenchmarkDriver {
@@ -152,7 +148,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                 }
                 log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);
 
-                this.namespace = config.client.namespacePrefix + "-" + getRandomString();
+                this.namespace = config.client.namespacePrefix + "-" + ResourceNames.randomSuffix();
                 adminClient.namespaces().createNamespace(namespace);
                 log.info("Created Pulsar namespace {}", namespace);
 
@@ -300,24 +296,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
         return failure;
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(PulsarConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static PulsarConfig readConfig(Path configurationFile) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            return reader.readValue(input);
-        }
-    }
-
-    private static final Random random = new Random();
-
-    private static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
+        return DriverConfigs.read(configurationFile, PulsarConfig.class);
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

@@ -18,22 +18,17 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.redis.client.RedisClientConfig;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 @SuppressWarnings("unused")
 public class RedisBenchmarkDriver implements BenchmarkDriver {
@@ -69,7 +64,7 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             final String topic, final String subscriptionName, final ConsumerCallback consumerCallback) {
-        String consumerId = "consumer-" + getRandomString();
+        String consumerId = "consumer-" + ResourceNames.randomSuffix();
         try {
             JedisPool sharedPool = pool();
             try (Jedis jedis = sharedPool.getResource()) {
@@ -157,24 +152,8 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(RedisClientConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static RedisClientConfig readConfig(Path configurationFile) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            return reader.readValue(input);
-        }
-    }
-
-    private static final Random random = new Random();
-
-    private static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
+        return DriverConfigs.read(configurationFile, RedisClientConfig.class);
     }
 
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkDriver.class);

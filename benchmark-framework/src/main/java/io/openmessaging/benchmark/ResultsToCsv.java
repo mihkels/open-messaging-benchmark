@@ -94,22 +94,22 @@ public class ResultsToCsv {
             }
 
             return MessageFormat.format(
-                            "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},"
-                                    + "{5,number,#},{6,number,#},{7,number,#.##},{8,number,#},"
-                                    + "{9,number,#},{10,number,#},{11,number,#.##},{12,number,#}",
-                            tr.topics,
-                            tr.partitions,
-                            tr.messageSize,
-                            tr.producersPerTopic,
-                            tr.consumersPerTopic,
-                            prodRateHistogram.getMinNonZeroValue(),
-                            prodRateHistogram.getMean(),
-                            prodRateHistogram.getStdDeviation(),
-                            prodRateHistogram.getMaxValue(),
-                            conRateHistogram.getMinNonZeroValue(),
-                            conRateHistogram.getMean(),
-                            conRateHistogram.getStdDeviation(),
-                            conRateHistogram.getMaxValue());
+                    "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},"
+                            + "{5,number,#},{6,number,#},{7,number,#.##},{8,number,#},"
+                            + "{9,number,#},{10,number,#},{11,number,#.##},{12,number,#}",
+                    tr.topics,
+                    tr.partitions,
+                    tr.messageSize,
+                    tr.producersPerTopic,
+                    tr.consumersPerTopic,
+                    prodRateHistogram.getMinNonZeroValue(),
+                    prodRateHistogram.getMean(),
+                    prodRateHistogram.getStdDeviation(),
+                    prodRateHistogram.getMaxValue(),
+                    conRateHistogram.getMinNonZeroValue(),
+                    conRateHistogram.getMean(),
+                    conRateHistogram.getStdDeviation(),
+                    conRateHistogram.getMaxValue());
         } catch (Exception e) {
             log.error("Error writing results csv", e);
             throw new RuntimeException(e);

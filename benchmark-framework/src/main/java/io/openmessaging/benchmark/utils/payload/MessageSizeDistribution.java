@@ -233,5 +233,4 @@ public class MessageSizeDistribution {
     public int getBucketCount() {
         return buckets.size();
     }
-
 }

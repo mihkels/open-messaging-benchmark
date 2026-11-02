@@ -22,6 +22,7 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -29,7 +30,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -41,10 +41,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NsqBenchmarkDriver implements BenchmarkDriver {
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -55,9 +51,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            config = reader.readValue(input);
-        }
+        config = DriverConfigs.read(configurationFile, NsqConfig.class);
         if (config.nsqdHttpPort < 1 || config.nsqdHttpPort > 65535) {
             throw new IllegalArgumentException("nsqdHttpPort must be between 1 and 65535");
         }
@@ -252,8 +246,4 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static final Logger log = LoggerFactory.getLogger(NsqBenchmarkDriver.class);
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-
-    private static final ObjectReader reader =
-            mapper.readerFor(NsqConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 }

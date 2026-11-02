@@ -13,6 +13,8 @@
  */
 package io.openmessaging.benchmark.worker;
 
+import static io.openmessaging.benchmark.driver.Failures.append;
+import static io.openmessaging.benchmark.driver.Failures.unwrap;
 import static java.util.stream.Collectors.toList;
 
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -24,6 +26,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ConsumerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
@@ -48,7 +51,6 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -522,10 +524,7 @@ public final class LocalWorker implements Worker {
                 return;
             }
             Failures cleanup = new Failures();
-            boolean interrupted = Thread.interrupted();
-            if (interrupted) {
-                cleanup.add(new InterruptedException("Interrupted before stopping the worker"));
-            }
+            cleanup.deferInterrupt("Interrupted before stopping the worker");
             List<TrackedTask<?>> tasks;
             synchronized (current.monitor) {
                 current.stopping = true;
@@ -536,8 +535,7 @@ public final class LocalWorker implements Worker {
                     cleanup.add(new TimeoutException("Callback gate did not quiesce"));
                 }
             } catch (InterruptedException e) {
-                interrupted = true;
-                cleanup.add(e);
+                cleanup.addInterruption(e);
             }
             tasks.forEach(task -> task.cancel(true));
 
@@ -551,8 +549,7 @@ public final class LocalWorker implements Worker {
                         tasksExited = false;
                     }
                 } catch (InterruptedException e) {
-                    interrupted = true;
-                    cleanup.add(e);
+                    cleanup.addInterruption(e);
                     tasksExited = false;
                 }
             }
@@ -567,9 +564,9 @@ public final class LocalWorker implements Worker {
                 driver = current.driver;
                 current.driver = null;
             }
-            interrupted |= closeResources(handles, "producer or consumer", cleanup);
+            closeResources(handles, "producer or consumer", cleanup);
             if (driver != null) {
-                interrupted |= closeResources(List.of(driver), "driver", cleanup);
+                closeResources(List.of(driver), "driver", cleanup);
             }
 
             boolean creationsFinished = false;
@@ -579,8 +576,7 @@ public final class LocalWorker implements Worker {
                     cleanup.add(new TimeoutException("Resource creation callbacks did not finish"));
                 }
             } catch (InterruptedException e) {
-                interrupted = true;
-                cleanup.add(e);
+                cleanup.addInterruption(e);
             }
             boolean callbacksFinished = false;
             try {
@@ -590,8 +586,7 @@ public final class LocalWorker implements Worker {
                             new TimeoutException("Outstanding send or consumer callbacks did not finish"));
                 }
             } catch (InterruptedException e) {
-                interrupted = true;
-                cleanup.add(e);
+                cleanup.addInterruption(e);
             }
             synchronized (current.monitor) {
                 cleanup.add(current.cleanupFailure);
@@ -600,7 +595,7 @@ public final class LocalWorker implements Worker {
             // A worker with failed cleanup is already unusable and may still receive stats from stuck
             // resources.
             if (!cleanup.hasFailure() && tasksExited && creationsFinished && callbacksFinished) {
-                interrupted |= resetStatistics(cleanup);
+                resetStatistics(cleanup);
             }
             if (cleanup.hasFailure()) {
                 unusable = true;
@@ -610,9 +605,7 @@ public final class LocalWorker implements Worker {
                     run = null;
                 }
             }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
+            cleanup.restoreInterrupt();
             Failures failures = new Failures();
             synchronized (current.monitor) {
                 if (!current.failureReported) {
@@ -620,7 +613,7 @@ public final class LocalWorker implements Worker {
                     current.failureReported = current.failure != null;
                 }
             }
-            failures.add(cleanup.failure);
+            failures.add(cleanup.failure());
             failures.throwIfAny("Failed to stop worker");
         }
     }
@@ -647,20 +640,13 @@ public final class LocalWorker implements Worker {
             failures.add(t);
         }
         executor.shutdownNow();
-        boolean interrupted = Thread.interrupted();
-        if (interrupted) {
-            failures.add(new InterruptedException("Interrupted before closing the worker executor"));
-        }
+        failures.deferInterrupt("Interrupted before closing the worker executor");
         try {
             if (!executor.awaitTermination(shutdownTimeoutNanos, TimeUnit.NANOSECONDS)) {
                 failures.add(new TimeoutException("Local worker executor did not terminate"));
             }
         } catch (InterruptedException e) {
-            interrupted = true;
-            failures.add(e);
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
+            failures.addInterruption(e);
         }
         failures.throwIfAny("Failed to close worker");
     }
@@ -830,19 +816,11 @@ public final class LocalWorker implements Worker {
             return;
         }
         Failures failures = new Failures();
-        for (AutoCloseable resource : resources) {
-            if (resource != null) {
-                try {
-                    resource.close();
-                } catch (Throwable t) {
-                    failures.add(t);
-                }
-            }
-        }
+        resources.forEach(failures::close);
         failures.throwIfAny("Failed to close untransferred resources");
     }
 
-    private boolean closeResources(
+    private void closeResources(
             List<? extends AutoCloseable> resources, String description, Failures failures) {
         List<TrackedTask<Void>> tasks = new ArrayList<>();
         for (AutoCloseable resource : resources) {
@@ -861,7 +839,6 @@ public final class LocalWorker implements Worker {
                 failures.add(e);
             }
         }
-        boolean interrupted = false;
         long deadline = System.nanoTime() + resourceCloseTimeoutNanos;
         for (TrackedTask<Void> task : tasks) {
             try {
@@ -872,17 +849,15 @@ public final class LocalWorker implements Worker {
                     awaitTask(task);
                 }
             } catch (InterruptedException e) {
-                interrupted = true;
                 task.cancel(true);
-                failures.add(e);
+                failures.addInterruption(e);
             } catch (Throwable t) {
                 failures.add(t);
             }
         }
-        return interrupted;
     }
 
-    private boolean resetStatistics(Failures failures) {
+    private void resetStatistics(Failures failures) {
         TrackedTask<Void> task =
                 new TrackedTask<>(
                         "statistics reset",
@@ -900,26 +875,15 @@ public final class LocalWorker implements Worker {
             }
         } catch (InterruptedException e) {
             task.cancel(true);
-            failures.add(e);
-            return true;
+            failures.addInterruption(e);
         } catch (Throwable t) {
             task.cancel(true);
             failures.add(t);
         }
-        return false;
     }
 
     private long deadline() {
         return System.nanoTime() + shutdownTimeoutNanos;
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        Throwable result = failure;
-        while ((result instanceof CompletionException || result instanceof ExecutionException)
-                && result.getCause() != null) {
-            result = result.getCause();
-        }
-        return result;
     }
 
     @FunctionalInterface
@@ -1035,37 +999,6 @@ public final class LocalWorker implements Worker {
             long remaining = deadlineNanos - System.nanoTime();
             return exited.getCount() == 0
                     || (remaining > 0 && exited.await(remaining, TimeUnit.NANOSECONDS));
-        }
-    }
-
-    private static Throwable append(Throwable primary, Throwable next) {
-        if (next == null) {
-            return primary;
-        }
-        if (primary == null) {
-            return next;
-        }
-        if (primary != next) {
-            primary.addSuppressed(next);
-        }
-        return primary;
-    }
-
-    private static final class Failures {
-        private Throwable failure;
-
-        private void add(Throwable cause) {
-            failure = append(failure, cause);
-        }
-
-        private boolean hasFailure() {
-            return failure != null;
-        }
-
-        private void throwIfAny(String message) {
-            if (failure != null) {
-                throw new IllegalStateException(message, failure);
-            }
         }
     }
 

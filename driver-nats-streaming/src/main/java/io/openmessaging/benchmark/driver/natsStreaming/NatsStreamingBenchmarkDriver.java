@@ -28,18 +28,13 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.ResourceNames;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     private static final String defaultClusterId = "test-cluster";
@@ -67,9 +62,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            config = reader.readValue(input);
-        }
+        config = DriverConfigs.read(configurationFile, NatsStreamingClientConfig.class);
         log.info("read config file," + config.toString());
         if (config.clusterId != null) {
             clusterId = config.clusterId;
@@ -106,7 +99,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
                     new IllegalStateException("NATS Streaming driver is closed"));
         }
         if (natsStreamingPublisher == null) {
-            String clientId = "ProducerInstance" + getRandomString();
+            String clientId = "ProducerInstance" + ResourceNames.randomSuffix();
             try {
                 natsStreamingPublisher =
                         connectionFactory.connect(clusterId, clientId, optsBuilder.build());
@@ -131,7 +124,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
                     new IllegalStateException("NATS Streaming driver is closed"));
         }
         StreamingConnection streamingConnection = null;
-        String clientId = "ConsumerInstance" + getRandomString();
+        String clientId = "ConsumerInstance" + ResourceNames.randomSuffix();
         try {
             streamingConnection = connectionFactory.connect(clusterId, clientId, optsBuilder.build());
             streamingConnection.subscribe(
@@ -179,22 +172,8 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(NatsStreamingClientConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static final org.slf4j.Logger log =
             LoggerFactory.getLogger(NatsStreamingBenchmarkDriver.class);
-
-    private static final Random random = new Random();
-
-    private static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
-    }
 
     public static void main(String[] args) throws Exception {
         try {

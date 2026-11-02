@@ -15,7 +15,6 @@ package io.openmessaging.benchmark.driver.mqtt5;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
-import com.google.common.io.BaseEncoding;
 import com.google.common.net.HostAndPort;
 import com.hivemq.client.mqtt.MqttClientConfig;
 import com.hivemq.client.mqtt.MqttClientState;
@@ -39,15 +38,15 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.mqtt5.client.MqttConfig;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -56,20 +55,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkDriver.class);
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper.readerFor(MqttConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
-    private static final Random random = new Random();
     private static final Pattern server_uri_pattern =
             Pattern.compile("(?:[^:]*://)?([^:]+)(?::(\\w+))?");
     public static final MqttUtf8String USER_PROPERTY_KEY_PUBLISH_TIMESTAMP =
@@ -365,9 +357,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static MqttConfig readConfig(Path configurationFile) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            return reader.readValue(input);
-        }
+        return DriverConfigs.read(configurationFile, MqttConfig.class);
     }
 
     private static HostAndPort parseServerUri(String serverUri) {
@@ -382,18 +372,14 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return BaseEncoding.base64Url().omitPadding().encode(buffer);
-    }
-
     private static String buildPublisherClientId() {
-        return Joiner.on("_").join("benchmark", "pub", getRandomString(), System.currentTimeMillis());
+        return Joiner.on("_")
+                .join("benchmark", "pub", ResourceNames.randomSuffix(), System.currentTimeMillis());
     }
 
     private static String buildSubscriberClientId() {
-        return Joiner.on("_").join("benchmark", "sub", getRandomString(), System.currentTimeMillis());
+        return Joiner.on("_")
+                .join("benchmark", "sub", ResourceNames.randomSuffix(), System.currentTimeMillis());
     }
 
     private static String extractClientId(MqttClientConfig clientConfig) {

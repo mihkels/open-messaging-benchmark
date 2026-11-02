@@ -31,19 +31,14 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 @SuppressWarnings("unused")
 public class NatsBenchmarkDriver implements BenchmarkDriver {
@@ -55,9 +50,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
-        try (InputStream input = Files.newInputStream(configurationFile)) {
-            config = reader.readValue(input);
-        }
+        config = DriverConfigs.read(configurationFile, NatsConfig.class);
         log.info("read config file: {}", config);
         try {
             this.connection =
@@ -189,9 +182,6 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static final Logger log = LoggerFactory.getLogger(NatsBenchmarkDriver.class);
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper.readerFor(NatsConfig.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static long readLongFromBytes(final byte[] b) {
         long result = 0;

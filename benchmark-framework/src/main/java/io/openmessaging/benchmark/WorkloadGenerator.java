@@ -13,8 +13,10 @@
  */
 package io.openmessaging.benchmark;
 
+import static io.openmessaging.benchmark.driver.Failures.append;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.PaddingDecimalFormat;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
@@ -340,16 +342,6 @@ public final class WorkloadGenerator implements WorkloadRun {
         void run() throws Exception;
     }
 
-    private static Throwable append(Throwable primary, Throwable next) {
-        if (primary == null) {
-            return next;
-        }
-        if (next != null && primary != next) {
-            primary.addSuppressed(next);
-        }
-        return primary;
-    }
-
     @Override
     public synchronized void close() {
         if (closed) {
@@ -366,51 +358,41 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
         executor.shutdownNow();
 
-        Throwable failure = null;
-        boolean interrupted = Thread.interrupted();
+        Failures failures = new Failures();
+        failures.deferInterrupt("Interrupted before stopping workload controllers");
         boolean runQuiescent = active == null;
         boolean controllersQuiescent = false;
-        if (interrupted) {
-            failure = new InterruptedException("Interrupted before stopping workload controllers");
-        }
         if (active != null && active != Thread.currentThread()) {
             try {
                 runQuiescent = runExited.await(shutdownTimeoutNanos, TimeUnit.NANOSECONDS);
                 if (!runQuiescent) {
-                    failure = append(failure, new TimeoutException("Workload run did not exit"));
+                    failures.add(new TimeoutException("Workload run did not exit"));
                 }
             } catch (InterruptedException e) {
-                interrupted = true;
-                failure = append(failure, e);
+                failures.addInterruption(e);
             }
         }
         try {
             controllersQuiescent = executor.awaitTermination(shutdownTimeoutNanos, TimeUnit.NANOSECONDS);
             if (!controllersQuiescent) {
-                failure = append(failure, new TimeoutException("Workload controllers did not terminate"));
+                failures.add(new TimeoutException("Workload controllers did not terminate"));
             }
         } catch (InterruptedException e) {
-            interrupted = true;
-            failure = append(failure, e);
+            failures.addInterruption(e);
         }
         synchronized (controllerLock) {
             if (controllerFailure != null && !controllerFailureReported) {
-                failure = append(failure, controllerFailure);
+                failures.add(controllerFailure);
                 controllerFailureReported = true;
             }
         }
         try {
             worker.stopAll();
         } catch (Throwable t) {
-            failure = append(failure, t);
+            failures.add(t);
         }
         quiescentAfterClose = runQuiescent && controllersQuiescent;
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
-        if (failure != null) {
-            throw new IllegalStateException("Failed to close workload", failure);
-        }
+        failures.throwIfAny("Failed to close workload");
     }
 
     @Override

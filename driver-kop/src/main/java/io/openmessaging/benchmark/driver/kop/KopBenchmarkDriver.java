@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkConsumer;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkProducer;
@@ -29,7 +30,6 @@ import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkProducer;
 import io.streamnative.pulsar.handlers.kop.KafkaPayloadProcessor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
@@ -54,19 +54,8 @@ import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionType;
 import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class KopBenchmarkDriver implements BenchmarkDriver {
-
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(Config.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                    .with(DeserializationFeature.USE_LONG_FOR_INTS);
 
     private Config config;
     private AdminClient admin;
@@ -77,7 +66,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     private ConsumerBuilder<ByteBuffer> consumerBuilder = null;
 
     public static Config loadConfig(Path file) throws IOException {
-        return reader.readValue(Files.newInputStream(file));
+        return DriverConfigs.read(file, Config.class, DeserializationFeature.USE_LONG_FOR_INTS);
     }
 
     @Override

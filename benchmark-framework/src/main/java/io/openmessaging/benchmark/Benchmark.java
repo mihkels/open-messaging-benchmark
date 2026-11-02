@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import static io.openmessaging.benchmark.driver.Failures.append;
 import static java.util.stream.Collectors.toList;
 
 import com.beust.jcommander.JCommander;
@@ -307,16 +308,6 @@ public final class Benchmark {
             append(failure, checkFailure);
             return false;
         }
-    }
-
-    private static Throwable append(Throwable primary, Throwable next) {
-        if (primary == null) {
-            return next;
-        }
-        if (next != null && primary != next) {
-            primary.addSuppressed(next);
-        }
-        return primary;
     }
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

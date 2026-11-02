@@ -20,6 +20,7 @@ import com.beust.jcommander.internal.Maps;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.ListPartition;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -316,14 +317,9 @@ public final class DistributedWorkersEnsemble implements Worker {
     }
 
     private static void throwIfAny(String message, List<Throwable> failures) {
-        if (!failures.isEmpty()) {
-            Throwable primary = failures.getFirst();
-            failures.stream()
-                    .skip(1)
-                    .filter(failure -> failure != primary)
-                    .forEach(primary::addSuppressed);
-            throw new IllegalStateException(message, primary);
-        }
+        Failures collected = new Failures();
+        failures.forEach(collected::add);
+        collected.throwIfAny(message);
     }
 
     private static final Logger log = LoggerFactory.getLogger(DistributedWorkersEnsemble.class);

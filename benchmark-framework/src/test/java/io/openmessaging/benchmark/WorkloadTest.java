@@ -55,6 +55,20 @@ class WorkloadTest {
     }
 
     @Test
+    void rejectsAnEmptyRandomizedPayloadPool() {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.useRandomizedPayloads = true;
+
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Randomized payload pool size must be positive");
+
+        workload.randomizedPayloadPoolSize = 1;
+        workload.validate();
+    }
+
+    @Test
     void rejectsAnInvalidSizeDistribution() {
         Workload workload = new Workload();
         workload.messageSizeDistribution = Map.of("not-a-range", 1);

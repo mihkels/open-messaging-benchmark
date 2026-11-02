@@ -47,13 +47,26 @@ final class DriverProcess {
 
     private final String description;
     private volatile Path workDir;
+    // Never cleared once set, so that a call failing during a concurrent stop can still report the
+    // exit; processStopped records that the process no longer needs stopping.
     private volatile Process process;
+    private volatile boolean processStopped;
     private volatile String endpoint;
     private volatile HttpWorkerClient client;
     private volatile boolean crashReported;
 
     DriverProcess(String description) {
         this.description = description;
+    }
+
+    DriverProcess(String description, Process process) {
+        this(description);
+        this.process = process;
+    }
+
+    // The process, unless it has been stopped
+    private Process owned() {
+        return processStopped ? null : process;
     }
 
     String description() {
@@ -147,12 +160,12 @@ final class DriverProcess {
     }
 
     Long pid() {
-        Process current = process;
+        Process current = owned();
         return current == null ? null : current.pid();
     }
 
     boolean isRunning() {
-        Process current = process;
+        Process current = owned();
         return client != null && current != null && current.isAlive();
     }
 
@@ -211,7 +224,7 @@ final class DriverProcess {
      * @param failures collects a failure to close the input
      */
     void closeInput(Failures failures) {
-        Process current = process;
+        Process current = owned();
         if (current != null) {
             failures.close(current.getOutputStream());
         }
@@ -231,12 +244,12 @@ final class DriverProcess {
             failures.close(closingClient);
             failures.deferInterrupt("Interrupted while closing the driver HTTP client");
         }
-        Process closing = process;
+        Process closing = owned();
         if (closing != null) {
             stopProcess(closing, failures);
         }
         endpoint = null;
-        if (workDir != null && process == null) {
+        if (workDir != null && owned() == null) {
             try {
                 deleteWorkDir(workDir);
                 workDir = null;
@@ -280,17 +293,17 @@ final class DriverProcess {
                         new IllegalStateException(
                                 "Driver process " + closing.pid() + " exited with code " + closing.exitValue()));
             }
-            process = null;
+            processStopped = true;
         }
     }
 
     boolean isStopped() {
-        return process == null && client == null && workDir == null;
+        return owned() == null && client == null && workDir == null;
     }
 
     /** Stops the process on JVM shutdown without throwing, since nobody could handle the failure. */
     void stopOnShutdown() {
-        Process current = process;
+        Process current = owned();
         Path directory = workDir;
         if (current == null) {
             if (directory != null) {

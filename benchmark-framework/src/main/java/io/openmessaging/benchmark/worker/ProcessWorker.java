@@ -359,7 +359,7 @@ public class ProcessWorker implements Worker {
 
     @Override
     public String id() {
-        return "local";
+        return "local-process";
     }
 
     @Override

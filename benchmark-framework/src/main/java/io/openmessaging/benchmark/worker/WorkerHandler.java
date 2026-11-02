@@ -54,7 +54,7 @@ public class WorkerHandler implements AutoCloseable {
     public static final String CUMULATIVE_LATENCIES = "/cumulative-latencies";
     public static final String COUNTERS_STATS = "/counters-stats";
     public static final String RESET_STATS = "/reset-stats";
-    private final Worker localWorker;
+    private final Worker worker;
 
     public WorkerHandler(PrometheusMeterRegistry statsLogger) {
         this(new LocalWorker(statsLogger));
@@ -66,7 +66,7 @@ public class WorkerHandler implements AutoCloseable {
      * @param worker the worker to expose
      */
     public WorkerHandler(Worker worker) {
-        this.localWorker = worker;
+        this.worker = worker;
     }
 
     public void configure(JavalinConfig config) {
@@ -101,7 +101,7 @@ public class WorkerHandler implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        localWorker.close();
+        worker.close();
     }
 
     private static String describe(Throwable e) {
@@ -133,7 +133,7 @@ public class WorkerHandler implements AutoCloseable {
         var tempFile = Files.createTempFile("driver-configuration", ".yaml");
         try {
             Files.write(tempFile, ctx.bodyAsBytes());
-            localWorker.initializeDriver(tempFile);
+            worker.initializeDriver(tempFile);
         } finally {
             Files.deleteIfExists(tempFile);
         }
@@ -142,18 +142,18 @@ public class WorkerHandler implements AutoCloseable {
     private void handleCreateTopics(Context ctx) {
         TopicsInfo topicsInfo = mapper.readValue(ctx.body(), TopicsInfo.class);
         log.info("Received create topics request for topics: {}", ctx.body());
-        List<String> topics = localWorker.createTopics(topicsInfo);
+        List<String> topics = worker.createTopics(topicsInfo);
         ctx.result(writer.writeValueAsString(topics));
     }
 
     private void handleCreateProducers(Context ctx) {
         var topics = mapper.readValue(ctx.body(), new TypeReference<List<String>>() {});
         log.info("Received create producers request for topics: {}", topics);
-        localWorker.createProducers(topics);
+        worker.createProducers(topics);
     }
 
     private void handleProbeProducers(Context ctx) {
-        localWorker.probeProducers();
+        worker.probeProducers();
     }
 
     private void handleCreateConsumers(Context ctx) {
@@ -161,15 +161,15 @@ public class WorkerHandler implements AutoCloseable {
 
         log.info(
                 "Received create consumers request for topics: {}", consumerAssignment.topicsSubscriptions);
-        localWorker.createConsumers(consumerAssignment);
+        worker.createConsumers(consumerAssignment);
     }
 
     private void handlePauseConsumers(Context ctx) {
-        localWorker.pauseConsumers();
+        worker.pauseConsumers();
     }
 
     private void handleResumeConsumers(Context ctx) {
-        localWorker.resumeConsumers();
+        worker.resumeConsumers();
     }
 
     private void handleStartLoad(Context ctx) {
@@ -182,30 +182,30 @@ public class WorkerHandler implements AutoCloseable {
                 producerWorkAssignment.publishRate(),
                 producerWorkAssignment.payloadData().size());
 
-        localWorker.startLoad(producerWorkAssignment);
+        worker.startLoad(producerWorkAssignment);
     }
 
     private void handleAdjustPublishRate(Context ctx) {
         Double publishRate = mapper.readValue(ctx.body(), Double.class);
         log.info("Adjust publish-rate: {} msg/s", publishRate);
-        localWorker.adjustPublishRate(publishRate);
+        worker.adjustPublishRate(publishRate);
     }
 
     private void handleStopAll(Context ctx) {
         log.info("Stop All");
-        localWorker.stopAll();
+        worker.stopAll();
     }
 
     private void handlePeriodStats(Context ctx) {
-        ctx.result(writer.writeValueAsString(localWorker.getPeriodStats()));
+        ctx.result(writer.writeValueAsString(worker.getPeriodStats()));
     }
 
     private void handleCumulativeLatencies(Context ctx) {
-        ctx.result(writer.writeValueAsString(localWorker.getCumulativeLatencies()));
+        ctx.result(writer.writeValueAsString(worker.getCumulativeLatencies()));
     }
 
     private void handleCountersStats(Context ctx) {
-        var stats = localWorker.getCountersStats();
+        var stats = worker.getCountersStats();
         log.info(
                 "Worker returning stats - sent: {}, errors: {}, received: {}",
                 stats.messagesSent(),
@@ -216,6 +216,6 @@ public class WorkerHandler implements AutoCloseable {
 
     private void handleResetStats(Context ctx) {
         log.info("Reset stats");
-        localWorker.resetStats();
+        worker.resetStats();
     }
 }

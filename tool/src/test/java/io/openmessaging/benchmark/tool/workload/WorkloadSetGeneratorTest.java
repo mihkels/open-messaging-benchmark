@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-class WorkloadGeneratorTest {
+class WorkloadSetGeneratorTest {
 
     @Test
     void allWorkloadFieldsAreExplicitlyAccountedFor() {
@@ -57,7 +57,7 @@ class WorkloadGeneratorTest {
     void emptySweepsUseExistingDefaults() throws Exception {
         WorkloadSetTemplate template = new WorkloadSetTemplate();
 
-        assertThat(new WorkloadGenerator(template).generate())
+        assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
                 .satisfies(
                         workload -> {
@@ -103,7 +103,7 @@ class WorkloadGeneratorTest {
                         0,
                         0);
 
-        assertThat(new WorkloadGenerator(template).generate())
+        assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
                 .satisfies(
                         workload -> {
@@ -144,7 +144,7 @@ class WorkloadGeneratorTest {
                         67,
                         89);
 
-        List<Workload> workloads = new WorkloadGenerator(template).generate();
+        List<Workload> workloads = new WorkloadSetGenerator(template).generate();
 
         assertThat(workloads).hasSize(128);
         for (int i = 0; i < workloads.size(); i++) {

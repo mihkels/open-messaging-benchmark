@@ -25,8 +25,8 @@ import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
 import java.nio.file.Path;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +113,7 @@ public final class Benchmark {
 
         if (arguments.help) {
             jc.usage();
-            System.exit(-1);
+            System.exit(0);
         }
 
         if (arguments.resultsDir != null) {
@@ -212,68 +212,14 @@ public final class Benchmark {
                 log.error("Failed to stop a previous workload", e);
             }
 
-            combinations:
-            for (Map.Entry<String, Workload> entry : workloads.entrySet()) {
-                for (String driverConfig : arguments.drivers) {
-                    if (!safeToContinue) {
-                        log.error("Skipping remaining workloads because worker cleanup failed");
-                        break combinations;
-                    }
-
-                    Workload workload = entry.getValue();
-                    WorkloadRun generator = null;
-                    Throwable runFailure = null;
-                    try {
-                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-                        DriverConfiguration driverConfiguration =
-                                driverConfigurationReader.readValue(new File(driverConfig));
-                        log.info(
-                                "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
-                                workload.name,
-                                driverConfiguration.name);
-                        worker.initializeDriver(Path.of(driverConfig));
-                        generator =
-                                Objects.requireNonNull(
-                                        generatorFactory.create(driverConfiguration.name, workload, worker));
-                        TestResult result = generator.run();
-                        boolean useOutput = arguments.output != null && !arguments.output.isEmpty();
-                        String timestamp = dateFormat.format(new Date());
-                        String fileName =
-                                useOutput
-                                        ? arguments.output
-                                        : String.format(
-                                                "%s-%s-%s.json", entry.getKey(), driverConfiguration.name, timestamp);
-                        log.info("Writing test result into {}", fileName);
-                        writer.writeValue(new File(fileName), result);
-                    } catch (Throwable e) {
-                        runFailure = e;
-                        if (e instanceof Error) {
-                            safeToContinue = false;
-                        }
-                    } finally {
-                        try {
-                            if (generator == null) {
-                                worker.stopAll();
-                            } else {
-                                generator.close();
-                            }
-                        } catch (Throwable e) {
-                            runFailure = append(runFailure, e);
-                            safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
-                        }
-                    }
-                    if (Thread.currentThread().isInterrupted()) {
-                        safeToContinue = false;
-                    }
-                    if (runFailure != null) {
-                        log.error(
-                                "Failed to run the workload '{}' for driver '{}'",
-                                workload.name,
-                                driverConfig,
-                                runFailure);
-                        failures = append(failures, runFailure);
-                    }
+            for (Combination combination : combinations(workloads, arguments.drivers)) {
+                if (!safeToContinue) {
+                    log.error("Skipping remaining workloads because worker cleanup failed");
+                    break;
                 }
+                Outcome outcome = runOne(combination, arguments.output, worker, generatorFactory);
+                failures = append(failures, outcome.failure());
+                safeToContinue = outcome.safeToContinue();
             }
         } catch (Throwable e) {
             failures = append(failures, e);
@@ -290,6 +236,95 @@ public final class Benchmark {
             throw new IllegalStateException(
                     "One or more workloads or required cleanup operations failed", failures);
         }
+    }
+
+    /**
+     * One workload run with one driver.
+     *
+     * @param workloadFileName the workload file name without its extension
+     * @param workload the workload
+     * @param driverConfig the driver configuration file
+     */
+    private record Combination(String workloadFileName, Workload workload, String driverConfig) {}
+
+    /**
+     * How a combination ended.
+     *
+     * @param failure the run or cleanup failure, or {@code null}
+     * @param safeToContinue whether the worker can run the next combination
+     */
+    private record Outcome(Throwable failure, boolean safeToContinue) {}
+
+    // Workloads in name order, each with every driver in the order given
+    private static List<Combination> combinations(
+            Map<String, Workload> workloads, List<String> driverConfigs) {
+        List<Combination> combinations = new ArrayList<>();
+        workloads.forEach(
+                (name, workload) ->
+                        driverConfigs.forEach(
+                                driverConfig -> combinations.add(new Combination(name, workload, driverConfig))));
+        return combinations;
+    }
+
+    // Runs one combination and always stops the worker afterwards, so the next one starts clean
+    private static Outcome runOne(
+            Combination combination, String output, Worker worker, GeneratorFactory generatorFactory) {
+        Workload workload = combination.workload();
+        WorkloadRun generator = null;
+        Throwable failure = null;
+        boolean safeToContinue = true;
+        try {
+            DriverConfiguration driverConfiguration =
+                    driverConfigurationReader.readValue(new File(combination.driverConfig()));
+            log.info(
+                    "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
+                    workload.name,
+                    driverConfiguration.name);
+            worker.initializeDriver(Path.of(combination.driverConfig()));
+            generator =
+                    Objects.requireNonNull(
+                            generatorFactory.create(driverConfiguration.name, workload, worker));
+            TestResult result = generator.run();
+            String fileName =
+                    resultFileName(output, combination.workloadFileName(), driverConfiguration.name);
+            log.info("Writing test result into {}", fileName);
+            writer.writeValue(new File(fileName), result);
+        } catch (Throwable e) {
+            failure = e;
+            if (e instanceof Error) {
+                safeToContinue = false;
+            }
+        } finally {
+            try {
+                if (generator == null) {
+                    worker.stopAll();
+                } else {
+                    generator.close();
+                }
+            } catch (Throwable e) {
+                failure = append(failure, e);
+                safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
+            }
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            safeToContinue = false;
+        }
+        if (failure != null) {
+            log.error(
+                    "Failed to run the workload '{}' for driver '{}'",
+                    workload.name,
+                    combination.driverConfig(),
+                    failure);
+        }
+        return new Outcome(failure, safeToContinue);
+    }
+
+    private static String resultFileName(String output, String workloadFileName, String driverName) {
+        if (output != null && !output.isEmpty()) {
+            return output;
+        }
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new Date());
+        return String.format("%s-%s-%s.json", workloadFileName, driverName, timestamp);
     }
 
     @FunctionalInterface

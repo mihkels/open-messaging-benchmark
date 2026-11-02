@@ -36,6 +36,10 @@ When `OMB_DRIVER_JVM_OPTS` is not set, the scripts build it as
 `OMB_DRIVER_JVM_OPTS` only when you need full control, and copy the default flags from `bin/benchmark`
 into it.
 
+For controlled, broker-independent heap/collector and virtual-thread scheduling experiments, use
+the opt-in [framework resource-efficiency harness](../development/framework-performance.md).
+Its JVM profiles do not change these launcher defaults and are not broker-client sizing guidance.
+
 ## System properties
 
 Pass these to the supervisor through `SUPERVISOR_HEAP_OPTS`, for example

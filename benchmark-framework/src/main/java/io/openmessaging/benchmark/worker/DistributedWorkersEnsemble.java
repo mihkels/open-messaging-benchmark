@@ -242,16 +242,17 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public PeriodStats getPeriodStats() {
-        return workers.parallelStream()
-                .map(
-                        w -> {
-                            try {
-                                return w.getPeriodStats();
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
-                .reduce(new PeriodStats(), PeriodStats::plus);
+        return PeriodStats.aggregate(
+                workers.parallelStream()
+                        .map(
+                                w -> {
+                                    try {
+                                        return w.getPeriodStats();
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                })
+                        .toList());
     }
 
     @Override

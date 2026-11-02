@@ -33,7 +33,6 @@ import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
-import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -50,11 +49,10 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -168,14 +166,7 @@ public final class LocalWorker implements Worker {
                                 throw new IllegalArgumentException(
                                         "Driver class " + configuration.driverClass + " is not on the classpath", e);
                             }
-                            boolean stopped;
-                            synchronized (next.monitor) {
-                                stopped = next.stopping;
-                                if (!stopped) {
-                                    next.driver = driver;
-                                }
-                            }
-                            if (stopped) {
+                            if (!next.attachDriver(driver)) {
                                 try {
                                     driver.close();
                                 } catch (Exception e) {
@@ -185,9 +176,7 @@ public final class LocalWorker implements Worker {
                                 throw new CancellationException("Driver initialization was stopped");
                             }
                             driver.initialize(driverConfigFile, stats.getMeterRegistry());
-                            synchronized (next.monitor) {
-                                next.initialized = true;
-                            }
+                            next.markInitialized();
                             return null;
                         }));
     }
@@ -233,7 +222,7 @@ public final class LocalWorker implements Worker {
                                 topics.stream().map(t -> new ProducerInfo(index.getAndIncrement(), t)).toList()),
                 created -> {
                     validateResources(created, "producer");
-                    current.producers.addAll(created);
+                    current.addProducers(created);
                 },
                 LocalWorker::closeUntransferred);
 
@@ -262,7 +251,7 @@ public final class LocalWorker implements Worker {
                                         .toList()),
                 created -> {
                     validateResources(created, "consumer");
-                    current.consumers.addAll(created);
+                    current.addConsumers(created);
                 },
                 LocalWorker::closeUntransferred);
 
@@ -275,74 +264,28 @@ public final class LocalWorker implements Worker {
     @Override
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         Run current = requireRun();
-        List<BenchmarkProducer> producers;
-        synchronized (current.monitor) {
-            current.checkRunning();
-            if (current.loadStarted) {
-                throw new IllegalStateException("Load has already started for this driver");
-            }
-            producers = List.copyOf(current.producers);
-        }
+        List<BenchmarkProducer> producers = current.producersBeforeLoad();
         log.info(
                 "Starting load with {} producers, publish rate: {}",
                 producers.size(),
                 producerWorkAssignment.publishRate());
 
-        updateMessageProducer(current, producerWorkAssignment.publishRate());
-        List<byte[]> payloads = producerWorkAssignment.payloadData();
-        if (payloads.isEmpty()) {
-            throw new IllegalArgumentException("At least one payload is required");
-        }
+        current.replaceMessageProducer(producerWorkAssignment.publishRate());
+        PayloadSampler payloads =
+                PayloadSampler.of(
+                        producerWorkAssignment.payloadData(), producerWorkAssignment.payloadWeights());
+        current.beginLoad();
 
-        int[] weights = producerWorkAssignment.payloadWeights();
-        int[] cumulativeWeights = null;
-        int totalWeight = payloads.size();
-        if (weights != null) {
-            cumulativeWeights = new int[weights.length];
-            totalWeight = 0;
-            for (int i = 0; i < weights.length; i++) {
-                if (weights[i] < 0) {
-                    throw new IllegalArgumentException("Payload weights cannot be negative");
-                }
-                try {
-                    totalWeight = Math.addExact(totalWeight, weights[i]);
-                } catch (ArithmeticException e) {
-                    throw new IllegalArgumentException("Payload weights exceed the supported total", e);
-                }
-                cumulativeWeights[i] = totalWeight;
-            }
-            if (totalWeight == 0) {
-                throw new IllegalArgumentException("Payload weights must sum to a positive value");
-            }
+        log.info("Submitting {} producers to executor", producers.size());
+        for (BenchmarkProducer producer : producers) {
+            startProducer(current, producer, producerWorkAssignment.keyDistributorType(), payloads);
         }
-        final int[] payloadCumulativeWeights = cumulativeWeights;
-        final int payloadTotalWeight = totalWeight;
-
-        synchronized (current.monitor) {
-            current.checkRunning();
-            if (current.loadStarted) {
-                throw new IllegalStateException("Load has already started for this driver");
-            }
-            current.loadStarted = true;
-        }
-
-        submitProducersToExecutor(
-                current,
-                producers,
-                producerWorkAssignment.keyDistributorType(),
-                payloads,
-                payloadCumulativeWeights,
-                payloadTotalWeight);
     }
 
     @Override
     public void probeProducers() {
         Run current = requireRun();
-        List<BenchmarkProducer> producers;
-        synchronized (current.monitor) {
-            current.checkRunning();
-            producers = List.copyOf(current.producers);
-        }
+        List<BenchmarkProducer> producers = current.producers();
         CompletableFuture<Void> complete = new CompletableFuture<>();
         AtomicInteger remaining = new AtomicInteger(producers.size());
         List<TrackedTask<Void>> probes = new ArrayList<>();
@@ -407,62 +350,39 @@ public final class LocalWorker implements Worker {
         }
     }
 
-    private void submitProducersToExecutor(
+    // Sends messages from one producer on its own task until the worker stops.
+    private void startProducer(
             Run current,
-            List<BenchmarkProducer> producers,
+            BenchmarkProducer producer,
             KeyDistributorType keyDistributorType,
-            List<byte[]> payloads,
-            int[] cumulativeWeights,
-            int totalWeight) {
-        log.info("Submitting {} producers to executor", producers.size());
-
-        for (BenchmarkProducer p : producers) {
-            // Each producer runs on its own thread, and distributors are not thread-safe
-            KeyDistributor keyDistributor = KeyDistributor.build(keyDistributorType);
-            submit(
-                    current,
-                    "producer task",
-                    () -> {
-                        try {
-                            ThreadLocalRandom random = ThreadLocalRandom.current();
-                            while (!current.stopping) {
-                                int payloadIndex =
-                                        cumulativeWeights == null
-                                                ? random.nextInt(payloads.size())
-                                                : MessageSizeDistribution.bucketIndexForTicket(
-                                                        random.nextInt(totalWeight), cumulativeWeights);
-                                current.messageProducer.sendMessage(
-                                        p, Optional.ofNullable(keyDistributor.next()), payloads.get(payloadIndex));
-                            }
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            if (!current.stopping) {
-                                current.recordFailure(e);
-                            }
-                        } catch (Throwable t) {
-                            current.recordFailure(t);
+            PayloadSampler payloads) {
+        // Each producer runs on its own thread, and distributors are not thread-safe
+        KeyDistributor keyDistributor = KeyDistributor.build(keyDistributorType);
+        submit(
+                current,
+                "producer task",
+                () -> {
+                    try {
+                        ThreadLocalRandom random = ThreadLocalRandom.current();
+                        while (!current.stopping) {
+                            current.messageProducer.sendMessage(
+                                    producer, Optional.ofNullable(keyDistributor.next()), payloads.next(random));
                         }
-                        return null;
-                    });
-        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        if (!current.stopping) {
+                            current.recordFailure(e);
+                        }
+                    } catch (Throwable t) {
+                        current.recordFailure(t);
+                    }
+                    return null;
+                });
     }
 
     @Override
     public void adjustPublishRate(double publishRate) {
-        Run current = requireRun();
-        if (publishRate < 1.0) {
-            updateMessageProducer(current, 1.0);
-            return;
-        }
-        updateMessageProducer(current, publishRate);
-    }
-
-    private void updateMessageProducer(Run current, double publishRate) {
-        synchronized (current.monitor) {
-            current.checkRunning();
-            current.messageProducer =
-                    new MessageProducer(new UniformRateLimiter(publishRate), current.callbacks);
-        }
+        requireRun().replaceMessageProducer(Math.max(publishRate, 1.0));
     }
 
     @Override
@@ -510,72 +430,17 @@ public final class LocalWorker implements Worker {
             }
             Failures cleanup = new Failures();
             cleanup.deferInterrupt("Interrupted before stopping the worker");
-            List<TrackedTask<?>> tasks;
-            synchronized (current.monitor) {
-                current.stopping = true;
-                tasks = List.copyOf(current.tasks);
+            List<TrackedTask<?>> tasks = current.beginStopping();
+            sealCallbacks(current, cleanup);
+            boolean tasksExited = cancelTasks(tasks, cleanup);
+            Detached detached = current.detach();
+            closeResources(detached.handles(), "producer or consumer", cleanup);
+            if (detached.driver() != null) {
+                closeResources(List.of(detached.driver()), "driver", cleanup);
             }
-            try {
-                if (!current.callbacks.seal(deadline())) {
-                    cleanup.add(new TimeoutException("Callback gate did not quiesce"));
-                }
-            } catch (InterruptedException e) {
-                cleanup.addInterruption(e);
-            }
-            tasks.forEach(task -> task.cancel(true));
-
-            long taskDeadline = deadline();
-            boolean tasksExited = true;
-            for (TrackedTask<?> task : tasks) {
-                try {
-                    if (!task.awaitExit(taskDeadline)) {
-                        cleanup.add(
-                                new TimeoutException(task.description + " did not exit after cancellation"));
-                        tasksExited = false;
-                    }
-                } catch (InterruptedException e) {
-                    cleanup.addInterruption(e);
-                    tasksExited = false;
-                }
-            }
-
-            List<AutoCloseable> handles = new ArrayList<>();
-            BenchmarkDriver driver;
-            synchronized (current.monitor) {
-                handles.addAll(current.producers);
-                handles.addAll(current.consumers);
-                current.producers.clear();
-                current.consumers.clear();
-                driver = current.driver;
-                current.driver = null;
-            }
-            closeResources(handles, "producer or consumer", cleanup);
-            if (driver != null) {
-                closeResources(List.of(driver), "driver", cleanup);
-            }
-
-            boolean creationsFinished = false;
-            try {
-                creationsFinished = current.awaitCreations(deadline());
-                if (!creationsFinished) {
-                    cleanup.add(new TimeoutException("Resource creation callbacks did not finish"));
-                }
-            } catch (InterruptedException e) {
-                cleanup.addInterruption(e);
-            }
-            boolean callbacksFinished = false;
-            try {
-                callbacksFinished = current.callbacks.awaitQuiescence(deadline());
-                if (!callbacksFinished) {
-                    cleanup.add(
-                            new TimeoutException("Outstanding send or consumer callbacks did not finish"));
-                }
-            } catch (InterruptedException e) {
-                cleanup.addInterruption(e);
-            }
-            synchronized (current.monitor) {
-                cleanup.add(current.cleanupFailure);
-            }
+            boolean creationsFinished = awaitCreations(current, cleanup);
+            boolean callbacksFinished = awaitCallbacks(current, cleanup);
+            cleanup.add(current.cleanupFailure());
 
             // A worker with failed cleanup is already unusable and may still receive stats from stuck
             // resources.
@@ -592,15 +457,64 @@ public final class LocalWorker implements Worker {
             }
             cleanup.restoreInterrupt();
             Failures failures = new Failures();
-            synchronized (current.monitor) {
-                if (!current.failureReported) {
-                    failures.add(current.failure);
-                    current.failureReported = current.failure != null;
-                }
-            }
+            failures.add(current.takeUnreportedFailure());
             failures.add(cleanup.failure());
             failures.throwIfAny("Failed to stop worker");
         }
+    }
+
+    private void sealCallbacks(Run current, Failures cleanup) {
+        try {
+            if (!current.callbacks.seal(deadline())) {
+                cleanup.add(new TimeoutException("Callback gate did not quiesce"));
+            }
+        } catch (InterruptedException e) {
+            cleanup.addInterruption(e);
+        }
+    }
+
+    // Returns whether every task exited after its cancellation.
+    private boolean cancelTasks(List<TrackedTask<?>> tasks, Failures cleanup) {
+        tasks.forEach(task -> task.cancel(true));
+        long taskDeadline = deadline();
+        boolean tasksExited = true;
+        for (TrackedTask<?> task : tasks) {
+            try {
+                if (!task.awaitExit(taskDeadline)) {
+                    cleanup.add(
+                            new TimeoutException(task.description() + " did not exit after cancellation"));
+                    tasksExited = false;
+                }
+            } catch (InterruptedException e) {
+                cleanup.addInterruption(e);
+                tasksExited = false;
+            }
+        }
+        return tasksExited;
+    }
+
+    private boolean awaitCreations(Run current, Failures cleanup) {
+        try {
+            if (current.awaitCreations(deadline())) {
+                return true;
+            }
+            cleanup.add(new TimeoutException("Resource creation callbacks did not finish"));
+        } catch (InterruptedException e) {
+            cleanup.addInterruption(e);
+        }
+        return false;
+    }
+
+    private boolean awaitCallbacks(Run current, Failures cleanup) {
+        try {
+            if (current.callbacks.awaitQuiescence(deadline())) {
+                return true;
+            }
+            cleanup.add(new TimeoutException("Outstanding send or consumer callbacks did not finish"));
+        } catch (InterruptedException e) {
+            cleanup.addInterruption(e);
+        }
+        return false;
     }
 
     @Override
@@ -641,28 +555,13 @@ public final class LocalWorker implements Worker {
         if (current == null) {
             throw new IllegalStateException("No driver is initialized");
         }
-        synchronized (current.monitor) {
-            current.checkRunning();
-            if (!current.initialized) {
-                throw new IllegalStateException("Driver initialization has not completed");
-            }
-        }
+        current.requireInitialized();
         return current;
     }
 
     private <T> TrackedTask<T> submit(Run current, String description, Callable<T> operation) {
         TrackedTask<T> task = new TrackedTask<>(description, operation);
-        synchronized (current.monitor) {
-            current.checkRunning();
-            current.tasks.add(task);
-            try {
-                executor.execute(task);
-            } catch (RuntimeException e) {
-                current.tasks.remove(task);
-                task.cancel(false);
-                throw e;
-            }
-        }
+        current.start(task, executor);
         return task;
     }
 
@@ -681,7 +580,7 @@ public final class LocalWorker implements Worker {
             if (cause instanceof Error error) {
                 throw error;
             }
-            throw new IllegalStateException(task.description + " failed", cause);
+            throw new IllegalStateException(task.description() + " failed", cause);
         }
     }
 
@@ -691,93 +590,9 @@ public final class LocalWorker implements Worker {
             Supplier<CompletableFuture<T>> factory,
             ResourceAction<T> transfer,
             ResourceAction<T> dispose) {
-        TrackedTask<T> task =
-                submit(
-                        current,
-                        description,
-                        () -> {
-                            CompletableFuture<T> created =
-                                    Objects.requireNonNull(factory.get(), description + " returned null");
-                            CompletableFuture<T> handedOff = new CompletableFuture<>();
-                            CompletableFuture<Void> quiescence =
-                                    created instanceof ResourceCreationCompletion completion
-                                            ? Objects.requireNonNull(
-                                                    completion.quiescence(), description + " quiescence returned null")
-                                            : null;
-                            synchronized (current.monitor) {
-                                current.pendingCreations += quiescence == null ? 1 : 2;
-                            }
-                            if (quiescence != null) {
-                                quiescence.whenComplete(
-                                        (ignored, failure) -> {
-                                            try {
-                                                if (failure != null) {
-                                                    current.recordCleanupFailure(unwrap(failure));
-                                                }
-                                            } finally {
-                                                current.creationFinished();
-                                            }
-                                        });
-                            }
-                            created.whenComplete(
-                                    (value, failure) -> {
-                                        try {
-                                            Throwable outcome = failure == null ? null : unwrap(failure);
-                                            boolean untransferred = false;
-                                            if (outcome == null) {
-                                                synchronized (current.monitor) {
-                                                    if (current.stopping) {
-                                                        untransferred = true;
-                                                        outcome = new CancellationException("Worker is stopping");
-                                                    } else {
-                                                        try {
-                                                            transfer.accept(value);
-                                                        } catch (Throwable t) {
-                                                            untransferred = true;
-                                                            outcome = t;
-                                                        }
-                                                    }
-                                                }
-                                                if (untransferred) {
-                                                    try {
-                                                        dispose.accept(value);
-                                                    } catch (Throwable t) {
-                                                        current.recordCleanupFailure(t);
-                                                        if (outcome != t) {
-                                                            outcome.addSuppressed(t);
-                                                        }
-                                                    }
-                                                }
-                                            } else if (quiescence == null) {
-                                                for (Throwable suppressed : outcome.getSuppressed()) {
-                                                    current.recordCleanupFailure(suppressed);
-                                                }
-                                            }
-                                            if (outcome == null) {
-                                                handedOff.complete(value);
-                                            } else {
-                                                handedOff.completeExceptionally(outcome);
-                                            }
-                                        } finally {
-                                            current.creationFinished();
-                                        }
-                                    });
-                            try {
-                                return handedOff.get();
-                            } catch (InterruptedException e) {
-                                try {
-                                    if (quiescence != null) {
-                                        created.cancel(true);
-                                    } else if (created instanceof AbandonableCreation creation) {
-                                        creation.abandonCreation();
-                                    }
-                                } catch (Throwable failure) {
-                                    current.recordCleanupFailure(failure);
-                                }
-                                Thread.currentThread().interrupt();
-                                throw e;
-                            }
-                        });
+        ResourceHandoff<T> handoff =
+                new ResourceHandoff<>(current, description, factory, transfer, dispose);
+        TrackedTask<T> task = submit(current, description, handoff::create);
         try {
             return awaitTask(task);
         } catch (InterruptedException e) {
@@ -786,6 +601,116 @@ public final class LocalWorker implements Worker {
             throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Failed during " + description, e);
+        }
+    }
+
+    /**
+     * Hands the result of one asynchronous driver creation to a run. A resource that completes after
+     * stopping has begun, or that the run rejects, is disposed of instead. Every creation callback is
+     * counted on the run, so that stopping can wait for late completions.
+     *
+     * @param <T> the created resource type
+     */
+    private static final class ResourceHandoff<T> {
+        private final Run run;
+        private final String description;
+        private final Supplier<CompletableFuture<T>> factory;
+        private final ResourceAction<T> transfer;
+        private final ResourceAction<T> dispose;
+        private final CompletableFuture<T> handedOff = new CompletableFuture<>();
+
+        private ResourceHandoff(
+                Run run,
+                String description,
+                Supplier<CompletableFuture<T>> factory,
+                ResourceAction<T> transfer,
+                ResourceAction<T> dispose) {
+            this.run = run;
+            this.description = description;
+            this.factory = factory;
+            this.transfer = transfer;
+            this.dispose = dispose;
+        }
+
+        // Runs as a worker task and waits until the creation has been handed off or has failed.
+        private T create() throws Exception {
+            CompletableFuture<T> created =
+                    Objects.requireNonNull(factory.get(), description + " returned null");
+            // A creation that reports quiescence reports its own late cleanup failures through it.
+            CompletableFuture<Void> quiescence =
+                    created instanceof ResourceCreationCompletion completion
+                            ? Objects.requireNonNull(
+                                    completion.quiescence(), description + " quiescence returned null")
+                            : null;
+            boolean tracksQuiescence = quiescence != null;
+            run.creationsStarted(tracksQuiescence ? 2 : 1);
+            if (tracksQuiescence) {
+                quiescence.whenComplete((ignored, failure) -> quiesced(failure));
+            }
+            created.whenComplete((value, failure) -> completed(value, failure, tracksQuiescence));
+            try {
+                return handedOff.get();
+            } catch (InterruptedException e) {
+                abandon(created, tracksQuiescence);
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+        }
+
+        private void quiesced(Throwable failure) {
+            try {
+                if (failure != null) {
+                    run.recordCleanupFailure(unwrap(failure));
+                }
+            } finally {
+                run.creationFinished();
+            }
+        }
+
+        private void completed(T value, Throwable failure, boolean tracksQuiescence) {
+            try {
+                Throwable outcome = failure == null ? null : unwrap(failure);
+                if (outcome == null) {
+                    outcome = run.transfer(value, transfer);
+                    if (outcome != null) {
+                        disposeUntransferred(value, outcome);
+                    }
+                } else if (!tracksQuiescence) {
+                    for (Throwable suppressed : outcome.getSuppressed()) {
+                        run.recordCleanupFailure(suppressed);
+                    }
+                }
+                if (outcome == null) {
+                    handedOff.complete(value);
+                } else {
+                    handedOff.completeExceptionally(outcome);
+                }
+            } finally {
+                run.creationFinished();
+            }
+        }
+
+        private void disposeUntransferred(T value, Throwable outcome) {
+            try {
+                dispose.accept(value);
+            } catch (Throwable t) {
+                run.recordCleanupFailure(t);
+                if (outcome != t) {
+                    outcome.addSuppressed(t);
+                }
+            }
+        }
+
+        private void abandon(CompletableFuture<T> created, boolean tracksQuiescence) {
+            try {
+                if (tracksQuiescence) {
+                    created.cancel(true);
+                } else if (created instanceof AbandonableCreation creation) {
+                    creation.abandonCreation();
+                }
+            } catch (Throwable failure) {
+                run.recordCleanupFailure(failure);
+            }
         }
     }
 
@@ -829,7 +754,7 @@ public final class LocalWorker implements Worker {
             try {
                 if (!task.awaitExit(deadline)) {
                     task.cancel(true);
-                    failures.add(new TimeoutException(task.description + " timed out"));
+                    failures.add(new TimeoutException(task.description() + " timed out"));
                 } else {
                     awaitTask(task);
                 }
@@ -876,6 +801,11 @@ public final class LocalWorker implements Worker {
         void accept(T value) throws Exception;
     }
 
+    /**
+     * The state of one initialized driver, from {@code initializeDriver} until {@code stopAll}. Every
+     * field written by more than one thread is guarded by {@link #monitor}, and only methods of this
+     * class take it.
+     */
     private final class Run {
         private final Object monitor = new Object();
         private final List<TrackedTask<?>> tasks = new ArrayList<>();
@@ -891,6 +821,156 @@ public final class LocalWorker implements Worker {
         private Throwable failure;
         private boolean failureReported;
         private Throwable cleanupFailure;
+
+        // Keeps a newly constructed driver unless stopping has begun. Returns false if the caller
+        // still owns the driver and must close it.
+        private boolean attachDriver(BenchmarkDriver newDriver) {
+            synchronized (monitor) {
+                if (stopping) {
+                    return false;
+                }
+                driver = newDriver;
+                return true;
+            }
+        }
+
+        private void markInitialized() {
+            synchronized (monitor) {
+                initialized = true;
+            }
+        }
+
+        private void requireInitialized() {
+            synchronized (monitor) {
+                checkRunning();
+                if (!initialized) {
+                    throw new IllegalStateException("Driver initialization has not completed");
+                }
+            }
+        }
+
+        // Starts a task on the executor and tracks it so that stopping can cancel and await it.
+        private void start(TrackedTask<?> task, Executor executor) {
+            synchronized (monitor) {
+                checkRunning();
+                tasks.add(task);
+                try {
+                    executor.execute(task);
+                } catch (RuntimeException e) {
+                    tasks.remove(task);
+                    task.cancel(false);
+                    throw e;
+                }
+            }
+        }
+
+        private void creationsStarted(int count) {
+            synchronized (monitor) {
+                pendingCreations += count;
+            }
+        }
+
+        // Hands a created resource to this run unless stopping has begun. Returns null if the
+        // resource was transferred, otherwise why it was not.
+        private <T> Throwable transfer(T value, ResourceAction<T> transfer) {
+            synchronized (monitor) {
+                if (stopping) {
+                    return new CancellationException("Worker is stopping");
+                }
+                try {
+                    transfer.accept(value);
+                    return null;
+                } catch (Throwable t) {
+                    return t;
+                }
+            }
+        }
+
+        // Must only be called from a transfer action, which holds the monitor.
+        private void addProducers(List<BenchmarkProducer> created) {
+            producers.addAll(created);
+        }
+
+        // Must only be called from a transfer action, which holds the monitor.
+        private void addConsumers(List<BenchmarkConsumer> created) {
+            consumers.addAll(created);
+        }
+
+        private List<BenchmarkProducer> producers() {
+            synchronized (monitor) {
+                checkRunning();
+                return List.copyOf(producers);
+            }
+        }
+
+        private List<BenchmarkProducer> producersBeforeLoad() {
+            synchronized (monitor) {
+                checkRunning();
+                checkLoadNotStarted();
+                return List.copyOf(producers);
+            }
+        }
+
+        private void beginLoad() {
+            synchronized (monitor) {
+                checkRunning();
+                checkLoadNotStarted();
+                loadStarted = true;
+            }
+        }
+
+        private void checkLoadNotStarted() {
+            if (loadStarted) {
+                throw new IllegalStateException("Load has already started for this driver");
+            }
+        }
+
+        private void replaceMessageProducer(double publishRate) {
+            synchronized (monitor) {
+                checkRunning();
+                messageProducer = new MessageProducer(new UniformRateLimiter(publishRate), callbacks);
+            }
+        }
+
+        // Rejects new tasks, transfers and calls from now on. Returns the tasks started so far.
+        private List<TrackedTask<?>> beginStopping() {
+            synchronized (monitor) {
+                stopping = true;
+                return List.copyOf(tasks);
+            }
+        }
+
+        // Takes ownership of the producer and consumer handles and the driver away from this run.
+        // Returns the handles, and the driver if one was attached.
+        private Detached detach() {
+            synchronized (monitor) {
+                List<AutoCloseable> handles = new ArrayList<>(producers);
+                handles.addAll(consumers);
+                producers.clear();
+                consumers.clear();
+                BenchmarkDriver detachedDriver = driver;
+                driver = null;
+                return new Detached(handles, detachedDriver);
+            }
+        }
+
+        private Throwable cleanupFailure() {
+            synchronized (monitor) {
+                return cleanupFailure;
+            }
+        }
+
+        // The failure of a producer or callback task that no caller has seen yet. Returns the
+        // failure, or null if there is none or it was already reported.
+        private Throwable takeUnreportedFailure() {
+            synchronized (monitor) {
+                if (failureReported) {
+                    return null;
+                }
+                failureReported = failure != null;
+                return failure;
+            }
+        }
 
         private void checkRunning() {
             if (stopping) {
@@ -943,49 +1023,7 @@ public final class LocalWorker implements Worker {
         }
     }
 
-    /**
-     * Future cancellation only signals a task. This separate latch tracks when its body really exits,
-     * including cancellation before the executor starts it.
-     *
-     * @param <T> task result type
-     */
-    private static final class TrackedTask<T> extends FutureTask<T> {
-        private final String description;
-        private final AtomicInteger state = new AtomicInteger();
-        private final CountDownLatch exited = new CountDownLatch(1);
-
-        private TrackedTask(String description, Callable<T> operation) {
-            super(operation);
-            this.description = description;
-        }
-
-        @Override
-        public void run() {
-            if (state.compareAndSet(0, 1)) {
-                try {
-                    super.run();
-                } finally {
-                    state.set(2);
-                    exited.countDown();
-                }
-            }
-        }
-
-        @Override
-        public boolean cancel(boolean interrupt) {
-            boolean cancelled = super.cancel(interrupt);
-            if (state.compareAndSet(0, 2)) {
-                exited.countDown();
-            }
-            return cancelled;
-        }
-
-        private boolean awaitExit(long deadlineNanos) throws InterruptedException {
-            long remaining = deadlineNanos - System.nanoTime();
-            return exited.getCount() == 0
-                    || (remaining > 0 && exited.await(remaining, TimeUnit.NANOSECONDS));
-        }
-    }
+    private record Detached(List<AutoCloseable> handles, BenchmarkDriver driver) {}
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 

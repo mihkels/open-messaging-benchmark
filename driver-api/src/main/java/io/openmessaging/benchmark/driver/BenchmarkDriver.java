@@ -32,6 +32,21 @@ import java.util.concurrent.CompletableFuture;
  * failure or cancellation, the operation must close every successfully created handle that was not
  * handed off exactly once, including late completions, and cancel pending work where possible. One
  * failed close must not prevent the remaining handles from being closed.
+ *
+ * <p>A creation future may also implement optional capabilities, which the worker and {@link
+ * ResourceCreator} discover with {@code instanceof}:
+ *
+ * <ul>
+ *   <li>{@link ResourceCreationCompletion}: a quiescence barrier that completes once creation work
+ *       and cleanup have finished, even after the future itself has failed or been cancelled. The
+ *       worker then waits on that barrier while stopping and reports cleanup failures through it.
+ *   <li>{@link AbandonableCreation}: a cooperative stop signal. The worker and batches call it
+ *       instead of cancelling a creation whose result is no longer needed, so that a resource
+ *       created anyway is cleaned up rather than discarded.
+ * </ul>
+ *
+ * <p>Futures returned by {@link ResourceCreator} and by the default batch methods already implement
+ * these capabilities.
  */
 public interface BenchmarkDriver extends AutoCloseable {
     /**

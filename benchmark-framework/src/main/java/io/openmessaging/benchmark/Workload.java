@@ -92,9 +92,7 @@ public class Workload {
      * @throws IllegalArgumentException if the workload is invalid
      */
     public void validate() {
-        if (useRandomizedPayloads
-                && !usesMessageSizeDistribution()
-                && randomizedPayloadPoolSize <= 0) {
+        if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
             throw new IllegalArgumentException("Randomized payload pool size must be positive");
         }
         if (usesMessageSizeDistribution()) {

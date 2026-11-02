@@ -53,14 +53,14 @@ public class WorkloadGenerationTool {
 
         if (arguments.help) {
             jc.usage();
-            System.exit(-1);
+            System.exit(0);
         }
 
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", mapper.writeValueAsString(arguments));
 
         WorkloadSetTemplate template = templateReader.readValue(arguments.templateFile);
-        List<Workload> workloads = new WorkloadGenerator(template).generate();
+        List<Workload> workloads = new WorkloadSetGenerator(template).generate();
         for (Workload w : workloads) {
             var outputFile = new File(arguments.outputFolder, w.name + ".yaml");
             workloadWriter.writeValue(outputFile, w);

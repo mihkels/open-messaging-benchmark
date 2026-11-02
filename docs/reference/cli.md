@@ -57,7 +57,7 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   combination or required cleanup fails; results from successful combinations remain available.
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
   workload files, no `--drivers`, or an invalid workload file print a message and exit with a
-  non-zero status before any broker resources are created. `--help` also exits with a non-zero status.
+  non-zero status before any broker resources are created. `--help` prints usage and exits successfully.
 - **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.
 
 ### Examples

@@ -26,19 +26,19 @@ import tools.jackson.databind.ObjectReader;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Expands a {@link WorkloadSetTemplate} into a set of {@link Workload Workloads}. */
-final class WorkloadGenerator {
-    private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
+final class WorkloadSetGenerator {
+    private static final Logger log = LoggerFactory.getLogger(WorkloadSetGenerator.class);
 
     private final WorkloadSetTemplate template;
     private final WorkloadNameFormat nameFormat;
 
     /**
-     * Creates a new WorkloadGenerator with the specified template.
+     * Creates a new WorkloadSetGenerator with the specified template.
      *
      * @param template the workload set template to use for generation
      * @throws IllegalArgumentException if template is null
      */
-    WorkloadGenerator(WorkloadSetTemplate template) {
+    WorkloadSetGenerator(WorkloadSetTemplate template) {
         this.template = Objects.requireNonNull(template, "Template cannot be null");
         this.nameFormat = new WorkloadNameFormat(template.nameFormat());
     }

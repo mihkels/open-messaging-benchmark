@@ -45,9 +45,10 @@ container allows.
 
 **`Driver process for ... did not start within 120s`**
 
-The host is very slow or overloaded. Raise the limit by adding
-`-Domb.driver.startupTimeoutSeconds=300` to `SUPERVISOR_HEAP_OPTS`, which the launch scripts pass to
-the coordinator and worker JVM.
+The host is very slow or overloaded. Raise the limit with
+`SUPERVISOR_HEAP_OPTS="-Xmx1G -Domb.driver.startupTimeoutSeconds=300"`, which the launch scripts pass
+to the coordinator and worker JVM. Setting the variable replaces its `-Xmx1G` default, so keep the
+heap flag.
 
 **`Failed to initialize driver ...`**
 

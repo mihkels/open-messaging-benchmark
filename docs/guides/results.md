@@ -88,7 +88,7 @@ directory:
 | `Publish latency 99pct.svg`                                  | Publish p99 per sample, ms                  |
 | `Publish Delay latency 99pct.svg`                            | Publish delay p99 per sample, µs            |
 | `Publish rate.svg`, `Consume rate.svg`                       | Rates per sample, msg/s                     |
-| `Publish Error rate.svg`                                     | Errors per sample                           |
+| `Publish Error rate.svg`                                     | Publish errors per second, per sample       |
 | `End To End Latency 95pct.svg`, `End To End Latency Avg.svg` | End-to-end latency per sample, ms           |
 | `Publish Latency Quantiles.svg`                              | Aggregated publish latency by percentile    |
 | `Publish Delay Latency Quantiles.svg`                        | Aggregated publish delay by percentile      |

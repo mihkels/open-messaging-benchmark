@@ -103,10 +103,10 @@ All keys are read by `RabbitMqConfig`. Unknown keys are ignored.
 | `amqpUris`                   | list of strings | empty list | Required. AMQP URIs `amqp://[user:password@]host[:port]`. Only host, port, user and password are used; path, query and scheme are ignored. |
 | `queueType`                  | enum            | `CLASSIC`  | `CLASSIC`, `QUORUM` or `STREAM`, upper case. Sets the `x-queue-type` queue argument (none for `CLASSIC`).                                  |
 | `messagePersistence`         | boolean         | `false`    | When `true`, messages are published with delivery mode 2 (persistent).                                                                     |
-| `producerCreationBatchSize`  | int             | `5`        | Producers created per batch.                                                                                                               |
-| `producerCreationDelay`      | long            | `100`      | Delay between producer creation batches, in milliseconds.                                                                                  |
-| `consumerCreationBatchSize`  | int             | `5`        | Consumers created per batch.                                                                                                               |
-| `consumerCreationDelay`      | long            | `100`      | Delay between consumer creation batches, in milliseconds.                                                                                  |
+| `producerCreationBatchSize`  | int             | `5`        | Producers created per batch. Must be positive.                                                                                             |
+| `producerCreationDelay`      | long            | `100`      | Delay between producer creation batches, in milliseconds. Must not be negative.                                                            |
+| `consumerCreationBatchSize`  | int             | `5`        | Consumers created per batch. Must be positive.                                                                                             |
+| `consumerCreationDelay`      | long            | `100`      | Delay between consumer creation batches, in milliseconds. Must not be negative.                                                            |
 | `resourceCreationMaxRetries` | int             | `10`       | Retries per failed producer or consumer after the initial attempt; `0` disables retries. Negative values are invalid.                      |
 
 There are no pass-through client properties. Other connection settings (heartbeat, TLS, virtual host, frame size)

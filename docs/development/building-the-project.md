@@ -31,12 +31,38 @@ The tool versions are pinned in
 | Maven  | 3.10.0  | the build              |
 | Python | 3.15    | the documentation site |
 
+CI builds the documentation site with Python 3.13 (`docs.yml`); any Python 3 that installs
+`docs/requirements.txt` works locally.
+
 ```bash
 mise install
 ```
 
 Activate mise in your shell, or prefix commands with `mise exec --` so they use these versions. The
-Maven Enforcer plugin in the root POM requires Maven 3.9.0 or newer and Java 27 or newer.
+Maven Enforcer plugin in the root POM requires Maven 3.9.0 or newer (3.10.0 recommended) and Java 27
+or newer.
+
+Docker is optional. You need it only to build images, run containers and run the end-to-end suites.
+The launch and helper scripts (`bin/*`, `local-build.sh`, `e2e-tests/compose/run-e2e.sh`) need bash.
+
+## Repository layout
+
+|                Path                 |                                Contents                                |
+|-------------------------------------|------------------------------------------------------------------------|
+| `benchmark-framework/`              | Coordinator, worker and plugin runtime                                 |
+| `driver-api/`                       | Driver SPI that plugins compile against                                |
+| `driver-*/`                         | One driver plugin per messaging system, with example driver YAML files |
+| `workloads/`, `payload/`            | Example workloads and message payloads                                 |
+| `bin/`                              | Launch scripts used by the distribution and for in-repo runs           |
+| `package/`                          | Binary distribution (`tar.gz`) with all plugin bundles                 |
+| `docker/`                           | Dockerfiles for runnable images                                        |
+| `deployment/`                       | Kubernetes manifests and Helm chart                                    |
+| `e2e-tests/`                        | Testcontainers contracts and the Docker Compose regression suite       |
+| `examples/external-driver-plugin/`  | A driver plugin built outside this repository                          |
+| `tool/`                             | Workload generator and other utilities                                 |
+| `performance-harness/`              | Framework resource-efficiency harness; built only with `-Pperformance` |
+| `local-test/`                       | Docker Compose setup used by the Quickstart                            |
+| `docs/`, `mkdocs.yml`, `overrides/` | Documentation site                                                     |
 
 ## Full reactor build
 
@@ -49,8 +75,13 @@ This builds and unit-tests every module, assembles each driver's plugin bundle i
 reactor: the distribution collects plugin bundles from the driver modules, so building only the
 `package` module can leave drivers out.
 
-During the build, Checkstyle runs in the `validate` phase, the license header check runs in
-`process-sources`, and Spotless checks formatting.
+During the build, the Maven Enforcer and Checkstyle run in the `validate` phase, the license header
+check runs in `process-sources`, and Spotless, SpotBugs (with `etc/findbugsExclude.xml`) and JaCoCo
+check in `verify`. Tests use JUnit 6 (Jupiter) and Mockito; metrics use Micrometer and the
+Prometheus client libraries.
+
+`performance-harness` is not in the default module list. It is built only with `-Pperformance`; see
+[Framework resource efficiency](framework-performance.md).
 
 Common variations:
 
@@ -61,6 +92,7 @@ Common variations:
 | `mvn clean verify -Dcheckstyle.skip`     | Skip Checkstyle                                |
 | `mvn clean verify -Dspotless.check.skip` | Skip the Spotless format check                 |
 | `mvn clean verify -Dlicense.skip`        | Skip the license header check                  |
+| `mvn clean verify -Dspotbugs.skip`       | Skip SpotBugs                                  |
 | `mvn -pl driver-kafka -am install`       | Build one module and the modules it depends on |
 
 After a source-tree build, the `bin/` scripts run straight from the checkout. They find the bundles in
@@ -195,3 +227,8 @@ mvn --no-transfer-progress --batch-mode verify
 
 If the job fails, the Surefire reports are uploaded as the `test-results` artifact. CI does not run the
 Testcontainers or Compose end-to-end suites. See [Testing a driver](testing-a-driver.md).
+
+The same workflow runs a `framework-performance-smoke` job, which builds `performance-harness` with
+`-Pperformance` and runs its smoke checks (see [Framework resource efficiency](framework-performance.md)).
+`framework-performance.yml` runs only when started manually. `docs.yml` builds the documentation site
+(see [Documentation](documentation.md#publishing)).

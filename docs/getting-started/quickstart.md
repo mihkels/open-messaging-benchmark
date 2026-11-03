@@ -67,6 +67,10 @@ directory contains a Compose file with:
 It mounts `local-test/drivers`, `local-test/workloads` and `local-test/payload` into the
 coordinator container as `/drivers`, `/workloads` and `/payload`.
 
+The benchmark services use the image `openmessaging-benchmark:local` by default. To use an existing
+Java 27 benchmark image instead of building one, set `OMB_IMAGE` before starting the environment,
+for example `OMB_IMAGE=mihkels/open-messaging-benchmark:<tag> docker compose up -d`.
+
 ```bash
 cd local-test
 docker compose up -d

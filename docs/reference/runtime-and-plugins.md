@@ -36,6 +36,9 @@ When `OMB_DRIVER_JVM_OPTS` is not set, the scripts build it as
 `OMB_DRIVER_JVM_OPTS` only when you need full control, and copy the default flags from `bin/benchmark`
 into it.
 
+The coordinator also reads `PUBLISH_BACKLOG_LIMIT`, `RECEIVE_BACKLOG_LIMIT`, `MIN_RAMPING_FACTOR` and
+`MAX_RAMPING_FACTOR` for `producerRate: 0` runs; see [Workloads](../guides/workloads.md).
+
 For controlled, broker-independent heap/collector and virtual-thread scheduling experiments, use
 the opt-in [framework resource-efficiency harness](../development/framework-performance.md).
 Its JVM profiles do not change these launcher defaults and are not broker-client sizing guidance.
@@ -63,7 +66,8 @@ second copy of an installed plugin to the plugin path.
 
 1. `<home>/drivers/*`, the layout of the distribution and the Docker image.
 2. `<home>/*/target/omb-plugin`, the layout of a built source checkout.
-3. Each entry of `omb.plugin.path` or `OMB_PLUGIN_PATH`. Relative entries are resolved against the
+3. Each entry of `omb.plugin.path` or `OMB_PLUGIN_PATH`, separated by `:` (`;` on Windows). An entry
+   may be a bundle directory or a directory of bundles; relative entries are resolved against the
    home directory.
 
 A driver configuration selects a plugin through its `driverClass`. The plugin IDs and driver

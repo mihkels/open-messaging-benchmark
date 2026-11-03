@@ -75,13 +75,16 @@ The image is multi-architecture and runs natively on amd64 and arm64. Wait until
 `curl -fsS http://localhost:8080/admin/v2/brokers/health` succeeds before you start a benchmark.
 
 > **Note:** Pulsar's admin port 8080 is also the default port of `bin/benchmark-worker`. If you run a
-> worker on the same host, start the worker on another port (for example `bin/benchmark-worker -p 8081`)
+> worker on the same host, start the worker on another port (for example `bin/benchmark-worker -p 8082`;
+> 8081 is the default `--stats-port`)
 > or publish the Pulsar admin API on a different host port.
 
 ## Minimal configuration and benchmark command
 
 This configuration targets the standalone broker above. It is the shipped `driver-pulsar/pulsar.yaml`
-with the cluster name and persistence quorums changed for a single-bookie broker:
+with the cluster name and persistence quorums changed for a single-bookie broker, and the optional
+`ioThreads`, `connectionsPerBroker`, TLS and authentication keys omitted (so `ioThreads` is the
+default 8 rather than 16):
 
 ```yaml
 name: Pulsar

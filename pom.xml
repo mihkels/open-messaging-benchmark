@@ -324,6 +324,7 @@
                                 <exclude>LICENSE</exclude>
                                 <exclude>NOTICE</exclude>
                                 <exclude>payload/**</exclude>
+                                <exclude>docs/demo/quickstart-*</exclude>
                                 <exclude>**/*.pyc</exclude>
                                 <exclude>**/.pydevproject</exclude>
                                 <exclude>.github/**</exclude>

@@ -73,7 +73,7 @@ docker run -d --name kafka -p 9092:9092 \
 The image is multi-arch and runs natively on amd64 and Apple Silicon. A single node is only suitable
 for functional checks; for measurements, see [Fair comparisons](../methodology/fair-comparisons.md).
 
-## Minimal configuration and run
+## Minimal configuration and benchmark command
 
 A single-broker test needs replication factor 1. Save this as `my-kafka.yaml`; it is
 `driver-kafka/kafka-latency.yaml` with the replication settings reduced:
@@ -223,8 +223,8 @@ Kafka 4.x producers enable idempotence by default when the other settings allow 
 
 **Topic creation.** Topics are created with `AdminClient.createTopics` in batches of up to 500, with
 `replicationFactor` and `topicConfig` applied to every topic. A topic that already exists counts as
-created. Each attempt is limited to 60 seconds; creation is retried up to 6 times with an increasing
-back-off, and before each retry the driver checks whether all topics already exist.
+created. Each attempt is limited to 60 seconds; creation is attempted up to 6 times (5 retries) with
+an increasing back-off of 2 s × attempt, and before each retry the driver checks whether all topics already exist.
 
 **Producing.** `sendAsync` calls `KafkaProducer.send` with a callback. The benchmark counts a message
 as published when the callback reports success, so what "published" means for durability is decided by

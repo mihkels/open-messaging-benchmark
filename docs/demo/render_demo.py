@@ -90,6 +90,8 @@ def transcript_lines():
         msg = raw[m.end():]
         if not KEEP.match(msg):
             continue
+        # Keep the terminal readable: drop the publish-delay tail of statistics lines.
+        msg = msg.split(" | Pub Delay")[0].rstrip()
         if msg.startswith("Pub rate"):
             out.append(("", msg, 160))
         elif msg.startswith("----- Aggregated"):
@@ -115,7 +117,7 @@ def render_terminal():
     <button class="omb-term__replay" type="button" data-omb-replay>Replay</button>
   </div>
   <pre class="omb-term__body" data-omb-term tabindex="0" aria-label="Quickstart terminal output">{body}</pre>
-  <p class="omb-term__note">Recorded quickstart run on a laptop with Docker; timestamps and logger names removed. Example output, not a benchmark result.</p>
+  <p class="omb-term__note">Recorded quickstart run on a laptop with Docker; timestamps, logger names and the publish-delay columns removed. Example output, not a benchmark result.</p>
 </div>
 """
 

@@ -296,17 +296,28 @@
   margin: 0;
   padding: 1rem 1.1rem 1.2rem;
   height: 22rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #283040 transparent;
   font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
-  line-height: 1.6;
+  font-size: 0.68rem;
+  line-height: 1.55;
   color: #c9d1dc;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
 
+/* Wrapped continuation lines hang under the first character, like a terminal with a gutter. */
 .omb-term__body .l {
   display: block;
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.omb-term__body .l + .l:not(.cont):not(.ok) {
+  margin-top: 0.15rem;
 }
 
 .omb-term__body .cmd::before {
@@ -382,6 +393,19 @@
   margin: 0 0 2.5rem;
 }
 
+.omb-section__intro a,
+.omb-caption a {
+  color: var(--omb-amber);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.omb-section__intro a::after {
+  content: " \2192";
+}
+
 .omb-kicker {
   font-family: var(--md-code-font-family);
   font-size: 0.72rem;
@@ -394,12 +418,8 @@
 /* What it measures */
 .omb-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: 1px;
-  background: var(--omb-line);
-  border: 1px solid var(--omb-line);
-  border-radius: 8px;
-  overflow: hidden;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -407,6 +427,8 @@
 
 .omb-metrics li {
   background: var(--omb-surface);
+  border: 1px solid var(--omb-line);
+  border-radius: 8px;
   padding: 1.25rem 1.25rem 1.4rem;
   min-width: 0;
 }
@@ -686,14 +708,20 @@
 /* Drivers */
 .omb-drivers {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.omb-drivers li {
+  display: flex;
+  min-width: 0;
+}
+
 .omb-driver {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -745,11 +773,14 @@
 
 .omb-driver__name {
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   line-height: 1.25;
 }
 
 .omb-driver__id {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--md-code-font-family);
   font-size: 0.7rem;
   color: var(--omb-muted);
@@ -845,6 +876,18 @@
 
 /* Responsive */
 @media (max-width: 960px) {
+  .omb-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .omb-metrics li:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .omb-drivers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .omb-hero .omb-wrap,
   .omb-arch,
   .omb-charts {
@@ -858,9 +901,29 @@
 }
 
 @media (max-width: 480px) {
+  .omb-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .omb-drivers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
+  }
+
+  .omb-drivers li:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .omb-driver {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .omb-term__bar > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .omb-driver {

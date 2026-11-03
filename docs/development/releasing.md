@@ -52,8 +52,11 @@ hand.
 - Publishing workflows use no caches, so a pull request cannot poison what is published.
 - Images and charts are signed keylessly with cosign through GitHub's OIDC token: no signing keys
   are stored. Images carry SBOM and SLSA provenance attestations.
-- Trivy scans every image; fixable critical and high vulnerabilities fail the build, and results go
-  to code scanning.
+- Trivy scans every image and sends all findings to code scanning. Fixable critical and high
+  vulnerabilities in the base image packages and the benchmark framework (`/benchmark/lib`) fail
+  the build. Findings in the client libraries bundled with driver plugins (`/benchmark/drivers`)
+  are reported but do not block, since they follow each broker's client releases; Dependabot
+  proposes Maven upgrades for them.
 - `Workflow lint` runs actionlint and zizmor, and checks that images are published only to
   Docker Hub.
 

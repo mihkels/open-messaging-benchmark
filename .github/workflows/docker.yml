@@ -133,6 +133,11 @@ jobs:
           install: false
           cache: false
 
+      # Every finding, including the client libraries bundled with driver plugins, goes to code
+      # scanning. The build fails on fixable critical and high findings in the layers this
+      # repository controls: the base image packages and the benchmark framework in /benchmark/lib.
+      # Driver client libraries follow their broker's client releases and are upgraded through
+      # Dependabot pull requests instead.
       - name: Scan for vulnerabilities
         env:
           # Avoids GitHub API rate limits when mise downloads the tool
@@ -141,7 +146,7 @@ jobs:
           mise exec "trivy@$TRIVY_VERSION" -- trivy image --scanners vuln --ignore-unfixed \
             --format sarif --output trivy.sarif omb-check:all
           mise exec "trivy@$TRIVY_VERSION" -- trivy image --scanners vuln --ignore-unfixed \
-            --severity CRITICAL,HIGH --exit-code 1 omb-check:all
+            --severity CRITICAL,HIGH --skip-dirs /benchmark/drivers --exit-code 1 omb-check:all
 
       - name: Upload scan results
         if: always() && github.event_name == 'push' && hashFiles('trivy.sarif') != ''

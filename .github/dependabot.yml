@@ -11,6 +11,14 @@ updates:
     commit-message:
       prefix: ci
 
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: deps
+
   - package-ecosystem: docker
     directories:
       - /docker

@@ -13,6 +13,8 @@
  */
 package io.openmessaging.benchmark.tool.workload;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.Collections;
 import java.util.List;
@@ -60,6 +62,8 @@ public record WorkloadSetTemplate(
     public static final String DEFAULT_NAME_TEMPLATE =
             "${topics}-topics-${partitionsPerTopic}-partitions-${messageSize}b"
                     + "-${producersPerTopic}p-${consumerPerSubscription}c-${producerRate}";
+    public static final int DEFAULT_TEST_DURATION_MINUTES = 5;
+    public static final int DEFAULT_WARMUP_DURATION_MINUTES = 1;
 
     // Defensive copy constructor
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -101,6 +105,45 @@ public record WorkloadSetTemplate(
         this.warmupDurationMinutes = warmupDurationMinutes;
     }
 
+    // Jackson creator: boxed scalars let fields missing from the template fall back to the defaults
+    @JsonCreator
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    static WorkloadSetTemplate fromJson(
+            @JsonProperty("nameFormat") String nameFormat,
+            @JsonProperty("topics") List<Integer> topics,
+            @JsonProperty("partitionsPerTopic") List<Integer> partitionsPerTopic,
+            @JsonProperty("messageSize") List<Integer> messageSize,
+            @JsonProperty("subscriptionsPerTopic") List<Integer> subscriptionsPerTopic,
+            @JsonProperty("producersPerTopic") List<Integer> producersPerTopic,
+            @JsonProperty("consumerPerSubscription") List<Integer> consumerPerSubscription,
+            @JsonProperty("producerRate") List<Integer> producerRate,
+            @JsonProperty("keyDistributor") KeyDistributorType keyDistributor,
+            @JsonProperty("payloadFile") String payloadFile,
+            @JsonProperty("useRandomizedPayloads") Boolean useRandomizedPayloads,
+            @JsonProperty("randomBytesRatio") Double randomBytesRatio,
+            @JsonProperty("randomizedPayloadPoolSize") Integer randomizedPayloadPoolSize,
+            @JsonProperty("consumerBacklogSizeGB") Long consumerBacklogSizeGB,
+            @JsonProperty("testDurationMinutes") Integer testDurationMinutes,
+            @JsonProperty("warmupDurationMinutes") Integer warmupDurationMinutes) {
+        return new WorkloadSetTemplate(
+                nameFormat != null ? nameFormat : DEFAULT_NAME_TEMPLATE,
+                topics,
+                partitionsPerTopic,
+                messageSize,
+                subscriptionsPerTopic,
+                producersPerTopic,
+                consumerPerSubscription,
+                producerRate,
+                keyDistributor != null ? keyDistributor : KeyDistributorType.NO_KEY,
+                payloadFile,
+                useRandomizedPayloads != null && useRandomizedPayloads,
+                randomBytesRatio != null ? randomBytesRatio : 0.0,
+                randomizedPayloadPoolSize != null ? randomizedPayloadPoolSize : 0,
+                consumerBacklogSizeGB != null ? consumerBacklogSizeGB : 0,
+                testDurationMinutes != null ? testDurationMinutes : DEFAULT_TEST_DURATION_MINUTES,
+                warmupDurationMinutes != null ? warmupDurationMinutes : DEFAULT_WARMUP_DURATION_MINUTES);
+    }
+
     @SuppressWarnings("checkstyle:ParameterNumber")
     public WorkloadSetTemplate() {
         this(
@@ -118,8 +161,8 @@ public record WorkloadSetTemplate(
                 0.0,
                 0,
                 0,
-                5,
-                1);
+                DEFAULT_TEST_DURATION_MINUTES,
+                DEFAULT_WARMUP_DURATION_MINUTES);
     }
 
     // Defensive copy getters for mutable List fields

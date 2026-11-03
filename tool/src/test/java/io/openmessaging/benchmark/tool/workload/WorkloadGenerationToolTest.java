@@ -187,4 +187,31 @@ class WorkloadGenerationToolTest {
         assertThat(workload.messageSizeDistribution).isNull();
         assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
     }
+
+    @Test
+    void appliesTemplateDefaultsForMissingFields() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+        Files.writeString(
+                templateFile,
+                """
+                topics: [1]
+                messageSize: [100]
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        Path generatedFile = outputDir.resolve("1-topics-1-partitions-100b-1p-1c-10k.yaml");
+        assertThat(outputDir.resolve("null.yaml")).doesNotExist();
+        assertThat(generatedFile).exists();
+        Workload workload = YAML_MAPPER.readValue(generatedFile.toFile(), Workload.class);
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.NO_KEY);
+        assertThat(workload.testDurationMinutes).isEqualTo(5);
+        assertThat(workload.warmupDurationMinutes).isEqualTo(1);
+    }
 }

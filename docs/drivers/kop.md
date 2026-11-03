@@ -96,7 +96,7 @@ docker run -d --name pulsar-kop --platform linux/amd64 \
 Check the published sha256 in `artifacts.txt` against the downloaded file. Standalone mode is for
 functional checks only; see [Fair comparisons](../methodology/fair-comparisons.md) before measuring.
 
-## Minimal configuration and run
+## Minimal configuration and benchmark command
 
 `driver-kop/kafka_to_kafka.yaml` with only the required settings:
 

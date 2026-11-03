@@ -309,6 +309,9 @@
                                 <exclude>LICENSE</exclude>
                                 <exclude>NOTICE</exclude>
                                 <exclude>payload/**</exclude>
+                                <exclude>docs/demo/quickstart-*</exclude>
+                                <!-- Jinja templates carry the header as a Jinja comment; an HTML comment would be rendered before the doctype -->
+                                <exclude>overrides/**</exclude>
                                 <exclude>**/*.pyc</exclude>
                                 <exclude>**/.pydevproject</exclude>
                                 <exclude>.github/**</exclude>

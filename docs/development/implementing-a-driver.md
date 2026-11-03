@@ -22,21 +22,28 @@ topics, producers and consumers, and moves bytes.
 
 The running example on this page is the broker-less loopback driver in
 [`examples/external-driver-plugin`](https://github.com/mihkels/open-messaging-benchmark/tree/main/examples/external-driver-plugin).
+The loopback driver delivers within one driver JVM, so it works only in local mode (no `--workers`).
 To package and install a driver, see [Packaging a plugin](packaging-a-plugin.md).
 
 ## The SPI
 
-|        Type         |                           Kind                           |                                   Purpose                                    |
-|---------------------|----------------------------------------------------------|------------------------------------------------------------------------------|
-| `BenchmarkDriver`   | interface, extends `AutoCloseable`                       | Entry point: configuration, topics, producers, consumers                     |
-| `BenchmarkProducer` | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`                            |
-| `BenchmarkConsumer` | interface, extends `AutoCloseable`                       | Marker for a subscription; only `close()` is called                          |
-| `ConsumerCallback`  | interface                                                | Implemented by the benchmark; the driver calls it for every received message |
-| `TopicInfo`         | record `(topic, partitions)`                             | Argument of `createTopics`                                                   |
-| `ProducerInfo`      | record `(id, topic)`                                     | Argument of `createProducers`                                                |
-| `ConsumerInfo`      | record `(id, topic, subscriptionName, consumerCallback)` | Argument of `createConsumers`                                                |
-| `ResourceCreator`   | helper class                                             | Batched creation with retries, for `createProducers` / `createConsumers`     |
-| `DriverApiVersion`  | constant `CURRENT = 1`                                   | SPI version that plugin bundles declare                                      |
+|             Type             |                           Kind                           |                                            Purpose                                             |
+|------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| `BenchmarkDriver`            | interface, extends `AutoCloseable`                       | Entry point: configuration, topics, producers, consumers                                       |
+| `BenchmarkProducer`          | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`                                              |
+| `BenchmarkConsumer`          | interface, extends `AutoCloseable`                       | Marker for a subscription; only `close()` is called                                            |
+| `ConsumerCallback`           | interface                                                | Implemented by the benchmark; the driver calls it for every received message                   |
+| `TopicInfo`                  | record `(topic, partitions)`                             | Argument of `createTopics`                                                                     |
+| `ProducerInfo`               | record `(id, topic)`                                     | Argument of `createProducers`                                                                  |
+| `ConsumerInfo`               | record `(id, topic, subscriptionName, consumerCallback)` | Argument of `createConsumers`                                                                  |
+| `ResourceCreator`            | helper class                                             | Batched creation with retries, for `createProducers` / `createConsumers`                       |
+| `DriverConfigs`              | helper class                                             | `read(configurationFile, MyConfig.class)` reads the driver YAML and ignores unknown properties |
+| `PendingSendTracker`         | helper class                                             | Tracks a producer's sends independently of the client library's close behavior                 |
+| `ResourceNames`              | helper class                                             | `randomSuffix()` returns a short random suffix for broker-side resource names                  |
+| `Failures`                   | helper class                                             | Collects failures of a multi-step cleanup so every step runs and none is lost                  |
+| `AbandonableCreation`        | interface                                                | Optional cooperative stop signal for a resource-creation future                                |
+| `ResourceCreationCompletion` | interface                                                | Optional completion barrier for a resource-creation future, including cleanup                  |
+| `DriverApiVersion`           | constant `CURRENT = 1`                                   | SPI version that plugin bundles declare                                                        |
 
 The records are nested in `BenchmarkDriver`. The full `BenchmarkDriver` interface is:
 
@@ -98,10 +105,11 @@ close()
 `LocalWorker` loads `driverClass` from the driver YAML with `Class.forName(...)` and calls its public
 no-argument constructor. It then calls `initialize(configurationFile, statsLogger)`:
 
-- `configurationFile` is a local copy of the driver YAML. The benchmark reads only `name` and
-  `driverClass` from it (unknown properties are ignored), so the driver parses the rest. The in-tree
-  drivers read it with Jackson's YAML mapper and disable `FAIL_ON_UNKNOWN_PROPERTIES`, so the shared
-  keys do not cause errors.
+- `configurationFile` is the driver YAML itself in local mode, and a temporary copy
+  (`driver-configuration*.yaml`) on remote workers. Do not resolve other files relative to its
+  directory. The benchmark reads only `name` and `driverClass` from it (unknown properties are
+  ignored), so the driver parses the rest. Use `DriverConfigs.read(configurationFile, MyConfig.class)`
+  from `driver-api`. It ignores unknown properties such as `name` and `driverClass`.
 - `statsLogger` is a host-owned Micrometer `MeterRegistry`. The driver process supplies the same
   `PrometheusMeterRegistry` used for worker statistics, so meters registered there are exposed on the
   worker's `/metrics` endpoint (see [Monitoring](../guides/monitoring.md)). Do not close the registry.
@@ -211,8 +219,9 @@ reporting success:
   acknowledgement does not necessarily mean durable storage. For example, Pravega transactional
   sends complete before the transaction commits; see [Pravega semantics](../drivers/pravega.md#semantics).
 - Complete the future exceptionally when a send fails. The benchmark counts it as a publish error and
-  logs `Write error on message`. An exception thrown directly from `sendAsync` stops that producer's
-  thread for the rest of the run (`Producer thread failed`).
+  logs `Write error on message`. An exception thrown directly from `sendAsync`, or a `null` return, is
+  recorded as a task failure (`Producer or callback task failed`), and the run fails at the next
+  statistics poll.
 - `key` is empty when the workload uses `NO_KEY`. Otherwise it is the key that the workload's key
   distributor selected.
 - Cancellation does not guarantee that the broker did not receive the message.
@@ -268,6 +277,7 @@ The SPI has no readiness method. After producers and consumers are created, the 
 `sendAsync(Optional.of("key"), new byte[10])` once on every producer. It then waits up to 60 s until
 the consumers have received at least `topics × subscriptionsPerTopic` messages, polling every 2 s.
 If too few probe messages arrive, the run fails with `Timed out waiting for consumers to be ready`.
+A failed probe send fails the run immediately with `Producer readiness probe failed`.
 
 The consequences for a driver:
 
@@ -281,8 +291,8 @@ The consequences for a driver:
 
 The SPI has no pause or resume method. For backlog workloads (`consumerBacklogSizeGB`), the benchmark
 pauses consumption by blocking inside `ConsumerCallback.messageReceived`: while consumers are paused,
-the call sleeps in 1 s steps and returns after `resumeConsumers`. The message being delivered has
-already been counted at that point.
+the call blocks on a condition and returns when `resumeConsumers` is called or the run stops. The
+message being delivered has already been counted at that point.
 
 A driver must therefore tolerate a callback that blocks for a long time. It must not treat a slow
 callback as a failure, for example by timing out a session, and should apply back-pressure instead of

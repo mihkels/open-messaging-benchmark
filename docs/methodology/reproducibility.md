@@ -24,10 +24,12 @@ Keep these with every set of result files:
   identify them only by name.
 - The benchmark version or Git commit, and the Docker image tag if one was used.
 - Broker versions, broker configuration and the number and type of broker nodes.
-- Worker count, machine type, `HEAP_OPTS` and any `JVM_OPTS`.
+- Worker count, machine type, `HEAP_OPTS`, `JVM_OPTS`, `SUPERVISOR_HEAP_OPTS` and
+  `OMB_DRIVER_JVM_OPTS` if set.
 - Operating system, kernel and filesystem settings that affect I/O, and the network between workers
   and brokers.
-- The full command line and the `benchmark-worker.log` from the coordinator.
+- The full command line, and `benchmark-worker.log` and `benchmark-driver.log` from the coordinator
+  and every worker.
 
 > **Note:** Give every driver file and workload a distinct `name`. Several shipped driver files share
 > a name such as `Kafka`, so results produced with them cannot be told apart afterwards.

@@ -36,9 +36,9 @@ Unit tests live in `driver-<name>/src/test/java` and run with Maven Surefire:
 mvn -pl driver-<name> -am verify
 ```
 
-`-am` also builds the modules the driver depends on, such as `driver-api`. The Kafka, KoP, NSQ, RabbitMQ
-and RocketMQ drivers currently have unit tests. The framework's own tests, including the plugin loader and the worker, are in
-`benchmark-framework`:
+`-am` also builds the modules the driver depends on, such as `driver-api`. Every driver module and
+`driver-api` have unit tests. The framework's own tests, including the plugin loader and the worker,
+are in `benchmark-framework`:
 
 ```bash
 mvn -pl benchmark-framework -am verify
@@ -249,15 +249,15 @@ The suite is driven by files in
 [`e2e-tests/compose`](https://github.com/mihkels/open-messaging-benchmark/tree/main/e2e-tests/compose)
 (paths below are relative to that directory):
 
-|           Path           |                                    Purpose                                     |
-|--------------------------|--------------------------------------------------------------------------------|
-| `common.yaml`            | Workers, the coordinator (Compose profile `runner`) and the `stack-ready` gate |
-| `stacks/*.yaml`          | One Compose file per messaging service                                         |
-| `stacks.txt`             | The stacks, in execution order                                                 |
-| `cases.txt`              | The cases                                                                      |
-| `drivers/`, `workloads/` | Case inputs, using Compose service names as host names                         |
-| `artifacts.txt`          | Pinned external artifacts with SHA-256 checksums                               |
-| `runner/Dockerfile`      | Java 27 image containing the binary distribution                               |
+|           Path           |                                              Purpose                                              |
+|--------------------------|---------------------------------------------------------------------------------------------------|
+| `common.yaml`            | Workers, the coordinator (Compose profile `runner`) and the `stack-ready` gate                    |
+| `stacks/*.yaml`          | One Compose file per messaging service                                                            |
+| `stacks.txt`             | The stacks, in execution order                                                                    |
+| `cases.txt`              | The cases                                                                                         |
+| `drivers/`, `workloads/` | Case inputs, using Compose service names as host names                                            |
+| `artifacts.txt`          | Pinned external artifacts with SHA-256 checksums                                                  |
+| `runner/Dockerfile`      | Java 27 image (Eclipse Temurin 27, like the application image) containing the binary distribution |
 
 **1. Stack file.** `common.yaml` defines a `stack-ready` service, and both workers start only after it
 has completed successfully. A stack file adds the broker services and makes `stack-ready` wait until the

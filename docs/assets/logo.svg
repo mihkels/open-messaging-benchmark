@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<!-- OMB mark: a latency percentile ladder (p50, p99, p99.9, max); the tail is the signal. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="OMB">
+  <rect width="32" height="32" rx="7" fill="#10141a"/>
+  <rect x="6" y="7" width="9" height="3" rx="1.5" fill="#e7eaef"/>
+  <rect x="6" y="12.5" width="13" height="3" rx="1.5" fill="#e7eaef"/>
+  <rect x="6" y="18" width="16" height="3" rx="1.5" fill="#98a2b1"/>
+  <rect x="6" y="23.5" width="20" height="3" rx="1.5" fill="#f0b13a"/>
+</svg>

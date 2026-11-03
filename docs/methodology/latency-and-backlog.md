@@ -63,7 +63,8 @@ Consequences:
 - **Driver differences.** Some drivers use a broker-assigned timestamp, some use the producer's,
   and some have coarser resolution. See the "Semantics" section of each
   [driver page](../drivers/index.md).
-- **Range.** Values up to 12 hours are recorded, so backlog drains are measured.
+- **Range.** End-to-end values up to 12 hours can be recorded, so backlog drains are measured; a
+  larger value fails the run. Publish latency and publish delay are capped at 60 seconds.
 
 ## Backlog
 
@@ -72,6 +73,10 @@ The backlog is the number of messages published but not yet received, counted pe
 ```text
 backlog = subscriptionsPerTopic × messages published − messages received
 ```
+
+Messages published counts only successful sends. Both totals count from the start of load,
+including warm-up and the readiness probe; resetting statistics for measurement resets only the
+latency histograms.
 
 It is reported every 10 seconds in the console and in the result's `backlog` series. A backlog that
 grows during a fixed-rate run means consumers cannot keep up with that rate.
@@ -83,8 +88,10 @@ consumers catch up. It requires a fixed `producerRate`.
 
 1. After warm-up, the coordinator starts backlog handling in the background and resets statistics
    for measurement. Pausing consumers and resetting statistics can overlap.
-2. Consumers are paused while producers continue at the target rate. Each consumer stops after
-   receiving one more message, so the backlog grows by almost the full publish rate.
+2. Consumers are paused while producers continue at the target rate: each consumer's receive
+   callback blocks after recording its next message, so the backlog grows by almost the full
+   publish rate. Messages already prefetched by the client library wait in the client, not in the
+   broker.
 3. When `backlog × message size` reaches `consumerBacklogSizeGB` (1 GB = 1024³ bytes), consumers
    resume. Producers keep publishing at the same rate throughout.
 4. The coordinator waits until the backlog falls to

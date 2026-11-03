@@ -73,7 +73,7 @@ Processes log to the console and to rolling files of up to 100 MB in their worki
 | Driver process started by either of them                                     | `benchmark-driver.log` |
 
 Driver process output is also forwarded to the parent's console. Useful messages include
-`Starting driver process for ...`, `All consumers are ready`, `Producing worker count: ...`,
+`Starting driver process for ...`, `All consumers are ready`, `Workers list - producers: ...`,
 `Failed to run the workload ...` and client library warnings about timeouts or disconnects.
 
 ## JVM and garbage collection
@@ -104,5 +104,6 @@ Collect at least:
 - Clock offset between hosts when measuring end-to-end latency across machines.
 
 Align the time ranges of these metrics with the run's measured period, which starts after the
-warm-up and, for backlog workloads, after the drain. See
+warm-up. For backlog workloads it includes the backlog build-up and drain, followed by
+`testDurationMinutes`. See
 [Benchmark design](../methodology/benchmark-design.md).

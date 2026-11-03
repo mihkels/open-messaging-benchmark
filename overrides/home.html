@@ -1,0 +1,236 @@
+{#-
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+  Landing page template, selected for the home page by overrides/main.html. The
+  Markdown body of index.md is not rendered here; it stays in the search index.
+-#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <style>
+    .md-main { display: none; }
+  </style>
+{% endblock %}
+
+{% block tabs %}
+{{ super() }}
+<div class="omb-home">
+
+  <section class="omb-hero" aria-labelledby="omb-title">
+    <div class="omb-wrap">
+      <div>
+        <p class="omb-eyebrow">OpenMessaging Benchmark &middot; maintained fork</p>
+        <h1 id="omb-title">Benchmark any messaging system with <em>the same workload</em></h1>
+        <p class="omb-lede">
+          OMB drives a workload you define in YAML through Kafka, Pulsar, RabbitMQ and twelve other
+          systems. Every 10 seconds it records publish and consume rate, backlog, and latency
+          percentiles, then writes the whole run to a JSON result.
+        </p>
+        <div class="omb-ctas">
+          <a class="omb-btn omb-btn--primary" href="{{ 'getting-started/quickstart/' | url }}">Run the quickstart</a>
+          <a class="omb-btn" href="{{ config.repo_url }}">View on GitHub</a>
+        </div>
+        <ul class="omb-facts">
+          <li><b>15</b> driver plugins</li>
+          <li><b>Java 27</b> runtime</li>
+          <li><b>Apache-2.0</b> license</li>
+        </ul>
+      </div>
+      {% include "partials/omb-demo-terminal.html" %}
+    </div>
+  </section>
+
+  <section class="omb-section" aria-labelledby="omb-measures">
+    <div class="omb-wrap">
+      <p class="omb-kicker">What a run records</p>
+      <h2 id="omb-measures">Rates, backlog and three kinds of latency</h2>
+      <p class="omb-section__intro">
+        The coordinator samples every producer and consumer every 10 seconds and keeps full
+        HdrHistogram percentiles for the measured period. A healthy run shows the offered rate met,
+        a flat backlog and a publish delay close to zero.
+        <a href="{{ 'getting-started/understanding-your-first-run/' | url }}">Reading a result</a>
+      </p>
+      <ul class="omb-metrics">
+        <li>
+          <span class="unit">msg/s &middot; MB/s</span>
+          <h3>Message rates</h3>
+          <p>Publish rate: messages the broker acknowledged. Consume rate: messages consumers received.</p>
+        </li>
+        <li>
+          <span class="unit">messages</span>
+          <h3>Backlog</h3>
+          <p>Sent but not yet received, per subscription. Growth means consumers fall behind.</p>
+        </li>
+        <li>
+          <span class="unit">ms &middot; p50 &hellip; max</span>
+          <h3>Publish latency</h3>
+          <p>From the start of the send call until the broker acknowledges the message.</p>
+        </li>
+        <li>
+          <span class="unit">&micro;s &middot; p50 &hellip; max</span>
+          <h3>Publish delay</h3>
+          <p>How late the load generator sent each message against its schedule.</p>
+        </li>
+        <li>
+          <span class="unit">ms &middot; p50 &hellip; max</span>
+          <h3>End-to-end latency</h3>
+          <p>From the producer timestamp until a consumer receives the message.</p>
+        </li>
+      </ul>
+      {% include "partials/omb-demo-charts.html" %}
+    </div>
+  </section>
+
+  <section class="omb-section" aria-labelledby="omb-how">
+    <div class="omb-wrap omb-arch">
+      <figure>
+        <svg viewBox="0 0 560 330" role="img" aria-labelledby="omb-arch-title">
+          <title id="omb-arch-title">The coordinator sends the workload to workers over HTTP; each worker runs the driver plugin in its own JVM, which talks to the messaging system.</title>
+          <defs>
+            <marker id="omb-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0,0 L8,4 L0,8 z"/></marker>
+            <marker id="omb-ah-d" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow--data" d="M0,0 L8,4 L0,8 z"/></marker>
+          </defs>
+
+          <rect class="box" x="10" y="20" width="160" height="62" rx="6"/>
+          <text class="t-sub" x="24" y="42">driver.yaml</text>
+          <text class="t-sub" x="24" y="60">workload.yaml</text>
+          <text class="t-sub" x="24" y="74" style="opacity:.7">your inputs</text>
+
+          <rect class="box box--hot" x="10" y="130" width="160" height="70" rx="6"/>
+          <text class="t" x="24" y="156">Coordinator</text>
+          <text class="t-sub" x="24" y="174">bin/benchmark</text>
+          <text class="t-sub" x="24" y="190">&rarr; result.json</text>
+
+          <path class="wire" d="M90 82 V126" marker-end="url(#omb-ah)"/>
+
+          <rect class="box" x="230" y="40" width="150" height="110" rx="6"/>
+          <text class="t" x="244" y="64">Worker 1</text>
+          <text class="t-sub" x="244" y="81">bin/benchmark-worker</text>
+          <rect class="box box--plugin" x="244" y="94" width="122" height="42" rx="4"/>
+          <text class="t-sub" x="256" y="112">driver JVM</text>
+          <text class="t-sub" x="256" y="127">plugin bundle</text>
+
+          <rect class="box" x="230" y="180" width="150" height="110" rx="6"/>
+          <text class="t" x="244" y="204">Worker 2</text>
+          <text class="t-sub" x="244" y="221">bin/benchmark-worker</text>
+          <rect class="box box--plugin" x="244" y="234" width="122" height="42" rx="4"/>
+          <text class="t-sub" x="256" y="252">driver JVM</text>
+          <text class="t-sub" x="256" y="267">plugin bundle</text>
+
+          <path class="wire" d="M170 155 C200 155 200 95 226 95" marker-end="url(#omb-ah)"/>
+          <path class="wire" d="M170 175 C200 175 200 235 226 235" marker-end="url(#omb-ah)"/>
+          <text class="t-sub" x="182" y="170">HTTP</text>
+
+          <rect class="box" x="440" y="110" width="110" height="110" rx="6"/>
+          <text class="t" x="454" y="136">Messaging</text>
+          <text class="t" x="454" y="153">system</text>
+          <text class="t-sub" x="454" y="176">Kafka, Pulsar,</text>
+          <text class="t-sub" x="454" y="191">RabbitMQ, &hellip;</text>
+
+          <path class="wire wire--data" d="M366 115 C405 115 405 150 436 150" marker-end="url(#omb-ah-d)"/>
+          <path class="wire wire--data" d="M366 255 C405 255 405 185 436 185" marker-end="url(#omb-ah-d)"/>
+          <text class="t-sub" x="392" y="94">produce / consume</text>
+        </svg>
+      </figure>
+      <div>
+        <p class="omb-kicker">How a run works</p>
+        <h2 id="omb-how">One coordinator, any number of workers</h2>
+        <ol>
+          <li><b>Describe the system and the load.</b> A driver YAML picks the plugin and broker settings; a workload YAML sets topics, partitions, message size, rate and duration.</li>
+          <li><b>The coordinator distributes it.</b> <code>bin/benchmark</code> creates topics, producers and consumers on each worker, or runs them itself in local mode.</li>
+          <li><b>Each driver runs isolated.</b> Workers start the selected plugin in a child JVM that holds only that driver's libraries.</li>
+          <li><b>Statistics come back every 10 seconds.</b> At the end the coordinator aggregates percentiles and writes a JSON result.</li>
+        </ol>
+        <p class="omb-caption"><a href="{{ 'development/architecture/' | url }}">Architecture</a> &middot; <a href="{{ 'getting-started/distributed-runs/' | url }}">Distributed runs</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="omb-section" aria-labelledby="omb-drv">
+    <div class="omb-wrap">
+      <p class="omb-kicker">Supported systems</p>
+      <h2 id="omb-drv">15 driver plugins, one workload format</h2>
+      <p class="omb-section__intro">
+        Each page covers broker setup, a minimal configuration, every setting the driver reads, and
+        how topics, keys and acknowledgements map onto the system.
+        <a href="{{ 'drivers/' | url }}">Compare drivers</a>
+      </p>
+      {% include "partials/omb-drivers.html" %}
+      <p class="omb-tm">Product names and logos are trademarks of their respective owners and are used only to identify supported systems. Logos from Simple Icons.</p>
+    </div>
+  </section>
+
+  <section class="omb-section" aria-labelledby="omb-fork">
+    <div class="omb-wrap">
+      <p class="omb-kicker">Why this fork</p>
+      <h2 id="omb-fork">Kept current, tested against real brokers</h2>
+      <ul class="omb-why">
+        <li>
+          <h3>Current Java and clients</h3>
+          <p>Builds and runs on Java 27 with up-to-date client libraries, while tracking upstream OpenMessaging Benchmark.</p>
+        </li>
+        <li>
+          <h3>Drivers as isolated plugins</h3>
+          <p>Every driver ships as a plugin bundle and runs in its own JVM, so client libraries never collide. <a href="{{ 'reference/runtime-and-plugins/' | url }}">Runtime and plugins</a></p>
+        </li>
+        <li>
+          <h3>Regression suite per plugin</h3>
+          <p>A Docker Compose suite runs every plugin end to end against its broker and writes HTML and JUnit reports. <a href="{{ 'development/testing-a-driver/' | url }}">Testing a driver</a></p>
+        </li>
+        <li>
+          <h3>Bring your own driver</h3>
+          <p>Build a plugin outside this repository against the driver API and drop it on the plugin path. <a href="{{ 'development/implementing-a-driver/' | url }}">Implementing a driver</a></p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="omb-section" aria-labelledby="omb-start">
+    <div class="omb-wrap">
+      <p class="omb-kicker">Where to start</p>
+      <h2 id="omb-start">Pick the page for what you need</h2>
+      <ul class="omb-paths">
+        <li><a href="{{ 'getting-started/quickstart/' | url }}"><span class="omb-paths__want">Get a first result in a few commands</span><span class="omb-paths__go">Quickstart &rarr;</span></a></li>
+        <li><a href="{{ 'getting-started/using-your-broker/' | url }}"><span class="omb-paths__want">Benchmark a broker you already run</span><span class="omb-paths__go">Your broker &rarr;</span></a></li>
+        <li><a href="{{ 'getting-started/understanding-your-first-run/' | url }}"><span class="omb-paths__want">Understand what the output means</span><span class="omb-paths__go">First run &rarr;</span></a></li>
+        <li><a href="{{ 'getting-started/distributed-runs/' | url }}"><span class="omb-paths__want">Spread load across machines</span><span class="omb-paths__go">Distributed &rarr;</span></a></li>
+        <li><a href="{{ 'methodology/benchmark-design/' | url }}"><span class="omb-paths__want">Design a meaningful experiment</span><span class="omb-paths__go">Methodology &rarr;</span></a></li>
+        <li><a href="{{ 'reference/workload-schema/' | url }}"><span class="omb-paths__want">Look up a workload field</span><span class="omb-paths__go">Reference &rarr;</span></a></li>
+        <li><a href="{{ 'guides/containers-and-kubernetes/' | url }}"><span class="omb-paths__want">Run in containers or Kubernetes</span><span class="omb-paths__go">Containers &rarr;</span></a></li>
+        <li><a href="{{ 'development/architecture/' | url }}"><span class="omb-paths__want">Write or package a new driver</span><span class="omb-paths__go">Development &rarr;</span></a></li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="omb-policy">
+    <div class="omb-wrap">
+      <p>
+        The project publishes no benchmark results and no comparisons between systems. The numbers
+        on this page come from one quickstart run on a laptop and only show what a result contains.
+        Run OMB on hardware and configurations that match your own use case, and read
+        <a href="{{ 'methodology/fair-comparisons/' | url }}">Fair comparisons</a> before comparing
+        drivers.
+      </p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block content %}{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ 'assets/javascripts/home.js' | url }}"></script>
+{% endblock %}

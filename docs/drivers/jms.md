@@ -80,9 +80,10 @@ only for annotation-only jars is the highest version chosen, with a warning. See
 Without a delegate, `createTopic` does nothing: the broker must create topics on first use, and the
 topic prefix is `topicNamePrefix`.
 
-## Minimal configuration and run
+## Minimal configuration and benchmark command
 
-`driver-jms/artemis-jms.yaml`, which needs only the Artemis provider jar:
+Copy `driver-jms/artemis-jms.yaml` to `my-artemis-jms.yaml` and give it a distinct `name` (the shipped
+file uses `name: JMS`). It needs only the Artemis provider jar:
 
 ```yaml
 name: JMS-Artemis

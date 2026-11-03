@@ -40,13 +40,7 @@ public record PravegaConfig(
         // Jackson will deserialize nested objects into Maps, which we can use to create the nested
         // records.
         PravegaClientConfig clientConfig =
-                new PravegaClientConfig(
-                        (String)
-                                ((Map<String, Object>) properties.getOrDefault("client", Collections.emptyMap()))
-                                        .get("controllerURI"),
-                        (String)
-                                ((Map<String, Object>) properties.getOrDefault("client", Collections.emptyMap()))
-                                        .get("scopeName"));
+                PravegaClientConfig.fromMap((Map<String, Object>) properties.get("client"));
         // YAML scalars such as "True" may arrive as strings, so parse rather than cast
         PravegaWriterConfig writerConfig =
                 new PravegaWriterConfig(

@@ -36,5 +36,10 @@ benchmark-driver.log*
 site/
 .venv/
 
+# Documentation site assets and the recorded landing page demo
+!docs/assets/**/*.svg
+!docs/assets/*.svg
+!docs/demo/*.json
+
 # Project-local kubeconfig written by the mise k8s tasks
 .kube/

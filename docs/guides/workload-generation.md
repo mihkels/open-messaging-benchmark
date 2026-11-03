@@ -57,8 +57,12 @@ The other fields are single values copied into every workload. The example produ
 `nameFormat` builds each workload's `name` and its file name, `<name>.yaml`. Every supported workload
 field in the template can be used as `${field}`; `nameFormat` itself and the unsupported fields cannot.
 Counts are abbreviated (`50000` becomes `50k`, `2000000` becomes `2m`), and a `producerRate` of
-10,000,000 or more is written as `max-rate`. Without `nameFormat`, the default is the format shown
-above.
+10,000,000 or more is written as `max-rate`.
+
+Always set `nameFormat`. Without it every workload is written to `null.yaml` and overwrites the
+previous one. Also set `keyDistributor`, `testDurationMinutes` and `warmupDurationMinutes`
+explicitly: if you leave them out, the generated files contain `keyDistributor: null`,
+`testDurationMinutes: 0` (the run never ends) and `warmupDurationMinutes: 0`.
 
 Because results are named after the workload file, a descriptive format makes result files easy to
 group later.

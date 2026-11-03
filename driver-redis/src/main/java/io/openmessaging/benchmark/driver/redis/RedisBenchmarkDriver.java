@@ -119,8 +119,8 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
                                 this.clientConfig.redisHost,
                                 this.clientConfig.redisPort,
                                 2000,
-                                this.clientConfig.redisPass,
-                                this.clientConfig.redisUser);
+                                this.clientConfig.redisUser,
+                                this.clientConfig.redisPass);
             } else {
                 jedisPool =
                         new JedisPool(

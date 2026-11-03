@@ -140,7 +140,7 @@ If consumers never become ready, the coordinator stops after 60 seconds with
 
 ## 6. Clean up
 
-Each run creates new topics with random names (for example `test-topic-<random>-0000`; the prefix is
+Each run creates new topics with random names (for example `test-topic-0000000-<random>`; the prefix is
 driver-specific). Most drivers do not delete them. Remove them with your broker's tools, or use a
 dedicated namespace, virtual host or scope for benchmarks. The driver pages describe what each
 driver creates.

@@ -18,13 +18,12 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClientConfig;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,10 +49,6 @@ import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     private DefaultMQAdminExt rmqAdmin;
@@ -75,7 +70,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         DefaultMQAdminExt admin = newAdmin(rpcHook);
         try {
             admin.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-            admin.setInstanceName("AdminInstance-" + getRandomString());
+            admin.setInstanceName("AdminInstance-" + ResourceNames.randomSuffix());
             admin.start();
         } catch (MQClientException e) {
             shutdownAfterFailure(admin::shutdown, e);
@@ -177,9 +172,9 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         if (rmqProducer == null) {
             DefaultMQProducer producer = null;
             try {
-                producer = newProducer("ProducerGroup_" + getRandomString(), rpcHook);
+                producer = newProducer("ProducerGroup_" + ResourceNames.randomSuffix(), rpcHook);
                 producer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-                producer.setInstanceName("ProducerInstance" + getRandomString());
+                producer.setInstanceName("ProducerInstance" + ResourceNames.randomSuffix());
                 if (null != this.rmqClientConfig.vipChannelEnabled) {
                     producer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
                 }
@@ -228,7 +223,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         try {
             rmqConsumer = newConsumer(subscriptionName, rpcHook);
             rmqConsumer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-            rmqConsumer.setInstanceName("ConsumerInstance" + getRandomString());
+            rmqConsumer.setInstanceName("ConsumerInstance" + ResourceNames.randomSuffix());
             if (null != this.rmqClientConfig.vipChannelEnabled) {
                 rmqConsumer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
             }
@@ -301,25 +296,8 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(RocketMQClientConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static RocketMQClientConfig readConfig(Path configurationFile) throws IOException {
-        try (var input = Files.newInputStream(configurationFile)) {
-            return reader.readValue(input);
-        }
-    }
-
-    private static final Random random = new Random();
-
-    private static String getRandomString() {
-        byte[] buffer = new byte[5];
-        random.nextBytes(buffer);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
+        return DriverConfigs.read(configurationFile, RocketMQClientConfig.class);
     }
 
     private static final Logger log = LoggerFactory.getLogger(RocketMQBenchmarkDriver.class);

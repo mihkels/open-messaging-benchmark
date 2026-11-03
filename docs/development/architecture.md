@@ -69,15 +69,14 @@ creates a single `Worker`:
 
 - If `--workers` or `--workers-file` is given, or a `workers.yaml` file exists in the working
   directory, it creates one `HttpWorkerClient` per worker URL and wraps them in a
-  `DistributedWorkersEnsemble`. In this mode `--legacy-driver-name` is ignored and a warning is logged.
-- Otherwise it creates a `ProcessWorker` in its own JVM. This is **local mode**: the coordinator
-  supervises one driver process itself.
+  `DistributedWorkersEnsemble`. In this mode `--driver-location` is ignored and a warning is logged.
+- Otherwise it creates a `ProcessWorker` in its own JVM, passing it the `--driver-location` path if
+  one is given. This is **local mode**: the coordinator supervises one driver process itself.
 
 For each workload and each driver file, the coordinator:
 
 1. calls `stopAll()` to stop any workload still running;
-2. calls `initializeDriver(driverConfig, driverLocation)`, where `driverLocation` is the
-   `--legacy-driver-name` path or `null`;
+2. calls `initializeDriver(driverConfig)`;
 3. runs a `WorkloadGenerator`, writes the `TestResult` as JSON (to `--output`, otherwise
    `<workload>-<driver name>-<yyyy-MM-dd-HH-mm-ss>.json`), and calls `stopAll()` again.
 
@@ -177,6 +176,9 @@ Calls are routed as follows:
 | `pauseConsumers`, `resumeConsumers`                            | consumer workers                                                                             |
 | `getPeriodStats`, `getCumulativeLatencies`, `getCountersStats` | every worker, with the results summed                                                        |
 
+Calls sent to more than one worker run concurrently. The ensemble waits for all of them and then
+reports the first failure, in worker order, with the others attached as suppressed exceptions.
+
 Two consequences matter for driver authors:
 
 - Producers and consumers of the same topic run in **different driver processes**, usually on
@@ -192,7 +194,7 @@ runs the selected driver in a child JVM. On every `initializeDriver` call it:
 
 1. stops the previous driver process, if one is running;
 2. reads `driverClass` from the driver YAML and resolves the plugin bundle(s) through
-   `PluginRegistry`, or from the given location when `--legacy-driver-name` is used in local mode;
+   `PluginRegistry`, or from its driver location when `--driver-location` is used in local mode;
 3. builds the classpath with `RuntimeClasspath` and logs any warnings;
 4. starts `java` from its own `java.home`. It passes an argument file in a temporary `omb-driver-*`
    directory, removes the `CLASSPATH` environment variable, and inherits stdout and stderr;

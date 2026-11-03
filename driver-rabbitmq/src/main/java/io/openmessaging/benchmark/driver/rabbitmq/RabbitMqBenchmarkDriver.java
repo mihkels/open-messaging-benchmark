@@ -27,12 +27,11 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -45,10 +44,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
 
@@ -64,9 +59,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
-        try (InputStream input = Files.newInputStream(configurationFile)) {
-            config = reader.readValue(input);
-        }
+        config = DriverConfigs.read(configurationFile, RabbitMqConfig.class);
         config.validate();
     }
 
@@ -283,13 +276,6 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
             log.warn("Could not close a resource created after cancellation", e);
         }
     }
-
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(RabbitMqConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqBenchmarkDriver.class);
 

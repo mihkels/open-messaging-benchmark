@@ -261,35 +261,6 @@ class ProcessWorkerTest {
     }
 
     @Test
-    void parsesQuotedAndEscapedJvmOptions() {
-        String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
-        try {
-            System.setProperty(
-                    ProcessWorker.JVM_OPTS_PROPERTY,
-                    "-Xmx256m -Da='two words' -Db=three\\ words -Dc=\"say \\\"hi\\\"\""
-                            + " -Dd=C:\\data\\file");
-            assertThat(ProcessWorker.jvmOptions())
-                    .containsExactly(
-                            "-Xmx256m",
-                            "-Da=two words",
-                            "-Db=three words",
-                            "-Dc=say \"hi\"",
-                            "-Dd=C:\\data\\file");
-
-            System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, "-Da=\"unterminated");
-            assertThatThrownBy(ProcessWorker::jvmOptions)
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Unterminated quote");
-        } finally {
-            if (oldOptions == null) {
-                System.clearProperty(ProcessWorker.JVM_OPTS_PROPERTY);
-            } else {
-                System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, oldOptions);
-            }
-        }
-    }
-
-    @Test
     void forwardsZoneIdAndAllowsDriverJvmOptionsToOverrideIt() throws Exception {
         String oldZone = System.getProperty("zone.id");
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);

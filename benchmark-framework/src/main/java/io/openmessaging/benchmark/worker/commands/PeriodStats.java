@@ -83,18 +83,6 @@ public record PeriodStats(
      * @return A new PeriodStats instance with the combined values.
      */
     public PeriodStats plus(PeriodStats other) {
-        Histogram combinedPublishLatency = new Histogram(5);
-        combinedPublishLatency.add(this.publishLatency);
-        combinedPublishLatency.add(other.publishLatency);
-
-        Histogram combinedPublishDelayLatency = new Histogram(5);
-        combinedPublishDelayLatency.add(this.publishDelayLatency);
-        combinedPublishDelayLatency.add(other.publishDelayLatency);
-
-        Histogram combinedEndToEndLatency = new Histogram(5);
-        combinedEndToEndLatency.add(this.endToEndLatency);
-        combinedEndToEndLatency.add(other.endToEndLatency);
-
         return new PeriodStats(
                 this.messagesSent + other.messagesSent,
                 this.messageSendErrors + other.messageSendErrors,
@@ -104,9 +92,16 @@ public record PeriodStats(
                 this.totalMessagesSent + other.totalMessagesSent,
                 this.totalMessageSendErrors + other.totalMessageSendErrors,
                 this.totalMessagesReceived + other.totalMessagesReceived,
-                combinedPublishLatency,
-                combinedPublishDelayLatency,
-                combinedEndToEndLatency);
+                combine(this.publishLatency, other.publishLatency),
+                combine(this.publishDelayLatency, other.publishDelayLatency),
+                combine(this.endToEndLatency, other.endToEndLatency));
+    }
+
+    private static Histogram combine(Histogram first, Histogram second) {
+        Histogram combined = new Histogram(5);
+        combined.add(first);
+        combined.add(second);
+        return combined;
     }
 
     /** Combines immutable snapshots without allocating intermediate combined snapshots. */

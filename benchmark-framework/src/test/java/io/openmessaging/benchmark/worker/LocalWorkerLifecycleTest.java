@@ -104,6 +104,40 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    void producersDoNotShareAKeyDistributor() throws Exception {
+        int producerCount = Runtime.getRuntime().availableProcessors() * 2 + 1;
+        int keysPerProducer = 50;
+        List<List<String>> keys = new ArrayList<>();
+        List<BenchmarkProducer> producers = new ArrayList<>();
+        for (int i = 0; i < producerCount; i++) {
+            List<String> producerKeys = java.util.Collections.synchronizedList(new ArrayList<>());
+            keys.add(producerKeys);
+            BenchmarkProducer producer = mock(BenchmarkProducer.class);
+            when(producer.sendAsync(any(), any()))
+                    .thenAnswer(
+                            invocation -> {
+                                java.util.Optional<String> key = invocation.getArgument(0);
+                                producerKeys.add(key.orElseThrow());
+                                return CompletableFuture.completedFuture(null);
+                            });
+            producers.add(producer);
+        }
+        try (LocalWorker worker = worker(new Scenario(producers), Duration.ofSeconds(2))) {
+            worker.createProducers(java.util.Collections.nCopies(producerCount, "topic"));
+            worker.startLoad(
+                    new ProducerWorkAssignment(
+                            List.of(new byte[8]), 1_000_000, KeyDistributorType.KEY_ROUND_ROBIN));
+            waitUntil(() -> keys.stream().allMatch(k -> k.size() >= keysPerProducer));
+            worker.stopAll();
+        }
+
+        List<String> expected = List.copyOf(keys.getFirst().subList(0, keysPerProducer));
+        for (List<String> producerKeys : keys) {
+            assertThat(producerKeys.subList(0, keysPerProducer)).containsExactlyElementsOf(expected);
+        }
+    }
+
+    @Test
     void ignoresCallbacksFromAnEarlierRun() throws Exception {
         BenchmarkConsumer firstConsumer = mock(BenchmarkConsumer.class);
         Scenario first = new Scenario(List.of());

@@ -8,6 +8,8 @@ target
 *.svg
 core/*.json
 *.json
+# Test fixtures, unlike benchmark results, belong in the repository
+!**/src/test/resources/**/*.json
 *.retry
 *.pem
 *.hcl

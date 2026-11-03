@@ -26,12 +26,12 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.bookkeeper.stats.StatsLoggerAdaptor;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -42,18 +42,11 @@ import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Benchmark driver testing distributedlog. */
 public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(DlogBenchmarkProducer.class);
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper.readerFor(Config.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private Config config;
     private Namespace namespace;
@@ -66,7 +59,7 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry meterRegistry) throws IOException {
-        config = reader.readValue(Files.newInputStream(configurationFile));
+        config = DriverConfigs.read(configurationFile, Config.class);
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         try {

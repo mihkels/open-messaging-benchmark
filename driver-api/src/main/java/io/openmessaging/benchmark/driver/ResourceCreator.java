@@ -87,7 +87,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
     public CompletableFuture<List<C>> create(List<R> resources) {
         List<R> requests = List.copyOf(resources);
         if (requests.isEmpty()) {
-            return ResourceBatch.completed(List.of());
+            return ResourceComposition.completed(List.of());
         }
         return new Operation(requests).start();
     }
@@ -110,7 +110,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             CompletableFuture<List<R>> requests,
             Function<R, CompletableFuture<C>> createOne,
             Function<List<C>, T> aggregate) {
-        return ResourceBatch.compose(requests, createOne, aggregate);
+        return ResourceComposition.compose(requests, createOne, aggregate);
     }
 
     private final class Operation {
@@ -204,7 +204,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             Throwable cause =
                     error == null && resource == null
                             ? new NullPointerException("creation completed with a null resource")
-                            : error == null ? null : ResourceBatch.unwrap(error);
+                            : error == null ? null : Failures.unwrap(error);
             if (cause == null) {
                 succeeded.incrementAndGet();
                 batch.succeed(attempt.index, resource);

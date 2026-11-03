@@ -19,50 +19,43 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
 public interface Worker extends AutoCloseable {
 
-    void initializeDriver(Path driverConfigFile) throws Exception;
-
     /**
-     * Initializes the driver, optionally loading it from an explicit plugin bundle directory or jar
-     * instead of the installed plugin bundles.
+     * Initializes the driver selected by a driver configuration file. Where the driver is loaded from
+     * is decided by the worker itself, for example by {@link ProcessWorker}'s driver location.
      *
      * @param driverConfigFile the driver configuration file
-     * @param driverLocation a plugin bundle directory or jar, or {@code null} to use installed
-     *     bundles
      * @throws Exception if the driver cannot be initialized
      */
-    default void initializeDriver(Path driverConfigFile, Path driverLocation) throws Exception {
-        initializeDriver(driverConfigFile);
-    }
+    void initializeDriver(Path driverConfigFile) throws Exception;
 
-    List<String> createTopics(TopicsInfo topicsInfo) throws IOException;
+    List<String> createTopics(TopicsInfo topicsInfo);
 
-    void createProducers(List<String> topics) throws IOException;
+    void createProducers(List<String> topics);
 
-    void createConsumers(ConsumerAssignment consumerAssignment) throws IOException;
+    void createConsumers(ConsumerAssignment consumerAssignment);
 
-    void probeProducers() throws IOException;
+    void probeProducers();
 
-    void startLoad(ProducerWorkAssignment producerWorkAssignment) throws IOException;
+    void startLoad(ProducerWorkAssignment producerWorkAssignment);
 
-    void adjustPublishRate(double publishRate) throws IOException;
+    void adjustPublishRate(double publishRate);
 
-    void pauseConsumers() throws IOException;
+    void pauseConsumers();
 
-    void resumeConsumers() throws IOException;
+    void resumeConsumers();
 
-    CountersStats getCountersStats() throws IOException;
+    CountersStats getCountersStats();
 
-    PeriodStats getPeriodStats() throws IOException;
+    PeriodStats getPeriodStats();
 
-    CumulativeLatencies getCumulativeLatencies() throws IOException;
+    CumulativeLatencies getCumulativeLatencies();
 
-    void resetStats() throws IOException;
+    void resetStats();
 
     void stopAll();
 

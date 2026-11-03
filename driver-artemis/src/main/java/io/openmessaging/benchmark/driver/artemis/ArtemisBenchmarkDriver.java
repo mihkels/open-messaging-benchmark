@@ -19,8 +19,8 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.DriverConfigs;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -33,11 +33,8 @@ import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.apache.activemq.artemis.api.core.client.ServerLocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ArtemisConfig config;
@@ -197,14 +194,8 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         return failure;
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    private static final ObjectReader reader =
-            mapper
-                    .readerFor(ArtemisConfig.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
     private static ArtemisConfig readConfig(Path configurationFile) throws IOException {
-        return reader.readValue(Files.newInputStream(configurationFile));
+        return DriverConfigs.read(configurationFile, ArtemisConfig.class);
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

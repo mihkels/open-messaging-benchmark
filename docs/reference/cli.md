@@ -34,10 +34,11 @@ bin/benchmark [options] <workload.yaml>...
 | `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                  |
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                           |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to CSV and exit                                                                       |
-| `--legacy-driver-name`  | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins |
+| `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins |
 | `-h`, `--help`          |                       | Print usage and exit                                                                                                                |
 
-Positional arguments are workload files.
+Positional arguments are workload files. `--legacy-driver-name` is accepted as a deprecated alias of
+`--driver-location`.
 
 ### Behavior
 
@@ -54,8 +55,9 @@ Positional arguments are workload files.
   `Failed to run the workload '<name>' for driver '<config>'` with the cause and continues with the
   next combination when it is safe to do so. The process exits with a non-zero status if any
   combination or required cleanup fails; results from successful combinations remain available.
-- **Validation errors** such as unknown options, or `--workers` combined with `--workers-file`,
-  print a message and exit with a non-zero status. `--help` also exits with a non-zero status.
+- **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
+  workload files, no `--drivers`, or an invalid workload file print a message and exit with a
+  non-zero status before any broker resources are created. `--help` prints usage and exits successfully.
 - **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.
 
 ### Examples

@@ -80,7 +80,7 @@ public final class BenchmarkWorker {
 
         if (arguments.help) {
             jc.usage();
-            System.exit(-1);
+            System.exit(0);
         }
 
         if (arguments.statsPort == arguments.httpPort) {
@@ -89,7 +89,6 @@ public final class BenchmarkWorker {
             System.exit(-1);
         }
 
-        // Replace BookKeeper stats with Micrometer
         PrometheusMeterRegistry prometheusRegistry =
                 new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         new JvmResourceMetrics().bindTo(prometheusRegistry, "supervisor");

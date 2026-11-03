@@ -108,12 +108,12 @@ rebuilt bundles to every worker. Matching descriptor or artifact versions alone 
 The JMS plugin loads `ext/*.jar` from its bundle. Copy a JMS provider's client jars into
 `drivers/driver-jms/ext/` before running. See [JMS](../drivers/jms.md).
 
-### --legacy-driver-name
+### --driver-location
 
-For local runs only, `--legacy-driver-name <path>` loads the driver from a specific location instead
+For local runs only, `--driver-location <path>` loads the driver from a specific location instead
 of the installed plugins. The path may be a plugin bundle directory, a driver module directory or a
 jar. It is ignored, with a warning, when remote workers are used, because workers load drivers from
-their own plugins.
+their own plugins. `--legacy-driver-name` is a deprecated alias.
 
 ## Logs
 

@@ -106,7 +106,8 @@ def render_terminal():
     for cls, text, delay in transcript_lines():
         classes = ("l " + cls).strip()
         rows.append(f'<span class="{classes}" data-d="{delay}">{html.escape(text)}</span>')
-    body = "\n".join(rows)
+    # No newlines between lines: each line is a block element inside <pre>.
+    body = "".join(rows)
     return HEADER + f"""<div class="omb-term">
   <div class="omb-term__bar">
     <span class="omb-term__dots" aria-hidden="true"><i></i><i></i><i></i></span>

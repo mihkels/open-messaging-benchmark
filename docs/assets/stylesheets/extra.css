@@ -12,6 +12,8 @@
  * limitations under the License.
  */
 
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&display=swap");
+
 /*
  * Layout concept: an instrument panel. A dark header band carries the run itself (terminal,
  * then the charts it produced); the rest of the page is a plain grid of reference cards.
@@ -87,6 +89,32 @@
 .md-typeset h1,
 .md-typeset h2 {
   text-wrap: balance;
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset h1 {
+  font-weight: 750;
+  font-stretch: 108%;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h2 {
+  font-weight: 650;
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+}
+
+/* Identifiers in tables (keys, class names, file names) wrap only between words; the table
+   scrolls sideways instead of splitting "partitionsPerTopic" in the middle. */
+.md-typeset table:not([class]) code {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.md-typeset table:not([class]) td {
+  min-width: 6rem;
 }
 
 /* ---------- Home page ---------- */
@@ -106,7 +134,8 @@
 }
 
 .omb-wrap {
-  max-width: 72rem;
+  /* Same width as Material's .md-grid, so the landing lines up with the header. */
+  max-width: 61rem;
   margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -140,7 +169,7 @@
   font-family: var(--omb-font-display);
   font-weight: 800;
   font-stretch: 112%;
-  font-size: clamp(2.2rem, 4.6vw, 3.6rem);
+  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
   line-height: 1.02;
   letter-spacing: -0.025em;
   margin: 0 0 1.25rem;
@@ -154,7 +183,7 @@
 }
 
 .omb-lede {
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   line-height: 1.6;
   color: var(--omb-band-muted);
   max-width: 34rem;
@@ -283,6 +312,10 @@
 .omb-term__body .cmd::before {
   content: "$ ";
   color: var(--omb-band-amber);
+}
+
+.omb-term__body .cmd.cont::before {
+  content: "  ";
 }
 
 .omb-term__body .cmd {

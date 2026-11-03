@@ -117,7 +117,9 @@ To add an in-tree driver module:
 1. Create the module (`driver-<name>`) and add it to the `<modules>` list of the root POM.
 2. Depend on `driver-api` with `provided` scope, so it is not copied into `lib/`. The worker supplies it.
 3. Add `src/main/plugin/plugin.yaml` like the one above.
-4. Build the reactor. The bundle appears in `driver-<name>/target/omb-plugin`, and the distribution
+4. Add the module to `package/pom.xml` as a `provided` dependency with a `*:*` exclusion, so the
+   reactor builds its bundle before the distribution is assembled.
+5. Build the reactor. The bundle appears in `driver-<name>/target/omb-plugin`, and the distribution
    copies it to `drivers/driver-<name>/`.
 
 Dependencies that the benchmark core already provides, such as Micrometer, can also be `provided`. If

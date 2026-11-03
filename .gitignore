@@ -30,3 +30,8 @@ benchmark-worker.log*
 benchmark-driver.log*
 site/
 .venv/
+
+# Documentation site assets and the recorded landing page demo
+!docs/assets/**/*.svg
+!docs/assets/*.svg
+!docs/demo/*.json

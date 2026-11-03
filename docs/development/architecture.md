@@ -89,9 +89,9 @@ For each workload and each driver file, the coordinator:
 4. The readiness check: `probeProducers()`, then a poll of the counters every 2 s until at least
    `topics × subscriptionsPerTopic` messages have been received. After 60 s it fails with
    `Timed out waiting for consumers to be ready`.
-5. `startLoad` with the prepared payloads, publish rate and key distributor.
+5. When `producerRate` is 0, the coordinator starts a rate controller that calls
+   `adjustPublishRate`. Then `startLoad` with the prepared payloads, publish rate and key distributor.
 6. Optional warm-up and optional backlog build and drain (`pauseConsumers` / `resumeConsumers`).
-   When `producerRate` is 0, a rate controller also calls `adjustPublishRate`.
 7. `resetStats`, the measured phase (periodic `getPeriodStats`, then a final
    `getCumulativeLatencies`), and `stopAll`.
 
@@ -190,22 +190,26 @@ Two consequences matter for driver authors:
 ## Isolated driver JVM (`ProcessWorker` and `DriverProcessMain`)
 
 [`ProcessWorker`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/ProcessWorker.java)
-runs the selected driver in a child JVM. On every `initializeDriver` call it:
+runs the selected driver in a child JVM. It resolves the bundle(s) and classpath and delegates the
+child JVM to the package-private `DriverProcess`. On every `initializeDriver` call:
 
-1. stops the previous driver process, if one is running;
-2. reads `driverClass` from the driver YAML and resolves the plugin bundle(s) through
+1. the previous driver process is stopped, if one is running;
+2. `ProcessWorker` reads `driverClass` from the driver YAML and resolves the plugin bundle(s) through
    `PluginRegistry`, or from its driver location when `--driver-location` is used in local mode;
-3. builds the classpath with `RuntimeClasspath` and logs any warnings;
-4. starts `java` from its own `java.home`. It passes an argument file in a temporary `omb-driver-*`
-   directory, removes the `CLASSPATH` environment variable, and inherits stdout and stderr;
-5. waits up to `omb.driver.startupTimeoutSeconds` (default 120 s) for the child to write its port
-   file;
-6. sends `POST /initialize-driver-local` with the path of the driver YAML.
+3. `ProcessWorker` builds the classpath with `RuntimeClasspath` and logs any warnings;
+4. `DriverProcess` starts `java` from its own `java.home`. It passes an argument file in a
+   temporary `omb-driver-*` directory, removes the `CLASSPATH` environment variable, and inherits
+   stdout and stderr;
+5. `DriverProcess` waits up to `omb.driver.startupTimeoutSeconds` (default 120 s) for the child to
+   write its port file;
+6. `ProcessWorker` sends `POST /initialize-driver-local` with the path of the driver YAML.
 
 The child JVM options come from the `omb.driver.jvmOpts` system property or the
-`OMB_DRIVER_JVM_OPTS` environment variable. If neither is set, `ProcessWorker` uses its built-in
-defaults. The supervisor forwards its `log4j.configurationFile`, `log4j2.configurationFile` and
-`zone.id` system properties. It also sets `omb.log.name=benchmark-driver`, so the driver process logs
+`OMB_DRIVER_JVM_OPTS` environment variable. The launch scripts always set `OMB_DRIVER_JVM_OPTS` from
+`HEAP_OPTS` and `JVM_OPTS`. `JvmOptions.DEFAULTS` (G1, `--add-opens`, Netty flags, no heap size)
+apply only when the supervisor is started without the scripts; they are defined in `JvmOptions`. The
+supervisor forwards its `log4j.configurationFile`, `log4j2.configurationFile` and `zone.id` system
+properties. It also sets `omb.log.name=benchmark-driver`, so the driver process logs
 to `benchmark-driver.log` instead of `benchmark-worker.log`. All settings are listed in
 [Runtime and plugins](../reference/runtime-and-plugins.md).
 
@@ -223,7 +227,7 @@ Process lifetime:
 - `ProcessWorker.stopAll()` stops only the producers, consumers and driver inside the child. The
   process keeps running until the next driver is initialized or the worker is closed.
 - To terminate the child, the supervisor closes stdin and waits 10 s. If the process is still running,
-  it destroys it and waits another 10 s, then kills it forcibly.
+  it destroys it and waits 5 s, then kills it forcibly and waits another 5 s.
 - If a forwarded call fails and the child has exited, the error message includes the exit code.
 
 ## Plugin discovery and the shared runtime
@@ -282,6 +286,8 @@ Prometheus metrics are split between processes:
   can add its own metrics. The driver process serves this registry at `/metrics` on its loopback port.
 - The supervisor's `GET /metrics` returns the supervisor's own registry followed by a scrape of the
   driver process's `/metrics`. Before any driver has started, the driver part is empty.
+- Both registries also expose `omb_resource_*` JVM gauges labelled `role="supervisor"` or
+  `role="driver"`.
 - In local mode there is no supervisor HTTP server, so `/metrics` cannot be reached from outside the
   host.
 

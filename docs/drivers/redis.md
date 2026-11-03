@@ -32,9 +32,10 @@ Redis endpoint.
 ## Prerequisites and broker setup
 
 The driver needs one Redis server with Streams support (Redis 5.0 or later; tested with 7.4) reachable on its TCP
-port. If the server requires authentication, set `redisPass` and optionally `redisUser` (ACL user). The user needs
-the stream commands `XADD`, `XGROUP`, `XREADGROUP` and `XACK`. Nothing has to be created in advance: the driver
-creates streams and consumer groups on demand.
+port. If the server requires authentication, set `redisPass`. ACL user authentication with `redisUser` currently
+fails (see below), so use password-only (`requirepass`) authentication. The user needs the stream commands `XADD`,
+`XGROUP`, `XREADGROUP` and `XACK`. Nothing has to be created in advance: the driver creates streams and consumer
+groups on demand.
 
 The regression suite starts Redis from
 [`e2e-tests/compose/stacks/redis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/redis.yaml).
@@ -85,14 +86,14 @@ Install the plugin bundle on every worker, see [Runtime and plugins](../referenc
 
 All keys are read by `RedisClientConfig`. Unknown keys are ignored.
 
-|         Key         |  Type   | Default  |                                                    Description                                                    |
-|---------------------|---------|----------|-------------------------------------------------------------------------------------------------------------------|
-| `redisHost`         | string  | required | Redis host name or IP address.                                                                                    |
-| `redisPort`         | integer | required | Redis TCP port.                                                                                                   |
-| `jedisPoolMaxTotal` | integer | required | Maximum connections in the Jedis pool of one driver instance (one per worker), shared by producers and consumers. |
-| `jedisPoolMaxIdle`  | integer | required | Maximum idle connections kept in the pool.                                                                        |
-| `redisPass`         | string  | none     | Password. When unset, no authentication is sent.                                                                  |
-| `redisUser`         | string  | none     | ACL user name. Only used when `redisPass` is also set.                                                            |
+|         Key         |  Type   | Default  |                                                      Description                                                       |
+|---------------------|---------|----------|------------------------------------------------------------------------------------------------------------------------|
+| `redisHost`         | string  | required | Redis host name or IP address.                                                                                         |
+| `redisPort`         | integer | required | Redis TCP port.                                                                                                        |
+| `jedisPoolMaxTotal` | integer | required | Maximum connections in the Jedis pool of one driver instance (one per worker), shared by producers and consumers.      |
+| `jedisPoolMaxIdle`  | integer | required | Maximum idle connections kept in the pool.                                                                             |
+| `redisPass`         | string  | none     | Password. When unset, no authentication is sent.                                                                       |
+| `redisUser`         | string  | none     | ACL user name, used only with `redisPass`. Currently not working: the code passes the two to Jedis in the wrong order. |
 
 The connection and socket timeout is fixed at 2000 ms. Other pool settings are the Apache Commons Pool defaults;
 in particular a caller waits without a time limit when the pool is exhausted. There are no pass-through client
@@ -157,12 +158,14 @@ Every consumer holds a pool connection for up to one second per `XREADGROUP BLOC
 connection without a time limit. Size the pool above the number of consumers per worker plus the producers per
 worker. Larger pools mean more client connections on the Redis server.
 
-Authentication:
+Password-only authentication (`requirepass`):
 
 ```yaml
-redisUser: benchmark
 redisPass: secret
 ```
+
+> **Note:** Do not set `redisUser`. The current code passes `redisPass` and `redisUser` to Jedis in the
+> wrong order, so ACL user authentication fails.
 
 Producer concurrency is controlled by the workload (`producersPerTopic`, topics) rather than by a driver setting,
 because each producer sends one command at a time. Because Redis is single-node here, partitions do not add
@@ -187,7 +190,7 @@ Common problems:
   `jedisPoolMaxIdle` is missing from the driver file.
 - `Failed to create consumer group ...`: the consumer group could not be created, for example because the key exists
   and is not a stream, or the user lacks permission for `XGROUP`.
-- `NOAUTH` or `WRONGPASS`: set `redisPass` (and `redisUser` for ACL users).
+- `NOAUTH` or `WRONGPASS`: set `redisPass`. If `redisUser` is set, remove it; ACL user authentication currently fails.
 - Publishing stalls while consumers run: the pool is exhausted, see the pool size example above.
 - `OOM command not allowed when used memory > 'maxmemory'`: streams are never trimmed; delete old benchmark keys or
   raise `maxmemory`.

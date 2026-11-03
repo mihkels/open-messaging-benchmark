@@ -26,16 +26,16 @@ The coordinator. It runs workloads against drivers and writes results.
 bin/benchmark [options] <workload.yaml>...
 ```
 
-|         Option          |       Argument        |                                                             Description                                                             |
-|-------------------------|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `-d`, `--drivers`       | Comma-separated paths | Driver configuration files. Every workload runs once with each driver                                                               |
-| `-w`, `--workers`       | Comma-separated URLs  | Worker addresses such as `http://10.0.0.1:8080`. Two or more enable distributed mode                                                |
-| `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs. Cannot be combined with `--workers`                                                       |
-| `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                  |
-| `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                           |
-| `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to CSV and exit                                                                       |
-| `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins |
-| `-h`, `--help`          |                       | Print usage and exit                                                                                                                |
+|         Option          |       Argument        |                                                                        Description                                                                         |
+|-------------------------|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `-d`, `--drivers`       | Comma-separated paths | Driver configuration files. Every workload runs once with each driver                                                                                      |
+| `-w`, `--workers`       | Comma-separated URLs  | Worker addresses such as `http://10.0.0.1:8080`. Distributed mode needs at least two; a single worker is rejected with `At least two workers are required` |
+| `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs. Cannot be combined with `--workers`                                                                              |
+| `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                         |
+| `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                  |
+| `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                           |
+| `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                        |
+| `-h`, `--help`          |                       | Print usage and exit                                                                                                                                       |
 
 Positional arguments are workload files. `--legacy-driver-name` is accepted as a deprecated alias of
 `--driver-location`.
@@ -56,8 +56,10 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   next combination when it is safe to do so. The process exits with a non-zero status if any
   combination or required cleanup fails; results from successful combinations remain available.
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
-  workload files, no `--drivers`, or an invalid workload file print a message and exit with a
-  non-zero status before any broker resources are created. `--help` prints usage and exits successfully.
+  workload files, no `--drivers`, or a workload that fails validation (pool size, size distribution,
+  backlog settings) print a message and exit with a non-zero status before any broker resources are
+  created. Payload file errors (missing file, length mismatch) are detected only after topics,
+  producers and consumers have been created. `--help` prints usage and exits successfully.
 - **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.
 
 ### Examples

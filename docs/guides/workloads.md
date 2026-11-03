@@ -63,15 +63,16 @@ bundled `*k-topic-*` workloads go up to one million topics.
 ## Choosing the rate
 
 `producerRate` is the total target rate in messages per second across all producers and topics. It
-is divided evenly among producer workers, and each producer sends at a uniform rate.
+is divided evenly among the producer workers that have topics. Within a worker, all producers share
+one uniform schedule at that worker's rate, so individual producers are not guaranteed equal shares.
 
 There are three common ways to use it:
 
-|           Goal            |                                       Setting                                       |
-|---------------------------|-------------------------------------------------------------------------------------|
-| Latency at a known load   | A fixed rate below the system's capacity, for example `producerRate: 50000`         |
-| Saturation behavior       | A fixed rate well above capacity; the bundled `max-rate-*` workloads use `10000000` |
-| Find the sustainable rate | `producerRate: 0`                                                                   |
+|           Goal            |                                                                                        Setting                                                                                        |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Latency at a known load   | A fixed rate below the system's capacity, for example `producerRate: 50000`                                                                                                           |
+| Saturation behavior       | A fixed rate well above capacity; most bundled `max-rate-*` workloads use `10000000`; the 1-topic 16- and 100-partition ones without a producer/consumer suffix use `producerRate: 0` |
+| Find the sustainable rate | `producerRate: 0`                                                                                                                                                                     |
 
 With `producerRate: 0`, producers start at 10,000 msg/s and the coordinator adjusts the rate every
 3 seconds. While producers keep up and consumers keep pace, the rate grows by a ramping factor that
@@ -124,14 +125,14 @@ drain and then `testDurationMinutes` after the backlog has drained to the level 
 
 The `workloads/` directory has about 130 files. Their names encode the shape:
 
-|              Pattern              |                   Example                    |                          Shape                          |
-|-----------------------------------|----------------------------------------------|---------------------------------------------------------|
-| `<n>-topic-<p>-partitions-<size>` | `1-topic-16-partitions-1kb.yaml`             | Fixed rate on a few topics                              |
-| `...-4p-4c-<rate>`                | `1-topic-100-partitions-1kb-4p-4c-500k.yaml` | 4 producers and 4 consumers per topic at the given rate |
-| `<count>-topic-1kb-4p-4c-<rate>`  | `10k-topic-1kb-4p-4c-500k.yaml`              | Many topics                                             |
-| `max-rate-*`                      | `max-rate-1-topic-16-partitions-1kb.yaml`    | Offered load far above capacity                         |
-| `backlog-*`                       | `backlog-1-topic-16-partitions-1kb.yaml`     | Backlog build-up and drain                              |
-| `1m-10-topics-*`                  | `1m-10-topics-16-partitions-100b.yaml`       | 10 topics with small messages                           |
+|              Pattern              |                     Example                     |                          Shape                          |
+|-----------------------------------|-------------------------------------------------|---------------------------------------------------------|
+| `<n>-topic-<p>-partitions-<size>` | `1-topic-16-partitions-1kb.yaml`                | Fixed rate on a few topics                              |
+| `...-4p-4c-<rate>`                | `1-topic-100-partitions-1kb-4p-4c-500k.yaml`    | 4 producers and 4 consumers per topic at the given rate |
+| `<count>-topic-1kb-4p-4c-<rate>`  | `10k-topic-1kb-4p-4c-500k.yaml`                 | Many topics                                             |
+| `max-rate-*`                      | `max-rate-1-topic-10-partitions-1p-1c-1kb.yaml` | Offered load far above capacity                         |
+| `backlog-*`                       | `backlog-1-topic-16-partitions-1kb.yaml`        | Backlog build-up and drain                              |
+| `1m-10-topics-*`                  | `1m-10-topics-16-partitions-100b.yaml`          | 10 topics with small messages                           |
 
 Most run for 5 minutes, and some for 15 minutes or more; many use high rates. Read the file before
 running it, and copy it under a new name before changing it.

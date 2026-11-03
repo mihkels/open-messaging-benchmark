@@ -15,7 +15,7 @@ limitations under the License.
 # Understanding your first run
 
 This page walks through what the coordinator does during a run and what each number in the console
-and the JSON result means. The examples come from a one-minute run of the Quickstart setup.
+and the JSON result means. The examples come from a short run with the Quickstart setup; arrays are truncated.
 
 ## Phases of a run
 
@@ -77,7 +77,7 @@ current directory.
 
 ```json
 {
-  "workload": "quick",
+  "workload": "Simple Workload 1 producer on 1 topic",
   "driver": "Kafka",
   "messageSize": 1024,
   "topics": 1,

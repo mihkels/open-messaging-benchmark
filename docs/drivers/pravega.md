@@ -33,7 +33,7 @@ is a reader group. Producers can write events directly or in transactions.
 
 The driver needs a Pravega cluster where:
 
-- the **controller** (`client.controllerURI`, default `tcp://localhost:9090`) is reachable from
+- the **controller** (`client.controllerURI`, for example `tcp://localhost:9090`) is reachable from
   every worker;
 - the **segment stores** advertise an address that every worker can reach. Clients get segment
   store addresses from the controller and then connect to them directly (port 12345 by default);
@@ -80,7 +80,7 @@ What to change:
 - `client.controllerURI`: the controller address from every worker's point of view (in the Compose
   suite, `tcp://pravega:9090`);
 - `client.scopeName`: the scope that holds the benchmark streams. The shipped files use `examples`;
-  the built-in default is `openmessaging-benchmark`.
+  the key is required.
 
 Run a local-mode benchmark from the repository root after `mvn -DskipTests install`, or from
 `/benchmark` inside the benchmark image:
@@ -100,19 +100,19 @@ For several worker hosts, see [Distributed runs](../getting-started/distributed-
 The configuration is read from a map: unknown keys are ignored, and boolean and integer values may be
 written as YAML strings or with any capitalization (`True`, `true`).
 
-|               Key                |  Type   |          Default          |                                                            Description                                                            |
-|----------------------------------|---------|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `client.controllerURI`           | string  | `tcp://localhost:9090`    | Controller URI.                                                                                                                   |
-| `client.scopeName`               | string  | `openmessaging-benchmark` | Scope for streams and reader groups.                                                                                              |
-| `writer.enableConnectionPooling` | boolean | `true`                    | Event writers share connections to segment stores instead of opening their own.                                                   |
-| `includeTimestampInEvent`        | boolean | `true`                    | Prefix each event with an 8-byte send timestamp used for end-to-end latency. Turn off only if you do not need end-to-end latency. |
-| `createScope`                    | boolean | `true`                    | Create the scope (if missing) before creating each stream.                                                                        |
-| `deleteStreams`                  | boolean | `true`                    | Delete the created streams when the driver closes. Streams are always sealed.                                                     |
-| `enableStreamAutoScaling`        | boolean | `false`                   | Use an auto-scaling policy instead of a fixed number of segments. Needs `eventsPerSecond` or `kbytesPerSecond`.                   |
-| `eventsPerSecond`                | integer | `-1` (unset)              | Target events per second per segment for auto-scaling (`ScalingPolicy.byEventRate`). Ignored unless auto-scaling is enabled.      |
-| `kbytesPerSecond`                | integer | `-1` (unset)              | Target KB per second per segment for auto-scaling (`ScalingPolicy.byDataRate`). Used only if `eventsPerSecond` is unset.          |
-| `enableTransaction`              | boolean | `false`                   | Write events in Pravega transactions.                                                                                             |
-| `eventsPerTransaction`           | integer | `100`                     | Events per transaction when `enableTransaction` is true.                                                                          |
+|               Key                |  Type   |   Default    |                                                            Description                                                            |
+|----------------------------------|---------|--------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `client.controllerURI`           | string  | required     | Controller URI.                                                                                                                   |
+| `client.scopeName`               | string  | required     | Scope for streams and reader groups.                                                                                              |
+| `writer.enableConnectionPooling` | boolean | `true`       | Event writers share connections to segment stores instead of opening their own.                                                   |
+| `includeTimestampInEvent`        | boolean | `true`       | Prefix each event with an 8-byte send timestamp used for end-to-end latency. Turn off only if you do not need end-to-end latency. |
+| `createScope`                    | boolean | `true`       | Create the scope (if missing) before creating each stream.                                                                        |
+| `deleteStreams`                  | boolean | `true`       | Delete the created streams when the driver closes. Streams are always sealed.                                                     |
+| `enableStreamAutoScaling`        | boolean | `false`      | Use an auto-scaling policy instead of a fixed number of segments. Needs `eventsPerSecond` or `kbytesPerSecond`.                   |
+| `eventsPerSecond`                | integer | `-1` (unset) | Target events per second per segment for auto-scaling (`ScalingPolicy.byEventRate`). Ignored unless auto-scaling is enabled.      |
+| `kbytesPerSecond`                | integer | `-1` (unset) | Target KB per second per segment for auto-scaling (`ScalingPolicy.byDataRate`). Used only if `eventsPerSecond` is unset.          |
+| `enableTransaction`              | boolean | `false`      | Write events in Pravega transactions.                                                                                             |
+| `eventsPerTransaction`           | integer | `100`        | Events per transaction when `enableTransaction` is true.                                                                          |
 
 ### What `pravega-exactly-once.yaml` does
 

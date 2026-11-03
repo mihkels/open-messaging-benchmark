@@ -41,6 +41,8 @@ driver configuration file selects the plugin through its `driverClass`. See
 Shipped configuration files are in the driver's `driver-<id>/` directory. They are examples: their
 broker addresses, replication settings and cluster names usually need changing for your
 environment, and several of them share the same `name`. Each driver page explains every setting.
+Each module's `driver-<id>/README.md` summarises the broker prerequisites and a usage example; some
+also show how to start the broker.
 
 > **Note:** The JMS driver needs a JMS provider's client jars, which are not shipped. Copy them into
 > `drivers/driver-jms/ext/`; see [JMS](jms.md).

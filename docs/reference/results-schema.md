@@ -29,15 +29,15 @@ how to read and chart it.
 
 ## Run description
 
-|        Field        |  Type  |                                  Description                                   |
-|---------------------|--------|--------------------------------------------------------------------------------|
-| `workload`          | string | The workload's `name` field, not its file name                                 |
-| `driver`            | string | The driver configuration's `name` field                                        |
-| `messageSize`       | int    | `messageSize`, or the weighted average for a `messageSizeDistribution`         |
-| `topics`            | int    | `topics`                                                                       |
-| `partitions`        | int    | `partitionsPerTopic`                                                           |
-| `producersPerTopic` | int    | `producersPerTopic`                                                            |
-| `consumersPerTopic` | int    | `consumerPerSubscription`. It is **not** multiplied by `subscriptionsPerTopic` |
+|        Field        |  Type  |                                            Description                                            |
+|---------------------|--------|---------------------------------------------------------------------------------------------------|
+| `workload`          | string | The workload's `name` field, not its file name                                                    |
+| `driver`            | string | The driver configuration's `name` field                                                           |
+| `messageSize`       | long   | `messageSize`, or for a `messageSizeDistribution` the integer weighted average of range midpoints |
+| `topics`            | int    | `topics`                                                                                          |
+| `partitions`        | int    | `partitionsPerTopic`                                                                              |
+| `producersPerTopic` | int    | `producersPerTopic`                                                                               |
+| `consumersPerTopic` | int    | `consumerPerSubscription`. It is **not** multiplied by `subscriptionsPerTopic`                    |
 
 ## Period series
 
@@ -45,15 +45,15 @@ These lists have one entry per 10-second sampling period of the measured phase. 
 included. For backlog workloads the measured phase includes the build-up and drain; see
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
-|                              Field                               |     Type     |                                            Description                                            |
-|------------------------------------------------------------------|--------------|---------------------------------------------------------------------------------------------------|
-| `publishRate`                                                    | number list  | Messages published per second                                                                     |
-| `publishErrorRate`                                               | number list  | Failed publishes per second                                                                       |
-| `consumeRate`                                                    | number list  | Messages received per second, across all subscriptions                                            |
-| `backlog`                                                        | int list     | `subscriptionsPerTopic × total published − total received` at the end of the period, floored at 0 |
-| `publishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number lists | Publish latency in ms                                                                             |
-| `publishDelayLatency{Avg,50pct,...,Max}`                         | lists        | Publish delay in µs; percentiles are integers                                                     |
-| `endToEndLatency{Avg,50pct,...,Max}`                             | number lists | End-to-end latency in ms                                                                          |
+|                              Field                               |     Type     |                                                                      Description                                                                      |
+|------------------------------------------------------------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `publishRate`                                                    | number list  | Messages published per second                                                                                                                         |
+| `publishErrorRate`                                               | number list  | Failed publishes per second                                                                                                                           |
+| `consumeRate`                                                    | number list  | Messages received per second, across all subscriptions                                                                                                |
+| `backlog`                                                        | int list     | `subscriptionsPerTopic × total successfully published − total received` since load started (warm-up included), at the end of the period, floored at 0 |
+| `publishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number lists | Publish latency in ms                                                                                                                                 |
+| `publishDelayLatency{Avg,50pct,...,Max}`                         | lists        | Publish delay in µs; percentiles are integers                                                                                                         |
+| `endToEndLatency{Avg,50pct,...,Max}`                             | number lists | End-to-end latency in ms                                                                                                                              |
 
 ## Aggregates
 

@@ -31,11 +31,11 @@ they are not tuned to be equivalent.
 
 Durability settings have the largest effect on latency. Compare like with like.
 
-|    Consideration     |                       Kafka                       |                  Pulsar                   |       RabbitMQ        |       Others        |
-|----------------------|---------------------------------------------------|-------------------------------------------|-----------------------|---------------------|
-| Replicas             | `replicationFactor`                               | `ensembleSize`, `writeQuorum`             | Quorum queue replicas | See the driver page |
-| Acknowledgments      | `acks=all`, `min.insync.replicas`                 | `ackQuorum`                               | Publisher confirms    | See the driver page |
-| Persistence controls | `flush.messages` or `log.flush.interval.messages` | `journalSyncData` on bookies (default on) | Queue type and mode   | See the driver page |
+|    Consideration     |                       Kafka                       |                  Pulsar                   |                       RabbitMQ                        |       Others        |
+|----------------------|---------------------------------------------------|-------------------------------------------|-------------------------------------------------------|---------------------|
+| Replicas             | `replicationFactor`                               | `ensembleSize`, `writeQuorum`             | `queueType: QUORUM` (replica count set on the broker) | See the driver page |
+| Acknowledgments      | `acks=all`, `min.insync.replicas`                 | `ackQuorum`                               | Publisher confirms (always on)                        | See the driver page |
+| Persistence controls | `flush.messages` or `log.flush.interval.messages` | `journalSyncData` on bookies (default on) | `queueType`, `messagePersistence`                     | See the driver page |
 
 Kafka by default acknowledges after replication to memory and relies on the page cache, while
 BookKeeper syncs its journal before acknowledging. Comparing defaults compares different guarantees.

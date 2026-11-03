@@ -76,7 +76,7 @@ docker run -d --name artemis -p 61616:61616 \
 This broker is for functional checks. Before measuring, size the broker's journal and memory for the
 workload and follow [Fair comparisons](../methodology/fair-comparisons.md).
 
-## Minimal configuration and run
+## Minimal configuration and benchmark command
 
 `driver-artemis/artemis.yaml`:
 

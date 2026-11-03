@@ -1,0 +1,968 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&display=swap");
+
+/*
+ * Layout concept: an instrument panel. A dark header band carries the run itself (terminal,
+ * then the charts it produced); the rest of the page is a plain grid of reference cards.
+ * Amber is the signal colour (publish path), cyan the second trace (end-to-end path).
+ */
+
+:root {
+  --omb-font-display: "Archivo", "IBM Plex Sans", system-ui, sans-serif;
+
+  /* Light scheme values (Material "default") */
+  --omb-bg: #f5f6f8;
+  --omb-surface: #ffffff;
+  --omb-line: #d9dee5;
+  --omb-fg: #131820;
+  --omb-muted: #566173;
+  --omb-amber: #9a6200;
+  --omb-cyan: #12707f;
+  --omb-band: #10141a;
+  --omb-band-fg: #e7eaef;
+  --omb-band-muted: #98a2b1;
+  --omb-band-line: #283040;
+  --omb-band-amber: #f0b13a;
+  --omb-band-cyan: #5cc3d4;
+}
+
+[data-md-color-scheme="slate"] {
+  --omb-bg: #0f1217;
+  --omb-surface: #161b23;
+  --omb-line: #283040;
+  --omb-fg: #e7eaef;
+  --omb-muted: #98a2b1;
+  --omb-amber: #f0b13a;
+  --omb-cyan: #5cc3d4;
+  --omb-band: #0a0d11;
+
+  --md-hue: 218;
+  --md-default-bg-color: var(--omb-bg);
+  --md-code-bg-color: #161b23;
+  --md-typeset-a-color: #f0b13a;
+}
+
+/* Material palette hooks: the header stays dark in both schemes, links use the amber trace. */
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: #10141a;
+  --md-primary-fg-color--light: #1b212b;
+  --md-primary-fg-color--dark: #0a0d11;
+  --md-primary-bg-color: #e7eaef;
+  --md-primary-bg-color--light: #98a2b1;
+}
+
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: #f0b13a;
+  --md-accent-fg-color--transparent: rgba(240, 177, 58, 0.12);
+  --md-accent-bg-color: #10141a;
+}
+
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: #8a5800;
+}
+
+.md-header,
+.md-tabs {
+  background-color: var(--omb-band);
+}
+
+.omb-site-name,
+.omb-site-name:hover,
+.omb-site-name:focus {
+  color: inherit;
+  text-decoration: none;
+}
+
+.md-header__topic:first-child,
+.md-typeset h1,
+.md-typeset h2 {
+  font-family: var(--omb-font-display);
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  text-wrap: balance;
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset h1 {
+  font-weight: 750;
+  font-stretch: 108%;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h2 {
+  font-weight: 650;
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+}
+
+/* Identifiers in tables (keys, class names, file names) wrap only between words; the table
+   scrolls sideways instead of splitting "partitionsPerTopic" in the middle. */
+.md-typeset table:not([class]) code {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.md-typeset table:not([class]) td {
+  min-width: 6rem;
+}
+
+/* ---------- Home page ---------- */
+
+.omb-home {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--omb-fg);
+  background: var(--omb-bg);
+}
+
+.omb-home a:focus-visible,
+.omb-home button:focus-visible {
+  outline: 2px solid var(--omb-band-amber);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.omb-wrap {
+  /* Same width as Material's .md-grid, so the landing lines up with the header. */
+  max-width: 61rem;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Hero band: always dark, it is the "screen" the run is shown on. */
+.omb-hero {
+  background: var(--omb-band);
+  color: var(--omb-band-fg);
+  border-bottom: 1px solid var(--omb-band-line);
+}
+
+.omb-hero .omb-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 3rem;
+  align-items: center;
+  padding-block: 4rem 3.5rem;
+}
+
+.omb-eyebrow {
+  font-family: var(--md-code-font-family);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--omb-band-muted);
+  margin: 0 0 1rem;
+}
+
+.omb-hero h1 {
+  font-family: var(--omb-font-display);
+  font-weight: 800;
+  font-stretch: 112%;
+  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  margin: 0 0 1.25rem;
+  color: var(--omb-band-fg);
+  text-wrap: balance;
+}
+
+.omb-hero h1 em {
+  font-style: normal;
+  color: var(--omb-band-amber);
+}
+
+.omb-lede {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--omb-band-muted);
+  max-width: 34rem;
+  margin: 0 0 2rem;
+}
+
+.omb-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.omb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  border: 1px solid var(--omb-band-line);
+  color: var(--omb-band-fg);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.omb-btn:hover {
+  border-color: var(--omb-band-muted);
+  color: var(--omb-band-fg);
+}
+
+.omb-btn--primary {
+  background: var(--omb-band-amber);
+  border-color: var(--omb-band-amber);
+  color: #10141a;
+}
+
+.omb-btn--primary:hover {
+  background: #f6c565;
+  border-color: #f6c565;
+  color: #10141a;
+}
+
+.omb-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--md-code-font-family);
+  font-size: 0.78rem;
+  color: var(--omb-band-muted);
+}
+
+.omb-facts b {
+  color: var(--omb-band-fg);
+  font-weight: 600;
+}
+
+/* Terminal */
+.omb-term {
+  min-width: 0;
+  border: 1px solid var(--omb-band-line);
+  border-radius: 8px;
+  background: #06080b;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.omb-term__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--omb-band-line);
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+  color: var(--omb-band-muted);
+}
+
+.omb-term__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.omb-term__dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--omb-band-line);
+}
+
+.omb-term__replay {
+  margin-left: auto;
+  font: inherit;
+  color: var(--omb-band-muted);
+  background: none;
+  border: 1px solid var(--omb-band-line);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+.omb-term__replay:hover {
+  color: var(--omb-band-fg);
+}
+
+.omb-term__body {
+  margin: 0;
+  padding: 1rem 1.1rem 1.2rem;
+  height: 22rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #283040 transparent;
+  font-family: var(--md-code-font-family);
+  font-size: 0.68rem;
+  line-height: 1.55;
+  color: #c9d1dc;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Wrapped continuation lines hang under the first character, like a terminal with a gutter. */
+.omb-term__body .l {
+  display: block;
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.omb-term__body .l + .l:not(.cont):not(.ok) {
+  margin-top: 0.15rem;
+}
+
+.omb-term__body .cmd::before {
+  content: "$ ";
+  color: var(--omb-band-amber);
+}
+
+.omb-term__body .cmd.cont::before {
+  content: "  ";
+}
+
+.omb-term__body .cmd {
+  color: var(--omb-band-fg);
+}
+
+.omb-term__body .dim {
+  color: #6c7686;
+}
+
+.omb-term__body .ok {
+  color: var(--omb-band-cyan);
+}
+
+.omb-term__body .hl {
+  color: var(--omb-band-amber);
+}
+
+.omb-term__body .caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--omb-band-amber);
+  animation: omb-blink 1s steps(2, start) infinite;
+}
+
+@keyframes omb-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.omb-term__note {
+  margin: 0;
+  padding: 0.6rem 1.1rem;
+  border-top: 1px solid var(--omb-band-line);
+  font-size: 0.72rem;
+  color: var(--omb-band-muted);
+}
+
+/* Sections */
+.omb-section {
+  padding-block: 4rem;
+  border-bottom: 1px solid var(--omb-line);
+}
+
+.omb-section h2 {
+  font-family: var(--omb-font-display);
+  font-weight: 750;
+  font-stretch: 108%;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0 0 0.75rem;
+  color: var(--omb-fg);
+  text-wrap: balance;
+}
+
+.omb-section__intro {
+  max-width: 42rem;
+  color: var(--omb-muted);
+  line-height: 1.6;
+  margin: 0 0 2.5rem;
+}
+
+.omb-section__intro a,
+.omb-caption a {
+  color: var(--omb-amber);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.omb-section__intro a::after {
+  content: " \2192";
+}
+
+.omb-kicker {
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--omb-amber);
+  margin: 0 0 0.75rem;
+}
+
+/* What it measures */
+.omb-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.omb-metrics li {
+  /* Subgrid: unit, title and description start on the same line in every card of a row. */
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0.4rem;
+  align-content: start;
+  background: var(--omb-surface);
+  border: 1px solid var(--omb-line);
+  border-radius: 8px;
+  padding: 1.1rem 1.1rem 1.25rem;
+  min-width: 0;
+}
+
+.omb-metrics .unit {
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+  color: var(--omb-amber);
+}
+
+.omb-metrics h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--omb-fg);
+}
+
+.omb-metrics p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--omb-muted);
+}
+
+/* Charts */
+.omb-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+}
+
+.omb-chart {
+  min-width: 0;
+  margin: 0;
+  padding: 1.25rem 1.25rem 1rem;
+  background: var(--omb-surface);
+  border: 1px solid var(--omb-line);
+  border-radius: 8px;
+}
+
+.omb-chart h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--omb-fg);
+}
+
+.omb-chart__sub {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  color: var(--omb-muted);
+}
+
+.omb-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--omb-muted);
+}
+
+.omb-chart__legend li::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  background: currentColor;
+}
+
+.omb-chart__legend .s1::before {
+  background: var(--omb-amber);
+}
+
+.omb-chart__legend .s2::before {
+  background: var(--omb-cyan);
+}
+
+.omb-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.omb-chart .grid line {
+  stroke: var(--omb-line);
+  stroke-width: 1;
+}
+
+.omb-chart .axis text {
+  fill: var(--omb-muted);
+  font-family: var(--md-code-font-family);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.omb-chart .axis .title {
+  fill: var(--omb-muted);
+  font-family: var(--md-text-font-family);
+  font-size: 10px;
+}
+
+.omb-chart .s1 {
+  stroke: var(--omb-amber);
+  fill: none;
+}
+
+.omb-chart .s2 {
+  stroke: var(--omb-cyan);
+  fill: none;
+}
+
+.omb-chart .line {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.omb-chart .pt {
+  stroke: var(--omb-surface);
+  stroke-width: 2;
+}
+
+.omb-chart .pt.s1 {
+  fill: var(--omb-amber);
+}
+
+.omb-chart .pt.s2 {
+  fill: var(--omb-cyan);
+}
+
+.omb-chart .lbl {
+  font-family: var(--md-code-font-family);
+  font-size: 10px;
+  fill: var(--omb-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.omb-chart .hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.omb-chart .hit:hover + .pt,
+.omb-chart .hit:hover {
+  cursor: crosshair;
+}
+
+.omb-chart details {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--omb-muted);
+}
+
+.omb-chart summary {
+  cursor: pointer;
+}
+
+.omb-chart table {
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-family: var(--md-code-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+.omb-chart th,
+.omb-chart td {
+  padding: 0.15rem 0.75rem 0.15rem 0;
+  text-align: right;
+  border-bottom: 1px solid var(--omb-line);
+}
+
+.omb-chart th:first-child,
+.omb-chart td:first-child {
+  text-align: left;
+}
+
+.omb-caption {
+  margin: 1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--omb-muted);
+}
+
+/* Architecture */
+.omb-arch {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 3rem;
+  align-items: center;
+}
+
+.omb-arch figure {
+  margin: 0;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.omb-arch svg {
+  display: block;
+  width: 100%;
+  min-width: 30rem;
+  height: auto;
+}
+
+.omb-arch .box {
+  fill: var(--omb-surface);
+  stroke: var(--omb-line);
+  stroke-width: 1.5;
+}
+
+.omb-arch .box--hot {
+  stroke: var(--omb-amber);
+}
+
+.omb-arch .box--plugin {
+  fill: var(--omb-bg);
+  stroke: var(--omb-cyan);
+  stroke-dasharray: 4 3;
+}
+
+.omb-arch .t {
+  fill: var(--omb-fg);
+  font-family: var(--md-text-font-family);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.omb-arch .t-sub {
+  fill: var(--omb-muted);
+  font-family: var(--md-code-font-family);
+  font-size: 10.5px;
+}
+
+.omb-arch .wire {
+  stroke: var(--omb-muted);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.omb-arch .wire--data {
+  stroke: var(--omb-amber);
+  stroke-width: 2;
+}
+
+.omb-arch .arrow {
+  fill: var(--omb-muted);
+}
+
+.omb-arch .arrow--data {
+  fill: var(--omb-amber);
+}
+
+.omb-arch ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 1rem;
+  color: var(--omb-muted);
+  line-height: 1.55;
+}
+
+.omb-arch ol b {
+  color: var(--omb-fg);
+}
+
+.omb-arch code {
+  font-size: 0.85em;
+  color: var(--omb-fg);
+}
+
+/* Drivers */
+.omb-drivers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.omb-drivers li {
+  display: flex;
+  min-width: 0;
+}
+
+.omb-driver {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  min-width: 0;
+  border: 1px solid var(--omb-line);
+  border-radius: 8px;
+  background: var(--omb-surface);
+  color: var(--omb-fg);
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.omb-driver:hover {
+  border-color: var(--omb-amber);
+  color: var(--omb-fg);
+}
+
+.omb-driver__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 6px;
+  background: var(--omb-bg);
+  color: var(--omb-fg);
+}
+
+.omb-driver__mark svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: currentColor;
+}
+
+.omb-driver__mark--mono {
+  font-family: var(--md-code-font-family);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--omb-muted);
+  border: 1px dashed var(--omb-line);
+}
+
+.omb-driver__text {
+  min-width: 0;
+  display: grid;
+}
+
+.omb-driver__name {
+  font-weight: 600;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.omb-driver__id {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--md-code-font-family);
+  font-size: 0.7rem;
+  color: var(--omb-muted);
+}
+
+.omb-tm {
+  margin: 1.25rem 0 0;
+  font-size: 0.72rem;
+  color: var(--omb-muted);
+}
+
+/* Why this fork */
+.omb-why {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 2rem 2.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.omb-why li {
+  min-width: 0;
+  border-top: 2px solid var(--omb-fg);
+  padding-top: 1rem;
+}
+
+.omb-why h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--omb-fg);
+}
+
+.omb-why p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--omb-muted);
+}
+
+/* Where to start */
+.omb-paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  column-gap: 2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.omb-paths a {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  height: 100%;
+  padding: 1rem 0.25rem;
+  border-top: 1px solid var(--omb-line);
+  color: var(--omb-fg);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.omb-paths a:hover .omb-paths__go {
+  color: var(--omb-amber);
+  transform: translateX(3px);
+}
+
+.omb-paths__want {
+  font-size: 0.92rem;
+}
+
+.omb-paths__go {
+  flex: none;
+  font-family: var(--md-code-font-family);
+  font-size: 0.75rem;
+  color: var(--omb-muted);
+  transition: transform 0.15s, color 0.15s;
+}
+
+.omb-policy {
+  padding-block: 2.5rem 3rem;
+  color: var(--omb-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.omb-policy p {
+  max-width: 48rem;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .omb-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .omb-metrics li:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .omb-drivers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .omb-hero .omb-wrap,
+  .omb-arch,
+  .omb-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .omb-hero .omb-wrap {
+    gap: 2.5rem;
+    padding-block: 3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .omb-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .omb-drivers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .omb-drivers li:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .omb-driver {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .omb-term__bar > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .omb-driver {
+    padding: 0.7rem;
+    gap: 0.6rem;
+  }
+
+  .omb-term__body {
+    height: 18rem;
+    font-size: 0.66rem;
+  }
+
+  .omb-section {
+    padding-block: 3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .omb-term__body .caret {
+    animation: none;
+  }
+
+  .omb-driver,
+  .omb-paths__go,
+  .omb-btn {
+    transition: none;
+  }
+}

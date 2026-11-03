@@ -36,8 +36,8 @@ consumers with its own driver process.
 The coordinator logs the split at startup:
 
 ```text
-Workers list - producers: [http://w1:8080,http://w2:8080]
-Workers list - consumers: http://w3:8080,http://w4:8080
+Workers list - producers: [http://w2:8080,http://w1:8080]
+Workers list - consumers: http://w4:8080,http://w3:8080
 ```
 
 ## 1. Start the workers

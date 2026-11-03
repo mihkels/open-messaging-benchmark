@@ -26,11 +26,19 @@ import static org.mockito.Mockito.when;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,6 +51,60 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.exceptions.JedisDataException;
 
 class RedisBenchmarkDriverTest {
+    @Test
+    void aclAuthenticationSendsUserBeforePassword(@TempDir Path temp) throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            CompletableFuture<List<String>> auth = new CompletableFuture<>();
+            CompletableFuture.runAsync(() -> serveRedis(server, auth));
+            Path config = temp.resolve("redis.yaml");
+            Files.writeString(
+                    config,
+                    "redisHost: 127.0.0.1\nredisPort: "
+                            + server.getLocalPort()
+                            + "\nredisUser: benchmark\nredisPass: secret\n"
+                            + "jedisPoolMaxTotal: 1\njedisPoolMaxIdle: 1\n");
+            RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+            driver.initialize(config, mock(MeterRegistry.class));
+            try {
+                driver.createProducer("topic").join();
+                try (Jedis ignored = driver.jedisPool.getResource()) {
+                    assertThat(auth.get(5, TimeUnit.SECONDS)).containsExactly("AUTH", "benchmark", "secret");
+                }
+            } finally {
+                driver.close();
+            }
+        }
+    }
+
+    // Minimal RESP server: answers every command with OK and records the first AUTH command
+    private static void serveRedis(ServerSocket server, CompletableFuture<List<String>> auth) {
+        try (Socket socket = server.accept()) {
+            BufferedReader in =
+                    new BufferedReader(
+                            new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            OutputStream out = socket.getOutputStream();
+            while (true) {
+                String header = in.readLine();
+                if (header == null) {
+                    auth.completeExceptionally(new IllegalStateException("Connection closed before AUTH"));
+                    return;
+                }
+                List<String> command = new ArrayList<>();
+                for (int i = Integer.parseInt(header.substring(1)); i > 0; i--) {
+                    in.readLine();
+                    command.add(in.readLine());
+                }
+                out.write("+OK\r\n".getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                if (command.getFirst().equalsIgnoreCase("AUTH")) {
+                    auth.complete(command);
+                }
+            }
+        } catch (Exception e) {
+            auth.completeExceptionally(e);
+        }
+    }
+
     @Test
     void concurrentCreationSharesOnePool(@TempDir Path temp) throws Exception {
         Path config = temp.resolve("redis.yaml");

@@ -41,17 +41,18 @@ You will:
 ```bash
 git clone https://github.com/mihkels/open-messaging-benchmark.git
 cd open-messaging-benchmark
-docker build -t openmessaging-benchmark:local -f docker/Dockerfile.build .
+docker buildx bake
 ```
 
-`docker/Dockerfile.build` compiles the project inside a Maven container and produces a small Java 27
-runtime image with the benchmark installed in `/benchmark`. The first build downloads all
-dependencies and takes several minutes; later builds reuse the Maven cache.
+[`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)
+compiles the project inside a Maven container and produces a Java 27 (Eclipse Temurin) runtime
+image, `openmessaging-benchmark:local`, with the benchmark installed in `/benchmark`. The first
+build downloads all dependencies and takes several minutes; later builds reuse the Maven cache.
+`DRIVERS=kafka docker buildx bake` builds only the Kafka plugin and is faster. You can also pull
+the published image instead and set `OMB_IMAGE=docker.io/mihkels/open-messaging-benchmark:edge`
+for the next step.
 
-> **Note:** Build from a regular clone. In a linked Git worktree, the license check inside the
-> build cannot read the Git metadata and fails. See
-> [Building the project](../development/building-the-project.md) for alternatives, including
-> building the image from a distribution built on the host.
+The image runs as a non-root user and `/benchmark` is read-only; results go to `/results`.
 
 ## 2. Start the environment
 
@@ -79,8 +80,8 @@ the benchmark:
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 --list
-docker exec omb-worker-1 wget -qO /dev/null http://127.0.0.1:8080/metrics
-docker exec omb-worker-2 wget -qO /dev/null http://127.0.0.1:8080/metrics
+curl -fsS -o /dev/null http://localhost:18081/metrics
+curl -fsS -o /dev/null http://localhost:18082/metrics
 ```
 
 The topic list may be empty; all three commands should succeed. If one fails, wait and retry it.
@@ -91,10 +92,10 @@ The topic list may be empty; all three commands should succeed. If one fails, wa
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
      --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \
-     -o first-result.json /workloads/simple.yaml'
+     -o /results/first-result.json /workloads/simple.yaml'
 ```
 
-The coordinator runs in `/benchmark` inside the container. The workload
+The coordinator runs in `/benchmark` inside the container and writes results to `/results`. The workload
 [`simple.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/local-test/workloads/simple.yaml)
 publishes 500 messages per second of 1 KiB to one topic with 10 partitions, with one producer and
 one consumer, for a one-minute warm-up followed by three measured minutes.
@@ -109,7 +110,7 @@ At the end it prints aggregated latency percentiles for the measured period and 
 
 ```text
 ----- Aggregated Pub Latency (ms) avg:  1.8 - 50%:  1.7 - 95%:  3.1 - 99%:  5.5 - ...
-Writing test result into first-result.json
+Writing test result into /results/first-result.json
 ```
 
 The numbers above are from a laptop and only illustrate the format.
@@ -119,7 +120,7 @@ The numbers above are from a laptop and only illustrate the format.
 Copy the JSON result to the host:
 
 ```bash
-docker cp omb-driver:/benchmark/first-result.json .
+docker cp omb-driver:/results/first-result.json .
 ```
 
 The file contains one value per 10-second sample for rates, backlog and latency percentiles, and
@@ -140,7 +141,7 @@ Run from the same container; every file below is already in the image.
 ```bash
 # Local mode: no workers, the coordinator runs the driver itself
 docker exec -it omb-driver bash -lc \
-  'bin/benchmark --drivers /drivers/kafka.yaml -o local.json /workloads/simple.yaml'
+  'bin/benchmark --drivers /drivers/kafka.yaml -o /results/local.json /workloads/simple.yaml'
 
 # One of the bundled workloads (paths relative to /benchmark)
 docker exec -it omb-driver bash -lc \

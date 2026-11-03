@@ -12,15 +12,8 @@
 # limitations under the License.
 #
 
-numWorkers: 8
-image: openmessaging/openmessaging-benchmark:latest
-imagePullPolicy: Always
-workload: workloads/1-topic-16-partitions-1kb.yaml
-driver: driver-pulsar/pulsar.yaml
-
-# Resource Configurations
-driverMemoryRequest: 512Mi
-driverMemoryLimit: 2048Mi
-
-#workersMemoryRequest: 512Mi
-#workersMemoryLimit: 2048Mi
+# RabbitMQ 4.1 single node (port of e2e-tests/compose/stacks/rabbitmq.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rabbitmq.yaml

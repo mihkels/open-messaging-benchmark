@@ -1,0 +1,55 @@
+name: Workflow lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ACTIONLINT_VERSION: 1.7.12
+  ZIZMOR_VERSION: 1.31.1
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+
+      - name: actionlint
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: mise exec "actionlint@$ACTIONLINT_VERSION" -- actionlint
+
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: mise exec "zizmor@$ZIZMOR_VERSION" -- zizmor --min-severity low .github/workflows
+
+      # Images and charts are published to Docker Hub only
+      - name: No other container registries
+        run: |
+          if git grep -n -I -E 'ghcr\.io|gcr\.io|pkg\.dev' -- ':!.github/workflows/workflow-lint.yml'; then
+            echo "Use Docker Hub (docker.io) for images and charts" >&2
+            exit 1
+          fi
+
+      - name: Versions in sync
+        run: .github/scripts/check-versions.sh

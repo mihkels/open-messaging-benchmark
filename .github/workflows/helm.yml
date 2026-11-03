@@ -1,0 +1,141 @@
+name: Helm chart
+
+# Lints the chart and local manifests, runs a Kafka case on kind, and publishes the signed chart
+# to Docker Hub as an OCI artifact on release tags. Only the release job uses the dockerhub
+# environment.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deployment/**'
+      - 'docker/**'
+      - 'docker-bake.hcl'
+      - 'bin/**'
+      - 'e2e-tests/compose/**'
+      - 'mise.toml'
+      - '.github/workflows/helm.yml'
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CHART_DIR: deployment/kubernetes/helm/open-messaging-benchmark-chart
+  CHART_REGISTRY: oci://registry-1.docker.io/mihkels
+  CHART_REPOSITORY: docker.io/mihkels/open-messaging-benchmark-chart
+  COSIGN_VERSION: 3.1.4
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: helm kubectl kubeconform python
+          cache: false
+
+      - name: Lint chart and manifests
+        run: mise run chart:lint
+
+  kind:
+    name: Kafka on kind
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: helm kind kubectl python
+          cache: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Create cluster
+        run: mise run k8s:cluster
+
+      - name: Run kafka-contract
+        run: mise run k8s:run kafka kafka-contract
+
+      - name: Collect logs
+        if: failure()
+        run: mise run k8s:logs kafka || true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: kind-kafka
+          path: e2e-tests/target/k8s/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  release:
+    name: Publish chart
+    if: github.ref_type == 'tag'
+    needs: lint
+    runs-on: ubuntu-latest
+    environment: dockerhub
+    permissions:
+      contents: read
+      # Keyless cosign signing through GitHub's OIDC token
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check versions
+        run: .github/scripts/check-versions.sh
+
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: helm
+          cache: false
+
+      - name: Package and push
+        id: push
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          helm package "$CHART_DIR" --destination dist
+          printf '%s' "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io \
+            --username "$DOCKERHUB_USERNAME" --password-stdin
+          helm push dist/*.tgz "$CHART_REGISTRY" 2>&1 | tee push.log
+          digest=$(sed -n 's/^Digest: //p' push.log)
+          [[ "$digest" == sha256:* ]] || { echo "no chart digest in helm push output" >&2; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Sign chart
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$DOCKERHUB_TOKEN" | mise exec "cosign@$COSIGN_VERSION" -- \
+            cosign login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          mise exec "cosign@$COSIGN_VERSION" -- cosign sign --yes "$CHART_REPOSITORY@$DIGEST"
+          echo "Signed $CHART_REPOSITORY@$DIGEST" >> "$GITHUB_STEP_SUMMARY"

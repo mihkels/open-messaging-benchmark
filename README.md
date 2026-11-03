@@ -58,8 +58,8 @@ The rest of this README is a summary for contributors.
 - Metrics: Micrometer and Prometheus client libraries
 - Containers: Docker (with Dockerfiles in docker/), multi-arch builds supported
 
-Builds and benchmark runtimes require Java 27. The application Dockerfiles use Amazon Corretto 27;
-the Compose regression runner uses Eclipse Temurin 27.
+Builds and benchmark runtimes require Java 27. The image (`docker/Dockerfile`) and the Compose
+regression runner use Eclipse Temurin 27.
 
 ## Requirements
 
@@ -98,11 +98,9 @@ The packaged distribution and this repository include two main shell entry point
     `-sp` is deprecated and does not start a separate metrics listener.
   - Example: `bin/benchmark-worker -p 8080`
 
-`local-build.sh` builds multi-architecture images with buildx. Its arguments are the version
-(default `latest`), platforms (for example `linux/arm64,linux/amd64`), and optionally `push` or
-`load`. `DOCKER_PUSH=1` also enables pushing. The repository and Kafka/Java tag components are set
-in the script. It formats license headers and source files, and exports a BuildKit cache to
-`mihkels/open-messaging-benchmark:cache` even when the image itself is not pushed.
+`docker-bake.hcl` builds the image with `docker buildx bake` (see [Docker images](#docker-images)),
+and the mise tasks in `mise.toml` run the drivers on a local kind cluster (see
+[Local Kubernetes](docs/guides/kubernetes-local.md)).
 
 ## Build
 
@@ -187,13 +185,13 @@ drivers/driver-kafka/
 ```yaml
 descriptorVersion: 1          # descriptor format, currently 1
 id: kafka                     # unique plugin id
-version: 0.0.6-SNAPSHOT
+version: 0.0.6
 driverApiVersion: 1           # must equal the benchmark's DriverApiVersion.CURRENT
 javaVersion: 27               # minimum Java feature version
 drivers:                      # BenchmarkDriver implementations in this bundle
   - io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
 classpath:                    # relative to the bundle; plain entries must exist, globs ('*' in the file name) may match nothing
-  - driver-kafka-0.0.6-SNAPSHOT.jar
+  - driver-kafka-0.0.6.jar
   - lib/*.jar
 ```
 
@@ -253,22 +251,20 @@ POM, which activates for every module that has `src/main/plugin/plugin.yaml`.
 
 ## Docker images
 
-See [docker/README.md](docker/README.md) for details. Both Dockerfiles use an Amazon Corretto 27
-runtime. `docker/Dockerfile` consumes a prebuilt distribution; `docker/Dockerfile.build` builds the
-full project with Maven in Docker.
+Published images: `docker.io/mihkels/open-messaging-benchmark` (`:edge` from `main`, `:<version>`
+and `:latest` from releases, `-<driver>` variants with a single driver plugin). They are signed with
+cosign and carry SBOM and provenance attestations; see
+[Releasing](docs/development/releasing.md#verifying-images-and-charts).
 
-Examples:
-- Build with prebuilt tarball:
-- `mvn -q -DskipTests install`
-- `export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.6-SNAPSHOT-bin.tar.gz`
-- `docker build -t openmessaging-benchmark:latest --build-arg "BENCHMARK_TARBALL=$BENCHMARK_TARBALL" -f docker/Dockerfile .`
-- Build everything inside Docker (no local Maven required):
-- docker build -t openmessaging-benchmark:latest . -f docker/Dockerfile.build
-- Multi-arch buildx helper:
-- ./local-build.sh <version> [platforms] [push|load]
+`docker/Dockerfile` builds the image in one multi-stage BuildKit build (Maven inside Docker with a
+cached repository, Eclipse Temurin 27 runtime, non-root user). See [docker/README.md](docker/README.md):
+
+- `docker buildx bake` — host architecture, every driver, tag `openmessaging-benchmark:local`
+- `DRIVERS=kafka,pulsar docker buildx bake` — only those driver plugins
+- `docker buildx bake multiarch-amd64 multiarch-arm64` — both architectures, separate local tags
 
 The `local-test/docker-compose.yaml` example uses `openmessaging-benchmark:local` by default.
-Build that tag locally or set `OMB_IMAGE` to an existing Java 27 benchmark image before starting it.
+Build that tag locally or set `OMB_IMAGE` to a published image before starting it.
 
 ## Environment variables
 
@@ -282,7 +278,8 @@ Build that tag locally or set `OMB_IMAGE` to an existing Java 27 benchmark image
   installation directory.
 - OMB_PLUGIN_PATH: Additional plugin bundle locations (see [Driver plugins](#driver-plugins)).
 - The `omb.driver.startupTimeoutSeconds` system property limits the driver process start time (default 120).
-- DOCKER_PUSH: enables pushing images from `local-build.sh`.
+- OMB_LOG_DIR: Directory for the supervisor and driver log files instead of the working directory (the image sets `/tmp`).
+- OMB_RESULTS_DIR: Directory for result files written without `--output` (the image sets `/results`).
 
 ## Tests
 

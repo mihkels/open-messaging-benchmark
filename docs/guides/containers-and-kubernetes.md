@@ -16,34 +16,33 @@ limitations under the License.
 
 ## Docker image
 
-The repository has two Dockerfiles. Both produce an Amazon Corretto 27 (Alpine) image with the
-distribution in `/benchmark`, which is also the working directory, and every driver plugin under
-`/benchmark/drivers`.
+Published images are in `docker.io/mihkels/open-messaging-benchmark` for `linux/amd64` and
+`linux/arm64`:
 
-|        Dockerfile         |            Build requirements            |                               Use when                               |
-|---------------------------|------------------------------------------|----------------------------------------------------------------------|
-| `docker/Dockerfile.build` | Docker only                              | You do not have JDK 27 and Maven, and you build from a regular clone |
-| `docker/Dockerfile`       | A distribution tarball built on the host | You already build with Maven, or you work in a linked Git worktree   |
+|                   Tag                    |                  Contents                   |
+|------------------------------------------|---------------------------------------------|
+| `edge`, `sha-<commit>`                   | latest `main` build, every driver           |
+| `<version>`, `<major>.<minor>`, `latest` | release, every driver                       |
+| `<tag>-<driver>`                         | one driver plugin, for example `edge-kafka` |
+
+Images are signed with cosign and carry SBOM and provenance attestations; see
+[Releasing](../development/releasing.md#verifying-images-and-charts).
+
+To build your own, [`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)
+compiles the project with Maven inside the build and needs only Docker with buildx:
 
 ```bash
-# Build everything inside Docker
-docker build -t openmessaging-benchmark:local -f docker/Dockerfile.build .
-
-# Or package a host build
-mvn -DskipTests install
-docker build -t openmessaging-benchmark:local \
-  --build-arg BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.6-SNAPSHOT-bin.tar.gz \
-  -f docker/Dockerfile .
+docker buildx bake                      # openmessaging-benchmark:local, every driver
+DRIVERS=kafka docker buildx bake        # only the Kafka plugin, faster and smaller
 ```
 
-Adjust the tarball name to the current project version. The root
-[`local-build.sh`](https://github.com/mihkels/open-messaging-benchmark/blob/main/local-build.sh)
-builds multi-platform images. See
-[docker/README.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
-for details.
+See [docker/README.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
+for the build targets, stages and multi-architecture builds.
 
-> **Note:** The fork does not publish a Java 27 image. Push your build to a registry your machines
-> or cluster can pull from.
+The image is Eclipse Temurin 27 with the distribution in `/benchmark`, which is also the working
+directory and is read-only. It runs as uid 10001. Logs go to `/tmp` (`OMB_LOG_DIR`) and results
+written without `--output` to `/results` (`OMB_RESULTS_DIR`), so the root file system can be
+mounted read-only with writable volumes on those two paths.
 
 ### Running containers
 
@@ -54,8 +53,8 @@ The image's default command is a shell. Pass the command to run:
 docker run -d --name omb-worker -p 8080:8080 \
   -e HEAP_OPTS="-Xms4G -Xmx4G" openmessaging-benchmark:local bin/benchmark-worker
 
-# Coordinator with configuration from the host
-docker run --rm -it -v "$PWD/config:/config" openmessaging-benchmark:local \
+# Coordinator with configuration from the host; --user lets it write the result there
+docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD/config:/config" openmessaging-benchmark:local \
   bin/benchmark --drivers /config/kafka.yaml --workers http://w1:8080,http://w2:8080 \
   -o /config/result.json /config/workload.yaml
 ```
@@ -66,7 +65,7 @@ killed for exceeding its limit.
 
 ### Adding a JMS provider
 
-The JMS driver loads provider jars from `drivers/driver-jms/ext/`. Mount or copy them there:
+The JMS driver loads provider jars from `drivers/driver-jms/ext/`. Mount them there:
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -87,41 +86,53 @@ See [JMS](../drivers/jms.md).
 
 ## Kubernetes with Helm
 
-The chart in `deployment/kubernetes/helm/benchmark` creates a StatefulSet of workers, a headless
-Service and a coordinator pod.
+The chart `open-messaging-benchmark-chart` creates a StatefulSet of workers with a headless
+Service, and a coordinator. It is published to Docker Hub as an OCI artifact whose version equals
+the benchmark version, and is also in
+[`deployment/kubernetes/helm`](https://github.com/mihkels/open-messaging-benchmark/tree/main/deployment/kubernetes/helm).
 
 ```bash
-IMAGE=registry.example.com/team/openmessaging-benchmark:java27
-helm upgrade --install benchmark deployment/kubernetes/helm/benchmark \
-  --set image="$IMAGE" --set numWorkers=4 --set driverMemoryLimit=8Gi
+helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart --version <version> \
+  --set workers.replicas=4 \
+  --set-file driverConfig=my-kafka.yaml \
+  --set-file workloadConfig=my-workload.yaml
 ```
 
-|                     Value                     |                    Default                     |                                 Notes                                  |
-|-----------------------------------------------|------------------------------------------------|------------------------------------------------------------------------|
-| `image`                                       | `openmessaging/openmessaging-benchmark:latest` | Not maintained by this fork; always set your own image                 |
-| `imagePullPolicy`                             | `Always`                                       |                                                                        |
-| `numWorkers`                                  | 8                                              | Worker pods; producers use half of them                                |
-| `driver`                                      | `driver-pulsar/pulsar.yaml`                    | Used only in the generated `example-run.sh`                            |
-| `workload`                                    | `workloads/1-topic-16-partitions-1kb.yaml`     | Used only in the generated `example-run.sh`                            |
-| `driverMemoryRequest` / `driverMemoryLimit`   | 512Mi / 2048Mi                                 | Coordinator pod; it sets `HEAP_OPTS=-Xms4G -Xmx4G`, so raise the limit |
-| `workersMemoryRequest` / `workersMemoryLimit` | unset                                          | Worker pod resources, applied only when the request is set             |
+|                                 Value                                  |                                    Default                                    |                                         Notes                                          |
+|------------------------------------------------------------------------|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| `image.repository`                                                     | `docker.io/mihkels/open-messaging-benchmark`                                  |                                                                                        |
+| `image.tag`                                                            | chart `appVersion`                                                            |                                                                                        |
+| `image.variant`                                                        | empty                                                                         | A driver name selects the single-driver image `<tag>-<driver>`                         |
+| `image.digest`                                                         | empty                                                                         | Pins the image; overrides tag and variant                                              |
+| `workers.replicas`                                                     | 2                                                                             | Worker pods; producers use half of them                                                |
+| `workers.heapOpts`                                                     | `-Xms1G -Xmx1G`                                                               | Driver JVM heap (`HEAP_OPTS`)                                                          |
+| `workers.resources`                                                    | 500m CPU, 2Gi memory                                                          | Keep the memory limit above both worker heaps                                          |
+| `coordinator.mode`                                                     | `interactive`                                                                 | `job` runs the workload once and prints the result JSON to the Job log                 |
+| `driverConfig` / `workloadConfig`                                      | empty                                                                         | YAML text (use `--set-file`), mounted at `/config` and used instead of the paths below |
+| `driver` / `workload`                                                  | `driver-kafka/kafka-latency.yaml`, `workloads/1-topic-16-partitions-1kb.yaml` | Paths in the image                                                                     |
+| `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                    |
+| `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                   |
 
-The release must be named `benchmark`, because the worker address list is hard-coded to
-`http://benchmark-worker-<n>.benchmark-worker:8080`. After the pods are ready:
+In interactive mode, open a shell in the coordinator and start a run; `DRIVER`, `WORKLOAD` and
+`WORKERS` are set:
 
 ```bash
-kubectl exec -it benchmark-driver -- bash
-bin/benchmark --drivers driver-kafka/kafka-latency.yaml --workers "$WORKERS" \
-  workloads/1-topic-16-partitions-1kb.yaml
+kubectl exec -it deploy/omb-open-messaging-benchmark-chart-coordinator -- bash
+benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
 ```
 
-To use your own driver configuration or workload, copy it into the pod with `kubectl cp`, or build
-an image that contains it. Broker addresses in the driver configuration must be reachable from the
-worker pods. Copy the result out with `kubectl cp benchmark-driver:/benchmark/<file>.json .`, and
-remove everything with `helm uninstall benchmark`.
+Copy the result with `kubectl cp <coordinator-pod>:/results/result.json .` while the pod runs, and
+remove everything with `helm uninstall omb`.
+
+The pods run as a non-root user with a read-only root file system, no Linux capabilities, the
+`RuntimeDefault` seccomp profile and no service account token. The worker API is unauthenticated
+and loads any driver configuration it receives, so the chart's NetworkPolicy only lets the
+coordinator of the release reach it; `networkPolicy.metricsFrom` adds peers such as Prometheus.
+Broker addresses in the driver configuration must be reachable from the worker pods.
 
 For meaningful numbers, schedule workers on dedicated nodes, away from the brokers, with CPU
-requests that match their limits.
+requests that match their limits. To try the chart with every driver on a laptop, see
+[Local Kubernetes](kubernetes-local.md).
 
 ## Cloud deployment scripts
 

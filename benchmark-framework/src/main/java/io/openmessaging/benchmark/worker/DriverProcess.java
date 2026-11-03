@@ -45,6 +45,16 @@ final class DriverProcess {
     private static final String LOG_NAME_PROPERTY = "omb.log.name";
     private static final String DRIVER_LOG_NAME = "benchmark-driver";
 
+    // Places the driver log next to the supervisor log, so a supervisor started with a log directory
+    // (OMB_LOG_DIR) does not make the driver write into a read-only working directory.
+    static String driverLogName(String supervisorLogName) {
+        if (supervisorLogName == null) {
+            return DRIVER_LOG_NAME;
+        }
+        Path directory = Path.of(supervisorLogName).getParent();
+        return directory == null ? DRIVER_LOG_NAME : directory.resolve(DRIVER_LOG_NAME).toString();
+    }
+
     private final String description;
     private volatile Path workDir;
     // Never cleared once set, so that a call failing during a concurrent stop can still report the
@@ -96,7 +106,8 @@ final class DriverProcess {
             }
         }
         jvmArgs.addAll(JvmOptions.configured());
-        jvmArgs.add("-D" + LOG_NAME_PROPERTY + "=" + DRIVER_LOG_NAME);
+        jvmArgs.add(
+                "-D" + LOG_NAME_PROPERTY + "=" + driverLogName(System.getProperty(LOG_NAME_PROPERTY)));
         jvmArgs.add("-cp");
         jvmArgs.add(
                 classpath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));

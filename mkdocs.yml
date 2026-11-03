@@ -83,6 +83,7 @@ nav:
       - Results: guides/results.md
       - Monitoring: guides/monitoring.md
       - Containers and Kubernetes: guides/containers-and-kubernetes.md
+      - Local Kubernetes: guides/kubernetes-local.md
       - Troubleshooting: guides/troubleshooting.md
   - Drivers:
       - Supported drivers: drivers/index.md
@@ -117,4 +118,5 @@ nav:
       - Implementing a driver: development/implementing-a-driver.md
       - Packaging a plugin: development/packaging-a-plugin.md
       - Testing a driver: development/testing-a-driver.md
+      - Releasing: development/releasing.md
       - Documentation: development/documentation.md

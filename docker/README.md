@@ -1,39 +1,70 @@
-# OpenMessaging Benchmark Docker images
+# OpenMessaging Benchmark Docker image
 
 > **Note:** See [Containers and Kubernetes](https://mihkels.github.io/open-messaging-benchmark/guides/containers-and-kubernetes/) in the documentation site for a usage guide.
 
-Both images run on Amazon Corretto 27 (Alpine) and include Bash for the benchmark launchers.
-Run the commands below from the repository root.
+One multi-stage BuildKit [`Dockerfile`](Dockerfile) builds the image, and
+[`docker-bake.hcl`](../docker-bake.hcl) in the repository root holds the build targets. Run the
+commands from the repository root. Only Docker with buildx is needed: Maven runs inside the build.
 
-## Prebuilt distribution
+## Published images
 
-This option requires Docker, Maven and JDK 27 on the host. Build the **full reactor** so the
-distribution includes every driver plugin:
+`docker.io/mihkels/open-messaging-benchmark`, for `linux/amd64` and `linux/arm64`:
 
-```bash
-mvn -DskipTests install
-export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.6-SNAPSHOT-bin.tar.gz
-docker build -t openmessaging-benchmark:latest \
-  --build-arg "BENCHMARK_TARBALL=$BENCHMARK_TARBALL" -f docker/Dockerfile .
-```
+|                   Tag                    |                                     Contents                                      |
+|------------------------------------------|-----------------------------------------------------------------------------------|
+| `edge`, `sha-<commit>`                   | latest `main` build, every driver                                                 |
+| `<version>`, `<major>.<minor>`, `latest` | release, every driver                                                             |
+| `<tag>-<driver>`                         | the same build with one driver plugin, for example `edge-kafka` or `0.1.0-pulsar` |
 
-Adjust the tarball name if the Maven project version changes. The path must be inside the Docker
-build context. If the license plugin fails in a Git worktree with "Bare Repository has neither a
-working tree, nor an index", append `-Dlicense.skip` to the Maven command; this bypasses the
-license check.
+Every image is signed with cosign (keyless, from the GitHub Actions workflow) and has SBOM and
+provenance attestations. See
+[Releasing](../docs/development/releasing.md#verifying-images-and-charts) for verification.
 
-## Build inside Docker
-
-This option does not require Maven or a JDK on the host. `Dockerfile.build` uses the
-`maven:3.10.0-eclipse-temurin-27-alpine` builder and assembles the distribution in the image build:
+## Build locally
 
 ```bash
-docker build -t openmessaging-benchmark:latest -f docker/Dockerfile.build .
+docker buildx bake                                    # openmessaging-benchmark:local, every driver
+DRIVERS=kafka docker buildx bake                      # only the Kafka plugin
+DRIVERS=kafka,pulsar IMAGE=omb:kp docker buildx bake  # several drivers, own tag
+docker buildx bake multiarch-amd64 multiarch-arm64    # :local-amd64 and :local-arm64
 ```
 
-The Maven license check needs Git metadata inside the build context. A linked Git worktree's
-`.git` file may point outside that context and cause the build to fail. Use a regular checkout,
-or build the distribution on the host with the worktree workaround above and use `docker/Dockerfile`.
+`docker build -f docker/Dockerfile --build-arg DRIVERS=kafka .` works too. `DRIVERS` is `all` or
+a comma-separated list from [`drivers.txt`](drivers.txt); unknown names fail the build.
 
-For multi-platform builds, see `./local-build.sh <version> [platforms] [push|load]`. For the local
-broker-backed driver regression suite, see [e2e-tests/compose/README.md](../e2e-tests/compose/README.md).
+Selecting drivers shortens the build: Maven builds only the selected driver modules (the
+`-Domb.selectDrivers -Pdriver-<name>` profiles, see
+[Building the project](../docs/development/building-the-project.md#building-selected-drivers)), and
+the image contains only their plugins and configuration files. The Maven repository is kept in a
+BuildKit cache mount, so later builds do not download dependencies again.
+
+The build skips tests and the license, formatting and static analysis checks; CI runs them. It
+does not need the `.git` directory, so it also works from a linked Git worktree.
+
+## Stages
+
+|   Stage   |                                                                                      Purpose                                                                                       |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `builder` | `maven:3.10.0-eclipse-temurin-27`; builds the distribution tarball                                                                                                                 |
+| `dist`    | the tarball: `builder`, or a prebuilt one (`--build-arg DIST_SOURCE=prebuilt --build-context prebuilt=<dir with dist.tar.gz>`, used by CI to build every variant from one tarball) |
+| `extract` | unpacks the distribution, removes unselected drivers, makes the files read-only                                                                                                    |
+| `runtime` | `eclipse-temurin:27-jre`; the final image                                                                                                                                          |
+
+Base images are pinned by digest and updated by Dependabot.
+
+## Runtime
+
+- The distribution is in `/benchmark` (working directory, read-only) and `/benchmark/bin` is on
+  `PATH`. Relative paths such as `bin/benchmark`, `workloads/...` and `driver-kafka/...` work.
+- The image runs as `omb` (uid and gid 10001). The root file system can be mounted read-only:
+  logs go to `OMB_LOG_DIR=/tmp`, and results written without `--output` to
+  `OMB_RESULTS_DIR=/results`. Mount writable volumes there.
+- `JAVA_TOOL_OPTIONS` sets `-XX:+ExitOnOutOfMemoryError -XX:+DisableAttachMechanism` and moves the
+  Java temporary directory and user home to `/tmp`.
+- The default command is a shell; pass `bin/benchmark-worker -p 8080` or `bin/benchmark ...`.
+- JMS provider jars go into `/benchmark/drivers/driver-jms/ext`; mount a volume there.
+
+For the broker-backed driver regression suite, see
+[e2e-tests/compose/README.md](../e2e-tests/compose/README.md). For Kubernetes, see the
+[Helm chart](../deployment/kubernetes/helm/README.md) and
+[Local Kubernetes](../docs/guides/kubernetes-local.md).

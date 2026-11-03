@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "35c2723b82279f006794c857c52eb5adb07f033d",
+  "include-component-in-tag": false,
+  "pull-request-title-pattern": "chore: Release ${version}",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "open-messaging-benchmark",
+      "bump-minor-pre-major": true,
+      "changelog-path": "CHANGELOG.md",
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "deps", "section": "Dependencies" },
+        { "type": "build", "section": "Build", "hidden": true },
+        { "type": "ci", "section": "CI", "hidden": true },
+        { "type": "chore", "section": "Chores", "hidden": true },
+        { "type": "test", "section": "Tests", "hidden": true }
+      ],
+      "extra-files": [
+        { "type": "generic", "path": "pom.xml" },
+        { "type": "generic", "path": "examples/external-driver-plugin/pom.xml" },
+        { "type": "generic", "path": "deployment/kubernetes/helm/open-messaging-benchmark-chart/Chart.yaml" }
+      ]
+    }
+  }
+}

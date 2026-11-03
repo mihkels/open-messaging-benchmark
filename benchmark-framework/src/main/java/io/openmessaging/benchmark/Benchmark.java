@@ -286,7 +286,11 @@ public final class Benchmark {
                             generatorFactory.create(driverConfiguration.name, workload, worker));
             TestResult result = generator.run();
             String fileName =
-                    resultFileName(output, combination.workloadFileName(), driverConfiguration.name);
+                    resultFileName(
+                            output,
+                            combination.workloadFileName(),
+                            driverConfiguration.name,
+                            System.getenv(RESULTS_DIR_ENV));
             log.info("Writing test result into {}", fileName);
             writer.writeValue(new File(fileName), result);
         } catch (Throwable e) {
@@ -319,12 +323,19 @@ public final class Benchmark {
         return new Outcome(failure, safeToContinue);
     }
 
-    private static String resultFileName(String output, String workloadFileName, String driverName) {
+    // The explicit output file, or a generated name in the results directory. Without a results
+    // directory the generated name is relative to the working directory.
+    static String resultFileName(
+            String output, String workloadFileName, String driverName, String resultsDirectory) {
         if (output != null && !output.isEmpty()) {
             return output;
         }
         String timestamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new Date());
-        return String.format("%s-%s-%s.json", workloadFileName, driverName, timestamp);
+        String fileName = String.format("%s-%s-%s.json", workloadFileName, driverName, timestamp);
+        if (resultsDirectory == null || resultsDirectory.isEmpty()) {
+            return fileName;
+        }
+        return Path.of(resultsDirectory, fileName).toString();
     }
 
     @FunctionalInterface
@@ -359,4 +370,7 @@ public final class Benchmark {
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 
     private static final Logger log = LoggerFactory.getLogger(Benchmark.class);
+
+    // Directory for result files written without --output, for example in a read-only container
+    static final String RESULTS_DIR_ENV = "OMB_RESULTS_DIR";
 }

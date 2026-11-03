@@ -37,28 +37,13 @@
     <modules>
         <module>benchmark-framework</module>
         <module>driver-api</module>
-        <module>driver-pravega</module>
-        <module>driver-pulsar</module>
-        <module>driver-kafka</module>
-        <module>driver-mqtt5</module>
-        <module>driver-rabbitmq</module>
-        <module>driver-artemis</module>
-        <module>driver-rocketmq</module>
-        <module>driver-rocketmq5</module>
-        <module>driver-nats</module>
-        <module>driver-nats-streaming</module>
-        <module>driver-nsq</module>
-        <module>driver-jms</module>
-        <module>driver-redis</module>
-        <module>driver-bookkeeper</module>
         <module>package</module>
-        <module>docker</module>
-        <module>driver-kop</module>
         <module>tool</module>
-        <module>e2e-tests</module>
     </modules>
     <properties>
-        <revision>0.0.6-SNAPSHOT</revision>
+        <!-- x-release-please-start-version -->
+        <revision>0.0.6</revision>
+        <!-- x-release-please-end -->
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>27</maven.compiler.source>
@@ -334,6 +319,10 @@
                                 <exclude>**/*.service</exclude>
                                 <exclude>**/*.cookie</exclude>
                                 <exclude>**/*.data</exclude>
+                                <!-- Rewritten by release-please with only the version -->
+                                <exclude>version.txt</exclude>
+                                <!-- Printed to users by helm install -->
+                                <exclude>**/templates/NOTES.txt</exclude>
                             </excludes>
                         </licenseSet>
                     </licenseSets>
@@ -343,6 +332,7 @@
                         <conf>SCRIPT_STYLE</conf>
                         <yaml>SCRIPT_STYLE</yaml>
                         <requirements.txt>SCRIPT_STYLE</requirements.txt>
+                        <txt>SCRIPT_STYLE</txt>
                         <md>XML_STYLE</md>
                         <puml>APOSTROPHE_STYLE</puml>
                     </mapping>
@@ -526,6 +516,130 @@
         </plugins>
     </build>
     <profiles>
+        <profile>
+            <!--
+                Driver selection. By default every driver plugin is built and packaged. Pass
+                -Domb.selectDrivers together with one or more driver-<name> profiles to build only those,
+                for example: mvn -Domb.selectDrivers -Pdriver-kafka,driver-pulsar package
+                The e2e-tests module expects every plugin, so it is only part of the full build.
+            -->
+            <id>all-drivers</id>
+            <activation>
+                <property>
+                    <name>!omb.selectDrivers</name>
+                </property>
+            </activation>
+            <modules>
+                <module>driver-artemis</module>
+                <module>driver-bookkeeper</module>
+                <module>driver-jms</module>
+                <module>driver-kafka</module>
+                <module>driver-kop</module>
+                <module>driver-mqtt5</module>
+                <module>driver-nats</module>
+                <module>driver-nats-streaming</module>
+                <module>driver-nsq</module>
+                <module>driver-pravega</module>
+                <module>driver-pulsar</module>
+                <module>driver-rabbitmq</module>
+                <module>driver-redis</module>
+                <module>driver-rocketmq</module>
+                <module>driver-rocketmq5</module>
+                <module>e2e-tests</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-artemis</id>
+            <modules>
+                <module>driver-artemis</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-bookkeeper</id>
+            <modules>
+                <module>driver-bookkeeper</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-jms</id>
+            <modules>
+                <module>driver-jms</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-kafka</id>
+            <modules>
+                <module>driver-kafka</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-kop</id>
+            <modules>
+                <module>driver-kafka</module>
+                <module>driver-pulsar</module>
+                <module>driver-kop</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-mqtt5</id>
+            <modules>
+                <module>driver-mqtt5</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-nats</id>
+            <modules>
+                <module>driver-nats</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-nats-streaming</id>
+            <modules>
+                <module>driver-nats-streaming</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-nsq</id>
+            <modules>
+                <module>driver-nsq</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-pravega</id>
+            <modules>
+                <module>driver-pravega</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-pulsar</id>
+            <modules>
+                <module>driver-pulsar</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-rabbitmq</id>
+            <modules>
+                <module>driver-rabbitmq</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-redis</id>
+            <modules>
+                <module>driver-redis</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-rocketmq</id>
+            <modules>
+                <module>driver-rocketmq</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>driver-rocketmq5</id>
+            <modules>
+                <module>driver-rocketmq5</module>
+            </modules>
+        </profile>
         <profile>
             <!--
                 Builds a self-contained driver plugin bundle in target/omb-plugin for every module that

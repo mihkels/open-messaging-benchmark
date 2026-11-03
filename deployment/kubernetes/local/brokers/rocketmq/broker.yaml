@@ -1,0 +1,131 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Headless Service with publishNotReadyAddresses: the name resolves straight to the pod IP, like a
+# compose service name. Clients connect to the brokerIP1 address the name server hands out (broker).
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker
+  labels:
+    app.kubernetes.io/name: broker
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: broker
+  ports:
+    - name: vip
+      port: 10909
+    - name: remoting
+      port: 10911
+    - name: ha
+      port: 10912
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broker
+  labels:
+    app.kubernetes.io/name: broker
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: broker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: broker
+        app.kubernetes.io/part-of: omb-broker
+    spec:
+      hostname: broker
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 3000
+        runAsGroup: 3000
+        fsGroup: 3000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # compose starts the broker once the name server is healthy.
+        - name: wait-for-namesrv
+          image: apache/rocketmq:5.3.2@sha256:4a80ff5cd4b0a3d3ef6dc338ce2028a85bd995648cb3aa5c3e753746d2dbc587
+          command: ["bash", "-c", "until (echo > /dev/tcp/namesrv/9876) 2>/dev/null; do echo waiting for namesrv; sleep 2; done"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: broker
+          image: apache/rocketmq:5.3.2@sha256:4a80ff5cd4b0a3d3ef6dc338ce2028a85bd995648cb3aa5c3e753746d2dbc587
+          args:
+            - sh
+            - -c
+            - >-
+              printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nbrokerIP1=broker\nautoCreateTopicEnable=true\nautoCreateSubscriptionGroup=true\n' > /tmp/broker.conf &&
+              exec sh mqbroker -c /tmp/broker.conf
+          env:
+            - name: NAMESRV_ADDR
+              value: namesrv:9876
+            - name: JAVA_OPT_EXT
+              value: "-Xms512m -Xmx1g -Xmn256m"
+          ports:
+            - name: vip
+              containerPort: 10909
+            - name: remoting
+              containerPort: 10911
+            - name: ha
+              containerPort: 10912
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "sh mqadmin clusterList -n namesrv:9876 2>/dev/null | grep -q broker-a"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+      volumes:
+        - name: store
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}

@@ -13,14 +13,20 @@
 #
 
 apiVersion: v2
-name: benchmark
-description: A Helm chart for running the Open Messaging Benchmark in Kubernetes
+name: open-messaging-benchmark-chart
+description: Benchmark workers and coordinator of the OpenMessaging Benchmark on Kubernetes
 type: application
-version: 0.1.1
-appVersion: "0.0.3"
-kubeVersion: ">=1.31.0"
+# version and appVersion always equal the project version in pom.xml; release-please updates all three.
+version: 0.0.6 # x-release-please-version
+appVersion: "0.0.6" # x-release-please-version
+kubeVersion: ">=1.31.0-0"
 home: https://github.com/mihkels/open-messaging-benchmark
 sources:
   - https://github.com/mihkels/open-messaging-benchmark
+keywords:
+  - benchmark
+  - messaging
+  - kafka
+  - pulsar
 maintainers:
-  - name: Micheal Selgal
+  - name: Mihkel Selgal

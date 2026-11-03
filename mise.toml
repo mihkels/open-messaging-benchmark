@@ -2,3 +2,136 @@
 java = "27"
 maven = "3.10.0"
 python = "3.15"
+helm = "4.3.1"
+kind = "0.33.0"
+kubectl = "1.37.2"
+k9s = "0.51.0"
+kubeconform = "0.8.0"
+
+[env]
+# Local Kubernetes work uses a project-local kubeconfig, never the Docker Desktop context
+KUBECONFIG = "{{config_root}}/.kube/config"
+CLUSTER = "omb"
+# Local image name; single-driver builds are tagged <IMAGE>-<driver>
+IMAGE = "openmessaging-benchmark:local"
+
+[tasks.check]
+description = "Show pinned tool versions and reject Docker Desktop kubectl and contexts"
+dir = "{{config_root}}"
+run = '''
+set -eu
+for tool in kubectl k9s; do
+  path=$(mise which "$tool")
+  printf '%s: %s\n' "$tool" "$path"
+  case "$path" in
+    *Docker.app*|*/.docker/*)
+      printf '%s resolved to a Docker Desktop binary: %s\n' "$tool" "$path" >&2
+      exit 1
+      ;;
+  esac
+done
+kubectl version --client
+k9s version --short
+if [ -f "$KUBECONFIG" ]; then
+  context=$(kubectl config current-context)
+  printf 'context: %s\n' "$context"
+  case "$context" in
+    docker-desktop*)
+      printf 'refusing Docker Desktop context %s\n' "$context" >&2
+      exit 1
+      ;;
+  esac
+  if [ "$context" != "kind-$CLUSTER" ]; then
+    printf 'expected context kind-%s, got %s\n' "$CLUSTER" "$context" >&2
+    exit 1
+  fi
+fi
+java_version=$(java -version 2>&1)
+printf '%s\n' "$java_version"
+printf '%s\n' "$java_version" | grep -q '"27'
+mvn --version | head -1
+helm version --short
+kind version
+kubeconform -v
+docker buildx version
+'''
+
+[tasks."k8s:cluster"]
+description = "Create the kind cluster and select its context"
+dir = "{{config_root}}"
+run = '''
+set -eu
+mkdir -p .kube
+if kind get clusters | grep -qx "$CLUSTER"; then
+  printf 'cluster %s already exists\n' "$CLUSTER"
+  kind export kubeconfig --name "$CLUSTER" --kubeconfig "$KUBECONFIG"
+else
+  kind create cluster --name "$CLUSTER" --kubeconfig "$KUBECONFIG" \
+    --config deployment/kubernetes/local/kind-config.yaml --wait 300s
+fi
+kubectl config use-context "kind-$CLUSTER"
+kubectl cluster-info
+'''
+
+[tasks.image]
+description = "Build the host-arch image (DRIVERS=all or a list) and load it into kind"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh image"
+
+[tasks."image:multiarch"]
+description = "Build linux/amd64 and linux/arm64 images with separate local tags"
+dir = "{{config_root}}"
+run = "docker buildx bake multiarch-amd64 multiarch-arm64"
+
+[tasks."k8s:list"]
+description = "List the broker stacks and benchmark cases"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh list"
+
+[tasks."k8s:broker"]
+description = "Deploy the broker of a stack into namespace omb-<stack>: mise run k8s:broker <stack>"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh broker"
+
+[tasks."k8s:deploy"]
+description = "Build the stack's image, deploy its broker and the chart with an interactive coordinator"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh deploy"
+
+[tasks."k8s:run"]
+description = "Run the cases of a stack as Jobs: mise run k8s:run <stack> [case...]"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh run"
+
+[tasks."k8s:shell"]
+description = "Open a shell in the interactive coordinator of a stack"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh shell"
+
+[tasks."k8s:logs"]
+description = "Show broker, worker and coordinator pods and recent logs of a stack"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh logs"
+
+[tasks."k8s:down"]
+description = "Delete a stack namespace, or the whole kind cluster without arguments"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh down"
+
+[tasks.k9s]
+description = "Open k9s on the kind-omb context"
+dir = "{{config_root}}"
+run = '''
+set -eu
+context=$(kubectl config current-context)
+if [ "$context" != "kind-$CLUSTER" ]; then
+  printf 'expected context kind-%s, got %s\n' "$CLUSTER" "$context" >&2
+  exit 1
+fi
+k9s --context "$context" --all-namespaces
+'''
+
+[tasks."chart:lint"]
+description = "Lint and render the Helm chart and broker manifests, validate them with kubeconform"
+dir = "{{config_root}}"
+run = "deployment/kubernetes/local/omb-k8s.sh lint"

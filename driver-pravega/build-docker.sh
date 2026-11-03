@@ -20,7 +20,5 @@ set -ex
 
 ROOT_DIR=$(dirname $0)/..
 cd ${ROOT_DIR}
-mvn install
-export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.1-SNAPSHOT-bin.tar.gz
-docker build --build-arg BENCHMARK_TARBALL . -f docker/Dockerfile -t ${DOCKER_REPOSITORY}/openmessaging-benchmark:${IMAGE_TAG}
+DRIVERS=pravega IMAGE=${DOCKER_REPOSITORY}/openmessaging-benchmark:${IMAGE_TAG} docker buildx bake local
 docker push ${DOCKER_REPOSITORY}/openmessaging-benchmark:${IMAGE_TAG}

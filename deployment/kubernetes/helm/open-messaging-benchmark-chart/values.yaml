@@ -1,0 +1,117 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: docker.io/mihkels/open-messaging-benchmark
+  # Defaults to the chart appVersion
+  tag: ""
+  # Empty for the image with every driver, or a driver name (for example kafka) for the slim
+  # single-driver image tagged <tag>-<driver>
+  variant: ""
+  # Pin an image digest (sha256:...); takes precedence over tag and variant
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  # Generated from the release name when empty
+  name: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+workers:
+  replicas: 2
+  # Heap of the driver JVM that produces and consumes messages
+  heapOpts: "-Xms1G -Xmx1G"
+  # Heap of the worker supervisor JVM
+  supervisorHeapOpts: "-Xmx512m"
+  # Give the container more memory than both heaps together, or it is killed at the limit
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+coordinator:
+  # interactive: a long-running pod to exec into and start runs by hand
+  # job: a Job that runs driver + workload once and prints the result JSON to its log
+  mode: interactive
+  heapOpts: "-Xmx512m"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+  job:
+    backoffLimit: 0
+    ttlSecondsAfterFinished: 86400
+    # Upper bound for the whole run in seconds; empty for no limit
+    activeDeadlineSeconds: ""
+  # Extra arguments passed to bin/benchmark, for example ["--service-version", "x"]
+  extraArgs: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Driver configuration and workload. Paths are relative to /benchmark in the image. When
+# driverConfig or workloadConfig holds YAML text it is mounted from a ConfigMap at /config and used
+# instead of the path (helm install --set-file driverConfig=my-kafka.yaml).
+driver: driver-kafka/kafka-latency.yaml
+workload: workloads/1-topic-16-partitions-1kb.yaml
+driverConfig: ""
+workloadConfig: ""
+
+# Size limit of the emptyDir volume that receives result files
+resultsSizeLimit: 1Gi
+
+# Restrict ingress to the worker port 8080 to the coordinator of this release. The worker API is
+# unauthenticated and loads arbitrary driver configurations.
+networkPolicy:
+  enabled: true
+  # Additional NetworkPolicy peers allowed to reach port 8080, for example a Prometheus namespace
+  # scraping /metrics. The same port serves the worker API, so allow only trusted peers.
+  metricsFrom: []
+
+extraEnv: []
+extraVolumes: []
+# Mounted into workers and the coordinator
+extraVolumeMounts: []
+# Added to the worker pods, for example to download JMS provider jars into an extra volume
+extraInitContainers: []

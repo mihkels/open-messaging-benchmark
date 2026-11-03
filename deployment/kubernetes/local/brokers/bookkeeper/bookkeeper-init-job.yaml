@@ -1,0 +1,73 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Formats the BookKeeper metadata in ZooKeeper once. Waits for ZooKeeper itself and is idempotent, so
+# it can be applied together with everything else and retried.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bookkeeper-init
+  labels:
+    app.kubernetes.io/name: bookkeeper-init
+    app.kubernetes.io/part-of: omb-broker-init
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bookkeeper-init
+        app.kubernetes.io/part-of: omb-broker-init
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The image runs as uid 10000 with gid 0; apply-config-from-env.py rewrites the group-writable conf/.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bookkeeper-init
+          image: apachepulsar/pulsar:4.0.6@sha256:c30ad1646e00b2a7c9e89de949a91b6506afc5f1bd3f402a23eefc46990def88
+          command:
+            - bash
+            - -c
+            - |
+              until [ "$({ echo ruok; sleep 1; } | nc zookeeper 2181 2>/dev/null)" = imok ]; do
+                echo waiting for zookeeper; sleep 3
+              done
+              if bin/pulsar zookeeper-shell -server zookeeper:2181 get /ledgers/INSTANCEID 2>/dev/null | grep -Eq '^[0-9a-f]{8}-'; then
+                echo "BookKeeper cluster already initialized"; exit 0
+              fi
+              bin/apply-config-from-env.py conf/bookkeeper.conf && exec bin/bookkeeper shell initnewcluster
+          env:
+            - name: PULSAR_MEM
+              value: "-Xmx128m"
+            - name: BOOKIE_MEM
+              value: "-Xmx256m"
+            - name: metadataServiceUri
+              value: zk+hierarchical://zookeeper:2181/ledgers
+            - name: zkServers
+              value: zookeeper:2181
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

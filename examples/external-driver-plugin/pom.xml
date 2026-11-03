@@ -31,7 +31,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>27</maven.compiler.release>
         <!-- The benchmark version whose driver-api this plugin is compiled against -->
-        <omb.version>0.0.6-SNAPSHOT</omb.version>
+        <!-- x-release-please-start-version -->
+        <omb.version>0.0.6</omb.version>
+        <!-- x-release-please-end -->
     </properties>
 
     <dependencies>

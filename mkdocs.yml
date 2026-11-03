@@ -18,7 +18,9 @@ site_url: https://mihkels.github.io/open-messaging-benchmark/
 repo_url: https://github.com/mihkels/open-messaging-benchmark
 repo_name: mihkels/open-messaging-benchmark
 edit_uri: edit/main/docs/
-copyright: Licensed under the Apache License, Version 2.0
+copyright: >
+  Licensed under the Apache License, Version 2.0 &middot;
+  <a href="#__consent">Change cookie settings</a>
 
 strict: true
 
@@ -74,6 +76,35 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to system preference
+
+# Google Analytics loads only after the visitor accepts the cookie banner. Custom events
+# (code copies, landing page clicks) are sent from assets/javascripts/site.js.
+extra:
+  analytics:
+    provider: google
+    property: G-3SRRECC5F8
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/thumb-up-outline
+          name: This page was helpful
+          data: 1
+          note: Thanks for your feedback!
+        - icon: material/thumb-down-outline
+          name: This page could be improved
+          data: 0
+          note: >
+            Thanks for your feedback! Help us improve this page by
+            <a href="https://github.com/mihkels/open-messaging-benchmark/issues/new?title=[Docs]+{title}&body=Page:+{url}" target="_blank" rel="noopener">opening an issue</a>.
+  consent:
+    title: Cookie consent
+    description: >
+      We use cookies to measure how the documentation is used, which pages help and
+      where people get stuck. With your consent, you help us make the docs better.
+    actions:
+      - accept
+      - reject
+      - manage
 
 markdown_extensions:
   - toc:

@@ -13,7 +13,7 @@ limitations under the License.
 -->
 <!-- The site home page is rendered by overrides/home.html. This text is kept for search. -->
 
-# OpenMessaging Benchmark (fork)
+# OpenMessaging Benchmark
 
 This site documents the maintained fork of the OpenMessaging Benchmark (OMB) framework in
 [mihkels/open-messaging-benchmark](https://github.com/mihkels/open-messaging-benchmark). The fork

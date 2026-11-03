@@ -12,7 +12,7 @@
 # limitations under the License.
 #
 
-site_name: OpenMessaging Benchmark (fork)
+site_name: OpenMessaging Benchmark
 site_description: Usage, driver, methodology and development documentation for the maintained OpenMessaging Benchmark fork.
 site_url: https://mihkels.github.io/open-messaging-benchmark/
 repo_url: https://github.com/mihkels/open-messaging-benchmark
@@ -28,6 +28,9 @@ exclude_docs: |
 
 extra_css:
   - assets/stylesheets/extra.css
+
+extra_javascript:
+  - assets/javascripts/site.js
 
 theme:
   name: material
@@ -48,13 +51,14 @@ theme:
     - content.code.copy
     - content.action.edit
     - toc.follow
+  # The first entry has no fixed scheme, so a new visitor gets the system setting; the toggle
+  # cycles automatic, light and dark.
   palette:
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
+    - media: "(prefers-color-scheme)"
       primary: custom
       accent: custom
       toggle:
-        icon: material/brightness-4
+        icon: material/brightness-auto
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -63,6 +67,13 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
 
 markdown_extensions:
   - toc:

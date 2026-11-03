@@ -141,6 +141,29 @@ for the home page, because YAML front matter (`template: home.html`) cannot prec
 - Theme colors are defined in
   [`docs/assets/stylesheets/extra.css`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/assets/stylesheets/extra.css).
 
+## Analytics
+
+The site uses Google Analytics 4 through the Material theme. The `extra.analytics` and `extra.consent`
+sections of `mkdocs.yml` hold the measurement ID, the "Was this page helpful?" widget and the cookie
+banner. Google Analytics loads only after a visitor accepts analytics cookies; the "Change cookie
+settings" link in the footer reopens the banner. Pages served by `mkdocs serve` load it too once you
+accept, so reject the banner while previewing.
+
+Material sends page views, `search` (the search term) and `feedback` (`page` and `data`, 1 for helpful
+and 0 for not helpful). Custom events are sent from
+[`docs/assets/javascripts/site.js`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/assets/javascripts/site.js):
+
+|      Event      |                Sent when                |            Parameters            |
+|-----------------|-----------------------------------------|----------------------------------|
+| `code_copy`     | A code block copy button is clicked     | `snippet`: first copied line     |
+| `cta_click`     | A landing page hero button is clicked   | `target`: `quickstart`, `github` |
+| `driver_select` | A landing page driver card is clicked   | `driver`: driver page name       |
+| `demo_replay`   | The landing page demo Replay is clicked | none                             |
+
+To track another element, add `data-omb-event="<event name>"` and optionally `data-omb-target` or
+`data-omb-driver` to it. Parameters show in Google Analytics reports only after they are registered as
+event-scoped custom dimensions (**Admin > Custom definitions**).
+
 ## Adding a driver page
 
 Each driver has a page in `docs/drivers/`. Every driver page uses the same sections, in this order:

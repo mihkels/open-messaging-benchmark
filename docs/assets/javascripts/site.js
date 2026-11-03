@@ -28,3 +28,54 @@
   name.textContent = "";
   name.appendChild(link);
 })();
+
+// Custom Google Analytics events. Material keeps its gtag function private and only creates
+// window.dataLayer once the visitor has accepted analytics cookies, so without consent this
+// sends nothing.
+(function () {
+  "use strict";
+
+  function track(name, params) {
+    if (!window.dataLayer) {
+      return;
+    }
+    // gtag expects an arguments object, not an array.
+    (function () {
+      window.dataLayer.push(arguments);
+    })("event", name, params);
+  }
+
+  // Code block copy buttons: record the first line of what was copied.
+  function snippet(button) {
+    var target = document.querySelector(button.getAttribute("data-clipboard-target"));
+    if (!target) {
+      return "";
+    }
+    var line = target.textContent.split("\n").find(function (l) {
+      return l.trim() !== "";
+    }) || "";
+    return line.trim().slice(0, 100);
+  }
+
+  document.addEventListener("click", function (event) {
+    var copy = event.target.closest("[data-clipboard-target]");
+    if (copy) {
+      track("code_copy", { snippet: snippet(copy) });
+      return;
+    }
+
+    // Landing page elements declare their event: data-omb-event plus optional
+    // data-omb-target and data-omb-driver parameters.
+    var el = event.target.closest("[data-omb-event]");
+    if (el) {
+      var params = {};
+      if (el.dataset.ombTarget) {
+        params.target = el.dataset.ombTarget;
+      }
+      if (el.dataset.ombDriver) {
+        params.driver = el.dataset.ombDriver;
+      }
+      track(el.dataset.ombEvent, params);
+    }
+  });
+})();

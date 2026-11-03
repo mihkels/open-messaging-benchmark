@@ -20,15 +20,84 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class DistributedWorkersEnsembleTest {
+
+    @Test
+    void aggregatesSnapshotsFromConcurrentlyPolledWorkers() throws Exception {
+        Worker first = mock(Worker.class);
+        Worker second = mock(Worker.class);
+        Histogram firstHistogram = new Histogram(5);
+        firstHistogram.recordValue(100);
+        Histogram secondHistogram = new Histogram(5);
+        secondHistogram.recordValue(200);
+        secondHistogram.recordValue(300);
+        PeriodStats firstStats =
+                new PeriodStats(1, 0, 10, 1, 10, 1, 0, 1, firstHistogram, firstHistogram, firstHistogram);
+        PeriodStats secondStats =
+                new PeriodStats(
+                        2, 1, 20, 2, 20, 2, 1, 2, secondHistogram, secondHistogram, secondHistogram);
+        CountDownLatch started = new CountDownLatch(2);
+        when(first.getPeriodStats())
+                .thenAnswer(
+                        invocation -> {
+                            started.countDown();
+                            if (!started.await(5, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("Workers were not polled concurrently");
+                            }
+                            return firstStats;
+                        });
+        when(second.getPeriodStats())
+                .thenAnswer(
+                        invocation -> {
+                            started.countDown();
+                            if (!started.await(5, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("Workers were not polled concurrently");
+                            }
+                            return secondStats;
+                        });
+
+        try (var ensemble = new DistributedWorkersEnsemble(List.of(first, second), false)) {
+            PeriodStats result = ensemble.getPeriodStats();
+            assertThat(result).isEqualTo(firstStats.plus(secondStats));
+            assertThat(result.publishLatency().getTotalCount()).isEqualTo(3);
+            assertThat(result.publishDelayLatency().getTotalCount()).isEqualTo(3);
+            assertThat(result.endToEndLatency().getTotalCount()).isEqualTo(3);
+            result.publishLatency().reset();
+            assertThat(firstStats.publishLatency().getTotalCount()).isEqualTo(1);
+            assertThat(secondStats.publishLatency().getTotalCount()).isEqualTo(2);
+            assertThat(result.publishLatency().getTotalCount()).isEqualTo(3);
+        }
+    }
+
+    @Test
+    void reportsEveryStatisticsPollingFailure() throws Exception {
+        Worker first = mock(Worker.class);
+        Worker second = mock(Worker.class);
+        var firstFailure = new IllegalStateException("first statistics failure");
+        var secondFailure = new IllegalStateException("second statistics failure");
+        when(first.getPeriodStats()).thenThrow(firstFailure);
+        when(second.getPeriodStats()).thenThrow(secondFailure);
+
+        try (var ensemble = new DistributedWorkersEnsemble(List.of(first, second), false)) {
+            Throwable failure = catchThrowable(ensemble::getPeriodStats);
+            assertThat(failure).isSameAs(firstFailure);
+            assertThat(failure.getSuppressed()).containsExactly(secondFailure);
+            verify(first).getPeriodStats();
+            verify(second).getPeriodStats();
+        }
+    }
 
     @Test
     void attemptsEveryWorkerAndReportsStopAndCloseFailures() throws Exception {

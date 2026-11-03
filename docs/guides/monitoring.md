@@ -52,6 +52,15 @@ scrape_configs:
       - targets: ["worker-1:8080", "worker-2:8080", "worker-3:8080", "worker-4:8080"]
 ```
 
+JVM resource gauges are exported separately as `omb_resource_*`, with `role="supervisor"` and
+`role="driver"` labels so the combined endpoint retains process identity. They include process
+CPU seconds, heap used/committed bytes, non-heap/direct-buffer bytes, platform-thread count,
+GC count/collection seconds, and PID. Unsupported management readings are `NaN`.
+These gauges are read on scrape, not updated on the message hot path. Collection time is not a
+GC-pause distribution, and heap is not resident memory.
+For broker-independent resource measurements, profiling, and repeatable baseline comparisons,
+see [Framework resource efficiency](../development/framework-performance.md).
+
 In local mode there is no worker HTTP server; use the JSON result and the logs.
 
 ## Logs

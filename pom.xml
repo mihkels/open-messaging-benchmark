@@ -775,5 +775,11 @@
                 </pluginManagement>
             </build>
         </profile>
+        <profile>
+            <id>performance</id>
+            <modules>
+                <module>performance-harness</module>
+            </modules>
+        </profile>
     </profiles>
 </project>

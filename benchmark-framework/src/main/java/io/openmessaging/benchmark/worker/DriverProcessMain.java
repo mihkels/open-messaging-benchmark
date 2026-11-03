@@ -58,6 +58,7 @@ public final class DriverProcessMain {
                         .start(DriverProcessMain::exitWhenSupervisorDisconnects);
 
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        new JvmResourceMetrics().bindTo(registry, "driver");
         LocalWorker worker = new LocalWorker(registry);
         WorkerHandler handler = new WorkerHandler(worker);
         Javalin app =

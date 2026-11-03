@@ -1,0 +1,61 @@
+name: Framework performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      topology:
+        description: Framework topology (distributed measures independent streams/control plane)
+        type: choice
+        options: [process, http, local, distributed]
+        default: process
+      mode:
+        description: Synthetic loopback completion
+        type: choice
+        options: [sync, async]
+        default: sync
+      rate:
+        description: Fixed offered messages per second
+        default: "10000"
+        required: true
+      collector:
+        description: Opt-in collector experiment (not a production recommendation)
+        type: choice
+        options: [g1, parallel, zgc]
+        default: g1
+      profile:
+        description: Record JFR and GC logs (compare only with equally profiled runs)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@v5
+      - name: Build opt-in tooling
+        run: mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install -DskipTests
+      - name: Run resource experiment
+        env:
+          TOPOLOGY: ${{ inputs.topology }}
+          MODE: ${{ inputs.mode }}
+          RATE: ${{ inputs.rate }}
+          COLLECTOR: ${{ inputs.collector }}
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          options=()
+          if [ "$PROFILE" = "true" ]; then options+=(--profile); fi
+          bin/framework-performance run --output "$RUNNER_TEMP/framework-performance" \
+            --topology "$TOPOLOGY" --mode "$MODE" --rate "$RATE" --collector "$COLLECTOR" \
+            --processors 2 --repetitions 3 "${options[@]}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: framework-performance-${{ inputs.collector }}
+          path: ${{ runner.temp }}/framework-performance

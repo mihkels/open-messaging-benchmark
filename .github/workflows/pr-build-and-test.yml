@@ -45,3 +45,45 @@ jobs:
         with:
           name: test-results
           path: test-results.zip
+
+  framework-performance-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@v5
+      - name: Build and verify opt-in harness
+        run: mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install
+      - name: Check comparison and sampling logic
+        run: python3 -m unittest discover -s performance-harness/tests -v
+      - name: Smoke JMH wiring without a performance threshold
+        run: |
+          bin/framework-performance micro --output "$RUNNER_TEMP/framework-smoke/jmh" -- \
+            '.*StatsTransferBenchmark.aggregatePeriod' -p aggregationSize=1 \
+            -wi 1 -i 1 -w 100ms -r 100ms -f 1
+      - name: Exercise framework topologies without a broker
+        run: |
+          for topology in local process http distributed; do
+            bin/framework-performance run --smoke --topology "$topology" \
+              --output "$RUNNER_TEMP/framework-smoke/$topology" \
+              --processors 2 --rate 1000 --repetitions 1
+          done
+          bin/framework-performance run --smoke --topology process --mode async \
+            --output "$RUNNER_TEMP/framework-smoke/async" \
+            --processors 2 --rate 1000 --repetitions 1
+      - name: Check failed driver startup is reported
+        run: |
+          if bin/framework-performance run --smoke --topology process \
+            --output "$RUNNER_TEMP/framework-smoke/failed-startup" --repetitions 1 \
+            --driver-jvm-opts=-XX:UnsupportedOMBOption; then
+            echo "Invalid JVM options unexpectedly succeeded"
+            exit 1
+          fi
+          test -f "$RUNNER_TEMP/framework-smoke/failed-startup/run-001/failure.json"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: framework-performance-smoke
+          path: ${{ runner.temp }}/framework-smoke

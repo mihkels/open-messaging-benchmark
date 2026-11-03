@@ -91,6 +91,7 @@ public final class BenchmarkWorker {
 
         PrometheusMeterRegistry prometheusRegistry =
                 new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        new JvmResourceMetrics().bindTo(prometheusRegistry, "supervisor");
 
         // Dump configuration variables
         log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));

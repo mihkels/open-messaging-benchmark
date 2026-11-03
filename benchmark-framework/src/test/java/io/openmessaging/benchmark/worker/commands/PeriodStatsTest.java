@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.worker.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 
@@ -100,5 +101,35 @@ class PeriodStatsTest {
         assertThat(stats.publishDelayLatency().getValueAtPercentile(99)).isEqualTo(200);
         assertThat(stats.endToEndLatency().getTotalCount()).isEqualTo(1);
         assertThat(stats.endToEndLatency().getValueAtPercentile(99)).isEqualTo(3_000);
+    }
+
+    @Test
+    void aggregatePreservesEveryCounterAndHistogramWithoutMutatingInputs() {
+        Histogram histogram = new Histogram(5);
+        histogram.recordValue(10);
+        histogram.recordValue(60_000_000);
+        PeriodStats one = new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, histogram, histogram, histogram);
+        histogram.recordValue(40_000_000_000L);
+        PeriodStats two =
+                new PeriodStats(10, 20, 30, 40, 50, 60, 70, 80, histogram, histogram, histogram);
+        PeriodStats result = PeriodStats.aggregate(List.of(one, two, one));
+
+        assertThat(result).isEqualTo(one.plus(two).plus(one));
+        assertThat(result.publishLatency().getTotalCount()).isEqualTo(7);
+        result.publishLatency().recordValue(100);
+        result.publishDelayLatency().reset();
+        result.endToEndLatency().reset();
+        assertThat(result.publishLatency().getTotalCount()).isEqualTo(7);
+        assertThat(one.publishLatency().getTotalCount()).isEqualTo(2);
+        assertThat(two.endToEndLatency().getTotalCount()).isEqualTo(3);
+    }
+
+    @Test
+    void aggregateHandlesEmptyAndSingletonSnapshots() {
+        assertThat(PeriodStats.aggregate(List.of())).isEqualTo(new PeriodStats());
+        PeriodStats snapshot = new PeriodStats();
+        assertThat(PeriodStats.aggregate(List.of(snapshot))).isSameAs(snapshot);
+        snapshot.publishLatency().recordValue(10);
+        assertThat(PeriodStats.aggregate(List.of(snapshot)).publishLatency().getTotalCount()).isZero();
     }
 }

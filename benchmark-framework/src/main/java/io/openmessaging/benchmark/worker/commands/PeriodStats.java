@@ -14,6 +14,8 @@
 package io.openmessaging.benchmark.worker.commands;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
+import java.util.Objects;
 import org.HdrHistogram.Histogram;
 
 public record PeriodStats(
@@ -100,5 +102,48 @@ public record PeriodStats(
         combined.add(first);
         combined.add(second);
         return combined;
+    }
+
+    /** Combines immutable snapshots without allocating intermediate combined snapshots. */
+    public static PeriodStats aggregate(List<PeriodStats> snapshots) {
+        if (snapshots.size() == 1) {
+            return Objects.requireNonNull(snapshots.getFirst());
+        }
+        long sent = 0;
+        long errors = 0;
+        long sentBytes = 0;
+        long received = 0;
+        long receivedBytes = 0;
+        long totalSent = 0;
+        long totalErrors = 0;
+        long totalReceived = 0;
+        Histogram publish = new Histogram(5);
+        Histogram delay = new Histogram(5);
+        Histogram endToEnd = new Histogram(5);
+        for (PeriodStats snapshot : snapshots) {
+            sent += snapshot.messagesSent;
+            errors += snapshot.messageSendErrors;
+            sentBytes += snapshot.bytesSent;
+            received += snapshot.messagesReceived;
+            receivedBytes += snapshot.bytesReceived;
+            totalSent += snapshot.totalMessagesSent;
+            totalErrors += snapshot.totalMessageSendErrors;
+            totalReceived += snapshot.totalMessagesReceived;
+            publish.add(snapshot.publishLatency);
+            delay.add(snapshot.publishDelayLatency);
+            endToEnd.add(snapshot.endToEndLatency);
+        }
+        return new PeriodStats(
+                sent,
+                errors,
+                sentBytes,
+                received,
+                receivedBytes,
+                totalSent,
+                totalErrors,
+                totalReceived,
+                publish,
+                delay,
+                endToEnd);
     }
 }

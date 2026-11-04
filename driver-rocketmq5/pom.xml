@@ -26,7 +26,7 @@
     <artifactId>driver-rocketmq5</artifactId>
 
     <properties>
-        <rocketmq-client-java-version>5.0.7</rocketmq-client-java-version>
+        <rocketmq-client-java-version>5.2.2</rocketmq-client-java-version>
         <rocketmq.version>5.1.0</rocketmq.version>
     </properties>
 

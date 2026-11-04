@@ -1103,6 +1103,12 @@ class NsqBenchmarkConsumerTest {
             second.sendMessage(new byte[] {1}, System.currentTimeMillis());
             assertThat(delivered.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(second.awaitCommand("FIN ")).isEqualTo("FIN 0123456789abcdef");
+
+            // Close while the broker is still alive: nsq-client waits a fixed 15 s for the CLS
+            // response and does not notice a peer that disconnected after the isConnected check.
+            consumer.close();
+            assertThat(second.awaitCommand("CLS")).isEqualTo("CLS");
+            assertThat(second.disconnected.await(5, TimeUnit.SECONDS)).isTrue();
         }
     }
 

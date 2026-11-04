@@ -1,0 +1,107 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Headless Service with publishNotReadyAddresses: the name resolves straight to the pod IP, like a
+# compose service name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulsar
+  labels:
+    app.kubernetes.io/name: pulsar
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: pulsar
+  ports:
+    - name: pulsar
+      port: 6650
+    - name: http
+      port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulsar
+  labels:
+    app.kubernetes.io/name: pulsar
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pulsar
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pulsar
+        app.kubernetes.io/part-of: omb-broker
+    spec:
+      hostname: pulsar
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      # The image runs as uid 10000 with gid 0; apply-config-from-env.py rewrites the group-writable conf/.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pulsar
+          image: apachepulsar/pulsar:4.0.6@sha256:c30ad1646e00b2a7c9e89de949a91b6506afc5f1bd3f402a23eefc46990def88
+          command: ["sh", "-c", "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"]
+          env:
+            - name: PULSAR_MEM
+              value: "-Xms256m -Xmx1g -XX:MaxDirectMemorySize=512m"
+            - name: PULSAR_PREFIX_transactionCoordinatorEnabled
+              value: "true"
+            - name: PULSAR_PREFIX_systemTopicEnabled
+              value: "true"
+            # Topic lookups must return the service name, not the pod name (compose resolves the hostname).
+            - name: PULSAR_PREFIX_advertisedAddress
+              value: pulsar
+          ports:
+            - name: pulsar
+              containerPort: 6650
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /admin/v2/brokers/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /pulsar/data
+      volumes:
+        - name: data
+          emptyDir: {}

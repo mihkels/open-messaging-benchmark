@@ -1,0 +1,54 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Chart values for the jms-pulsar stack: downloads the pinned JMS provider jar (URL and sha256 from
+# e2e-tests/compose/artifacts.txt) into the driver-jms ext/ directory of every worker.
+
+image:
+  variant: jms
+
+extraVolumes:
+  - name: jms-ext
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: jms-ext
+    mountPath: /benchmark/drivers/driver-jms/ext
+    readOnly: true
+
+extraInitContainers:
+  - name: fetch-jms-provider
+    image: curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    command: ["sh", "-c"]
+    args:
+      - |
+        set -eu
+        curl -fsSL --retry 3 -o /ext/pulsar-jms-all-6.0.11.jar https://repo1.maven.org/maven2/com/datastax/oss/pulsar-jms-all/6.0.11/pulsar-jms-all-6.0.11.jar
+        echo "d4c744c8e5bdedb8f373ece959ebf2256128fc31248d5c2db909bce913ed7f3a  /ext/pulsar-jms-all-6.0.11.jar" | sha256sum -c -
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi
+    volumeMounts:
+      - name: jms-ext
+        mountPath: /ext

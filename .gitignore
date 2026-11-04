@@ -10,9 +10,14 @@ core/*.json
 *.json
 # Test fixtures, unlike benchmark results, belong in the repository
 !**/src/test/resources/**/*.json
+# Release and chart configuration
+!/release-please-config.json
+!/.release-please-manifest.json
+!/deployment/kubernetes/helm/**/values.schema.json
 *.retry
 *.pem
 *.hcl
+!/docker-bake.hcl
 **/.terraform
 **/terraform.tfstate
 **/terraform.tfstate.backup
@@ -35,3 +40,6 @@ site/
 !docs/assets/**/*.svg
 !docs/assets/*.svg
 !docs/demo/*.json
+
+# Project-local kubeconfig written by the mise k8s tasks
+.kube/

@@ -35,10 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: jdx/mise-action@v5
+          persist-credentials: false
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install_args: java maven python
       - name: Build opt-in tooling
         run: mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install -DskipTests
       - name: Run resource experiment
@@ -54,7 +57,7 @@ jobs:
           bin/framework-performance run --output "$RUNNER_TEMP/framework-performance" \
             --topology "$TOPOLOGY" --mode "$MODE" --rate "$RATE" --collector "$COLLECTOR" \
             --processors 2 --repetitions 3 "${options[@]}"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: framework-performance-${{ inputs.collector }}

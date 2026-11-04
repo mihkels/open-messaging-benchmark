@@ -43,7 +43,7 @@ Maven Enforcer plugin in the root POM requires Maven 3.9.0 or newer (3.10.0 reco
 or newer.
 
 Docker is optional. You need it only to build images, run containers and run the end-to-end suites.
-The launch and helper scripts (`bin/*`, `local-build.sh`, `e2e-tests/compose/run-e2e.sh`) need bash.
+The launch and helper scripts (`bin/*`, `setup.sh`, `deployment/kubernetes/local/omb-k8s.sh`, `e2e-tests/compose/run-e2e.sh`) need bash.
 
 ## Repository layout
 
@@ -138,7 +138,7 @@ package/target/openmessaging-benchmark-<version>-bin.tar.gz
 ```
 
 `<version>` is the reactor version (the `revision` property in the root POM, currently
-`0.0.6-SNAPSHOT`). The assembly descriptor is
+`0.0.6`; release-please updates it, see [Releasing](releasing.md)). The assembly descriptor is
 [`package/src/assemble/bin.xml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/package/src/assemble/bin.xml).
 The tarball contains a single `openmessaging-benchmark-<version>/` directory with this layout:
 
@@ -156,63 +156,41 @@ README.md, LICENSE
 Each `drivers/<module>/` directory is a copy of that module's `target/omb-plugin`. A source tarball is
 also assembled next to the binary tarball.
 
+## Building selected drivers
+
+By default the reactor builds and packages every driver. To build only some, pass
+`-Domb.selectDrivers` with one `driver-<name>` profile per driver (names as in
+[`docker/drivers.txt`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/drivers.txt)):
+
+```bash
+mvn -Domb.selectDrivers -Pdriver-kafka,driver-pulsar -DskipTests package
+```
+
+The reactor then contains the framework, `driver-api`, the selected drivers, `package` and `tool`,
+and the distribution's `drivers/` holds only those plugins. `driver-kop` also builds `driver-kafka`
+and `driver-pulsar`, which it compiles against. The `e2e-tests` module needs every plugin and is only
+part of the full build. Without `-Domb.selectDrivers` the `all-drivers` profile stays active.
+
 ## Docker images
 
-Both Dockerfiles are documented in
-[`docker/README.md`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
-and use an Amazon Corretto 27 runtime. Inside the image the distribution is at `/benchmark`, which is
-also the working directory.
-
-### From a prebuilt tarball
-
 [`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)
-takes the tarball through the `BENCHMARK_TARBALL` build argument. The file must be inside the build
-context:
+is a single multi-stage BuildKit build: Maven compiles the distribution inside the build with the
+local Maven repository in a cache mount, and the runtime stage is Eclipse Temurin 27 running as a
+non-root user. Build targets are in
+[`docker-bake.hcl`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker-bake.hcl):
 
 ```bash
-mvn -q -DskipTests install
-export BENCHMARK_TARBALL=package/target/openmessaging-benchmark-0.0.6-SNAPSHOT-bin.tar.gz
-docker build -t openmessaging-benchmark:latest \
-  --build-arg "BENCHMARK_TARBALL=$BENCHMARK_TARBALL" -f docker/Dockerfile .
+docker buildx bake                                  # openmessaging-benchmark:local, every driver
+DRIVERS=kafka docker buildx bake                    # selected drivers only
+docker buildx bake multiarch-amd64 multiarch-arm64  # both architectures, separate local tags
 ```
 
-### Building inside Docker
-
-[`docker/Dockerfile.build`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile.build)
-needs no local Maven. Its builder stage (`maven:3.10.0-eclipse-temurin-27-alpine`) resolves
-dependencies and runs `mvn install` with tests, and the runtime stage extracts the tarball to
-`/benchmark`:
-
-```bash
-docker build -t openmessaging-benchmark:latest . -f docker/Dockerfile.build
-```
-
-The license check runs inside this build too. If the build context comes from a linked worktree, the
-`.git` file can point outside the context and the check can fail.
-
-### Multi-platform helper
-
-[`local-build.sh`](https://github.com/mihkels/open-messaging-benchmark/blob/main/local-build.sh)
-formats the sources, builds the reactor on the host, and then builds `docker/Dockerfile.build` with
-`docker buildx`:
-
-```bash
-./local-build.sh [version] [platforms] [push|load]
-```
-
-|   Argument    |                           Default                           |                                     Meaning                                      |
-|---------------|-------------------------------------------------------------|----------------------------------------------------------------------------------|
-| `version`     | `latest`                                                    | Image tag prefix                                                                 |
-| `platforms`   | `linux/arm64,linux/amd64` on macOS, `linux/amd64` otherwise | `buildx --platform` value                                                        |
-| `push`/`load` | load for one platform; OCI archive for several              | `push` (or `--push`, `true`, `1`) pushes; `load` (or `--load`) loads into Docker |
-
-The image is tagged `mihkels/open-messaging-benchmark:<version>-kafka-4.4-java27`. Setting
-`DOCKER_PUSH` to any value other than `0` also enables pushing. A multi-platform build that neither
-pushes nor loads is written to `omb-image-<version>-kafka-4.4-java27.oci.tar`. The script attaches an
-SBOM attestation and exports the build cache to the registry `mihkels/open-messaging-benchmark:cache`,
-even when the image itself is not pushed.
-
-For running the images, see [Containers and Kubernetes](../guides/containers-and-kubernetes.md).
+`DRIVERS` selects the Maven profiles above and removes the other drivers from the image. The image
+build skips tests and the license, formatting and static analysis checks, and does not need the
+`.git` directory, so it works from linked worktrees. See
+[`docker/README.md`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
+for the stages and runtime layout, and
+[Containers and Kubernetes](../guides/containers-and-kubernetes.md) for running the images.
 
 ## Continuous integration
 
@@ -232,3 +210,14 @@ The same workflow runs a `framework-performance-smoke` job, which builds `perfor
 `-Pperformance` and runs its smoke checks (see [Framework resource efficiency](framework-performance.md)).
 `framework-performance.yml` runs only when started manually. `docs.yml` builds the documentation site
 (see [Documentation](documentation.md#publishing)).
+
+Other workflows:
+
+|       Workflow       |                                                    What it does                                                     |
+|----------------------|---------------------------------------------------------------------------------------------------------------------|
+| `Docker image`       | Builds the distribution once, smoke-tests and scans the image; publishes signed images from `main` and release tags |
+| `Helm chart`         | Lints the chart and local manifests, runs `kafka-contract` on kind; publishes the signed chart from release tags    |
+| `Release`            | Maintains the release-please Release PR; see [Releasing](releasing.md)                                              |
+| `Pull request title` | Requires conventional-commit titles                                                                                 |
+| `Workflow lint`      | actionlint, zizmor, version consistency and the Docker Hub-only registry check                                      |
+

@@ -1,0 +1,20 @@
+{{ include "omb.workerName" . }}: {{ .Values.workers.replicas }} workers in namespace {{ .Release.Namespace }}, image {{ include "omb.image" . }}.
+{{- if eq .Values.coordinator.mode "job" }}
+
+The coordinator Job runs {{ include "omb.workloadPath" . }} with {{ include "omb.driverPath" . }} once.
+Follow it and read the result JSON between the OMB RESULT markers:
+
+  kubectl logs --namespace {{ .Release.Namespace }} -f job/{{ include "omb.coordinatorName" . }}
+{{- else }}
+
+Open a shell in the coordinator and start a run:
+
+  kubectl exec --namespace {{ .Release.Namespace }} -it deploy/{{ include "omb.coordinatorName" . }} -- bash
+  benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
+
+Copy the result out while the pod runs:
+
+  kubectl cp --namespace {{ .Release.Namespace }} "$(kubectl get pod --namespace {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=coordinator -o name | head -1 | cut -d/ -f2)":/results/result.json result.json
+{{- end }}
+
+Broker addresses in the driver configuration must be reachable from the worker pods.

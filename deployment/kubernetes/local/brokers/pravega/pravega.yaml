@@ -1,0 +1,102 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Headless Service with publishNotReadyAddresses: the name resolves straight to the pod IP, like a
+# compose service name. HOST_IP (the address the segment store advertises) must be this name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravega
+  labels:
+    app.kubernetes.io/name: pravega
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: pravega
+  ports:
+    - name: controller
+      port: 9090
+    - name: rest
+      port: 9091
+    - name: segmentstore
+      port: 12345
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravega
+  labels:
+    app.kubernetes.io/name: pravega
+    app.kubernetes.io/part-of: omb-broker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pravega
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pravega
+        app.kubernetes.io/part-of: omb-broker
+    spec:
+      hostname: pravega
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      # The image is linux/amd64 only (no multi-arch index for this tag).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      # Exception: the image has no USER and writes under /opt/pravega as root, so it keeps running as
+      # root (without capabilities or privilege escalation).
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pravega
+          image: pravega/pravega:0.13.0@sha256:b000c0604430d5e34b82f2d4a42e1e0318930610379023e89d187580b755f3b9
+          args: ["standalone"]
+          env:
+            - name: HOST_IP
+              value: pravega
+            - name: JAVA_OPTS
+              value: "-Xmx1g -XX:MaxDirectMemorySize=1g"
+          ports:
+            - name: controller
+              containerPort: 9090
+            - name: rest
+              containerPort: 9091
+            - name: segmentstore
+              containerPort: 12345
+          readinessProbe:
+            # The controller REST API listens on 9091 in standalone mode; also require the segment store.
+            exec:
+              command: ["sh", "-c", "curl -fsS http://localhost:9091/v1/scopes > /dev/null && nc -z localhost 12345"]
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1536Mi
+            limits:
+              memory: 3Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

@@ -38,10 +38,9 @@ services:
     container_name: omb-worker-1
     environment:
       - HEAP_OPTS=-Xms512m -Xmx512m
-    command: ["bash","-lc","bin/benchmark-worker -p 8080 -sp 8081"]
+    command: ["bash","-c","bin/benchmark-worker -p 8080"]
     ports:
-      - "18081:8080"   # HTTP
-      - "18091:8081"   # metrics (optional)
+      - "18081:8080"   # HTTP API and /metrics
     networks:
       - ombnet
 
@@ -50,10 +49,9 @@ services:
     container_name: omb-worker-2
     environment:
       - HEAP_OPTS=-Xms512m -Xmx512m
-    command: ["bash","-lc","bin/benchmark-worker -p 8080 -sp 8081"]
+    command: ["bash","-c","bin/benchmark-worker -p 8080"]
     ports:
       - "18082:8080"
-      - "18092:8081"
     networks:
       - ombnet
 
@@ -70,10 +68,11 @@ services:
       - ./drivers:/drivers:ro
       - ./workloads:/workloads:ro
       - ./payload:/payload:ro
+    # The image runs as a non-root user with a read-only /benchmark; results go to /results
     command:
       [
-        "bash","-lc",
-        "cat > /root/.bashrc << 'EOF'\necho\necho 'Run the benchmark with:'\necho 'HEAP_OPTS=\"-Xms512m -Xmx512m\"  bin/benchmark --drivers /drivers/kafka.yaml --workers http://omb-worker-1:8080,http://omb-worker-2:8080 /workloads/simple.yaml'\necho 'Optionally with heap tuning:'\necho '  HEAP_OPTS=\"-Xms4G -Xmx4G\" bin/benchmark --drivers /drivers/kafka.yaml --workers http://omb-worker-1:8080,http://omb-worker-2:8080 /workloads/simple.yaml'\necho\nEOF\nprintf '#!/usr/bin/env bash\nset -euo pipefail\n${HEAP_OPTS:+export HEAP_OPTS}\nbin/benchmark --drivers /drivers/kafka.yaml --workers omb-worker-1:8080,omb-worker-2:8080 /workloads/1-topic-16-partitions-1kb.yaml\n' > /usr/local/bin/run-benchmark && chmod +x /usr/local/bin/run-benchmark\nexec tail -f /dev/null"
+        "bash","-c",
+        "echo 'Run the benchmark with:'; echo '  bin/benchmark --drivers /drivers/kafka.yaml --workers http://omb-worker-1:8080,http://omb-worker-2:8080 -o /results/result.json /workloads/simple.yaml'; exec sleep infinity"
       ]
     networks:
       - ombnet

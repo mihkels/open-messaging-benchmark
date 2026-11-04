@@ -24,6 +24,14 @@ import org.junit.jupiter.api.Test;
 class DriverProcessTest {
 
     @Test
+    void driverLogFollowsTheSupervisorLogDirectory() {
+        assertThat(DriverProcess.driverLogName(null)).isEqualTo("benchmark-driver");
+        assertThat(DriverProcess.driverLogName("benchmark-worker")).isEqualTo("benchmark-driver");
+        assertThat(DriverProcess.driverLogName("/tmp/benchmark-worker"))
+                .isEqualTo(Path.of("/tmp", "benchmark-driver").toString());
+    }
+
+    @Test
     void reportsACrashAfterAConcurrentStopHasFinished() throws Exception {
         Process exited =
                 new ProcessBuilder(

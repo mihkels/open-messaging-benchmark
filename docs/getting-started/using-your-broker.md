@@ -111,9 +111,13 @@ With the Docker image and files on the host, mount them into a container on a ne
 reach the broker:
 
 ```bash
-docker run --rm -it -v "$PWD:/work" -w /benchmark openmessaging-benchmark:local \
+docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /benchmark \
+  openmessaging-benchmark:local \
   bin/benchmark --drivers /work/my-kafka.yaml -o /work/smoke.json /work/smoke.yaml
 ```
+
+`--user` lets the container write the result into your directory; the image otherwise runs as
+uid 10001.
 
 Add `--network <name>` or `--network host` (Linux) when the broker is only reachable that way.
 The driver child JVM uses a 4 GiB heap by default; set `-e HEAP_OPTS="-Xms1G -Xmx1G"` on small

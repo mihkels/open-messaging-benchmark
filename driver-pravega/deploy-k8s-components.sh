@@ -26,6 +26,7 @@ NAMESPACE=${NAMESPACE:-examples}
 helm upgrade --install --timeout 600 --wait --debug \
 ${NAMESPACE}-openmessaging-benchmarking \
 --namespace ${NAMESPACE} \
---set image=${DOCKER_REPOSITORY}/openmessaging-benchmark:${IMAGE_TAG} \
-${ROOT_DIR}/deployment/kubernetes/helm/benchmark \
+--set image.repository=${DOCKER_REPOSITORY}/openmessaging-benchmark \
+--set image.tag=${IMAGE_TAG} \
+${ROOT_DIR}/deployment/kubernetes/helm/open-messaging-benchmark-chart \
 $@

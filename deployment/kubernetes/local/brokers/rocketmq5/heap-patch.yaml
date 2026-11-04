@@ -1,0 +1,50 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Smaller heaps from rocketmq5-proxy.yaml so that the proxy fits next to the name server and broker.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namesrv
+spec:
+  template:
+    spec:
+      containers:
+        - name: namesrv
+          env:
+            - name: JAVA_OPT_EXT
+              value: "-Xms64m -Xmx256m -Xmn64m"
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broker
+spec:
+  template:
+    spec:
+      containers:
+        - name: broker
+          env:
+            - name: JAVA_OPT_EXT
+              value: "-Xms128m -Xmx512m -Xmn128m"
+          resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 1536Mi

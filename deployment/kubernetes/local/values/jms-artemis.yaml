@@ -1,0 +1,54 @@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Chart values for the jms-artemis stack: downloads the pinned JMS provider jar (URL and sha256 from
+# e2e-tests/compose/artifacts.txt) into the driver-jms ext/ directory of every worker.
+
+image:
+  variant: jms
+
+extraVolumes:
+  - name: jms-ext
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: jms-ext
+    mountPath: /benchmark/drivers/driver-jms/ext
+    readOnly: true
+
+extraInitContainers:
+  - name: fetch-jms-provider
+    image: curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+    command: ["sh", "-c"]
+    args:
+      - |
+        set -eu
+        curl -fsSL --retry 3 -o /ext/artemis-jms-client-all-2.57.0.jar https://repo1.maven.org/maven2/org/apache/artemis/artemis-jms-client-all/2.57.0/artemis-jms-client-all-2.57.0.jar
+        echo "a60bc90946368c5908908fd82ef8cec6e8401a1fd3805ebda1d7ccd9c6b1ddee  /ext/artemis-jms-client-all-2.57.0.jar" | sha256sum -c -
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi
+    volumeMounts:
+      - name: jms-ext
+        mountPath: /ext

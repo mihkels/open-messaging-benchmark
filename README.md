@@ -28,16 +28,18 @@ Run a first benchmark against a single Kafka broker with Docker only:
 ```bash
 git clone https://github.com/mihkels/open-messaging-benchmark.git
 cd open-messaging-benchmark
-docker build -t openmessaging-benchmark:local -f docker/Dockerfile.build .
+docker buildx bake                # or pull docker.io/mihkels/open-messaging-benchmark:edge
 cd local-test && docker compose up -d
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
      --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \
-     -o first-result.json /workloads/simple.yaml'
+     -o /results/first-result.json /workloads/simple.yaml'
 ```
 
 The [Quickstart](https://mihkels.github.io/open-messaging-benchmark/getting-started/quickstart/)
 explains each step, how to check that the environment is ready, and how to read the result.
+To run any driver against its broker on a local kind cluster with the Helm chart, see
+[Local Kubernetes](https://mihkels.github.io/open-messaging-benchmark/guides/kubernetes-local/).
 
 ### From the binary distribution
 
@@ -84,7 +86,7 @@ mvn spotless:apply           # format sources and Markdown
 ```
 
 [Building the project](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/)
-covers the build profiles, Docker images, the Testcontainers and Docker Compose regression suites,
+covers the build profiles, Docker images (published to `docker.io/mihkels/open-messaging-benchmark`), the Testcontainers and Docker Compose regression suites,
 and known issues such as running the license check in a Git worktree.
 
 ## Repository layout

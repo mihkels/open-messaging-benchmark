@@ -70,7 +70,7 @@ hand.
    is optional.
 3. **GitHub App for release-please**: create an app with repository permissions *Contents*,
    *Pull requests* and *Issues* set to read and write, install it on this repository only, and
-   create environment `release` (limited to `main`) with variable `RELEASE_APP_CLIENT_ID` (the app's Client ID) and secret
+   create environment `release` (limited to `main`) with variable `RELEASE_APP_ID` (the app's App ID or Client ID) and secret
    `RELEASE_APP_PRIVATE_KEY`. The app token is needed because pull requests and tags created with
    `GITHUB_TOKEN` do not trigger workflows.
 4. **Rulesets**: protect `main` (pull requests, required checks) and `v*` tags (only maintainers

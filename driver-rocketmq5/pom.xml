@@ -27,7 +27,7 @@
 
     <properties>
         <rocketmq-client-java-version>5.2.2</rocketmq-client-java-version>
-        <rocketmq.version>5.1.0</rocketmq.version>
+        <rocketmq.version>5.5.1</rocketmq.version>
     </properties>
 
     <dependencies>

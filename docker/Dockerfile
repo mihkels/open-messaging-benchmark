@@ -64,7 +64,11 @@ LABEL org.opencontainers.image.title="OpenMessaging Benchmark" \
       org.opencontainers.image.revision="${REVISION}" \
       io.openmessaging.benchmark.drivers="${DRIVERS}"
 
-RUN groupadd --system --gid 10001 omb \
+# Upgrades OS packages so Ubuntu security fixes apply before the pinned Temurin image is rebuilt.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 omb \
     && useradd --system --uid 10001 --gid omb --home-dir /tmp --shell /usr/sbin/nologin omb \
     && mkdir -p /results \
     && chown 10001:10001 /results

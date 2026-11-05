@@ -2,6 +2,8 @@
 
 [![Build](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml)
 [![Docs](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/docs.yml/badge.svg)](https://mihkels.github.io/open-messaging-benchmark/)
+[![Coverage](https://raw.githubusercontent.com/mihkels/open-messaging-benchmark/badges/jacoco.svg)](docs/development/building-the-project.md#coverage-thresholds)
+[![Branches](https://raw.githubusercontent.com/mihkels/open-messaging-benchmark/badges/branches.svg)](docs/development/building-the-project.md#coverage-thresholds)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 A maintained fork of the [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)

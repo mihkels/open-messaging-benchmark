@@ -128,6 +128,10 @@ a floor only when code is deliberately left untested, and say why in the pull re
 Classes excluded from coverage are listed in the JaCoCo plugin configuration of the root
 `pom.xml`, each with the reason.
 
+The coverage and branch badges in the README show instruction and branch coverage summed over every
+module. On each push to `main`, the `coverage-badge` job of the build workflow regenerates them from
+the modules' `jacoco.csv` files and force-pushes them to the orphan `badges` branch.
+
 ## Formatting and license headers
 
 ```bash
@@ -237,7 +241,10 @@ runs:
 mvn --no-transfer-progress --batch-mode verify
 ```
 
-If the job fails, the Surefire reports are uploaded as the `test-results` artifact. CI does not run the
+The build fails when a module's coverage drops below its floor (see
+[Coverage thresholds](#coverage-thresholds)). The JaCoCo CSV reports are uploaded as the `jacoco-csv`
+artifact, and on `main` the `coverage-badge` job turns them into the README badges. If the job fails,
+the Surefire reports are uploaded as the `test-results` artifact. CI does not run the
 Testcontainers or Compose end-to-end suites. See [Testing a driver](testing-a-driver.md).
 
 The same workflow runs a `framework-performance-smoke` job, which builds `performance-harness` with

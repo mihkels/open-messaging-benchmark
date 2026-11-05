@@ -24,6 +24,14 @@
     </parent>
     <artifactId>driver-rabbitmq</artifactId>
 
+    <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.91</jacoco.min.class>
+        <jacoco.min.method>0.82</jacoco.min.method>
+        <jacoco.min.line>0.78</jacoco.min.line>
+        <jacoco.min.branch>0.67</jacoco.min.branch>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.rabbitmq</groupId>

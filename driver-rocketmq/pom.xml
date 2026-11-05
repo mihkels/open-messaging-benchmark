@@ -26,6 +26,11 @@
     <artifactId>driver-rocketmq</artifactId>
 
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.78</jacoco.min.class>
+        <jacoco.min.method>0.59</jacoco.min.method>
+        <jacoco.min.line>0.66</jacoco.min.line>
+        <jacoco.min.branch>0.54</jacoco.min.branch>
         <rocketmq.version>5.5.1</rocketmq.version>
         <!-- The ACL artifact stopped being published after 5.3.2. -->
         <rocketmq.acl.version>5.3.2</rocketmq.acl.version>

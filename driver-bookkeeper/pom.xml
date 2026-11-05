@@ -26,6 +26,11 @@
     <artifactId>driver-bookkeeper</artifactId>
 
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.78</jacoco.min.class>
+        <jacoco.min.method>0.66</jacoco.min.method>
+        <jacoco.min.line>0.72</jacoco.min.line>
+        <jacoco.min.branch>0.70</jacoco.min.branch>
         <distributedlog.version>${bookkeeper.version}</distributedlog.version>
         <driver.isolated>true</driver.isolated>
     </properties>

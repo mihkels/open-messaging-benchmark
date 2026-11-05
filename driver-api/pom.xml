@@ -25,6 +25,14 @@
 
     <artifactId>driver-api</artifactId>
 
+    <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.81</jacoco.min.class>
+        <jacoco.min.method>0.89</jacoco.min.method>
+        <jacoco.min.line>0.85</jacoco.min.line>
+        <jacoco.min.branch>0.76</jacoco.min.branch>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

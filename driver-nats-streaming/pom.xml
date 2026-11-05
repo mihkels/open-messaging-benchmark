@@ -24,6 +24,14 @@
     </parent>
 
     <artifactId>driver-nats-streaming</artifactId>
+    <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.48</jacoco.min.class>
+        <jacoco.min.method>0.46</jacoco.min.method>
+        <jacoco.min.line>0.58</jacoco.min.line>
+        <jacoco.min.branch>0.59</jacoco.min.branch>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.google.guava</groupId>

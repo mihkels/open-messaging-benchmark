@@ -34,8 +34,17 @@ jobs:
         with:
           install_args: java maven python
 
+      # Fails when a module's coverage drops below its jacoco.min.* floor
       - name: Build and Verify
         run: mvn --no-transfer-progress --batch-mode verify
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        name: upload coverage reports
+        with:
+          name: jacoco-csv
+          path: '*/target/site/jacoco/jacoco.csv'
+          if-no-files-found: error
+          retention-days: 7
 
       - name: package surefire test results
         if: failure()
@@ -50,6 +59,40 @@ jobs:
         with:
           name: test-results
           path: test-results.zip
+
+  coverage-badge:
+    # Publishes the overall coverage badges shown in README.md to the orphan `badges` branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jacoco-csv
+          path: coverage
+      - name: Generate badges
+        uses: cicirello/jacoco-badge-generator@72266185b7ee48a6fd74eaf0238395cc8b14fef8 # v2.12.1
+        with:
+          jacoco-csv-file: "coverage/**/jacoco.csv"
+          badges-directory: badges
+          generate-branches-badge: true
+          generate-workflow-summary: true
+      - name: Push badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The generator runs in a container and leaves root-owned files; publish from a copy
+          mkdir publish
+          cp badges/*.svg publish/
+          cd publish
+          git init -q -b badges
+          git add ./*.svg
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "Update coverage badges for ${GITHUB_SHA}"
+          git push --force -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   framework-performance-smoke:
     runs-on: ubuntu-latest

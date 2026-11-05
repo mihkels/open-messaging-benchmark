@@ -42,7 +42,7 @@
     </modules>
     <properties>
         <!-- x-release-please-start-version -->
-        <revision>0.1.0</revision>
+        <revision>0.1.1</revision>
         <!-- x-release-please-end -->
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

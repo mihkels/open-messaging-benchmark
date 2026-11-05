@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.0...v0.1.1) (2026-11-05)
+
+
+### Dependencies
+
+* Bump org.apache.rocketmq:rocketmq-tools from 5.1.0 to 5.5.1 ([#52](https://github.com/mihkels/open-messaging-benchmark/issues/52)) ([f9116ec](https://github.com/mihkels/open-messaging-benchmark/commit/f9116ec19f15b6ec61d20b3468acf0bb802f6074))
+
 ## [0.1.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.0.6...v0.1.0) (2026-11-04)
 
 

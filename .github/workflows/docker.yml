@@ -2,8 +2,8 @@ name: Docker image
 
 # Builds the distribution once, checks and scans the image on every pull request, and publishes
 # signed multi-arch images to Docker Hub from main (edge) and release tags (semver, latest).
-# Release tags also attach the distribution tarball and SHA256SUMS to the GitHub release; only the
-# newest 10 releases keep them.
+# Release tags also attach the distribution tarball and SHA256SUMS to the GitHub release as soon as
+# the distribution is built (the image scan does not gate it); only the latest release keeps them.
 # Pull requests never see registry credentials: only the publish job uses the dockerhub
 # environment, and it runs for pushes to main and v* tags only. No caches are used, so nothing a
 # pull request writes can end up in a published image.
@@ -239,9 +239,9 @@ jobs:
   github-release:
     name: Attach distribution to release
     if: github.ref_type == 'tag'
-    needs:
-      - dist
-      - check
+    # The tarball is verified by `mvn verify` on tags; the image scan covers base image packages that
+    # are not part of it, so a scan finding blocks the images but not the distribution
+    needs: dist
     runs-on: ubuntu-latest
     permissions:
       # Upload release assets and remove them from releases past the retention window
@@ -271,7 +271,7 @@ jobs:
           gh release upload "$TAG" "$tarball" SHA256SUMS --clobber
           echo "Attached $tarball and SHA256SUMS to release $TAG" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Keep distributions of the newest 10 releases
+      - name: Keep the distribution on the latest release only
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

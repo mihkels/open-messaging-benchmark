@@ -33,8 +33,10 @@ changes it.
    - `Docker image`: full verification, then multi-arch images `X.Y.Z`, `X.Y`, `latest` and their
      `-<driver>` variants, signed with cosign; the same verified
      `openmessaging-benchmark-X.Y.Z-bin.tar.gz` and a `SHA256SUMS` file are attached to the GitHub
-     release. Only the newest 10 releases keep these two assets; older releases keep their notes
-     and tag (`.github/scripts/prune-release-assets.sh`);
+     release as soon as the distribution is built, even if the image scan fails. Only the latest
+     release keeps these two assets; older releases keep their notes and tag
+     (`.github/scripts/prune-release-assets.sh`). The "Source code" archives on every release are
+     added by GitHub and cannot be removed;
    - `Helm chart`: the chart `X.Y.Z` pushed to `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`
      and signed.
 

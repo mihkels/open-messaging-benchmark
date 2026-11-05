@@ -14,11 +14,11 @@
 #
 
 # Removes the distribution tarball and SHA256SUMS from every published release except the newest
-# KEEP (default 10) by version. Release notes, tags and any other assets stay. DRY_RUN=1 prints
+# KEEP (default 1) by version. Release notes, tags and any other assets stay. DRY_RUN=1 prints
 # what would be removed without deleting anything.
 set -euo pipefail
 
-keep=${KEEP:-10}
+keep=${KEEP:-1}
 dry_run=${DRY_RUN:-0}
 
 summary() {

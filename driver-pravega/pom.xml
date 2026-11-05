@@ -25,6 +25,11 @@
     <artifactId>driver-pravega</artifactId>
 
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.93</jacoco.min.method>
+        <jacoco.min.line>0.87</jacoco.min.line>
+        <jacoco.min.branch>0.70</jacoco.min.branch>
         <!--Provide Pravega version for build: mvn clean install  "-DpravegaVersion=0.9.0-2766.2515791-SNAPSHOT" -DskipTests=true -Dlicense.skip=true-->
         <pravegaVersion>0.13.0</pravegaVersion>
         <protobuf.version>4.36.2</protobuf.version>

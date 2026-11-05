@@ -26,6 +26,11 @@
     <artifactId>driver-redis</artifactId>
 
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.88</jacoco.min.method>
+        <jacoco.min.line>0.77</jacoco.min.line>
+        <jacoco.min.branch>0.61</jacoco.min.branch>
         <redis.version>8.0.2</redis.version>
     </properties>
 

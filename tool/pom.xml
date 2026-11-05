@@ -25,6 +25,14 @@
 
     <artifactId>tool</artifactId>
 
+    <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.94</jacoco.min.method>
+        <jacoco.min.line>0.90</jacoco.min.line>
+        <jacoco.min.branch>0.94</jacoco.min.branch>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>commons-io</groupId>

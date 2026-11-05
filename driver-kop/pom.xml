@@ -25,6 +25,14 @@
 
     <artifactId>driver-kop</artifactId>
 
+    <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.79</jacoco.min.method>
+        <jacoco.min.line>0.58</jacoco.min.line>
+        <jacoco.min.branch>0.60</jacoco.min.branch>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>

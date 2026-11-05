@@ -77,6 +77,16 @@
         <spotless.plugin.version>3.10.4</spotless.plugin.version>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
+        <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
+        <argLine/>
+        <!--
+            JaCoCo coverage floors (BUNDLE covered ratio). Modules override these in their own pom as a
+            ratchet just below their measured unit-test coverage; see docs/development/building-the-project.md.
+        -->
+        <jacoco.min.class>0.00</jacoco.min.class>
+        <jacoco.min.method>0.00</jacoco.min.method>
+        <jacoco.min.line>0.00</jacoco.min.line>
+        <jacoco.min.branch>0.00</jacoco.min.branch>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -431,7 +441,8 @@
                     <!-- Required by system-lambda test dependency -->
                     <!-- Required by Netty for optimized direct byte buffer access -->
                     <!-- Required by Pulsar client for optimized direct byte buffer access and optimized checksum calculation -->
-                    <argLine>--add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED
+                    <!-- @{argLine} keeps the JaCoCo agent that prepare-agent puts in the argLine property -->
+                    <argLine>@{argLine} --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED
                         -Dio.netty.tryReflectionSetAccessible=true
                         --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED
                         -Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true
@@ -469,6 +480,14 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>${jacoco.plugin.version}</version>
+                <configuration>
+                    <excludes>
+                        <!-- CLI entry points: argument parsing, server wiring and System.exit only -->
+                        <exclude>io/openmessaging/benchmark/worker/BenchmarkWorker*.class</exclude>
+                        <!-- Driver process entry point; ProcessWorkerTest runs it in a child JVM without the agent -->
+                        <exclude>io/openmessaging/benchmark/worker/DriverProcessMain*.class</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -489,6 +508,7 @@
                         </goals>
                         <phase>verify</phase>
                         <configuration>
+                            <haltOnFailure>true</haltOnFailure>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
@@ -496,22 +516,22 @@
                                         <limit>
                                             <counter>CLASS</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.00</minimum>
+                                            <minimum>${jacoco.min.class}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>METHOD</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.00</minimum>
+                                            <minimum>${jacoco.min.method}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.00</minimum>
+                                            <minimum>${jacoco.min.line}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.00</minimum>
+                                            <minimum>${jacoco.min.branch}</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

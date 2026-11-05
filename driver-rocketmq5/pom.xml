@@ -26,6 +26,11 @@
     <artifactId>driver-rocketmq5</artifactId>
 
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.73</jacoco.min.class>
+        <jacoco.min.method>0.55</jacoco.min.method>
+        <jacoco.min.line>0.57</jacoco.min.line>
+        <jacoco.min.branch>0.54</jacoco.min.branch>
         <rocketmq-client-java-version>5.2.2</rocketmq-client-java-version>
         <rocketmq.version>5.5.1</rocketmq.version>
     </properties>

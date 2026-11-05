@@ -98,6 +98,36 @@ Common variations:
 After a source-tree build, the `bin/` scripts run straight from the checkout. They find the bundles in
 `driver-*/target/omb-plugin` (see [Runtime and plugins](../reference/runtime-and-plugins.md)).
 
+## Coverage thresholds
+
+The JaCoCo `check` goal runs in `verify` and fails the build when a module's unit-test coverage drops
+below its floor. The PR build runs `mvn verify`, so it enforces the same floors.
+
+The root `pom.xml` defines four properties, all `0.00` by default. Each module with production code
+overrides them in its own `pom.xml`:
+
+|      Property       |   Counter (covered ratio of the module)   |
+|---------------------|-------------------------------------------|
+| `jacoco.min.class`  | Classes with at least one executed method |
+| `jacoco.min.method` | Methods                                   |
+| `jacoco.min.line`   | Lines                                     |
+| `jacoco.min.branch` | Branches                                  |
+
+The floors are a ratchet: each one sits about two points below the coverage the module had when it
+was set, so ordinary changes pass but a change that adds untested code or deletes tests fails.
+Driver modules only count their unit tests; the Testcontainers suite in `e2e-tests` runs drivers in
+separate plugin processes and does not feed the JaCoCo report.
+
+To see a module's coverage, run `mvn verify` and open `<module>/target/site/jacoco/index.html`. The
+same numbers are in `jacoco.csv` next to it.
+
+To raise a floor after adding tests, set the module's properties to the new coverage minus about
+two points, rounded down to two decimals, and include the change in the same pull request. Lower
+a floor only when code is deliberately left untested, and say why in the pull request.
+
+Classes excluded from coverage are listed in the JaCoCo plugin configuration of the root
+`pom.xml`, each with the reason.
+
 ## Formatting and license headers
 
 ```bash

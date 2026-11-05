@@ -25,6 +25,11 @@
 
     <artifactId>driver-pulsar</artifactId>
     <properties>
+        <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.88</jacoco.min.method>
+        <jacoco.min.line>0.62</jacoco.min.line>
+        <jacoco.min.branch>0.57</jacoco.min.branch>
         <!-- Pulsar 5's shaded client conflicts with the JMS 2 provider when both plugins are loaded. -->
         <pulsar.version>5.0.1</pulsar.version>
     </properties>

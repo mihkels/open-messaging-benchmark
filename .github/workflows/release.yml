@@ -3,7 +3,7 @@ name: Release
 # release-please keeps a Release PR open that bumps pom.xml, version.txt, the example plugin and
 # the Helm chart (version and appVersion) together and updates CHANGELOG.md from conventional
 # commits. Merging it creates the vX.Y.Z tag and GitHub release; the tag triggers the Docker image
-# and Helm chart publishing workflows.
+# (which also attaches the distribution tarball to the release) and Helm chart publishing workflows.
 #
 # A GitHub App token is used because pull requests and tags created with GITHUB_TOKEN do not
 # trigger other workflows, so the Release PR would get no CI and the tag would publish nothing.

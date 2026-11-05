@@ -31,7 +31,10 @@ changes it.
 3. Merging the Release PR tags `vX.Y.Z` and creates a GitHub release.
 4. The tag triggers publishing:
    - `Docker image`: full verification, then multi-arch images `X.Y.Z`, `X.Y`, `latest` and their
-     `-<driver>` variants, signed with cosign;
+     `-<driver>` variants, signed with cosign; the same verified
+     `openmessaging-benchmark-X.Y.Z-bin.tar.gz` and a `SHA256SUMS` file are attached to the GitHub
+     release. Only the newest 10 releases keep these two assets; older releases keep their notes
+     and tag (`.github/scripts/prune-release-assets.sh`);
    - `Helm chart`: the chart `X.Y.Z` pushed to `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`
      and signed.
 

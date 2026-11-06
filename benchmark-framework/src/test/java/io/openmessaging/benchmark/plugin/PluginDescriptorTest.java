@@ -27,58 +27,101 @@ class PluginDescriptorTest {
 
     @Test
     void reportsInvalidDescriptorFields() {
-        List<InvalidDescriptor> invalid = List.of(
-                new InvalidDescriptor(
-                        descriptor(2, "plugin", DriverApiVersion.CURRENT, List.of("test.Driver"),
-                                List.of("driver.jar"), List.of(), List.of()),
-                        "unsupported descriptorVersion 2"),
-                new InvalidDescriptor(
-                        descriptor(1, "../plugin", DriverApiVersion.CURRENT, List.of("test.Driver"),
-                                List.of("driver.jar"), List.of(), List.of()),
-                        "id '../plugin'"),
-                new InvalidDescriptor(
-                        descriptor(1, "plugin", DriverApiVersion.CURRENT + 1, List.of("test.Driver"),
-                                List.of("driver.jar"), List.of(), List.of()),
-                        "driverApiVersion " + (DriverApiVersion.CURRENT + 1)),
-                new InvalidDescriptor(
-                        descriptor(1, "plugin", DriverApiVersion.CURRENT, List.of("not-a-class"),
-                                List.of("driver.jar"), List.of(), List.of()),
-                        "invalid driver class name"),
-                new InvalidDescriptor(
-                        descriptor(1, "plugin", DriverApiVersion.CURRENT, List.of("test.Driver"),
-                                List.of(), List.of(), List.of()),
-                        "classpath must list at least one entry"),
-                new InvalidDescriptor(
-                        descriptor(1, "plugin", DriverApiVersion.CURRENT, List.of("test.Driver"),
-                                List.of("../outside.jar"), List.of(), List.of()),
-                        "escapes the bundle directory"),
-                new InvalidDescriptor(
-                        descriptor(
-                                1,
-                                "plugin",
-                                DriverApiVersion.CURRENT,
-                                List.of("test.Driver"),
-                                List.of("/absolute/driver.jar"),
-                                List.of(),
-                                List.of()),
-                        "must be relative to the bundle directory"),
-                new InvalidDescriptor(
-                        new PluginDescriptor(
-                                1,
-                                "plugin",
-                                "1.0",
-                                DriverApiVersion.CURRENT,
-                                Runtime.version().feature() + 1,
-                                List.of("test.Driver"),
-                                List.of("driver.jar"),
-                                List.of(),
-                                List.of(),
-                                null),
-                        "requires Java"),
-                new InvalidDescriptor(
-                        descriptor(1, "plugin", DriverApiVersion.CURRENT, List.of("test.Driver"),
-                                List.of("lib/*.jar"), List.of(), List.of(" ")),
-                        "classReferenceProperties must not contain blank names"));
+        List<InvalidDescriptor> invalid =
+                List.of(
+                        new InvalidDescriptor(
+                                descriptor(
+                                        2,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of("driver.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "unsupported descriptorVersion 2"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "../plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of("driver.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "id '../plugin'"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT + 1,
+                                        List.of("test.Driver"),
+                                        List.of("driver.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "driverApiVersion " + (DriverApiVersion.CURRENT + 1)),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("not-a-class"),
+                                        List.of("driver.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "invalid driver class name"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of(),
+                                        List.of(),
+                                        List.of()),
+                                "classpath must list at least one entry"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of("../outside.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "escapes the bundle directory"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of("/absolute/driver.jar"),
+                                        List.of(),
+                                        List.of()),
+                                "must be relative to the bundle directory"),
+                        new InvalidDescriptor(
+                                new PluginDescriptor(
+                                        1,
+                                        "plugin",
+                                        "1.0",
+                                        DriverApiVersion.CURRENT,
+                                        Runtime.version().feature() + 1,
+                                        List.of("test.Driver"),
+                                        List.of("driver.jar"),
+                                        List.of(),
+                                        List.of(),
+                                        null),
+                                "requires Java"),
+                        new InvalidDescriptor(
+                                descriptor(
+                                        1,
+                                        "plugin",
+                                        DriverApiVersion.CURRENT,
+                                        List.of("test.Driver"),
+                                        List.of("lib/*.jar"),
+                                        List.of(),
+                                        List.of(" ")),
+                                "classReferenceProperties must not contain blank names"));
 
         for (InvalidDescriptor testCase : invalid) {
             assertThat(testCase.descriptor().validate())
@@ -90,15 +133,20 @@ class PluginDescriptorTest {
     @Test
     void rejectsBundlesBuiltForAnOlderDriverApi() {
         PluginDescriptor descriptor =
-                descriptor(1, "plugin", DriverApiVersion.CURRENT - 1, List.of("test.Driver"),
-                        List.of("driver.jar"), List.of(), List.of());
+                descriptor(
+                        1,
+                        "plugin",
+                        DriverApiVersion.CURRENT - 1,
+                        List.of("test.Driver"),
+                        List.of("driver.jar"),
+                        List.of(),
+                        List.of());
 
         assertThat(descriptor.validate())
                 .anySatisfy(
                         error ->
                                 assertThat(error)
-                                        .contains("bundle targets driverApiVersion "
-                                                + (DriverApiVersion.CURRENT - 1)));
+                                        .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1)));
     }
 
     private static PluginDescriptor validDescriptor() {

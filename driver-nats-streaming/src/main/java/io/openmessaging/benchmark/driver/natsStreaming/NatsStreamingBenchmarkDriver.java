@@ -13,16 +13,12 @@
  */
 package io.openmessaging.benchmark.driver.natsStreaming;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import io.micrometer.core.instrument.MeterRegistry;
-import io.nats.streaming.AckHandler;
 import io.nats.streaming.Message;
 import io.nats.streaming.MessageHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
 import io.nats.streaming.StreamingConnection;
-import io.nats.streaming.Subscription;
 import io.nats.streaming.SubscriptionOptions;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -174,52 +170,4 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
 
     private static final org.slf4j.Logger log =
             LoggerFactory.getLogger(NatsStreamingBenchmarkDriver.class);
-
-    public static void main(String[] args) throws Exception {
-        try {
-            Options opts = new Options.Builder().natsUrl("nats://0.0.0.0:4222").build();
-            SubscriptionOptions.Builder builder = new SubscriptionOptions.Builder();
-            StreamingConnection streamingConnection =
-                    NatsStreaming.connect("mycluster", "benchmark-sub", opts);
-            Subscription sub =
-                    streamingConnection.subscribe(
-                            "topicTest",
-                            "subscription",
-                            new MessageHandler() {
-                                @Override
-                                public void onMessage(Message message) {
-                                    System.out.println(message.toString());
-                                }
-                            },
-                            builder.build());
-            StreamingConnection natsStreamingPublisher =
-                    NatsStreaming.connect("mycluster", "benchmark-pub", opts);
-
-            final String[] guid = new String[1];
-            AckHandler acb =
-                    new AckHandler() {
-                        @Override
-                        public void onAck(String s, Exception e) {
-                            if ((e != null) || !guid[0].equals(s)) {
-                                System.out.println("pub error");
-                            } else {
-                                System.out.println("pub success");
-                            }
-                        }
-                    };
-
-            guid[0] = natsStreamingPublisher.publish("topicTest", "HelloStreaming".getBytes(UTF_8), acb);
-
-            if (guid[0].isEmpty()) {
-                System.out.println("Expected non-empty guid to be returned.");
-            }
-
-            Thread.sleep(1000);
-            sub.unsubscribe();
-            natsStreamingPublisher.close();
-            streamingConnection.close();
-        } catch (Exception e) {
-            log.warn("test exception", e);
-        }
-    }
 }

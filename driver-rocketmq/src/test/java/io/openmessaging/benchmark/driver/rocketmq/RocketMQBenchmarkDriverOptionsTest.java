@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -33,6 +34,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -173,6 +178,39 @@ class RocketMQBenchmarkDriverOptionsTest {
         assertThatThrownBy(() -> driver.createTopic("topic", 1).join())
                 .hasMessageContaining("Failed to create topic [topic] to cluster [c1]");
         driver.close();
+    }
+
+    @Test
+    void interruptedTopicCreationRestoresInterruptStatus() throws Exception {
+        TestDriver driver = new TestDriver();
+        driver.initialize(config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\n"), null);
+        when(driver.admin.examineBrokerClusterInfo()).thenReturn(cluster("c1", "b1:10911"));
+
+        InterruptedException interrupted = new InterruptedException("interrupted");
+        CountDownLatch adminCallStarted = new CountDownLatch(1);
+        CountDownLatch releaseAdminCall = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    adminCallStarted.countDown();
+                    releaseAdminCall.await();
+                    throw interrupted;
+                })
+                .when(driver.admin)
+                .createAndUpdateTopicConfig(anyString(), any(TopicConfig.class));
+
+        CompletableFuture<Void> topicCreation = driver.createTopic("topic", 1);
+        assertThat(adminCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        AtomicBoolean interruptRestored = new AtomicBoolean();
+        CompletableFuture<Void> observed = topicCreation.whenComplete(
+                (ignored, failure) -> interruptRestored.set(Thread.currentThread().isInterrupted()));
+
+        try {
+            releaseAdminCall.countDown();
+            assertThatThrownBy(observed::join).hasRootCause(interrupted);
+            assertThat(interruptRestored).isTrue();
+        } finally {
+            releaseAdminCall.countDown();
+            driver.close();
+        }
     }
 
     @Test

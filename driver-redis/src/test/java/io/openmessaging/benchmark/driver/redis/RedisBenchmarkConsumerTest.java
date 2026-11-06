@@ -26,18 +26,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.params.XReadGroupParams;
 import redis.clients.jedis.resps.StreamEntryBinary;
 
@@ -164,5 +170,244 @@ class RedisBenchmarkConsumerTest {
             allowRead.countDown();
             consumer.close();
         }
+    }
+
+    @Test
+    void rejectsNonPositiveCloseTimeout() {
+        assertThatThrownBy(
+                        () ->
+                                new RedisBenchmarkConsumer(
+                                        "consumer",
+                                        "topic",
+                                        "subscription",
+                                        mock(JedisPool.class),
+                                        mock(ConsumerCallback.class),
+                                        Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void readLoopSurvivesEmptyReadsAndReadFailuresAndAcknowledgesDeliveredEntries() throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        Map<byte[], byte[]> fields = new LinkedHashMap<>();
+        fields.put("other".getBytes(UTF_8), new byte[] {9});
+        fields.put("payload".getBytes(UTF_8), new byte[] {1, 2});
+        StreamEntryBinary entry = new StreamEntryBinary(new StreamEntryID(42, 0), fields);
+        StreamEntryBinary missingPayload =
+                new StreamEntryBinary(
+                        new StreamEntryID(43, 0), Map.of("other".getBytes(UTF_8), new byte[] {9}));
+        CountDownLatch blocked = new CountDownLatch(1);
+        AtomicInteger reads = new AtomicInteger();
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenAnswer(
+                        invocation ->
+                                switch (reads.getAndIncrement()) {
+                                    case 0 -> null;
+                                    case 1 -> List.of();
+                                    case 2 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
+                                    case 3 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(missingPayload)));
+                                    case 4 -> throw new JedisDataException("ERR unexpected");
+                                    case 5 -> throw new IllegalStateException("connection lost");
+                                    default -> {
+                                        blocked.countDown();
+                                        new CountDownLatch(1).await();
+                                        yield List.of();
+                                    }
+                                });
+        ConsumerCallback callback = mock();
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer("consumer", "topic", "subscription", pool, callback);
+
+        assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
+        consumer.close();
+
+        verify(callback).messageReceived(new byte[] {1, 2}, 42L);
+        verify(jedis).xack("topic", "subscription", new StreamEntryID(42, 0));
+        verify(jedis, never()).xack("topic", "subscription", new StreamEntryID(43, 0));
+    }
+
+    @Test
+    void readFailuresDuringCloseAreIgnored() throws Exception {
+        assertReadFailureDuringCloseIsIgnored(new JedisDataException("NOGROUP No such key"));
+        assertReadFailureDuringCloseIsIgnored(new JedisDataException("ERR other"));
+        assertReadFailureDuringCloseIsIgnored(new JedisDataException((String) null));
+        assertReadFailureDuringCloseIsIgnored(new IllegalStateException("closed pool"));
+    }
+
+    private static void assertReadFailureDuringCloseIsIgnored(RuntimeException failure)
+            throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        CountDownLatch blocked = new CountDownLatch(1);
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenAnswer(
+                        invocation -> {
+                            blocked.countDown();
+                            try {
+                                new CountDownLatch(1).await();
+                            } catch (InterruptedException interrupted) {
+                                throw failure;
+                            }
+                            return List.of();
+                        });
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer(
+                        "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class));
+
+        assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
+        consumer.close();
+        verify(jedis).close();
+    }
+
+    @Test
+    void readerThatDiedIsReportedOnClose() throws Exception {
+        RedisBenchmarkConsumer consumer = deadReader();
+
+        assertThatThrownBy(consumer::close)
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(AssertionError.class);
+    }
+
+    @Test
+    void readerFailureIsSuppressedIntoInterruptedClose() throws Exception {
+        RedisBenchmarkConsumer consumer = deadReader();
+        try {
+            Thread.currentThread().interrupt();
+            assertThatThrownBy(consumer::close)
+                    .isInstanceOf(InterruptedException.class)
+                    .satisfies(
+                            error ->
+                                    assertThat(error.getSuppressed())
+                                            .singleElement()
+                                            .isInstanceOf(ExecutionException.class));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void timeoutIsSuppressedIntoInterruptedClose() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        RedisBenchmarkConsumer consumer = stubbornReader(release, Duration.ofMillis(100));
+        try {
+            Thread.currentThread().interrupt();
+            assertThatThrownBy(consumer::close)
+                    .isInstanceOf(InterruptedException.class)
+                    .satisfies(
+                            error ->
+                                    assertThat(error.getSuppressed())
+                                            .singleElement()
+                                            .isInstanceOf(TimeoutException.class));
+        } finally {
+            Thread.interrupted();
+            release.countDown();
+            consumer.close();
+        }
+    }
+
+    @Test
+    void interruptionWhileWaitingForReaderIsReported() throws Exception {
+        assertInterruptedWhileWaiting(false);
+        assertInterruptedWhileWaiting(true);
+    }
+
+    private static void assertInterruptedWhileWaiting(boolean interruptedBeforeClose)
+            throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        RedisBenchmarkConsumer consumer = stubbornReader(release, Duration.ofSeconds(10));
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        AtomicBoolean interruptedAfterClose = new AtomicBoolean();
+        Thread closer =
+                Thread.ofPlatform()
+                        .start(
+                                () -> {
+                                    if (interruptedBeforeClose) {
+                                        Thread.currentThread().interrupt();
+                                    }
+                                    try {
+                                        consumer.close();
+                                    } catch (Throwable error) {
+                                        failure.set(error);
+                                    } finally {
+                                        interruptedAfterClose.set(Thread.currentThread().isInterrupted());
+                                    }
+                                });
+        try {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (closer.getState() != Thread.State.TIMED_WAITING) {
+                assertThat(System.nanoTime()).isLessThan(deadline);
+                Thread.sleep(5);
+            }
+            closer.interrupt();
+            while (closer.getState() != Thread.State.TIMED_WAITING && closer.isAlive()) {
+                assertThat(System.nanoTime()).isLessThan(deadline);
+                Thread.sleep(5);
+            }
+        } finally {
+            release.countDown();
+        }
+        closer.join(5000);
+        assertThat(closer.isAlive()).isFalse();
+        assertThat(failure.get()).isInstanceOf(InterruptedException.class);
+        assertThat(interruptedAfterClose).isTrue();
+        if (interruptedBeforeClose) {
+            assertThat(failure.get().getSuppressed())
+                    .singleElement()
+                    .isInstanceOf(InterruptedException.class);
+        }
+    }
+
+    private static RedisBenchmarkConsumer stubbornReader(CountDownLatch release, Duration timeout)
+            throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        CountDownLatch started = new CountDownLatch(1);
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenAnswer(
+                        invocation -> {
+                            started.countDown();
+                            while (true) {
+                                try {
+                                    release.await();
+                                    return List.of();
+                                } catch (InterruptedException ignored) {
+                                    // Simulate a client call that ignores interruption.
+                                }
+                            }
+                        });
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer(
+                        "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class), timeout);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        return consumer;
+    }
+
+    private static RedisBenchmarkConsumer deadReader() throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenThrow(new AssertionError("reader died"));
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer(
+                        "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class));
+        Field field = RedisBenchmarkConsumer.class.getDeclaredField("consumerTask");
+        field.setAccessible(true);
+        Future<?> task = (Future<?>) field.get(consumer);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!task.isDone()) {
+            assertThat(System.nanoTime()).isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        return consumer;
     }
 }

@@ -29,6 +29,8 @@ import com.github.brainlag.nsq.NSQCommand;
 import com.github.brainlag.nsq.ServerAddress;
 import com.github.brainlag.nsq.exceptions.NSQException;
 import com.github.brainlag.nsq.frames.ErrorFrame;
+import com.github.brainlag.nsq.frames.MessageFrame;
+import com.github.brainlag.nsq.frames.NSQFrame;
 import com.github.brainlag.nsq.frames.ResponseFrame;
 import com.github.brainlag.nsq.lookup.NSQLookup;
 import io.netty.channel.Channel;
@@ -1213,6 +1215,159 @@ class NsqBenchmarkConsumerTest {
     private static CompletableFuture<Void> quiescence(CompletableFuture<?> future) {
         assertThat(future).isInstanceOf(ResourceCreationCompletion.class);
         return ((ResourceCreationCompletion) future).quiescence();
+    }
+
+    @Test
+    void unexpectedSubResponsesRejectTheSubscription() throws Exception {
+        assertSubResponseRejected(response("NOT_OK"));
+        assertSubResponseRejected(new MessageFrame());
+    }
+
+    private void assertSubResponseRejected(NSQFrame subResponse) throws Exception {
+        Connection connection = mock(Connection.class);
+        when(connection.isConnected()).thenReturn(true);
+        when(connection.isHeartbeatStatusOK()).thenReturn(true);
+        when(connection.commandAndWait(any(NSQCommand.class))).thenReturn(subResponse);
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> connection);
+
+        assertThatThrownBy(() -> consumer.startAsync().get(5, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .hasCauseInstanceOf(NSQException.class)
+                .hasMessageContaining("Unexpected NSQ SUB response");
+        verify(connection, timeout(5000)).close();
+    }
+
+    @Test
+    void readyTimeoutAndConnectionLostAfterSubAreRetried() throws Exception {
+        Connection timedOut = readyConnection(response("CLOSE_WAIT"));
+        Connection lost = readyConnection(response("CLOSE_WAIT"));
+        Connection healthy = readyConnection(response("CLOSE_WAIT"));
+        ChannelFuture slowWrite = mock(ChannelFuture.class);
+        when(slowWrite.await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+        when(timedOut.command(any(NSQCommand.class))).thenReturn(slowWrite);
+        when(lost.isConnected()).thenReturn(true, false);
+        List<Connection> attempts = List.of(timedOut, lost, healthy);
+        AtomicInteger created = new AtomicInteger();
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> attempts.get(Math.min(created.getAndIncrement(), 2)));
+
+        assertThat(consumer.startAsync().get(5, TimeUnit.SECONDS)).isSameAs(consumer);
+        verify(timedOut).close();
+        verify(lost).close();
+        consumer.close();
+        verify(healthy).close();
+    }
+
+    @Test
+    void gracefulCloseSkipsDisconnectedNodesAndReportsInvalidCloseResponses() throws Exception {
+        ErrorFrame invalid = new ErrorFrame();
+        invalid.setData("E_INVALID cannot close".getBytes(StandardCharsets.UTF_8));
+        ErrorFrame other = new ErrorFrame();
+        other.setData("E_OTHER ignored".getBytes(StandardCharsets.UTF_8));
+        AtomicBoolean firstConnected = new AtomicBoolean(true);
+        Connection disconnected = readyConnection(response("CLOSE_WAIT"));
+        when(disconnected.isConnected()).thenAnswer(invocation -> firstConnected.get());
+        Connection rejecting = readyConnection(invalid);
+        Connection tolerated = readyConnection(other);
+        List<Connection> connections = List.of(disconnected, rejecting, tolerated);
+        AtomicInteger created = new AtomicInteger();
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(
+                                Set.of(
+                                        new ServerAddress("one", 1),
+                                        new ServerAddress("two", 2),
+                                        new ServerAddress("three", 3))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> connections.get(created.getAndIncrement()));
+        consumer.startAsync().get(5, TimeUnit.SECONDS);
+        firstConnected.set(false);
+
+        assertThatThrownBy(consumer::close)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("E_INVALID cannot close");
+        consumers.remove(consumer);
+        for (Connection connection : connections) {
+            verify(connection).close();
+        }
+    }
+
+    @Test
+    void interruptedGracefulCloseIsReported() throws Exception {
+        Connection connection = readyConnection(null);
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> connection);
+        consumer.startAsync().get(5, TimeUnit.SECONDS);
+
+        assertThatThrownBy(consumer::close).isInstanceOf(InterruptedException.class);
+        consumers.remove(consumer);
+        verify(connection).close();
+    }
+
+    @Test
+    void repeatedStartAbandonAndCancelAreIdempotent() throws Exception {
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of()),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        30_000,
+                        60_000,
+                        Connection::new);
+        CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
+        assertThat(consumer.startAsync()).isSameAs(creation);
+
+        assertThat(creation.cancel(false)).isTrue();
+        assertThat(creation.cancel(false)).isTrue();
+        ((AbandonableCreation) creation).abandonCreation();
+        ((AbandonableCreation) creation).abandonCreation();
+        quiescence(creation).get(5, TimeUnit.SECONDS);
+    }
+
+    private static Connection readyConnection(NSQFrame closeResponse) throws Exception {
+        Connection connection = mock(Connection.class);
+        ChannelFuture write = mock(ChannelFuture.class);
+        when(connection.isConnected()).thenReturn(true);
+        when(connection.isHeartbeatStatusOK()).thenReturn(true);
+        when(connection.commandAndWait(any(NSQCommand.class)))
+                .thenReturn(response("OK"), closeResponse);
+        when(connection.command(any(NSQCommand.class))).thenReturn(write);
+        when(write.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(write.isSuccess()).thenReturn(true);
+        return connection;
+    }
+
+    private static ResponseFrame response(String message) {
+        ResponseFrame frame = new ResponseFrame();
+        frame.setData(message.getBytes(StandardCharsets.UTF_8));
+        return frame;
     }
 
     private static void awaitIgnoringInterrupts(CountDownLatch latch) {

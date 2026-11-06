@@ -27,10 +27,10 @@
 
     <properties>
         <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
-        <jacoco.min.class>0.81</jacoco.min.class>
-        <jacoco.min.method>0.89</jacoco.min.method>
-        <jacoco.min.line>0.85</jacoco.min.line>
-        <jacoco.min.branch>0.76</jacoco.min.branch>
+        <jacoco.min.class>0.92</jacoco.min.class>
+        <jacoco.min.method>0.93</jacoco.min.method>
+        <jacoco.min.line>0.92</jacoco.min.line>
+        <jacoco.min.branch>0.88</jacoco.min.branch>
     </properties>
 
     <dependencies>

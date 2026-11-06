@@ -240,4 +240,158 @@ class NsqEventLoopGroupTest {
         assertThat(scope.terminationFuture().cause()).isSameAs(failure);
         verify(unsafe).closeForcibly();
     }
+
+    @Test
+    void attemptsAreRejectedAfterCloseAndCannotOverlap() {
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(mock(EventLoopGroup.class));
+        assertThat(scope.endAttempt(true)).isEmpty();
+        scope.beginAttempt();
+        assertThatThrownBy(scope::beginAttempt).isInstanceOf(IllegalStateException.class);
+        assertThat(scope.endAttempt(true)).isEmpty();
+
+        assertThat(scope.isShuttingDown()).isFalse();
+        scope.stopConnecting();
+        assertThat(scope.isShuttingDown()).isTrue();
+        assertThat(scope.isShutdown()).isTrue();
+        assertThatThrownBy(scope::beginAttempt).isInstanceOf(RejectedExecutionException.class);
+    }
+
+    @Test
+    void shutdownMethodsCloseChannelsAndReportTermination() throws Exception {
+        EventLoopGroup delegate = mock(EventLoopGroup.class);
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(delegate);
+
+        scope.shutdown();
+        assertThat(scope.awaitTermination(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(scope.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).isSuccess()).isTrue();
+        scope.next();
+        scope.iterator();
+        verify(delegate).next();
+        verify(delegate).iterator();
+    }
+
+    @Test
+    void promiseForAnotherChannelIsRejected() {
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(mock(EventLoopGroup.class));
+        Channel channel = mock(Channel.class);
+        ChannelPromise other =
+                new DefaultChannelPromise(mock(Channel.class), ImmediateEventExecutor.INSTANCE);
+
+        assertThatThrownBy(() -> scope.register(channel, other))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void promiseRegistrationIsDelegatedAndRejectedAfterClose() throws Exception {
+        EventLoopGroup delegate = mock(EventLoopGroup.class);
+        Fixture first = new Fixture();
+        ChannelPromise promise =
+                new DefaultChannelPromise(first.channel, ImmediateEventExecutor.INSTANCE);
+        when(delegate.register(promise)).thenReturn(promise);
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(delegate);
+
+        assertThat(scope.register(first.channel, promise)).isSameAs(promise);
+        promise.setSuccess();
+        scope.closeChannels();
+        first.closeRequest.setSuccess();
+        first.closed();
+
+        Fixture late = new Fixture();
+        ChannelPromise latePromise =
+                new DefaultChannelPromise(late.channel, ImmediateEventExecutor.INSTANCE);
+        assertThat(scope.register(latePromise)).isSameAs(latePromise);
+        assertThat(latePromise.cause()).isInstanceOf(RejectedExecutionException.class);
+        late.closed();
+        scope.pendingCloses().get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void registrationErrorIsRethrown() {
+        EventLoopGroup delegate = mock(EventLoopGroup.class);
+        Fixture fixture = new Fixture();
+        AssertionError failure = new AssertionError("registration error");
+        when(delegate.register(fixture.channel)).thenThrow(failure);
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(delegate);
+
+        assertThatThrownBy(() -> scope.register(fixture.channel)).isSameAs(failure);
+        verify(fixture.unsafe).closeForcibly();
+    }
+
+    @Test
+    void asynchronousRegistrationFailureForcesTheChannelClosed() throws Exception {
+        EventLoopGroup delegate = mock(EventLoopGroup.class);
+        Fixture fixture = new Fixture();
+        when(delegate.register(fixture.channel)).thenReturn(fixture.registration);
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(delegate);
+        scope.register(fixture.channel);
+
+        fixture.registration.setFailure(new RuntimeException("registration failed"));
+
+        verify(fixture.unsafe).closeForcibly();
+        fixture.closed();
+        scope.pendingCloses().get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void severalChannelsCloseTogetherAndAccumulateDistinctFailures() throws Exception {
+        assertSeveralChannelFailures(false);
+        assertSeveralChannelFailures(true);
+    }
+
+    private static void assertSeveralChannelFailures(boolean sameFailure) throws Exception {
+        EventLoopGroup delegate = mock(EventLoopGroup.class);
+        Fixture first = new Fixture();
+        Fixture second = new Fixture();
+        RuntimeException firstFailure = new RuntimeException("first");
+        RuntimeException secondFailure = sameFailure ? firstFailure : new RuntimeException("second");
+        doThrow(firstFailure).when(first.unsafe).closeForcibly();
+        doThrow(secondFailure).when(second.unsafe).closeForcibly();
+        when(delegate.register(first.channel)).thenReturn(first.registration);
+        when(delegate.register(second.channel)).thenReturn(second.registration);
+        NsqEventLoopGroup scope = new NsqEventLoopGroup(delegate);
+        scope.register(first.channel);
+        scope.register(second.channel);
+        first.registration.setSuccess();
+        second.registration.setSuccess();
+
+        scope.closeChannels();
+        first.closeRequest.setFailure(firstFailure);
+        first.closed();
+        assertThat(scope.pendingCloses()).isNotDone();
+        second.closeRequest.setFailure(secondFailure);
+        second.closed();
+
+        scope.pendingCloses().get(5, TimeUnit.SECONDS);
+        assertThat(scope.terminationFuture().await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(scope.terminationFuture().cause()).isSameAs(firstFailure);
+        if (sameFailure) {
+            assertThat(firstFailure.getSuppressed()).isEmpty();
+        } else {
+            assertThat(firstFailure.getSuppressed()).containsOnly(secondFailure);
+        }
+    }
+
+    private static final class Fixture {
+        private final Channel channel = mock(Channel.class);
+        private final Channel.Unsafe unsafe = mock(Channel.Unsafe.class);
+        private final ChannelPromise registration =
+                new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+        private final ChannelPromise closeRequest =
+                new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+        private final ChannelPromise channelClosed =
+                new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+        private final AtomicBoolean open = new AtomicBoolean(true);
+
+        private Fixture() {
+            when(channel.closeFuture()).thenReturn(channelClosed);
+            when(channel.close()).thenReturn(closeRequest);
+            when(channel.unsafe()).thenReturn(unsafe);
+            when(channel.isOpen()).thenAnswer(invocation -> open.get());
+        }
+
+        private void closed() {
+            open.set(false);
+            channelClosed.trySuccess();
+        }
+    }
 }

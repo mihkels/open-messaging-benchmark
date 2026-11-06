@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ResourceCreatorComposeTest {
@@ -382,6 +383,169 @@ class ResourceCreatorComposeTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void emptyRequestListBuildsAnEmptyAggregate() {
+        CompletableFuture<Aggregate> result =
+                ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.<Integer>of()),
+                        ignored -> {
+                            throw new AssertionError("no creation expected");
+                        },
+                        Aggregate::new);
+
+        assertTrue(result.join().resources.isEmpty());
+        quiescence(result).join();
+    }
+
+    @Test
+    void aggregateFailureClosesAResourceSharedByRequestsOnce() {
+        Resource shared = new Resource();
+        IllegalStateException failure = new IllegalStateException("aggregate failed");
+        CompletableFuture<Aggregate> result =
+                ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.of(0, 1)),
+                        ignored -> CompletableFuture.completedFuture(shared),
+                        resources -> {
+                            throw failure;
+                        });
+
+        assertSame(failure, assertThrows(CompletionException.class, result::join).getCause());
+        assertEquals(1, shared.closes.get());
+    }
+
+    @Test
+    void aggregateFailureAfterAnEarlierFailureIsSuppressedIntoIt() {
+        CompletableFuture<List<Integer>> lookup = new CompletableFuture<>();
+        Resource resource = new Resource();
+        IllegalStateException earlier = new IllegalStateException("cancelled elsewhere");
+        IllegalStateException failure = new IllegalStateException("aggregate failed");
+        AtomicReference<CompletableFuture<Aggregate>> result = new AtomicReference<>();
+        result.set(
+                ResourceCreator.compose(
+                        lookup,
+                        ignored -> CompletableFuture.completedFuture(resource),
+                        resources -> {
+                            result.get().completeExceptionally(earlier);
+                            throw failure;
+                        }));
+
+        lookup.complete(List.of(0));
+
+        assertSame(
+                earlier, assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        assertSame(failure, earlier.getSuppressed()[0]);
+        assertEquals(1, resource.closes.get());
+    }
+
+    @Test
+    void aggregateRethrowingTheRecordedFailureIsNotSuppressedIntoItself() {
+        CompletableFuture<List<Integer>> lookup = new CompletableFuture<>();
+        IllegalStateException failure = new IllegalStateException("aggregate failed");
+        AtomicReference<CompletableFuture<Aggregate>> result = new AtomicReference<>();
+        result.set(
+                ResourceCreator.compose(
+                        lookup,
+                        ignored -> CompletableFuture.completedFuture(new Resource()),
+                        resources -> {
+                            result.get().completeExceptionally(failure);
+                            throw failure;
+                        }));
+
+        lookup.complete(List.of(0));
+
+        assertSame(
+                failure, assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        assertEquals(0, failure.getSuppressed().length);
+    }
+
+    @Test
+    void aggregateFailureAfterSuccessfulCompletionIsOnlyLogged() {
+        CompletableFuture<List<Integer>> lookup = new CompletableFuture<>();
+        Aggregate winner = new Aggregate(List.of());
+        IllegalStateException failure = new IllegalStateException("aggregate failed");
+        AtomicReference<CompletableFuture<Aggregate>> result = new AtomicReference<>();
+        result.set(
+                ResourceCreator.compose(
+                        lookup,
+                        ignored -> CompletableFuture.completedFuture(new Resource()),
+                        resources -> {
+                            result.get().complete(winner);
+                            throw failure;
+                        }));
+
+        lookup.complete(List.of(0));
+
+        assertSame(winner, result.get().join());
+        assertEquals(0, failure.getSuppressed().length);
+    }
+
+    @Test
+    void untransferredHandleIsClosedWhenResultCompletedElsewhere() {
+        CompletableFuture<List<Integer>> lookup = new CompletableFuture<>();
+        Aggregate winner = new Aggregate(List.of());
+        RuntimeException closeFailure = new RuntimeException("close failed");
+        Resource resource = new Resource(closeFailure);
+        AtomicReference<CompletableFuture<Aggregate>> result = new AtomicReference<>();
+        result.set(
+                ResourceCreator.compose(
+                        lookup,
+                        ignored -> CompletableFuture.completedFuture(resource),
+                        resources -> {
+                            result.get().complete(winner);
+                            return new Aggregate(resources);
+                        }));
+
+        lookup.complete(List.of(0));
+
+        assertSame(winner, result.get().join());
+        assertEquals(1, resource.closes.get());
+        assertSame(
+                closeFailure,
+                assertThrows(CompletionException.class, () -> quiescence(result.get()).join()).getCause());
+    }
+
+    @Test
+    void interruptedCloseAfterAggregateFailureRestoresInterruptFlag() {
+        InterruptedException interruption = new InterruptedException("close");
+        IllegalStateException failure = new IllegalStateException("aggregate failed");
+        AutoCloseable resource =
+                () -> {
+                    throw interruption;
+                };
+        CompletableFuture<AutoCloseable> result =
+                ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.of(0)),
+                        ignored -> CompletableFuture.completedFuture(resource),
+                        resources -> {
+                            throw failure;
+                        });
+
+        try {
+            assertSame(failure, assertThrows(CompletionException.class, result::join).getCause());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+        assertSame(interruption, failure.getSuppressed()[0]);
+    }
+
+    @Test
+    void closeFailingWithTheAggregateFailureIsNotSuppressedIntoItself() {
+        IllegalStateException failure = new IllegalStateException("broken");
+        Resource resource = new Resource(failure);
+        CompletableFuture<Aggregate> result =
+                ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.of(0)),
+                        ignored -> CompletableFuture.completedFuture(resource),
+                        resources -> {
+                            throw failure;
+                        });
+
+        assertSame(failure, assertThrows(CompletionException.class, result::join).getCause());
+        assertEquals(0, failure.getSuppressed().length);
+        assertEquals(1, resource.closes.get());
     }
 
     private static void await(CountDownLatch latch) {

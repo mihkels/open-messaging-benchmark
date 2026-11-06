@@ -23,6 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -146,5 +147,22 @@ class RedisBenchmarkProducerTest {
             release.countDown();
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void keyedSendAddsTheKeyField() {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
+
+        producer.sendAsync(Optional.of("k"), new byte[] {1}).join();
+
+        verify(jedis)
+                .xadd(
+                        any(byte[].class),
+                        org.mockito.ArgumentMatchers.<Map<byte[], byte[]>>argThat(map -> map.size() == 2),
+                        any(XAddParams.class));
+        verify(jedis).close();
     }
 }

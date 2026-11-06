@@ -15,11 +15,13 @@ package io.openmessaging.benchmark.driver;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -281,6 +283,69 @@ class ResourceCreatorTest {
         CompletableFuture<List<TestResource>> result = creator.create(List.of());
         assertEquals(List.of(), result.join());
         assertTrue(((ResourceCreationCompletion) result).quiescence().isDone());
+    }
+
+    @Test
+    void nullResourceFailsWithoutRetries() {
+        ResourceCreator<String, TestResource> creator =
+                new ResourceCreator<>("test", 1, 0, 0, ignored -> CompletableFuture.completedFuture(null));
+
+        assertInstanceOf(
+                NullPointerException.class,
+                assertThrows(CompletionException.class, () -> creator.create(List.of("a")).join())
+                        .getCause());
+    }
+
+    @Test
+    void cancelledCreationIsNeverRetried() {
+        AtomicInteger attempts = new AtomicInteger();
+        ResourceCreator<String, TestResource> creator =
+                new ResourceCreator<>(
+                        "test",
+                        1,
+                        0,
+                        10,
+                        ignored -> {
+                            attempts.incrementAndGet();
+                            CompletableFuture<TestResource> cancelled = new CompletableFuture<>();
+                            cancelled.cancel(false);
+                            return cancelled;
+                        });
+
+        assertThrows(CancellationException.class, () -> creator.create(List.of("a")).join());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void cancellationDuringABatchStopsStartingTheRestOfIt() {
+        AtomicReference<CompletableFuture<List<TestResource>>> result = new AtomicReference<>();
+        CountDownLatch published = new CountDownLatch(1);
+        List<String> started = new java.util.concurrent.CopyOnWriteArrayList<>();
+        TestResource late = new TestResource();
+        ResourceCreator<String, TestResource> creator =
+                new ResourceCreator<>(
+                        "test",
+                        2,
+                        0,
+                        0,
+                        request -> {
+                            started.add(request);
+                            try {
+                                published.await(5, TimeUnit.SECONDS);
+                            } catch (InterruptedException error) {
+                                Thread.currentThread().interrupt();
+                            }
+                            result.get().cancel(false);
+                            return CompletableFuture.completedFuture(late);
+                        });
+
+        result.set(creator.create(List.of("a", "b")));
+        published.countDown();
+
+        assertThrows(CancellationException.class, () -> result.get().join());
+        ((ResourceCreationCompletion) result.get()).quiescence().join();
+        assertEquals(List.of("a"), started);
+        assertEquals(1, late.closes.get());
     }
 
     private static void await(BooleanSupplier condition) {

@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -136,9 +137,79 @@ class NsqLookupTest {
         }
     }
 
+    @Test
+    void rejectedOrMalformedLookupResponsesYieldNoProducers() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/lookup",
+                exchange -> {
+                    String topic = exchange.getRequestURI().getQuery().substring("topic=".length());
+                    switch (topic) {
+                        case "unavailable" -> respond(exchange, 503, "{}");
+                        case "missing" -> respond(exchange, "{\"channels\":[]}");
+                        case "object" -> respond(exchange, "{\"producers\":{}}");
+                        case "nohost" -> respond(exchange, "{\"producers\":[{\"tcp_port\":4150}]}");
+                        case "bigport" ->
+                                respond(
+                                        exchange, "{\"producers\":[{\"broadcast_address\":\"h\",\"tcp_port\":70000}]}");
+                        default ->
+                                respond(
+                                        exchange, "{\"producers\":[{\"broadcast_address\":\"h\",\"tcp_port\":4150}]}");
+                    }
+                });
+        server.start();
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            NsqLookup lookup =
+                    new NsqLookup(http, Duration.ofSeconds(2), "127.0.0.1", server.getAddress().getPort());
+            lookup.addLookupAddress("http://127.0.0.1", server.getAddress().getPort());
+
+            assertThat(lookup.lookup("unavailable")).isEmpty();
+            assertThat(lookup.lookup("missing")).isEmpty();
+            assertThat(lookup.lookup("object")).isEmpty();
+            assertThat(lookup.lookup("nohost")).isEmpty();
+            assertThat(lookup.lookup("bigport")).isEmpty();
+            assertThat(lookup.lookup("ok")).containsExactly(new ServerAddress("h", 4150));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void publisherIdentityIsCachedOnceSeenAndUnavailableIdentityIsNotPresent() throws Exception {
+        AtomicReference<Integer> status = new AtomicReference<>(503);
+        AtomicInteger infoRequests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/info",
+                exchange -> {
+                    infoRequests.incrementAndGet();
+                    respond(
+                            exchange, status.get(), "{\"broadcast_address\":\"publisher\",\"tcp_port\":4150}");
+                });
+        server.start();
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            NsqLookup lookup =
+                    new NsqLookup(http, Duration.ofSeconds(2), "127.0.0.1", server.getAddress().getPort());
+            Set<ServerAddress> discovered = Set.of(new ServerAddress("publisher", 4150));
+
+            assertThat(lookup.includesPublishingNode(discovered)).isFalse();
+            status.set(200);
+            assertThat(lookup.includesPublishingNode(discovered)).isTrue();
+            assertThat(lookup.includesPublishingNode(discovered)).isTrue();
+            assertThat(lookup.includesPublishingNode(Set.of())).isFalse();
+            assertThat(infoRequests.get()).isEqualTo(2);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static void respond(HttpExchange exchange, String body) throws IOException {
+        respond(exchange, 200, body);
+    }
+
+    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.sendResponseHeaders(status, bytes.length);
         try (exchange) {
             exchange.getResponseBody().write(bytes);
         }

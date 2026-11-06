@@ -28,6 +28,7 @@ public class WorkerStats {
 
     private final LatencyMetric publishLatency;
     private final LatencyMetric publishDelayLatency;
+    private final LatencyMetric publishScheduleLatency;
     private final LatencyMetric endToEndLatency;
 
     // Micrometer counters
@@ -77,6 +78,12 @@ public class WorkerStats {
                         "producer_delay_latency",
                         "Delay between intended and actual send (micros)",
                         registry);
+        this.publishScheduleLatency =
+                LatencyMetric.clamped(
+                        TimeUnit.SECONDS.toMicros(60),
+                        "produce_schedule_latency",
+                        "Publish latency from intended send to acknowledgement (micros)",
+                        registry);
         this.endToEndLatency =
                 LatencyMetric.positiveOnly(
                         TimeUnit.HOURS.toMicros(12), "e2e_latency", "End to end latency (micros)", registry);
@@ -111,13 +118,15 @@ public class WorkerStats {
                 totalMessagesReceived.sum(),
                 publishLatency.takeInterval(),
                 publishDelayLatency.takeInterval(),
-                endToEndLatency.takeInterval());
+                endToEndLatency.takeInterval(),
+                publishScheduleLatency.takeInterval());
     }
 
     public CumulativeLatencies toCumulativeLatencies() {
         CumulativeLatencies latencies = new CumulativeLatencies();
         latencies.publishLatency = publishLatency.takeCumulative();
         latencies.publishDelayLatency = publishDelayLatency.takeCumulative();
+        latencies.publishScheduleLatency = publishScheduleLatency.takeCumulative();
         latencies.endToEndLatency = endToEndLatency.takeCumulative();
         return latencies;
     }
@@ -130,6 +139,7 @@ public class WorkerStats {
     public void resetLatencies() {
         publishLatency.reset();
         publishDelayLatency.reset();
+        publishScheduleLatency.reset();
         endToEndLatency.reset();
     }
 
@@ -160,5 +170,6 @@ public class WorkerStats {
         bytesSentCounter.increment(payloadLength);
         publishLatency.record(TimeUnit.NANOSECONDS.toMicros(nowNs - sendTimeNs));
         publishDelayLatency.record(TimeUnit.NANOSECONDS.toMicros(sendTimeNs - intendedSendTimeNs));
+        publishScheduleLatency.record(TimeUnit.NANOSECONDS.toMicros(nowNs - intendedSendTimeNs));
     }
 }

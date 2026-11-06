@@ -29,7 +29,8 @@ public record PeriodStats(
         @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
         @JsonProperty("publishLatency") Histogram publishLatency,
         @JsonProperty("publishDelayLatency") Histogram publishDelayLatency,
-        @JsonProperty("endToEndLatency") Histogram endToEndLatency) {
+        @JsonProperty("endToEndLatency") Histogram endToEndLatency,
+        @JsonProperty("publishScheduleLatency") Histogram publishScheduleLatency) {
 
     // Defensive copy constructor
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -44,7 +45,8 @@ public record PeriodStats(
             long totalMessagesReceived,
             Histogram publishLatency,
             Histogram publishDelayLatency,
-            Histogram endToEndLatency) {
+            Histogram endToEndLatency,
+            Histogram publishScheduleLatency) {
         this.messagesSent = messagesSent;
         this.messageSendErrors = messageSendErrors;
         this.bytesSent = bytesSent;
@@ -57,6 +59,36 @@ public record PeriodStats(
         this.publishDelayLatency =
                 publishDelayLatency != null ? publishDelayLatency.copy() : new Histogram(5);
         this.endToEndLatency = endToEndLatency != null ? endToEndLatency.copy() : new Histogram(5);
+        this.publishScheduleLatency =
+                publishScheduleLatency != null ? publishScheduleLatency.copy() : new Histogram(5);
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PeriodStats(
+            long messagesSent,
+            long messageSendErrors,
+            long bytesSent,
+            long messagesReceived,
+            long bytesReceived,
+            long totalMessagesSent,
+            long totalMessageSendErrors,
+            long totalMessagesReceived,
+            Histogram publishLatency,
+            Histogram publishDelayLatency,
+            Histogram endToEndLatency) {
+        this(
+                messagesSent,
+                messageSendErrors,
+                bytesSent,
+                messagesReceived,
+                bytesReceived,
+                totalMessagesSent,
+                totalMessageSendErrors,
+                totalMessagesReceived,
+                publishLatency,
+                publishDelayLatency,
+                endToEndLatency,
+                null);
     }
 
     public PeriodStats() {
@@ -70,6 +102,10 @@ public record PeriodStats(
 
     public Histogram publishDelayLatency() {
         return publishDelayLatency.copy();
+    }
+
+    public Histogram publishScheduleLatency() {
+        return publishScheduleLatency.copy();
     }
 
     public Histogram endToEndLatency() {
@@ -94,7 +130,8 @@ public record PeriodStats(
                 this.totalMessagesReceived + other.totalMessagesReceived,
                 combine(this.publishLatency, other.publishLatency),
                 combine(this.publishDelayLatency, other.publishDelayLatency),
-                combine(this.endToEndLatency, other.endToEndLatency));
+                combine(this.endToEndLatency, other.endToEndLatency),
+                combine(this.publishScheduleLatency, other.publishScheduleLatency));
     }
 
     private static Histogram combine(Histogram first, Histogram second) {
@@ -119,6 +156,7 @@ public record PeriodStats(
         long totalReceived = 0;
         Histogram publish = new Histogram(5);
         Histogram delay = new Histogram(5);
+        Histogram schedule = new Histogram(5);
         Histogram endToEnd = new Histogram(5);
         for (PeriodStats snapshot : snapshots) {
             sent += snapshot.messagesSent;
@@ -131,6 +169,7 @@ public record PeriodStats(
             totalReceived += snapshot.totalMessagesReceived;
             publish.add(snapshot.publishLatency);
             delay.add(snapshot.publishDelayLatency);
+            schedule.add(snapshot.publishScheduleLatency);
             endToEnd.add(snapshot.endToEndLatency);
         }
         return new PeriodStats(
@@ -144,6 +183,7 @@ public record PeriodStats(
                 totalReceived,
                 publish,
                 delay,
-                endToEnd);
+                endToEnd,
+                schedule);
     }
 }

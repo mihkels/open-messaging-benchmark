@@ -20,6 +20,20 @@ import org.junit.jupiter.api.Test;
 class CumulativeLatenciesTest {
 
     @Test
+    void combinesCorrectedHistogramsWithoutChangingInputs() {
+        CumulativeLatencies one = new CumulativeLatencies();
+        CumulativeLatencies two = new CumulativeLatencies();
+        one.publishScheduleLatency.recordValue(1_200);
+        two.publishScheduleLatency.recordValue(100_000);
+        CumulativeLatencies result = one.plus(two);
+        assertThat(result.publishScheduleLatency.getTotalCount()).isEqualTo(2);
+        assertThat(result.publishScheduleLatency.getValueAtPercentile(99)).isEqualTo(100_000);
+        result.publishScheduleLatency.reset();
+        assertThat(one.publishScheduleLatency.getTotalCount()).isEqualTo(1);
+        assertThat(two.publishScheduleLatency.getTotalCount()).isEqualTo(1);
+    }
+
+    @Test
     void zeroPlus() {
         CumulativeLatencies one = new CumulativeLatencies();
         CumulativeLatencies two = new CumulativeLatencies();

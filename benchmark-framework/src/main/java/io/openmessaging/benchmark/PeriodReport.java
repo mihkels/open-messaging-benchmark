@@ -27,6 +27,7 @@ import org.HdrHistogram.Histogram;
  * @param backlog messages published but not yet consumed by every subscription
  * @param publishLatency time from send to acknowledgement
  * @param publishDelayLatency delay between the intended and the actual send time
+ * @param publishScheduleLatency time from intended send to acknowledgement
  * @param endToEndLatency time from publish to consumption
  */
 record PeriodReport(
@@ -38,6 +39,7 @@ record PeriodReport(
         long backlog,
         Histogram publishLatency,
         Histogram publishDelayLatency,
+        Histogram publishScheduleLatency,
         Histogram endToEndLatency) {
 
     private static final double MEGABYTE = 1024 * 1024;
@@ -53,6 +55,7 @@ record PeriodReport(
                         0L, subscriptionsPerTopic * stats.totalMessagesSent() - stats.totalMessagesReceived()),
                 stats.publishLatency(),
                 stats.publishDelayLatency(),
+                stats.publishScheduleLatency(),
                 stats.endToEndLatency());
     }
 }

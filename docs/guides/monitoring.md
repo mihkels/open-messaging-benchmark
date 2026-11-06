@@ -29,16 +29,17 @@ curl http://worker-1:8080/metrics
 The response combines the worker supervisor's registry with the metrics of its current driver
 process. Once a driver is initialized, it includes:
 
-|              Metric              |  Type   |                   Meaning                   |
-|----------------------------------|---------|---------------------------------------------|
-| `messages_sent_total`            | Counter | Sends completed successfully by the driver  |
-| `message_send_errors_total`      | Counter | Failed sends                                |
-| `bytes_sent_total`               | Counter | Payload bytes sent                          |
-| `messages_recv_total`            | Counter | Messages received by consumers              |
-| `bytes_recv_total`               | Counter | Payload bytes received                      |
-| `produce_latency_seconds`        | Timer   | Publish latency                             |
-| `producer_delay_latency_seconds` | Timer   | Delay between the scheduled and actual send |
-| `e2e_latency_seconds`            | Timer   | End-to-end latency                          |
+|               Metric               |  Type   |                                   Meaning                                   |
+|------------------------------------|---------|-----------------------------------------------------------------------------|
+| `messages_sent_total`              | Counter | Sends completed successfully by the driver                                  |
+| `message_send_errors_total`        | Counter | Failed sends                                                                |
+| `bytes_sent_total`                 | Counter | Payload bytes sent                                                          |
+| `messages_recv_total`              | Counter | Messages received by consumers                                              |
+| `bytes_recv_total`                 | Counter | Payload bytes received                                                      |
+| `produce_latency_seconds`          | Timer   | Publish latency                                                             |
+| `producer_delay_latency_seconds`   | Timer   | Delay between the scheduled and actual send                                 |
+| `produce_schedule_latency_seconds` | Timer   | Intended send to successful completion (schedule-corrected publish latency) |
+| `e2e_latency_seconds`              | Timer   | End-to-end latency                                                          |
 
 The driver's send-completion point depends on its broker and configuration; it is not always a
 broker acknowledgement. See [Publish latency](../methodology/latency-and-backlog.md#publish-latency).

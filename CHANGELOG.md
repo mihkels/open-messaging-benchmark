@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.2](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.1...v0.1.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* Avoid SIGPIPE exits in omb-k8s.sh pipelines, ref: [#86](https://github.com/mihkels/open-messaging-benchmark/issues/86) ([#87](https://github.com/mihkels/open-messaging-benchmark/issues/87)) ([fe3a7e0](https://github.com/mihkels/open-messaging-benchmark/commit/fe3a7e055985f41d14889b5a86bc397ff38412d8))
+* Upgrade OS packages in the runtime image, ref: [#65](https://github.com/mihkels/open-messaging-benchmark/issues/65) ([#66](https://github.com/mihkels/open-messaging-benchmark/issues/66)) ([279cd99](https://github.com/mihkels/open-messaging-benchmark/commit/279cd99f5a54803bc0e0971004b397868ef94a5f))
+
+
+### Documentation
+
+* Add CONTRIBUTING.md pointing to development docs, ref: [#49](https://github.com/mihkels/open-messaging-benchmark/issues/49) ([#67](https://github.com/mihkels/open-messaging-benchmark/issues/67)) ([a3c5a13](https://github.com/mihkels/open-messaging-benchmark/commit/a3c5a13bc426dde9b5257fa39cc5ddfe36991c6d))
+
 ## [0.1.1](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.0...v0.1.1) (2026-11-04)
 
 

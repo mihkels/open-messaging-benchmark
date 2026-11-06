@@ -16,9 +16,14 @@ package io.openmessaging.benchmark.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.driver.Failures;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class DriverProcessTest {
@@ -56,5 +61,84 @@ class DriverProcessTest {
         assertThat(driverProcess.describeFailure(callFailure))
                 .isEqualTo("connection refused (driver process exited with code 0)");
         assertThat(stopFailures.hasFailure()).isFalse();
+    }
+
+    @Test
+    void escalatesShutdownAfterTimeoutAndReportsTheForcedExit() {
+        TimedOutProcess process = new TimedOutProcess();
+        DriverProcess driverProcess = new DriverProcess("fixture driver", process);
+        Failures failures = new Failures();
+
+        driverProcess.stop(failures);
+
+        assertThat(process.destroyCalls).isEqualTo(1);
+        assertThat(process.forceCalls).isEqualTo(1);
+        assertThat(process.waitCalls.get()).isEqualTo(3);
+        assertThat(driverProcess.isStopped()).isTrue();
+        assertThat(failures.failure())
+                .hasMessageContaining("did not stop")
+                .hasStackTraceContaining("exited with code 137");
+    }
+
+    private static final class TimedOutProcess extends Process {
+        private final AtomicInteger waitCalls = new AtomicInteger();
+        private int destroyCalls;
+        private int forceCalls;
+        private boolean alive = true;
+
+        @Override
+        public OutputStream getOutputStream() {
+            return new ByteArrayOutputStream();
+        }
+
+        @Override
+        public InputStream getInputStream() {
+            return new ByteArrayInputStream(new byte[0]);
+        }
+
+        @Override
+        public InputStream getErrorStream() {
+            return new ByteArrayInputStream(new byte[0]);
+        }
+
+        @Override
+        public int waitFor() {
+            return exitValue();
+        }
+
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) {
+            return waitCalls.incrementAndGet() == 3;
+        }
+
+        @Override
+        public int exitValue() {
+            if (alive) {
+                throw new IllegalThreadStateException("process is still running");
+            }
+            return 137;
+        }
+
+        @Override
+        public void destroy() {
+            destroyCalls++;
+        }
+
+        @Override
+        public Process destroyForcibly() {
+            forceCalls++;
+            alive = false;
+            return this;
+        }
+
+        @Override
+        public boolean isAlive() {
+            return alive;
+        }
+
+        @Override
+        public long pid() {
+            return 137;
+        }
     }
 }

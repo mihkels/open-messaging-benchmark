@@ -45,12 +45,45 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerBuilder;
+import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.MessageListener;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.ProducerBuilder;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class KopPulsarCreationTest {
+    @Test
+    void pulsarConsumerCallbackAcknowledgesAndReleasesMessage() throws Exception {
+        Fixture fixture = new Fixture();
+        CompletableFuture<List<String>> lookup = fixture.lookup();
+        Consumer<ByteBuffer> consumer = consumer();
+        when(fixture.consumerBuilder.subscribeAsync())
+                .thenReturn(CompletableFuture.completedFuture(consumer));
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        CompletableFuture<BenchmarkConsumer> creation =
+                fixture.driver.createConsumer("topic", "subscription", callback);
+        lookup.complete(List.of("topic-partition-0"));
+        BenchmarkConsumer handle = creation.join();
+        ArgumentCaptor<MessageListener<ByteBuffer>> listener =
+                ArgumentCaptor.forClass(MessageListener.class);
+        verify(fixture.consumerBuilder).messageListener(listener.capture());
+        Message<ByteBuffer> message = mock();
+        ByteBuffer payload = ByteBuffer.wrap(new byte[] {1, 2});
+        when(message.getValue()).thenReturn(payload);
+        when(message.getPublishTime()).thenReturn(456L);
+
+        listener.getValue().received(consumer, message);
+
+        verify(callback).messageReceived(payload, 456L);
+        verify(consumer).acknowledgeAsync(message);
+        verify(message).release();
+        handle.close();
+        verify(consumer).close();
+    }
+
     @Test
     void producerIsHandedOffAndClosedByItsOwner() throws Exception {
         Fixture fixture = new Fixture();

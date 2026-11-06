@@ -24,8 +24,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.nats.streaming.Message;
 import io.nats.streaming.MessageHandler;
 import io.nats.streaming.StreamingConnection;
+import io.nats.streaming.Subscription;
 import io.nats.streaming.SubscriptionOptions;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
@@ -36,8 +38,35 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class NatsStreamingBenchmarkDriverTest {
+    @Test
+    void consumerCallbackConvertsNanosecondTimestampToMilliseconds() throws Exception {
+        StreamingConnection connection = mock(StreamingConnection.class);
+        when(connection.subscribe(
+                        anyString(), anyString(), any(MessageHandler.class), any(SubscriptionOptions.class)))
+                .thenReturn(mock(Subscription.class));
+        NatsStreamingBenchmarkDriver driver =
+                new NatsStreamingBenchmarkDriver((cluster, client, options) -> connection);
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        BenchmarkConsumer consumer = driver.createConsumer("topic", "group", callback).join();
+
+        ArgumentCaptor<MessageHandler> handler = ArgumentCaptor.forClass(MessageHandler.class);
+        verify(connection)
+                .subscribe(anyString(), anyString(), handler.capture(), any(SubscriptionOptions.class));
+        Message message = mock(Message.class);
+        byte[] payload = {1, 2, 3};
+        when(message.getData()).thenReturn(payload);
+        when(message.getTimestamp()).thenReturn(TimeUnit.MILLISECONDS.toNanos(1234L));
+        handler.getValue().onMessage(message);
+
+        verify(callback).messageReceived(payload, 1234L);
+        consumer.close();
+        verify(connection).close();
+    }
+
     @Test
     void producerConnectionFailureIsAnExceptionalFuture() {
         IOException failure = new IOException("connect failed");

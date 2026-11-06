@@ -24,18 +24,50 @@ import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.apache.rocketmq.client.apis.ClientException;
 import org.apache.rocketmq.client.apis.ClientServiceProvider;
+import org.apache.rocketmq.client.apis.consumer.ConsumeResult;
+import org.apache.rocketmq.client.apis.consumer.MessageListener;
+import org.apache.rocketmq.client.apis.consumer.PushConsumer;
 import org.apache.rocketmq.client.apis.consumer.PushConsumerBuilder;
+import org.apache.rocketmq.client.apis.message.MessageView;
 import org.apache.rocketmq.client.apis.producer.ProducerBuilder;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class RocketMQ5BenchmarkDriverTest {
+    @Test
+    void consumerCallbackReturnsSuccessAndConsumerHandleClosesClient() throws Exception {
+        TestDriver driver = new TestDriver();
+        driver.initialize(configPath(), null);
+        PushConsumerBuilder consumerBuilder = mock(PushConsumerBuilder.class, RETURNS_SELF);
+        PushConsumer pushConsumer = mock(PushConsumer.class);
+        when(driver.provider.newPushConsumerBuilder()).thenReturn(consumerBuilder);
+        when(consumerBuilder.build()).thenReturn(pushConsumer);
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        var handle = driver.createConsumer("topic", "group", callback).join();
+
+        ArgumentCaptor<MessageListener> listener = ArgumentCaptor.forClass(MessageListener.class);
+        verify(consumerBuilder).setMessageListener(listener.capture());
+        MessageView message = mock(MessageView.class);
+        ByteBuffer body = ByteBuffer.wrap(new byte[] {1, 2, 3});
+        when(message.getBody()).thenReturn(body);
+        when(message.getBornTimestamp()).thenReturn(123L);
+        assertThat(listener.getValue().consume(message)).isEqualTo(ConsumeResult.SUCCESS);
+        verify(callback).messageReceived(body, 123L);
+
+        handle.close();
+        verify(pushConsumer).close();
+        driver.close();
+    }
+
     @Test
     void adminStartupFailurePropagatesAndClosesPartialAdmin() throws Exception {
         TestDriver driver = new TestDriver();

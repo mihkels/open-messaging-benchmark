@@ -182,6 +182,18 @@ class DlogBenchmarkDriverTest {
     }
 
     @Test
+    void namespaceCloseFailureIsPropagated() throws Exception {
+        Namespace namespace = mock(Namespace.class);
+        IOException closeFailure = new IOException("namespace close failed");
+        doThrow(closeFailure).when(namespace).close();
+        DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
+
+        assertThatThrownBy(driver::close).isSameAs(closeFailure);
+
+        verify(namespace).close();
+    }
+
+    @Test
     void nullInitialReaderFailsCreationAndClosesManager() throws Exception {
         Namespace namespace = mock(Namespace.class);
         DistributedLogManager manager = mock(DistributedLogManager.class);

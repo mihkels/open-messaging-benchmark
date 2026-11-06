@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.pulsar;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -41,14 +42,74 @@ import org.apache.pulsar.client.admin.PulsarAdminBuilder;
 import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerBuilder;
+import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.MessageListener;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.ProducerBuilder;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 class PulsarBenchmarkDriverTest {
+    @Test
+    void consumerCallbackAcknowledgesAndReleasesMessage() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> builder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        Consumer<ByteBuffer> consumer = mock();
+        Message<ByteBuffer> message = mock();
+        ByteBuffer payload = ByteBuffer.wrap(new byte[] {1, 2, 3});
+        when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(builder);
+        when(builder.subscribeAsync()).thenReturn(CompletableFuture.completedFuture(consumer));
+        when(message.getValue()).thenReturn(payload);
+        when(message.getPublishTime()).thenReturn(123L);
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        assertThat(driver.createInternalConsumer("topic", "subscription", callback).join())
+                .isSameAs(consumer);
+        ArgumentCaptor<MessageListener<ByteBuffer>> listener =
+                ArgumentCaptor.forClass(MessageListener.class);
+        verify(builder).messageListener(listener.capture());
+
+        listener.getValue().received(consumer, message);
+
+        verify(callback).messageReceived(payload, 123L);
+        verify(consumer).acknowledgeAsync(message);
+        verify(message).release();
+    }
+
+    @Test
+    void consumerReleasesMessageWhenCallbackFailsWithoutAcknowledging() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> builder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        Consumer<ByteBuffer> consumer = mock();
+        Message<ByteBuffer> message = mock();
+        when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(builder);
+        when(builder.subscribeAsync()).thenReturn(CompletableFuture.completedFuture(consumer));
+        when(message.getValue()).thenReturn(ByteBuffer.wrap(new byte[] {7}));
+        IllegalStateException failure = new IllegalStateException("callback failed");
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        doThrow(failure).when(callback).messageReceived(any(ByteBuffer.class), anyLong());
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+        CompletableFuture<Consumer<ByteBuffer>> created =
+                driver.createInternalConsumer("topic", "subscription", callback);
+        ArgumentCaptor<MessageListener<ByteBuffer>> listener =
+                ArgumentCaptor.forClass(MessageListener.class);
+        verify(builder).messageListener(listener.capture());
+
+        assertThatThrownBy(() -> listener.getValue().received(consumer, message)).isSameAs(failure);
+
+        verify(consumer, never()).acknowledgeAsync(message);
+        verify(message).release();
+        assertThat(created.join()).isSameAs(consumer);
+    }
+
     @Test
     void producerCreationUsesIndependentBuilderClones() throws Exception {
         PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();

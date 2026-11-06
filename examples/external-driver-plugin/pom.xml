@@ -32,7 +32,7 @@
         <maven.compiler.release>27</maven.compiler.release>
         <!-- The benchmark version whose driver-api this plugin is compiled against -->
         <!-- x-release-please-start-version -->
-        <omb.version>0.1.3</omb.version>
+        <omb.version>0.2.0</omb.version>
         <!-- x-release-please-end -->
     </properties>
 

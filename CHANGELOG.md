@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.2...v0.1.3) (2026-11-06)
+
+
+### Bug Fixes
+
+* handle oversized histogram payloads ([#98](https://github.com/mihkels/open-messaging-benchmark/issues/98)) ([081b630](https://github.com/mihkels/open-messaging-benchmark/commit/081b630d72f6d780b010955df58d74872736a7a5))
+* preserve RocketMQ admin interrupt status ([#99](https://github.com/mihkels/open-messaging-benchmark/issues/99)) ([ad16302](https://github.com/mihkels/open-messaging-benchmark/commit/ad163028cbb91321c24fe56c27e096d9c0d06056))
+
 ## [0.1.2](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.1...v0.1.2) (2026-11-06)
 
 

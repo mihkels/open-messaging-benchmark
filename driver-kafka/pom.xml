@@ -26,10 +26,10 @@
 
     <properties>
         <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
-        <jacoco.min.class>0.86</jacoco.min.class>
-        <jacoco.min.method>0.71</jacoco.min.method>
-        <jacoco.min.line>0.66</jacoco.min.line>
-        <jacoco.min.branch>0.58</jacoco.min.branch>
+        <jacoco.min.class>0.98</jacoco.min.class>
+        <jacoco.min.method>0.86</jacoco.min.method>
+        <jacoco.min.line>0.77</jacoco.min.line>
+        <jacoco.min.branch>0.73</jacoco.min.branch>
         <kafka.version>4.4.0</kafka.version>
     </properties>
 

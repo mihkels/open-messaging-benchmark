@@ -28,9 +28,9 @@
     <properties>
         <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
         <jacoco.min.class>0.98</jacoco.min.class>
-        <jacoco.min.method>0.84</jacoco.min.method>
-        <jacoco.min.line>0.83</jacoco.min.line>
-        <jacoco.min.branch>0.70</jacoco.min.branch>
+        <jacoco.min.method>0.92</jacoco.min.method>
+        <jacoco.min.line>0.89</jacoco.min.line>
+        <jacoco.min.branch>0.83</jacoco.min.branch>
         <hivemq.mqtt.client.version>1.4.1</hivemq.mqtt.client.version>
     </properties>
 

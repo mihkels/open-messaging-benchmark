@@ -53,6 +53,28 @@ public class KopBenchmarkDriverTest {
     }
 
     @Test
+    public void nullConfigValuesFallBackToDefaults() {
+        Config config = new Config(null, null, null, (Long) null, null);
+
+        assertThat(config.producerType()).isEqualTo(ClientType.KAFKA);
+        assertThat(config.consumerType()).isEqualTo(ClientType.KAFKA);
+        assertThat(config.pollTimeoutMs()).isEqualTo(100);
+        assertThat(config.kafkaConfig()).isEmpty();
+        assertThat(config.pulsarConfig().serviceUrl()).isEqualTo("pulsar://localhost:6650");
+        assertThat(PulsarConfig.fromMap(null).receiverQueueSize()).isEqualTo(1000);
+    }
+
+    @Test
+    public void kafkaPropertiesRequireBootstrapServers() {
+        assertThatThrownBy(() -> new Config().getKafkaProperties())
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Config(null, null, null, 100L, "   ").getKafkaProperties())
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Config(null, null, null, 100L, "client.id=x").getKafkaProperties())
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     public void testLoadCustomConfig() throws Exception {
         final URL url = this.getClass().getClassLoader().getResource("kop_custom.yaml");
         assertThat(url).isNotNull();

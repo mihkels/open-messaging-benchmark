@@ -14,8 +14,12 @@
 package io.openmessaging.benchmark.driver.kop;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,17 +37,21 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.kop.config.Config;
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletionException;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
@@ -135,6 +143,76 @@ class KopBenchmarkDriverOwnershipTest {
         driver.close();
         verify(admin, times(1)).close();
         verify(client, times(1)).close();
+    }
+
+    @Test
+    void pulsarClientsAreBuiltLazilyAndSharedForProducersAndConsumers() throws Exception {
+        KopBenchmarkDriver driver = new KopBenchmarkDriver();
+        Path config =
+                Path.of(KopBenchmarkDriverOwnershipTest.class.getResource("/kop_all_pulsar.yaml").toURI());
+
+        driver.initialize(config, null);
+        try {
+            Field client = KopBenchmarkDriver.class.getDeclaredField("client");
+            client.setAccessible(true);
+            assertNotNull(client.get(driver));
+            Field configField = KopBenchmarkDriver.class.getDeclaredField("config");
+            configField.setAccessible(true);
+            assertEquals(100L, ((Config) configField.get(driver)).pollTimeoutMs());
+        } finally {
+            driver.close();
+        }
+    }
+
+    @Test
+    void topicCreationCompletesWithTheAdminResult() throws Exception {
+        KopBenchmarkDriver driver = new KopBenchmarkDriver();
+        AdminClient admin = mock(AdminClient.class);
+        CreateTopicsResult created = mock(CreateTopicsResult.class);
+        CreateTopicsResult rejected = mock(CreateTopicsResult.class);
+        KafkaFutureImpl<Void> failure = new KafkaFutureImpl<>();
+        IllegalStateException cause = new IllegalStateException("topic exists");
+        failure.completeExceptionally(cause);
+        when(created.all()).thenReturn(KafkaFuture.completedFuture(null));
+        when(rejected.all()).thenReturn(failure);
+        when(admin.createTopics(anyCollection())).thenReturn(created, rejected);
+        setField(driver, "admin", admin);
+
+        assertNull(driver.createTopic("topic", 2).join());
+        assertSame(
+                cause,
+                assertThrows(CompletionException.class, () -> driver.createTopic("topic", 2).join())
+                        .getCause());
+    }
+
+    @Test
+    void interruptedCloseRestoresInterruptFlagAndSharedFailureIsReportedOnce() throws Exception {
+        KopBenchmarkDriver driver = new KopBenchmarkDriver();
+        AdminClient admin = mock(AdminClient.class);
+        PulsarClient client = mock(PulsarClient.class);
+        InterruptedException interruption = new InterruptedException("admin close");
+        doAnswer(
+                        invocation -> {
+                            throw interruption;
+                        })
+                .when(admin)
+                .close();
+        setField(driver, "admin", admin);
+        try {
+            assertSame(interruption, assertThrows(InterruptedException.class, driver::close));
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+
+        RuntimeException shared = new RuntimeException("shared");
+        AdminClient otherAdmin = mock(AdminClient.class);
+        doThrow(shared).when(otherAdmin).close();
+        doThrow(shared).when(client).close();
+        setField(driver, "admin", otherAdmin);
+        setField(driver, "client", client);
+        assertSame(shared, assertThrows(RuntimeException.class, driver::close));
+        assertEquals(0, shared.getSuppressed().length);
     }
 
     private static KopBenchmarkDriver kafkaDriver() throws Exception {

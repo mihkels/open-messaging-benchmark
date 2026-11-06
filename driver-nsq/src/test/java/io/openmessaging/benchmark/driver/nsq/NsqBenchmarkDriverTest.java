@@ -372,4 +372,181 @@ class NsqBenchmarkDriverTest {
             verify(consumer, never()).close();
         }
     }
+
+    @Test
+    void rejectsZeroHttpPort() throws Exception {
+        Path config =
+                Files.writeString(
+                        temp.resolve("nsq.yaml"),
+                        "nsqdHost: localhost\nlookupHost: localhost\nnsqdHttpPort: 0\n");
+        try (NsqBenchmarkDriver driver = new NsqBenchmarkDriver()) {
+            assertThatThrownBy(() -> driver.initialize(config, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void topicCreationFailsOnHttpError() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/topic/create",
+                exchange -> {
+                    exchange.sendResponseHeaders(500, -1);
+                    exchange.close();
+                });
+        server.start();
+        try (NsqBenchmarkDriver driver = new NsqBenchmarkDriver()) {
+            driver.initialize(httpConfig(server), null);
+            assertThatThrownBy(() -> driver.createTopic("benchmark-topic", 1).get(5, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("HTTP 500");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failuresThatAreRethrownByCleanupAreNotSuppressedIntoThemselves() throws Exception {
+        NSQProducer producer = mock(NSQProducer.class);
+        NsqBenchmarkConsumer consumer = mock(NsqBenchmarkConsumer.class);
+        RuntimeException producerFailure = new RuntimeException("producer broken");
+        RuntimeException consumerFailure = new RuntimeException("consumer broken");
+        doThrow(producerFailure).when(producer).start();
+        doThrow(producerFailure).when(producer).shutdown();
+        doThrow(consumerFailure).when(consumer).startAsync();
+        doThrow(consumerFailure).when(consumer).close();
+        try (NsqBenchmarkDriver driver = driverWith(() -> producer, () -> consumer)) {
+            driver.initialize(moduleConfig(), null);
+            assertThatThrownBy(() -> driver.createProducer("topic").join()).hasCause(producerFailure);
+            assertThatThrownBy(
+                            () -> driver.createConsumer("topic", "group", mock(ConsumerCallback.class)).join())
+                    .hasCause(consumerFailure);
+            assertThat(producerFailure.getSuppressed()).isEmpty();
+            assertThat(consumerFailure.getSuppressed()).isEmpty();
+        }
+    }
+
+    @Test
+    void failureToConstructClientsIsReported() throws Exception {
+        RuntimeException producerFailure = new RuntimeException("no producer");
+        RuntimeException consumerFailure = new RuntimeException("no consumer");
+        try (NsqBenchmarkDriver driver =
+                driverWith(
+                        () -> {
+                            throw producerFailure;
+                        },
+                        () -> {
+                            throw consumerFailure;
+                        })) {
+            driver.initialize(moduleConfig(), null);
+            assertThatThrownBy(() -> driver.createProducer("topic").join()).hasCause(producerFailure);
+            assertThatThrownBy(
+                            () -> driver.createConsumer("topic", "group", mock(ConsumerCallback.class)).join())
+                    .hasCause(consumerFailure);
+            assertThatThrownBy(
+                            () -> driver.createConsumer("topic", "other", mock(ConsumerCallback.class)).join())
+                    .hasCause(consumerFailure);
+        }
+    }
+
+    @Test
+    void consumerCreationAfterCloseFailsBeforeAllocatingResources() throws Exception {
+        NsqBenchmarkDriver driver = new NsqBenchmarkDriver();
+        driver.initialize(moduleConfig(), null);
+        driver.close();
+
+        assertThatThrownBy(
+                        () -> driver.createConsumer("topic", "group", mock(ConsumerCallback.class)).join())
+                .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void closeDuringStartupHandlesEveryCreationOutcome() throws Exception {
+        NsqBenchmarkConsumer other = mock(NsqBenchmarkConsumer.class);
+        RuntimeException startupFailure = new RuntimeException("startup failed");
+        assertCloseDuringStartup(
+                consumer -> CompletableFuture.failedFuture(startupFailure),
+                (consumer, creation) -> {
+                    assertThatThrownBy(creation::join).hasCause(startupFailure);
+                    verify(consumer, never()).close();
+                });
+        assertCloseDuringStartup(
+                consumer -> CompletableFuture.completedFuture(other),
+                (consumer, creation) -> {
+                    assertThatThrownBy(creation::join).hasCauseInstanceOf(IllegalStateException.class);
+                    verify(other).close();
+                    verify(consumer).close();
+                });
+        assertCloseDuringStartup(
+                consumer -> CompletableFuture.completedFuture(null),
+                (consumer, creation) -> {
+                    assertThatThrownBy(creation::join).hasCauseInstanceOf(IllegalStateException.class);
+                    verify(consumer).close();
+                });
+        assertCloseDuringStartup(
+                consumer -> new CompletableFuture<>(),
+                (consumer, creation) -> {
+                    assertThat(creation).isCancelled();
+                    verify(consumer, never()).close();
+                });
+    }
+
+    private void assertCloseDuringStartup(
+            java.util.function.Function<NsqBenchmarkConsumer, CompletableFuture<BenchmarkConsumer>> start,
+            CreationCheck check)
+            throws Exception {
+        NsqBenchmarkConsumer consumer = mock(NsqBenchmarkConsumer.class);
+        AtomicReference<NsqBenchmarkDriver> owner = new AtomicReference<>();
+        when(consumer.startAsync())
+                .thenAnswer(
+                        invocation -> {
+                            owner.get().close();
+                            return start.apply(consumer);
+                        });
+        try (NsqBenchmarkDriver driver = driverWith(NSQProducer::new, () -> consumer)) {
+            owner.set(driver);
+            driver.initialize(moduleConfig(), null);
+            check.accept(consumer, driver.createConsumer("topic", "group", mock(ConsumerCallback.class)));
+        }
+    }
+
+    @FunctionalInterface
+    private interface CreationCheck {
+        void accept(NsqBenchmarkConsumer consumer, CompletableFuture<BenchmarkConsumer> creation)
+                throws Exception;
+    }
+
+    private static NsqBenchmarkDriver driverWith(
+            java.util.function.Supplier<NSQProducer> producers,
+            java.util.function.Supplier<NsqBenchmarkConsumer> consumers) {
+        return new NsqBenchmarkDriver() {
+            @Override
+            NSQProducer newProducer() {
+                return producers.get();
+            }
+
+            @Override
+            NsqBenchmarkConsumer newConsumer(
+                    NsqLookup lookup,
+                    String topic,
+                    String subscription,
+                    ConsumerCallback callback,
+                    NsqEventLoopGroup scope) {
+                return consumers.get();
+            }
+        };
+    }
+
+    private static Path moduleConfig() {
+        Path inModule = Path.of("nsq.yaml");
+        return Files.exists(inModule) ? inModule : Path.of("driver-nsq", "nsq.yaml");
+    }
+
+    private Path httpConfig(HttpServer server) throws Exception {
+        return Files.writeString(
+                temp.resolve("nsq-http.yaml"),
+                "nsqdHost: 127.0.0.1\nlookupHost: 127.0.0.1\nnsqdHttpPort: "
+                        + server.getAddress().getPort()
+                        + "\n");
+    }
 }

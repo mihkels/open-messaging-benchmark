@@ -14,8 +14,11 @@
 package io.openmessaging.benchmark.driver.jms;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -28,6 +31,9 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -231,6 +237,256 @@ public class JMSBenchmarkDriverTest {
         assertEquals(1, TestFactory.closes.get());
     }
 
+    @Test
+    void initializesWithoutAdminDelegateAndUsesOwnTopicSettings() throws Exception {
+        AtomicInteger starts = new AtomicInteger();
+        TestFactory.nextConnection =
+                proxy(
+                        Connection.class,
+                        (method, args) -> {
+                            if (method.equals("start")) {
+                                starts.incrementAndGet();
+                            }
+                            return null;
+                        });
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        driver.initialize(resource("/jms-no-delegate-test.yaml"), new SimpleMeterRegistry());
+
+        assertEquals(1, starts.get());
+        assertEquals("jms-test", driver.getTopicNamePrefix());
+        assertNull(driver.createTopic("topic", 3).join());
+        driver.close();
+    }
+
+    @Test
+    void adminDelegateHandlesTopicPrefixAndCreation() throws Exception {
+        TestFactory.nextConnection = proxy(Connection.class, (method, args) -> null);
+        TestDelegate.closes.set(0);
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        driver.initialize(resource("/jms-creation-test.yaml"), new SimpleMeterRegistry());
+
+        assertEquals("test", driver.getTopicNamePrefix());
+        assertNull(driver.createTopic("topic", 1).join());
+        driver.close();
+        assertEquals(1, TestDelegate.closes.get());
+    }
+
+    @Test
+    void connectionFactoryCanBeBuiltFromJsonProperties() throws Exception {
+        PropertiesFactory.lastProperties = null;
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        driver.initialize(resource("/jms-properties-factory-test.yaml"), new SimpleMeterRegistry());
+
+        assertEquals("localhost:9092", PropertiesFactory.lastProperties.get("bootstrap.servers"));
+        driver.close();
+    }
+
+    @Test
+    void connectionFactoryWithoutSupportedConstructorFailsInitialization() {
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        IOException failure =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                driver.initialize(
+                                        resource("/jms-unsupported-factory-test.yaml"), new SimpleMeterRegistry()));
+
+        assertInstanceOf(RuntimeException.class, failure.getCause());
+    }
+
+    @Test
+    void initializationCleanupFailureIsSuppressedIntoTheCause() throws Exception {
+        JMSException cause = new JMSException("start");
+        JMSException closeFailure = new JMSException("close");
+        TestFactory.nextConnection =
+                proxy(
+                        Connection.class,
+                        (method, args) ->
+                                switch (method) {
+                                    case "start" -> throw cause;
+                                    case "close" -> throw closeFailure;
+                                    default -> null;
+                                });
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        IOException failure =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                driver.initialize(resource("/jms-creation-test.yaml"), new SimpleMeterRegistry()));
+
+        assertSame(cause, failure.getCause());
+        assertSame(closeFailure, cause.getSuppressed()[0]);
+    }
+
+    @Test
+    void initializationCleanupRethrowingTheCauseIsNotSuppressedIntoItself() throws Exception {
+        JMSException cause = new JMSException("broken connection");
+        TestFactory.nextConnection =
+                proxy(
+                        Connection.class,
+                        (method, args) ->
+                                switch (method) {
+                                    case "start", "close" -> throw cause;
+                                    default -> null;
+                                });
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        IOException failure =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                driver.initialize(resource("/jms-creation-test.yaml"), new SimpleMeterRegistry()));
+
+        assertSame(cause, failure.getCause());
+        assertEquals(0, cause.getSuppressed().length);
+    }
+
+    @Test
+    void interruptedAdminDelegateInitializationIsRethrown() throws Exception {
+        InterruptedException interruption = new InterruptedException("delegate");
+        TestDelegate.initFailure = interruption;
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+        try {
+            assertSame(
+                    interruption,
+                    assertThrows(
+                            InterruptedException.class,
+                            () ->
+                                    driver.initialize(
+                                            resource("/jms-creation-test.yaml"), new SimpleMeterRegistry())));
+            assertTrue(Thread.interrupted());
+        } finally {
+            TestDelegate.initFailure = null;
+        }
+    }
+
+    @Test
+    void interruptedCloseRestoresInterruptFlag() throws Exception {
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+        InterruptedException interruption = new InterruptedException("close");
+        TestDelegate delegate = new TestDelegate();
+        delegate.onClose =
+                () -> {
+                    throw interruption;
+                };
+        set(driver, "delegateForAdminOperations", delegate);
+
+        assertSame(interruption, assertThrows(InterruptedException.class, driver::close));
+        assertTrue(Thread.interrupted());
+    }
+
+    @Test
+    void sameCloseFailureFromSeveralResourcesIsReportedOnce() throws Exception {
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+        JMSException failure = new JMSException("shared");
+        set(
+                driver,
+                "connection",
+                proxy(
+                        Connection.class,
+                        (method, args) -> {
+                            if (method.equals("close")) {
+                                throw failure;
+                            }
+                            return null;
+                        }));
+        set(
+                driver,
+                "connectionFactory",
+                proxy(
+                        ConnectionFactory.class,
+                        new Class<?>[] {ConnectionFactory.class, AutoCloseable.class},
+                        (method, args) -> {
+                            if (method.equals("close")) {
+                                throw failure;
+                            }
+                            return null;
+                        }));
+
+        assertSame(failure, assertThrows(JMSException.class, driver::close));
+        assertEquals(0, failure.getSuppressed().length);
+    }
+
+    @Test
+    void transactionalConfigurationCreatesTransactionalProducer() throws Exception {
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+        JMSConfig config = new JMSConfig();
+        config.sendWithTransactions = true;
+        set(driver, "config", config);
+        set(driver, "connection", proxy(Connection.class, (method, args) -> null));
+
+        BenchmarkProducer producer = driver.createProducer("topic").join();
+
+        assertInstanceOf(JMSBenchmarkTransactionProducer.class, producer);
+        producer.close();
+    }
+
+    @Test
+    void consumerUsesSharedDurableSubscriptionAndSelectorWithJms20() throws Exception {
+        JMSConfig config = new JMSConfig();
+        config.use20api = true;
+        config.messageSelector = "region = 'eu'";
+        List<String> calls = new ArrayList<>();
+        JMSBenchmarkDriver driver = consumerDriver(config, calls);
+
+        driver.createConsumer("topic", "subscription", null).join().close();
+
+        assertEquals(List.of("createSharedDurableConsumer:subscription:region = 'eu'"), calls);
+    }
+
+    @Test
+    void emptySelectorIsTreatedAsNoSelector() throws Exception {
+        JMSConfig config = new JMSConfig();
+        config.messageSelector = "";
+        List<String> calls = new ArrayList<>();
+        JMSBenchmarkDriver driver = consumerDriver(config, calls);
+
+        driver.createConsumer("topic", "subscription", null).join().close();
+
+        assertEquals(List.of("createConsumer:null"), calls);
+    }
+
+    private static JMSBenchmarkDriver consumerDriver(JMSConfig config, List<String> calls)
+            throws Exception {
+        MessageConsumer consumer = proxy(MessageConsumer.class, (method, args) -> null);
+        Topic topic = proxy(Topic.class, (method, args) -> null);
+        Session session =
+                proxy(
+                        Session.class,
+                        (method, args) ->
+                                switch (method) {
+                                    case "createTopic" -> topic;
+                                    case "createSharedDurableConsumer" -> {
+                                        calls.add(method + ":" + args[1] + ":" + args[2]);
+                                        yield consumer;
+                                    }
+                                    case "createConsumer" -> {
+                                        calls.add(method + ":" + args[1]);
+                                        yield consumer;
+                                    }
+                                    default -> null;
+                                });
+        Connection connection =
+                proxy(Connection.class, (method, args) -> method.equals("createSession") ? session : null);
+        ConnectionFactory factory =
+                proxy(
+                        ConnectionFactory.class,
+                        (method, args) -> method.equals("createConnection") ? connection : null);
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+        set(driver, "config", config);
+        set(driver, "connectionFactory", factory);
+        return driver;
+    }
+
+    private static Path resource(String name) throws Exception {
+        return Path.of(JMSBenchmarkDriverTest.class.getResource(name).toURI());
+    }
+
     private static void set(Object instance, String name, Object value) throws Exception {
         Field field = instance.getClass().getDeclaredField(name);
         field.setAccessible(true);
@@ -254,7 +510,7 @@ public class JMSBenchmarkDriverTest {
         Object invoke(String method, Object[] args) throws Throwable;
     }
 
-    public static final class TestFactory implements ConnectionFactory, AutoCloseable {
+    public static class TestFactory implements ConnectionFactory, AutoCloseable {
         private static final AtomicInteger closes = new AtomicInteger();
         private static Connection nextConnection;
 
@@ -296,14 +552,40 @@ public class JMSBenchmarkDriverTest {
         }
     }
 
+    public static final class PropertiesFactory extends TestFactory {
+        private static Properties lastProperties;
+
+        public PropertiesFactory(Properties properties) {
+            super("properties");
+            lastProperties = properties;
+        }
+
+        @Override
+        public Connection createConnection() {
+            return proxy(Connection.class, (method, args) -> null);
+        }
+    }
+
+    public static final class NoArgFactory extends TestFactory {
+        public NoArgFactory() {
+            super("none");
+        }
+    }
+
     public static final class TestDelegate implements BenchmarkDriver {
         private static final AtomicInteger closes = new AtomicInteger();
+        private static volatile InterruptedException initFailure;
         private CloseAction onClose = closes::incrementAndGet;
 
         public TestDelegate() {}
 
         @Override
-        public void initialize(Path configurationFile, MeterRegistry statsLogger) {}
+        public void initialize(Path configurationFile, MeterRegistry statsLogger)
+                throws InterruptedException {
+            if (initFailure != null) {
+                throw initFailure;
+            }
+        }
 
         @Override
         public String getTopicNamePrefix() {

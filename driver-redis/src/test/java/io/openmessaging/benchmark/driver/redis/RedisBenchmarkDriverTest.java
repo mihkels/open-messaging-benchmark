@@ -24,6 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.BufferedReader;
@@ -177,6 +178,68 @@ class RedisBenchmarkDriverTest {
         assertThatThrownBy(
                         () ->
                                 driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+                .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void existingConsumerGroupIsReused() throws Exception {
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        driver.jedisPool = pool;
+        when(pool.getResource()).thenReturn(jedis);
+        doThrow(new JedisDataException("BUSYGROUP Consumer Group name already exists"))
+                .when(jedis)
+                .xgroupCreate(eq("topic"), eq("subscription"), isNull(), eq(true));
+
+        BenchmarkConsumer consumer =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join();
+
+        assertThat(consumer).isInstanceOf(RedisBenchmarkConsumer.class);
+        consumer.close();
+    }
+
+    @Test
+    void groupCreationFailureWithoutMessageIsReported() {
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        driver.jedisPool = pool;
+        when(pool.getResource()).thenReturn(jedis);
+        JedisDataException failure = new JedisDataException((String) null);
+        doThrow(failure).when(jedis).xgroupCreate(eq("topic"), eq("subscription"), isNull(), eq(true));
+
+        assertThatThrownBy(
+                        () ->
+                                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+                .hasCause(failure);
+    }
+
+    @Test
+    void passwordWithoutUserCreatesAPoolLazily(@TempDir Path temp) throws Exception {
+        Path config = temp.resolve("redis.yaml");
+        Files.writeString(
+                config,
+                "redisHost: localhost\nredisPort: 6379\nredisPass: secret\n"
+                        + "jedisPoolMaxTotal: 1\njedisPoolMaxIdle: 1\n");
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+        driver.initialize(config, mock(MeterRegistry.class));
+        try {
+            BenchmarkProducer producer = driver.createProducer("topic").join();
+            assertThat(driver.jedisPool).isNotNull();
+            producer.close();
+        } finally {
+            driver.close();
+        }
+    }
+
+    @Test
+    void closingADriverThatNeverConnectedIsANoOp() {
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+
+        driver.close();
+
+        assertThatThrownBy(() -> driver.createProducer("topic").join())
                 .hasCauseInstanceOf(IllegalStateException.class);
     }
 }

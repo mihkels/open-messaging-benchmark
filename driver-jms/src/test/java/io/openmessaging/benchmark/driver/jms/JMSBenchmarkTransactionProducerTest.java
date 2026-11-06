@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -311,6 +312,227 @@ class JMSBenchmarkTransactionProducerTest {
         }
     }
 
+    @Test
+    void synchronousSendCommitsWithGroupIdAndConfiguredProperties() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSConfig.AddProperty property = new JMSConfig.AddProperty();
+        property.name = "region";
+        property.value = "eu";
+        JMSBenchmarkTransactionProducer producer = scenario.producer(false, List.of(property));
+
+        assertNull(producer.sendAsync(Optional.of("key"), new byte[] {1}).join());
+
+        assertEquals(List.of("JMSXGroupID=key", "region=eu"), scenario.stringProperties);
+        assertEquals(1, scenario.commits.get());
+        assertEquals(1, scenario.producerCloses.get());
+        assertEquals(1, scenario.sessionCloses.get());
+        producer.close();
+    }
+
+    @Test
+    void nullPropertiesAreTreatedAsEmpty() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSBenchmarkTransactionProducer producer = scenario.producer(false, null);
+
+        assertNull(producer.sendAsync(Optional.empty(), new byte[] {1}).join());
+
+        assertTrue(scenario.stringProperties.isEmpty());
+        producer.close();
+    }
+
+    @Test
+    void wrappedProviderFailureIsUnwrapped() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        CompletableFuture<Void> wrapped = producer.sendAsync(Optional.empty(), new byte[] {1});
+        CompletableFuture<Void> bare = producer.sendAsync(Optional.empty(), new byte[] {2});
+        JMSException cause = new JMSException("rejected");
+        CompletionException withoutCause = new CompletionException((Throwable) null);
+
+        scenario.listeners.get(0).onException(null, new CompletionException(cause));
+        scenario.listeners.get(1).onException(null, withoutCause);
+
+        assertSame(cause, assertThrows(CompletionException.class, wrapped::join).getCause());
+        assertSame(withoutCause, assertThrows(CompletionException.class, bare::join));
+        assertEquals(0, scenario.commits.get());
+        producer.close();
+    }
+
+    @Test
+    void repeatedCancellationReportsCancelled() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+
+        assertTrue(send.cancel(false));
+        assertTrue(send.cancel(false));
+        assertEquals(1, scenario.sessionCloses.get());
+        producer.close();
+    }
+
+    @Test
+    void sameFailureReportedByCleanupIsNotSuppressedIntoItself() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSException failure = new JMSException("broken");
+        scenario.sendFailure = failure;
+        scenario.producerCloseFailure = failure;
+        JMSBenchmarkTransactionProducer producer = scenario.producer(false);
+
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+
+        assertSame(failure, assertThrows(CompletionException.class, send::join).getCause());
+        assertEquals(0, failure.getSuppressed().length);
+        producer.close();
+    }
+
+    @Test
+    void repeatedCloseRethrowsTheFirstCloseFailure() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSException failure = new JMSException("close failed");
+        scenario.producerCloseFailure = failure;
+        scenario.sessionCloseFailure = failure;
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        producer.sendAsync(Optional.empty(), new byte[] {1});
+        producer.sendAsync(Optional.empty(), new byte[] {2});
+
+        assertSame(failure, assertThrows(JMSException.class, producer::close));
+        assertEquals(0, failure.getSuppressed().length);
+        assertSame(failure, assertThrows(JMSException.class, producer::close));
+    }
+
+    @Test
+    void closeFromSendCallbackOnTheClosingThreadReturnsImmediately() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+        AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
+        AtomicInteger callbacks = new AtomicInteger();
+        send.whenComplete(
+                (ignored, error) -> {
+                    callbacks.incrementAndGet();
+                    try {
+                        producer.close();
+                    } catch (Exception closeError) {
+                        callbackFailure.set(closeError);
+                    }
+                });
+
+        producer.close();
+
+        assertEquals(1, callbacks.get());
+        assertNull(callbackFailure.get());
+        assertInstanceOf(
+                IllegalStateException.class,
+                assertThrows(CompletionException.class, send::join).getCause());
+    }
+
+    @Test
+    void closeWhileTopicIsCreatedAbandonsTheSend() throws Exception {
+        Scenario scenario = new Scenario();
+        scenario.topicEntered = new CountDownLatch(1);
+        scenario.releaseTopic = new CountDownLatch(1);
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        AtomicReference<CompletableFuture<Void>> result = new AtomicReference<>();
+        Thread sender =
+                Thread.ofVirtual()
+                        .start(() -> result.set(producer.sendAsync(Optional.empty(), new byte[] {1})));
+        try {
+            assertTrue(scenario.topicEntered.await(2, TimeUnit.SECONDS));
+            producer.close();
+        } finally {
+            scenario.releaseTopic.countDown();
+        }
+        sender.join(2000);
+        assertFalse(sender.isAlive());
+        assertInstanceOf(
+                IllegalStateException.class,
+                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        assertEquals(1, scenario.sessionCloses.get());
+        assertEquals(0, scenario.producerCloses.get());
+    }
+
+    @Test
+    void closeWhileMessageIsBuiltAbandonsTheSend() throws Exception {
+        Scenario scenario = new Scenario();
+        scenario.messageEntered = new CountDownLatch(1);
+        scenario.releaseMessage = new CountDownLatch(1);
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        AtomicReference<CompletableFuture<Void>> result = new AtomicReference<>();
+        Thread sender =
+                Thread.ofVirtual()
+                        .start(() -> result.set(producer.sendAsync(Optional.empty(), new byte[] {1})));
+        try {
+            assertTrue(scenario.messageEntered.await(2, TimeUnit.SECONDS));
+            producer.close();
+        } finally {
+            scenario.releaseMessage.countDown();
+        }
+        sender.join(2000);
+        assertFalse(sender.isAlive());
+        assertInstanceOf(
+                IllegalStateException.class,
+                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        assertEquals(1, scenario.sessionCloses.get());
+        assertEquals(1, scenario.producerCloses.get());
+        assertTrue(scenario.listeners.isEmpty());
+    }
+
+    @Test
+    void interruptedCloseStillWaitsAndReportsInterruption() throws Exception {
+        assertInterruptedClose(null);
+        assertInterruptedClose(new JMSException("session close failed"));
+    }
+
+    private static void assertInterruptedClose(JMSException sessionCloseFailure) throws Exception {
+        Scenario scenario = new Scenario();
+        scenario.sessionCloseFailure = sessionCloseFailure;
+        scenario.commitEntered = new CountDownLatch(1);
+        scenario.releaseCommit = new CountDownLatch(1);
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        producer.sendAsync(Optional.empty(), new byte[] {1});
+        scenario.listeners.get(0).onCompletion(null);
+        assertTrue(scenario.commitEntered.await(2, TimeUnit.SECONDS));
+        AtomicReference<Exception> closeFailure = new AtomicReference<>();
+        AtomicReference<Boolean> interruptedAfterClose = new AtomicReference<>();
+        Thread closer =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        producer.close();
+                                    } catch (Exception error) {
+                                        closeFailure.set(error);
+                                    } finally {
+                                        interruptedAfterClose.set(Thread.currentThread().isInterrupted());
+                                    }
+                                });
+        try {
+            awaitWaiting(closer);
+            closer.interrupt();
+            awaitWaiting(closer);
+        } finally {
+            scenario.releaseCommit.countDown();
+        }
+        closer.join(2000);
+        assertFalse(closer.isAlive());
+        InterruptedException failure = assertInstanceOf(InterruptedException.class, closeFailure.get());
+        assertTrue(interruptedAfterClose.get());
+        if (sessionCloseFailure == null) {
+            assertEquals(0, failure.getSuppressed().length);
+        } else {
+            assertSame(sessionCloseFailure, failure.getSuppressed()[0]);
+        }
+        drainCallbacks();
+    }
+
+    private static void awaitWaiting(Thread thread) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (thread.getState() != Thread.State.WAITING || thread.isInterrupted()) {
+            assertTrue(System.nanoTime() < deadline, "thread did not block");
+            Thread.sleep(5);
+        }
+    }
+
     private static void drainCallbacks() {
         assertTrue(ForkJoinPool.commonPool().awaitQuiescence(3, TimeUnit.SECONDS));
     }
@@ -355,8 +577,18 @@ class JMSBenchmarkTransactionProducerTest {
         private CountDownLatch releaseProducer;
         private CountDownLatch commitEntered;
         private CountDownLatch releaseCommit;
+        private CountDownLatch topicEntered;
+        private CountDownLatch releaseTopic;
+        private CountDownLatch messageEntered;
+        private CountDownLatch releaseMessage;
+        private final List<String> stringProperties = new CopyOnWriteArrayList<>();
 
         private JMSBenchmarkTransactionProducer producer(boolean async) {
+            return producer(async, List.of());
+        }
+
+        private JMSBenchmarkTransactionProducer producer(
+                boolean async, List<JMSConfig.AddProperty> properties) {
             Connection connection =
                     proxy(
                             Connection.class,
@@ -374,12 +606,20 @@ class JMSBenchmarkTransactionProducerTest {
                                 }
                                 return null;
                             });
-            return JMSBenchmarkTransactionProducer.create(connection, "topic", async, List.of());
+            return JMSBenchmarkTransactionProducer.create(connection, "topic", async, properties);
         }
 
         private Session session() {
             Topic topic = proxy(Topic.class, (method, args) -> null);
-            BytesMessage message = proxy(BytesMessage.class, (method, args) -> null);
+            BytesMessage message =
+                    proxy(
+                            BytesMessage.class,
+                            (method, args) -> {
+                                if (method.equals("setStringProperty")) {
+                                    stringProperties.add(args[0] + "=" + args[1]);
+                                }
+                                return null;
+                            });
             MessageProducer messageProducer =
                     proxy(
                             MessageProducer.class,
@@ -405,6 +645,10 @@ class JMSBenchmarkTransactionProducerTest {
                             switch (method) {
                                 case "createTopic" -> {
                                     topicsCreated.incrementAndGet();
+                                    if (topicEntered != null) {
+                                        topicEntered.countDown();
+                                        releaseTopic.await();
+                                    }
                                     yield topic;
                                 }
                                 case "createProducer" -> {
@@ -414,7 +658,13 @@ class JMSBenchmarkTransactionProducerTest {
                                     }
                                     yield messageProducer;
                                 }
-                                case "createBytesMessage" -> message;
+                                case "createBytesMessage" -> {
+                                    if (messageEntered != null) {
+                                        messageEntered.countDown();
+                                        releaseMessage.await();
+                                    }
+                                    yield message;
+                                }
                                 case "commit" -> {
                                     commits.incrementAndGet();
                                     if (commitEntered != null) {

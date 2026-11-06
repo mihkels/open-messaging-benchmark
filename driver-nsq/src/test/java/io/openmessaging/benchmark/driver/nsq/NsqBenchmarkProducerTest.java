@@ -403,6 +403,147 @@ class NsqBenchmarkProducerTest {
     }
 
     @Test
+    void nullPayloadIsRejected() {
+        try (NsqBenchmarkProducer producer =
+                new NsqBenchmarkProducer(mock(NSQProducer.class), "topic", new CapturingExecutor(), 1)) {
+            assertThatThrownBy(() -> producer.sendAsync(Optional.empty(), null).join())
+                    .hasCauseInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Test
+    void repeatedClosePreservesShutdownError() {
+        NSQProducer client = mock(NSQProducer.class);
+        AssertionError failure = new AssertionError("client shutdown failed");
+        doThrow(failure).when(client).shutdown();
+        NsqBenchmarkProducer producer =
+                new NsqBenchmarkProducer(client, "topic", new CapturingExecutor(), 1);
+
+        assertThatThrownBy(producer::close).isSameAs(failure);
+        assertThatThrownBy(producer::close).isSameAs(failure);
+    }
+
+    @Test
+    void executorAndClientShutdownFailuresAreBothReported() {
+        NSQProducer client = mock(NSQProducer.class);
+        RuntimeException executorFailure = new RuntimeException("executor");
+        RuntimeException clientFailure = new RuntimeException("client");
+        doThrow(clientFailure).when(client).shutdown();
+        CapturingExecutor executor = new CapturingExecutor();
+        executor.onShutdownNow =
+                () -> {
+                    throw executorFailure;
+                };
+        NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1);
+
+        assertThatThrownBy(producer::close).isSameAs(executorFailure);
+        assertThat(executorFailure.getSuppressed()).containsExactly(clientFailure);
+    }
+
+    @Test
+    void sameShutdownFailureFromExecutorAndClientIsReportedOnce() {
+        NSQProducer client = mock(NSQProducer.class);
+        RuntimeException failure = new RuntimeException("shared");
+        doThrow(failure).when(client).shutdown();
+        CapturingExecutor executor = new CapturingExecutor();
+        executor.onShutdownNow =
+                () -> {
+                    throw failure;
+                };
+        NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1);
+
+        assertThatThrownBy(producer::close).isSameAs(failure);
+        assertThat(failure.getSuppressed()).isEmpty();
+    }
+
+    @Test
+    void taskStartingAfterCloseDoesNotProduce() throws Exception {
+        NSQProducer client = mock(NSQProducer.class);
+        CapturingExecutor executor = new CapturingExecutor();
+        NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 2);
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+        executor.onShutdownNow = () -> executor.tasks.forEach(Runnable::run);
+
+        producer.close();
+
+        assertThatThrownBy(send::join).hasCauseInstanceOf(IllegalStateException.class);
+        verify(client, times(0)).produce(anyString(), any(byte[].class));
+    }
+
+    @Test
+    void cancelledTaskDoesNotProduce() throws Exception {
+        NSQProducer client = mock(NSQProducer.class);
+        CapturingExecutor executor = new CapturingExecutor();
+        try (NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1)) {
+            CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+            assertThat(send.cancel(false)).isTrue();
+            executor.tasks.get(0).run();
+
+            verify(client, times(0)).produce(anyString(), any(byte[].class));
+            producer.sendAsync(Optional.empty(), new byte[] {2});
+            assertThat(executor.tasks).hasSize(2);
+        }
+    }
+
+    @Test
+    void clientErrorFailsTheSendAndIsRethrownByTheTask() {
+        NSQProducer client = mock(NSQProducer.class);
+        AssertionError failure = new AssertionError("client error");
+        try {
+            doThrow(failure).when(client).produce(anyString(), any(byte[].class));
+        } catch (Exception impossible) {
+            throw new AssertionError(impossible);
+        }
+        CapturingExecutor executor = new CapturingExecutor();
+        try (NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1)) {
+            CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+
+            assertThatThrownBy(() -> executor.tasks.get(0).run()).isSameAs(failure);
+            assertThatThrownBy(send::join).hasCause(failure);
+        }
+    }
+
+    private static final class CapturingExecutor
+            extends java.util.concurrent.AbstractExecutorService {
+        private final java.util.List<Runnable> tasks =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+        private Runnable onShutdownNow = () -> {};
+        private volatile boolean shutdown;
+
+        @Override
+        public void execute(Runnable task) {
+            tasks.add(task);
+        }
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Override
+        public java.util.List<Runnable> shutdownNow() {
+            shutdown = true;
+            onShutdownNow.run();
+            return java.util.List.of();
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return shutdown;
+        }
+    }
+
+    @Test
     void canceledSendDoesNotRetainTheCallerBuffer() throws Exception {
         NSQProducer client = mock(NSQProducer.class);
         CountDownLatch entered = new CountDownLatch(1);

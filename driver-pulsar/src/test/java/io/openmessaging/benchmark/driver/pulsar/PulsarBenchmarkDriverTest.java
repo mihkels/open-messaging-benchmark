@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminBuilder;
+import org.apache.pulsar.client.admin.PulsarAdminException;
+import org.apache.pulsar.client.admin.Tenants;
 import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.ConsumerBuilder;
@@ -315,6 +317,155 @@ class PulsarBenchmarkDriverTest {
         driver.close();
         verify(client, times(1)).close();
         verify(admin, times(1)).close();
+    }
+
+    @Test
+    void consumerCloseIsIdempotentAndHandlesInterruptionAndSharedFailures() throws Exception {
+        Consumer<ByteBuffer> healthy = mock();
+        PulsarBenchmarkConsumer quiet = new PulsarBenchmarkConsumer(List.of(healthy));
+        quiet.close();
+        quiet.close();
+        verify(healthy, times(1)).close();
+
+        Consumer<ByteBuffer> interrupted = mock();
+        Consumer<ByteBuffer> sharedOne = mock();
+        Consumer<ByteBuffer> sharedTwo = mock();
+        InterruptedException interruption = new InterruptedException("close");
+        org.mockito.Mockito.doAnswer(
+                        invocation -> {
+                            throw interruption;
+                        })
+                .when(interrupted)
+                .close();
+        RuntimeException shared = new RuntimeException("shared");
+        doThrow(shared).when(sharedOne).close();
+        doThrow(shared).when(sharedTwo).close();
+        PulsarBenchmarkConsumer consumer =
+                new PulsarBenchmarkConsumer(List.of(sharedOne, sharedTwo, interrupted));
+        try {
+            assertThatThrownBy(consumer::close).isSameAs(shared);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(shared.getSuppressed()).containsExactly(interruption);
+    }
+
+    @Test
+    void initializesTlsAuthenticatedClientsAndCreatesMissingTenant(@TempDir Path temp)
+            throws Exception {
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of());
+        ClientBuilder clientBuilder = initialize(temp, admin, true);
+
+        verify(clientBuilder).tlsTrustCertsFilePath("/certs/ca.pem");
+        verify(clientBuilder).authentication("token", "secret");
+        verify(admin.tenants()).createTenant(org.mockito.ArgumentMatchers.eq("benchmark"), any());
+    }
+
+    @Test
+    void existingTenantIsReusedWithoutTls(@TempDir Path temp) throws Exception {
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of("benchmark"));
+        ClientBuilder clientBuilder = initialize(temp, admin, false);
+
+        verify(clientBuilder, never()).tlsTrustCertsFilePath(any());
+        verify(admin.tenants(), never()).createTenant(any(), any());
+    }
+
+    @Test
+    void concurrentTenantCreationFailureIsToleratedOnlyWhenTheTenantExists(@TempDir Path temp)
+            throws Exception {
+        PulsarAdmin racing = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(racing.tenants().getTenants()).thenReturn(List.of(), List.of("benchmark"));
+        Tenants racingTenants = racing.tenants();
+        doThrow(new PulsarAdminException("server error"))
+                .when(racingTenants)
+                .createTenant(any(), any());
+        initialize(temp, racing, false);
+
+        PulsarAdmin missing = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(missing.tenants().getTenants()).thenReturn(List.of());
+        PulsarAdminException failure = new PulsarAdminException("server error");
+        Tenants missingTenants = missing.tenants();
+        doThrow(failure).when(missingTenants).createTenant(any(), any());
+        assertThatThrownBy(() -> initialize(temp, missing, false))
+                .isInstanceOf(java.io.IOException.class)
+                .hasCause(failure);
+    }
+
+    @Test
+    void singlePartitionTopicsNeedNoAdminCall() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.topics().createPartitionedTopicAsync("topic", 4))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        set(driver, "adminClient", admin);
+
+        assertThat(driver.createTopic("topic", 1).join()).isNull();
+        assertThat(driver.createTopic("topic", 4).join()).isNull();
+        verify(admin.topics(), times(1)).createPartitionedTopicAsync("topic", 4);
+    }
+
+    @Test
+    void interruptedClientCloseAndSharedCloseFailure() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        PulsarAdmin admin = mock();
+        RuntimeException shared = new RuntimeException("shared");
+        doThrow(shared).when(client).close();
+        doThrow(shared).when(admin).close();
+        set(driver, "client", client);
+        set(driver, "adminClient", admin);
+        assertThatThrownBy(driver::close).isSameAs(shared);
+        assertThat(shared.getSuppressed()).isEmpty();
+
+        PulsarClient interrupted = mock();
+        InterruptedException interruption = new InterruptedException("close");
+        org.mockito.Mockito.doAnswer(
+                        invocation -> {
+                            throw interruption;
+                        })
+                .when(interrupted)
+                .close();
+        set(driver, "client", interrupted);
+        try {
+            assertThatThrownBy(driver::close).isSameAs(interruption);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    private static ClientBuilder initialize(Path temp, PulsarAdmin admin, boolean secure)
+            throws Exception {
+        Path configuration = Files.createTempFile(temp, "pulsar", ".yaml");
+        Files.writeString(
+                configuration,
+                secure
+                        ? "client:\n  serviceUrl: pulsar+ssl://localhost:6651\n  httpUrl: https://localhost:8443\n"
+                                + "  tlsTrustCertsFilePath: /certs/ca.pem\n  namespacePrefix: benchmark/ns\n"
+                                + "  clusterName: local\n"
+                                + "  authentication:\n    plugin: token\n    data: secret\n"
+                        : "client:\n  serviceUrl: pulsar://localhost:6650\n  httpUrl: http://localhost:8080\n"
+                                + "  namespacePrefix: benchmark/ns\n  clusterName: local\n"
+                                + "  authentication:\n    plugin: \"\"\n");
+        ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
+        PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
+        PulsarClient client = mock();
+        when(clientBuilder.build()).thenReturn(client);
+        when(adminBuilder.build()).thenReturn(admin);
+        when(client.newProducer()).thenReturn(mock(ProducerBuilder.class, RETURNS_SELF));
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        try (var clients = mockStatic(PulsarClient.class);
+                var admins = mockStatic(PulsarAdmin.class)) {
+            clients.when(PulsarClient::builder).thenReturn(clientBuilder);
+            admins.when(PulsarAdmin::builder).thenReturn(adminBuilder);
+            driver.initialize(configuration, mock(MeterRegistry.class));
+        }
+        assertThat(driver.getTopicNamePrefix()).startsWith("persistent://benchmark/ns-");
+        driver.close();
+        return clientBuilder;
     }
 
     private static void set(Object target, String name, Object value) throws Exception {

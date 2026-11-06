@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -223,6 +224,57 @@ class JMSBenchmarkProducerTest {
         }
     }
 
+    @Test
+    void synchronousSendSetsGroupIdAndConfiguredProperties() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.async = false;
+        JMSConfig.AddProperty property = new JMSConfig.AddProperty();
+        property.name = "region";
+        property.value = "eu";
+        fixture.properties = List.of(property);
+        JMSBenchmarkProducer producer = fixture.producer();
+
+        assertNull(producer.sendAsync(Optional.of("key"), new byte[] {1}).join());
+
+        assertEquals(1, fixture.syncSends.get());
+        assertEquals(List.of("JMSXGroupID=key", "region=eu"), fixture.stringProperties);
+        producer.close();
+    }
+
+    @Test
+    void nullPropertiesAreTreatedAsEmpty() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.async = false;
+        fixture.properties = null;
+        JMSBenchmarkProducer producer = fixture.producer();
+
+        assertNull(producer.sendAsync(Optional.empty(), new byte[] {1}).join());
+
+        assertTrue(fixture.stringProperties.isEmpty());
+        producer.close();
+    }
+
+    @Test
+    void providerFailureIsReturnedToTheSender() throws Exception {
+        Fixture fixture = new Fixture();
+        JMSBenchmarkProducer producer = fixture.producer();
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+        JMSException failure = new JMSException("rejected");
+
+        fixture.listeners.get(0).onException(null, failure);
+
+        assertSame(failure, assertThrows(CompletionException.class, send::join).getCause());
+        producer.close();
+    }
+
+    @Test
+    void producerCreationFailureIsPropagated() {
+        Fixture fixture = new Fixture();
+        fixture.createFailure = new JMSException("no producer");
+
+        assertSame(fixture.createFailure, assertThrows(JMSException.class, fixture::producer));
+    }
+
     private static void assertClosed(CompletableFuture<Void> future) {
         assertInstanceOf(
                 IllegalStateException.class,
@@ -236,9 +288,22 @@ class JMSBenchmarkProducerTest {
         private RuntimeException sendFailure;
         private Action onClose;
         private Action onSend;
+        private boolean async = true;
+        private List<JMSConfig.AddProperty> properties = List.of();
+        private JMSException createFailure;
+        private final List<String> stringProperties = new ArrayList<>();
+        private final AtomicInteger syncSends = new AtomicInteger();
 
         private JMSBenchmarkProducer producer() throws Exception {
-            BytesMessage message = proxy(BytesMessage.class, (method, args) -> null);
+            BytesMessage message =
+                    proxy(
+                            BytesMessage.class,
+                            (method, args) -> {
+                                if (method.equals("setStringProperty")) {
+                                    stringProperties.add(args[0] + "=" + args[1]);
+                                }
+                                return null;
+                            });
             MessageProducer producer =
                     proxy(
                             MessageProducer.class,
@@ -250,7 +315,11 @@ class JMSBenchmarkProducerTest {
                                     if (onSend != null) {
                                         onSend.run();
                                     }
-                                    listeners.add((CompletionListener) args[1]);
+                                    if (args.length == 1) {
+                                        syncSends.incrementAndGet();
+                                    } else {
+                                        listeners.add((CompletionListener) args[1]);
+                                    }
                                 }
                                 return null;
                             });
@@ -260,6 +329,9 @@ class JMSBenchmarkProducerTest {
                             (method, args) -> {
                                 switch (method) {
                                     case "createProducer":
+                                        if (createFailure != null) {
+                                            throw createFailure;
+                                        }
                                         return producer;
                                     case "createBytesMessage":
                                         return message;
@@ -277,7 +349,7 @@ class JMSBenchmarkProducerTest {
                                 }
                             });
             return JMSBenchmarkProducer.create(
-                    session, proxy(Destination.class, (m, a) -> null), true, List.of());
+                    session, proxy(Destination.class, (m, a) -> null), async, properties);
         }
     }
 

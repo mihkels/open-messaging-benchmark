@@ -26,6 +26,7 @@ import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -34,6 +35,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
@@ -91,6 +93,11 @@ public final class Benchmark {
                 description = "Output",
                 required = false)
         public String output;
+
+        @Parameter(
+                names = "--include-histograms",
+                description = "Include compressed latency histograms")
+        public boolean includeHistograms;
     }
 
     private Benchmark() {
@@ -217,7 +224,13 @@ public final class Benchmark {
                     log.error("Skipping remaining workloads because worker cleanup failed");
                     break;
                 }
-                Outcome outcome = runOne(combination, arguments.output, worker, generatorFactory);
+                Outcome outcome =
+                        runOne(
+                                combination,
+                                arguments.output,
+                                arguments.includeHistograms,
+                                worker,
+                                generatorFactory);
                 failures = append(failures, outcome.failure());
                 safeToContinue = outcome.safeToContinue();
             }
@@ -268,14 +281,23 @@ public final class Benchmark {
 
     // Runs one combination and always stops the worker afterwards, so the next one starts clean
     private static Outcome runOne(
-            Combination combination, String output, Worker worker, GeneratorFactory generatorFactory) {
+            Combination combination,
+            String output,
+            boolean includeHistograms,
+            Worker worker,
+            GeneratorFactory generatorFactory) {
         Workload workload = combination.workload();
         WorkloadRun generator = null;
         Throwable failure = null;
         boolean safeToContinue = true;
         try {
+            Map<String, Object> driverConfig =
+                    driverConfigReader.readValue(new File(combination.driverConfig()));
             DriverConfiguration driverConfiguration =
                     driverConfigurationReader.readValue(new File(combination.driverConfig()));
+            String runId = RunId.create();
+            Instant startedAt = Instant.now();
+            worker.setRunId(runId);
             log.info(
                     "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                     workload.name,
@@ -284,7 +306,17 @@ public final class Benchmark {
             generator =
                     Objects.requireNonNull(
                             generatorFactory.create(driverConfiguration.name, workload, worker));
+            generator.includeHistograms(includeHistograms);
             TestResult result = generator.run();
+            result.schemaVersion = 2;
+            result.metadata =
+                    ResultMetadata.create(
+                            runId,
+                            startedAt,
+                            Instant.now(),
+                            worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
+                            workload,
+                            driverConfig);
             String fileName =
                     resultFileName(
                             output,
@@ -366,6 +398,8 @@ public final class Benchmark {
             mapper
                     .readerFor(DriverConfiguration.class)
                     .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private static final ObjectReader driverConfigReader =
+            mapper.readerFor(new TypeReference<Map<String, Object>>() {});
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 

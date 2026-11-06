@@ -52,11 +52,11 @@ public record PluginDescriptor(
 
     public static final int CURRENT_DESCRIPTOR_VERSION = 1;
 
-    private static final Pattern ID = Pattern.compile("[A-Za-z0-9._-]+");
+    private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9._-]+");
     private static final Pattern CLASS_NAME =
             Pattern.compile(
-                    "[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
-                            + "(\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*");
+                    "[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*+"
+                            + "(\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*+)*+");
 
     public PluginDescriptor {
         drivers = drivers == null ? List.of() : List.copyOf(drivers);
@@ -76,8 +76,8 @@ public record PluginDescriptor(
                             + ", expected "
                             + CURRENT_DESCRIPTOR_VERSION);
         }
-        if (id == null || !ID.matcher(id).matches()) {
-            errors.add("id '" + id + "' must match " + ID.pattern());
+        if (id == null || !ID_PATTERN.matcher(id).matches()) {
+            errors.add("id '" + id + "' must match " + ID_PATTERN.pattern());
         }
         if (driverApiVersion == null || driverApiVersion != DriverApiVersion.CURRENT) {
             errors.add(

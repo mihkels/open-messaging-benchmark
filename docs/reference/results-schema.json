@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mihkels.github.io/open-messaging-benchmark/reference/results-schema.json",
+  "title": "OpenMessaging Benchmark result",
+  "description": "Version 2 result document. Version 1 files omit schemaVersion, metadata, summary and histograms.",
+  "type": "object",
+  "required": ["schemaVersion", "metadata", "summary"],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "runId",
+        "startedAtUtc",
+        "finishedAtUtc",
+        "ombVersion",
+        "gitCommit",
+        "jdk",
+        "jvmOptions",
+        "workerCount",
+        "workload",
+        "driverConfig"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "startedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ombVersion": {
+          "type": "string"
+        },
+        "gitCommit": {
+          "type": "string"
+        },
+        "jdk": {
+          "type": "string"
+        },
+        "jvmOptions": {
+          "type": "string"
+        },
+        "workerCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workload": {
+          "type": "object"
+        },
+        "driverConfig": {
+          "type": "object",
+          "description": "Resolved driver YAML with credential-like keys redacted."
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "publishRateAvg",
+        "consumeRateAvg",
+        "throughputMbSec",
+        "totalMessagesSent",
+        "totalErrors",
+        "maxBacklog",
+        "targetRate"
+      ],
+      "properties": {
+        "publishRateAvg": {
+          "type": "number"
+        },
+        "consumeRateAvg": {
+          "type": "number"
+        },
+        "throughputMbSec": {
+          "type": "number"
+        },
+        "totalMessagesSent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalErrors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxBacklog": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "targetRate": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "histograms": {
+      "type": "object",
+      "properties": {
+        "publish": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Compressed HdrHistogram for publish latency."
+        },
+        "publishDelay": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Compressed HdrHistogram for publish-delay latency."
+        },
+        "endToEnd": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "description": "Compressed HdrHistogram for end-to-end latency."
+        }
+      },
+      "required": ["publish", "publishDelay", "endToEnd"],
+      "additionalProperties": false
+    },
+    "workload": {
+      "type": "string"
+    },
+    "driver": {
+      "type": "string"
+    },
+    "messageSize": {
+      "type": "integer"
+    },
+    "topics": {
+      "type": "integer"
+    },
+    "partitions": {
+      "type": "integer"
+    },
+    "producersPerTopic": {
+      "type": "integer"
+    },
+    "consumersPerTopic": {
+      "type": "integer"
+    },
+    "publishRate": {
+      "$ref": "#/$defs/numberSeries"
+    },
+    "publishErrorRate": {
+      "$ref": "#/$defs/numberSeries"
+    },
+    "consumeRate": {
+      "$ref": "#/$defs/numberSeries"
+    },
+    "backlog": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    }
+  },
+  "$defs": {
+    "numberSeries": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    }
+  },
+  "additionalProperties": true
+}

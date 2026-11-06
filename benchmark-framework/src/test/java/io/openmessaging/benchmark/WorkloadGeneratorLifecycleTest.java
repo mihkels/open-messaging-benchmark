@@ -69,6 +69,7 @@ class WorkloadGeneratorLifecycleTest {
         Worker worker = mock(Worker.class);
         when(worker.getPeriodStats()).thenReturn(snapshot);
         when(worker.getCumulativeLatencies()).thenReturn(cumulative);
+        when(worker.getCountersStats()).thenReturn(new CountersStats(9, 2, 8));
         Workload workload = workload();
         workload.subscriptionsPerTopic = 2;
         TestResult result;
@@ -80,6 +81,7 @@ class WorkloadGeneratorLifecycleTest {
                         Duration.ofMillis(10),
                         Duration.ofMillis(10),
                         Duration.ofSeconds(2))) {
+            generator.includeHistograms(true);
             result = generator.printAndCollectStats(1, TimeUnit.MILLISECONDS);
         }
 
@@ -115,6 +117,10 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(result.aggregatedPublishLatencyAvg).isEqualTo(2.0);
         assertThat(result.aggregatedPublishDelayLatencyAvg).isEqualTo(300.0);
         assertThat(result.aggregatedEndToEndLatencyAvg).isEqualTo(6.0);
+        assertThat(result.summary.totalMessagesSent()).isEqualTo(9);
+        assertThat(result.summary.totalErrors()).isEqualTo(2);
+        assertThat(result.summary.maxBacklog()).isEqualTo(12);
+        assertThat(result.histograms).containsOnlyKeys("publish", "publishDelay", "endToEnd");
 
         Path driverConfig = directory.resolve("driver.yaml");
         Files.writeString(driverConfig, "name: driver\ndriverClass: fixture.Driver\n");
@@ -176,6 +182,7 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(json.get("aggregatedPublishLatencyQuantiles").size()).isPositive();
         assertThat(json.get("aggregatedPublishDelayLatencyQuantiles").size()).isPositive();
         assertThat(json.get("aggregatedEndToEndLatencyQuantiles").size()).isPositive();
+        assertThat(json.get("histograms").get("publish").isTextual()).isTrue();
     }
 
     private static Histogram histogram(long first, long second) {

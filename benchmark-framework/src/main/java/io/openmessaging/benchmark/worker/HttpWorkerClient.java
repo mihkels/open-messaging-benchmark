@@ -25,6 +25,7 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.PERIOD_STATS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.PROBE_PRODUCERS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.RESET_STATS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.RESUME_CONSUMERS;
+import static io.openmessaging.benchmark.worker.WorkerHandler.SET_RUN_ID;
 import static io.openmessaging.benchmark.worker.WorkerHandler.START_LOAD;
 import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
@@ -97,6 +98,11 @@ public final class HttpWorkerClient implements Worker {
     public void initializeDriver(Path configurationFile) throws IOException {
         byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
         sendPost(INITIALIZE_DRIVER, confFileContent);
+    }
+
+    @Override
+    public void setRunId(String runId) {
+        sendPost(SET_RUN_ID, runId.getBytes(StandardCharsets.UTF_8));
     }
 
     void initializeDriverFromLocalPath(Path configurationFile) {

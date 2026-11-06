@@ -41,6 +41,7 @@ public class WorkerHandler implements AutoCloseable {
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
 
     public static final String INITIALIZE_DRIVER = "/initialize-driver";
+    public static final String SET_RUN_ID = "/set-run-id";
     public static final String CREATE_TOPICS = "/create-topics";
     public static final String CREATE_PRODUCERS = "/create-producers";
     public static final String PROBE_PRODUCERS = "/probe-producers";
@@ -84,6 +85,7 @@ public class WorkerHandler implements AutoCloseable {
                 });
 
         routes.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
+        routes.post(SET_RUN_ID, this::handleSetRunId);
         routes.post(CREATE_TOPICS, this::handleCreateTopics);
         routes.post(CREATE_PRODUCERS, this::handleCreateProducers);
         routes.post(PROBE_PRODUCERS, this::handleProbeProducers);
@@ -137,6 +139,10 @@ public class WorkerHandler implements AutoCloseable {
         } finally {
             Files.deleteIfExists(tempFile);
         }
+    }
+
+    private void handleSetRunId(Context ctx) {
+        worker.setRunId(ctx.body());
     }
 
     private void handleCreateTopics(Context ctx) {

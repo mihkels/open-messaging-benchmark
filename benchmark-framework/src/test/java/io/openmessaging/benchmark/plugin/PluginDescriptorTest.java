@@ -26,6 +26,38 @@ class PluginDescriptorTest {
     }
 
     @Test
+    void validatesLongAndUnicodeClassNamesWithoutBacktracking() {
+        List<String> drivers =
+                List.of("Driver", "α.类$Inner_1", "p.".repeat(10_000) + "Driver", "p." + "D".repeat(20_000));
+        for (String driver : drivers) {
+            assertThat(
+                            descriptor(
+                                            1,
+                                            "plugin",
+                                            DriverApiVersion.CURRENT,
+                                            List.of(driver),
+                                            List.of("driver.jar"),
+                                            List.of(),
+                                            List.of())
+                                    .validate())
+                    .isEmpty();
+            for (String suffix : List.of(".", "!")) {
+                assertThat(
+                                descriptor(
+                                                1,
+                                                "plugin",
+                                                DriverApiVersion.CURRENT,
+                                                List.of(driver + suffix),
+                                                List.of("driver.jar"),
+                                                List.of(),
+                                                List.of())
+                                        .validate())
+                        .containsExactly("invalid driver class name '" + driver + suffix + "'");
+            }
+        }
+    }
+
+    @Test
     void reportsInvalidDescriptorFields() {
         List<InvalidDescriptor> invalid =
                 List.of(

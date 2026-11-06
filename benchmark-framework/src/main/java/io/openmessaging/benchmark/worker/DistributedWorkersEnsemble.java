@@ -152,6 +152,15 @@ public final class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
+    public void setRunId(String runId) {
+        forAll(workers, worker -> worker.setRunId(runId));
+    }
+
+    public int workerCount() {
+        return workers.size();
+    }
+
+    @Override
     public boolean canReuseAfterFailure() {
         return workers.stream().allMatch(Worker::canReuseAfterFailure);
     }

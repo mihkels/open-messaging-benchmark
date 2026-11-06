@@ -17,6 +17,17 @@ import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A producer load command, not intended for value comparisons.
+ *
+ * <p>The generated {@code equals}, {@code hashCode}, and {@code toString} methods use array
+ * identity, not array contents.
+ *
+ * @param payloadData the payload templates
+ * @param publishRate the assigned publish rate
+ * @param keyDistributorType the message key distribution strategy
+ * @param payloadWeights the weight of each template, or {@code null} to pick them uniformly
+ */
 public record ProducerWorkAssignment(
         List<byte[]> payloadData,
         double publishRate,

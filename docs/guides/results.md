@@ -69,6 +69,10 @@ topics,partitions,message-size,producers-per-topic,consumers-per-topic,prod-rate
 
 The CSV contains rates only. For latency, read the JSON files directly.
 
+Result files include run metadata and a measured-window summary. Add `--include-histograms` to
+`bin/benchmark` to include compressed raw latency histograms; they are omitted by default to keep
+files smaller. See the [results schema](../reference/results-schema.md) for field definitions.
+
 ## Charts
 
 `bin/create_charts.py` draws SVG charts with [pygal](https://www.pygal.org/):

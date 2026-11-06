@@ -66,6 +66,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     private volatile boolean quiescentAfterClose;
     private volatile Thread runThread;
     private boolean started;
+    private volatile boolean includeHistograms;
     private Throwable controllerFailure;
     private boolean controllerFailureReported;
 
@@ -119,6 +120,14 @@ public final class WorkloadGenerator implements WorkloadRun {
             runExited.countDown();
             runThread = null;
         }
+    }
+
+    @Override
+    public synchronized void includeHistograms(boolean include) {
+        if (started || closed) {
+            throw new IllegalStateException("Histogram option must be set before the workload starts");
+        }
+        includeHistograms = include;
     }
 
     private TestResult runWorkload() throws Exception {
@@ -236,6 +245,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             currentRate =
                     rateController.nextRate(
                             currentRate, periodNanos, stats.messagesSent(), stats.messagesReceived());
+            targetPublishRate = currentRate;
             worker.adjustPublishRate(currentRate);
         }
     }
@@ -475,6 +485,14 @@ public final class WorkloadGenerator implements WorkloadRun {
                 CumulativeLatencies aggregate = worker.getCumulativeLatencies();
                 ResultLog.aggregate(aggregate);
                 result.recordAggregate(aggregate);
+                var counters = worker.getCountersStats();
+                result.recordSummary(
+                        counters == null ? new CountersStats() : counters,
+                        targetPublishRate,
+                        result.backlog.stream().mapToLong(Long::longValue).max().orElse(0));
+                if (includeHistograms) {
+                    result.recordHistogramData(aggregate);
+                }
                 return result;
             }
 

@@ -16,21 +16,22 @@ limitations under the License.
 
 This page explains exactly what each latency number measures and how backlog workloads run.
 
-## Publish latency (service time)
+## Publish latency
 
 The time from the moment the driver's send call starts until its send future completes successfully,
 measured on the producer's monotonic clock. Only successful sends are recorded. Values are capped at
-60 seconds.
+60 seconds. This is the send's service time (`publishLatency`).
 
 Completion semantics depend on the driver and its configuration: for example, completion can
 represent client acceptance or a broker acknowledgment, with different replication and persistence
 guarantees. See the relevant [driver page](../drivers/index.md) and
 [Fair comparisons](fair-comparisons.md).
 
-## Publish delay (schedule lag)
+## Publish delay
 
 Producers send on a schedule derived from the target rate. Publish delay is how late each send
 started compared with its scheduled time, in microseconds, also capped at 60 seconds.
+This is the schedule lag (`publishDelayLatency`).
 
 Publish latency is measured from the actual send, not the scheduled one. If the client blocks, for
 example because its buffer is full, later messages start late and their wait does not appear in

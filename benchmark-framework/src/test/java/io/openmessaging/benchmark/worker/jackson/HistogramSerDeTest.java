@@ -62,11 +62,13 @@ class HistogramSerDeTest {
         Histogram histogram = new Histogram(100_000, 3);
         histogram.recordValue(1);
         histogram.recordValue(100);
-        byte[] encodedHistogram = HistogramSerializer.toByteArray(
-                HistogramSerializer.serializeHistogram(histogram, ByteBuffer.allocate(32)));
+        byte[] encodedHistogram =
+                HistogramSerializer.toByteArray(
+                        HistogramSerializer.serializeHistogram(histogram, ByteBuffer.allocate(32)));
         byte[] oversizedEncoding = Arrays.copyOf(encodedHistogram, 8 * 1024 * 1024 + 1);
-        byte[] json = ("\"" + Base64.getEncoder().encodeToString(oversizedEncoding) + "\"")
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] json =
+                ("\"" + Base64.getEncoder().encodeToString(oversizedEncoding) + "\"")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
         assertThat(oversizedEncoding.length).isGreaterThan(8 * 1024 * 1024);
         assertThat(mapper.readValue(json, Histogram.class)).isEqualTo(histogram);

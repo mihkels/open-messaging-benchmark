@@ -17,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Random;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,22 @@ class HistogramSerDeTest {
 
         assertThat(mapper.readValue(mapper.writeValueAsBytes(histogram), Histogram.class))
                 .isEqualTo(histogram);
+    }
+
+    @Test
+    void roundTripsHistogramFromBinaryPayloadLargerThanEightMegabytes() throws Exception {
+        ObjectMapper mapper = mapper();
+        Histogram histogram = new Histogram(100_000, 3);
+        histogram.recordValue(1);
+        histogram.recordValue(100);
+        byte[] encodedHistogram = HistogramSerializer.toByteArray(
+                HistogramSerializer.serializeHistogram(histogram, ByteBuffer.allocate(32)));
+        byte[] oversizedEncoding = Arrays.copyOf(encodedHistogram, 8 * 1024 * 1024 + 1);
+        byte[] json = ("\"" + Base64.getEncoder().encodeToString(oversizedEncoding) + "\"")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(oversizedEncoding.length).isGreaterThan(8 * 1024 * 1024);
+        assertThat(mapper.readValue(json, Histogram.class)).isEqualTo(histogram);
     }
 
     @Test

@@ -36,21 +36,21 @@ class JMSBenchmarkConsumerTest {
         AtomicReference<byte[]> received = new AtomicReference<>();
         AtomicReference<Long> timestamp = new AtomicReference<>();
         JMSBenchmarkConsumer.create(
-                fixture.connection,
-                fixture.session,
-                fixture.consumer,
-                callback(received, timestamp),
-                true);
+                fixture.connection, fixture.session, fixture.consumer, callback(received, timestamp), true);
         byte[] body = {4, 5, 6};
-        fixture.message = proxy(Message.class, (method, args) -> switch (method) {
-            case "getBody" -> body;
-            case "getLongProperty" -> 123L;
-            case "acknowledge" -> {
-                fixture.acknowledgements.incrementAndGet();
-                yield null;
-            }
-            default -> null;
-        });
+        fixture.message =
+                proxy(
+                        Message.class,
+                        (method, args) ->
+                                switch (method) {
+                                    case "getBody" -> body;
+                                    case "getLongProperty" -> 123L;
+                                    case "acknowledge" -> {
+                                        fixture.acknowledgements.incrementAndGet();
+                                        yield null;
+                                    }
+                                    default -> null;
+                                });
 
         fixture.listener.get().onMessage(fixture.message);
 

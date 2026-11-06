@@ -38,10 +38,7 @@ class RabbitMqBenchmarkConsumerTest {
         AtomicReference<Long> timestamp = new AtomicReference<>();
         RabbitMqBenchmarkConsumer consumer =
                 RabbitMqBenchmarkConsumer.create(
-                        fixture.channel,
-                        "stream",
-                        callback(received, timestamp),
-                        true);
+                        fixture.channel, "stream", callback(received, timestamp), true);
 
         consumer.handleDelivery(
                 "tag",
@@ -65,7 +62,8 @@ class RabbitMqBenchmarkConsumerTest {
         AtomicReference<byte[]> received = new AtomicReference<>();
         AtomicReference<Long> timestamp = new AtomicReference<>();
         RabbitMqBenchmarkConsumer consumer =
-                RabbitMqBenchmarkConsumer.create(fixture.channel, "queue", callback(received, timestamp), false);
+                RabbitMqBenchmarkConsumer.create(
+                        fixture.channel, "queue", callback(received, timestamp), false);
 
         consumer.handleDelivery(
                 "tag",
@@ -82,8 +80,7 @@ class RabbitMqBenchmarkConsumerTest {
     }
 
     @Test
-    void callbackFailurePreventsManualAcknowledgementAndCloseFailureIsPropagated()
-            throws Exception {
+    void callbackFailurePreventsManualAcknowledgementAndCloseFailureIsPropagated() throws Exception {
         Fixture fixture = new Fixture();
         IllegalStateException callbackFailure = new IllegalStateException("callback failed");
         ConsumerCallback throwingCallback =
@@ -108,9 +105,7 @@ class RabbitMqBenchmarkConsumerTest {
                                 consumer.handleDelivery(
                                         "tag",
                                         new Envelope(3L, false, "", "queue"),
-                                        new BasicProperties.Builder()
-                                                .timestamp(new Date(2L))
-                                                .build(),
+                                        new BasicProperties.Builder().timestamp(new Date(2L)).build(),
                                         new byte[] {1})));
 
         assertEquals(0, fixture.acknowledgements.get());
@@ -125,9 +120,7 @@ class RabbitMqBenchmarkConsumerTest {
         Fixture fixture = new Fixture();
 
         new RabbitMqBenchmarkConsumer(
-                        fixture.channel,
-                        callback(new AtomicReference<>(), new AtomicReference<>()),
-                        false)
+                        fixture.channel, callback(new AtomicReference<>(), new AtomicReference<>()), false)
                 .close();
 
         assertEquals(1, fixture.channelCloses.get());

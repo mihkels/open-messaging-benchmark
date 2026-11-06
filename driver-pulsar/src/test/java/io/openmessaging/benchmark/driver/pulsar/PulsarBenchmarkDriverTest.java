@@ -69,10 +69,7 @@ class PulsarBenchmarkDriverTest {
         set(driver, "config", new PulsarConfig());
         ConsumerCallback callback = mock(ConsumerCallback.class);
 
-        assertThat(
-                        driver
-                                .createInternalConsumer("topic", "subscription", callback)
-                                .join())
+        assertThat(driver.createInternalConsumer("topic", "subscription", callback).join())
                 .isSameAs(consumer);
         ArgumentCaptor<MessageListener<ByteBuffer>> listener =
                 ArgumentCaptor.forClass(MessageListener.class);

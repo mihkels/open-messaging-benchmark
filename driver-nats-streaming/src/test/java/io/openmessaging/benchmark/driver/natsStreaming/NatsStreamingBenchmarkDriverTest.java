@@ -55,11 +55,7 @@ class NatsStreamingBenchmarkDriverTest {
 
         ArgumentCaptor<MessageHandler> handler = ArgumentCaptor.forClass(MessageHandler.class);
         verify(connection)
-                .subscribe(
-                        anyString(),
-                        anyString(),
-                        handler.capture(),
-                        any(SubscriptionOptions.class));
+                .subscribe(anyString(), anyString(), handler.capture(), any(SubscriptionOptions.class));
         Message message = mock(Message.class);
         byte[] payload = {1, 2, 3};
         when(message.getData()).thenReturn(payload);

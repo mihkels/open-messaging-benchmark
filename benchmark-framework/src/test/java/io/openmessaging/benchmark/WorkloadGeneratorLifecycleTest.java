@@ -306,9 +306,10 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(consumerOnlyRun.isAlive()).isFalse();
         assertThat(consumerOnlyFailure.get()).isInstanceOf(InterruptedException.class);
         verify(consumerOnlyWorker).createProducers(List.of());
-        verify(consumerOnlyWorker).createConsumers(
-                org.mockito.ArgumentMatchers.argThat(
-                        assignment -> assignment.topicsSubscriptions.size() == 1));
+        verify(consumerOnlyWorker)
+                .createConsumers(
+                        org.mockito.ArgumentMatchers.argThat(
+                                assignment -> assignment.topicsSubscriptions.size() == 1));
 
         Worker producerOnlyWorker = worker();
         CountDownLatch producerOnlyStarted = new CountDownLatch(1);
@@ -343,9 +344,10 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(producerOnlyRun.isAlive()).isFalse();
         assertThat(producerOnlyFailure.get()).isInstanceOf(InterruptedException.class);
         verify(producerOnlyWorker).createProducers(List.of("topic"));
-        verify(producerOnlyWorker).createConsumers(
-                org.mockito.ArgumentMatchers.argThat(
-                        assignment -> assignment.topicsSubscriptions.isEmpty()));
+        verify(producerOnlyWorker)
+                .createConsumers(
+                        org.mockito.ArgumentMatchers.argThat(
+                                assignment -> assignment.topicsSubscriptions.isEmpty()));
     }
 
     @Test

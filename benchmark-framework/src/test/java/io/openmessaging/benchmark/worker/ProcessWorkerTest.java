@@ -263,6 +263,54 @@ class ProcessWorkerTest {
     }
 
     @Test
+    void rejectsDriverConfigurationsWithoutADriverClass() throws Exception {
+        Path missing = Files.writeString(Files.createTempFile(dir, "missing", ".yaml"), "name: test\n");
+        Path blank =
+                Files.writeString(Files.createTempFile(dir, "blank", ".yaml"), "driverClass: ' '\n");
+        ProcessWorker worker = newWorker();
+        try {
+            for (Path config : List.of(missing, blank)) {
+                assertThatThrownBy(() -> worker.initializeDriver(config))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("must specify a driverClass");
+            }
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+        } finally {
+            worker.close();
+        }
+        assertThat(worker.canReuseAfterFailure()).isFalse();
+    }
+
+    @Test
+    void reportsMissingDriverLocationOverride() throws Exception {
+        ProcessWorker worker =
+                new ProcessWorker(
+                        dir.resolve("no-such-driver"),
+                        () -> PluginRegistry.discover(List.of(plugins)),
+                        HostRuntime::current);
+        try {
+            assertThatThrownBy(() -> worker.initializeDriver(config("fixture.alpha.AlphaDriver")))
+                    .hasMessageContaining("does not exist");
+        } finally {
+            worker.close();
+        }
+    }
+
+    @Test
+    void operationsWithoutADriverProcessAreRejectedOrNoOps() throws Exception {
+        ProcessWorker worker = newWorker();
+        try {
+            assertThat(worker.scrapeMetrics()).isEmpty();
+            worker.stopAll();
+            assertThatThrownBy(worker::getPeriodStats)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("No driver process is running");
+        } finally {
+            worker.close();
+        }
+    }
+
+    @Test
     void passesQuotedJvmOptionsToDriverProcess() throws Exception {
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
         try {

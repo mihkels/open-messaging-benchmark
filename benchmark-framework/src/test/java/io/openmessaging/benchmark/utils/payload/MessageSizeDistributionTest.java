@@ -248,4 +248,47 @@ class MessageSizeDistributionTest {
         assertThatThrownBy(() -> MessageSizeDistribution.bucketIndexForTicket(3, cumulative))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void parsesByteSuffix() {
+        MessageSizeDistribution distribution = new MessageSizeDistribution(Map.of("10B-20b", 1));
+
+        assertThat(distribution.getMaxSize()).isEqualTo(20);
+        assertThat(distribution.getBucketSizes()).containsExactly(15);
+    }
+
+    @Test
+    void rejectsMissingRangesAndWeights() {
+        Map<String, Integer> nullWeight = new HashMap<>();
+        nullWeight.put("0-10", null);
+        Map<String, Integer> nullRange = new HashMap<>();
+        nullRange.put(null, 1);
+
+        assertThatThrownBy(() -> new MessageSizeDistribution(nullWeight))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Weight cannot be null");
+        assertThatThrownBy(() -> new MessageSizeDistribution(nullRange))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Range cannot be null or empty");
+        assertThatThrownBy(() -> new MessageSizeDistribution(Map.of("", 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Range cannot be null or empty");
+    }
+
+    @Test
+    void rejectsNegativeMinimumSize() {
+        assertThatThrownBy(() -> new MessageSizeDistribution(Map.of("-5-10", 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Min size cannot be negative");
+    }
+
+    @Test
+    void weightedSelectionRejectsMissingWeightsAndNegativeTickets() {
+        assertThatThrownBy(() -> MessageSizeDistribution.bucketIndexForTicket(0, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MessageSizeDistribution.bucketIndexForTicket(0, new int[0]))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MessageSizeDistribution.bucketIndexForTicket(-1, new int[] {1}))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

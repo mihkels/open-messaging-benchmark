@@ -27,10 +27,10 @@
 
     <properties>
         <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
-        <jacoco.min.class>0.86</jacoco.min.class>
-        <jacoco.min.method>0.75</jacoco.min.method>
-        <jacoco.min.line>0.73</jacoco.min.line>
-        <jacoco.min.branch>0.62</jacoco.min.branch>
+        <jacoco.min.class>0.95</jacoco.min.class>
+        <jacoco.min.method>0.89</jacoco.min.method>
+        <jacoco.min.line>0.87</jacoco.min.line>
+        <jacoco.min.branch>0.81</jacoco.min.branch>
         <hdrhistogram.version>2.2.2</hdrhistogram.version>
         <async.client.version>3.0.14</async.client.version>
         <javalin.version>7.2.4</javalin.version>

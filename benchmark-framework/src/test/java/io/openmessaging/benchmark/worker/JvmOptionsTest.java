@@ -60,4 +60,12 @@ class JvmOptionsTest {
         assertThat(JvmOptions.quoteForArgumentFile("C:\\dir\\a \"b\""))
                 .isEqualTo("\"C:\\\\dir\\\\a \\\"b\\\"\"");
     }
+
+    @Test
+    void handlesEscapesInsideAndOutsideQuotes() {
+        assertThat(JvmOptions.parse("  -Da='x\\y'  -Db=\"p\\\\q\\r\" -Dc=\\'s\\\" -Dd=end\\"))
+                .containsExactly("-Da=x\\y", "-Db=p\\q\\r", "-Dc='s\"", "-Dd=end\\");
+        assertThat(JvmOptions.parse(" '' ")).containsExactly("");
+        assertThat(JvmOptions.parse("   ")).isEmpty();
+    }
 }

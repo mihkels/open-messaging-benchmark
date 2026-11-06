@@ -23,14 +23,58 @@ import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.JetStreamSubscription;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
+import java.nio.ByteBuffer;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class NatsBenchmarkConsumerLifecycleTest {
+    @Test
+    void deliveryInvokesCallbackWithPublishTimestampAndAcknowledgesMessage() throws Exception {
+        Fixture fixture = new Fixture();
+        AtomicReference<byte[]> received = new AtomicReference<>();
+        AtomicReference<Long> timestamp = new AtomicReference<>();
+        AtomicInteger acknowledgements = new AtomicInteger();
+        ConsumerCallback callback =
+                new ConsumerCallback() {
+                    @Override
+                    public void messageReceived(byte[] payload, long publishTimestamp) {
+                        received.set(payload);
+                        timestamp.set(publishTimestamp);
+                    }
+
+                    @Override
+                    public void messageReceived(ByteBuffer payload, long publishTimestamp) {
+                        throw new AssertionError("byte array callback expected");
+                    }
+                };
+        fixture.driver.createConsumer("topic", "subscription", callback).join();
+
+        byte[] body = ByteBuffer.allocate(Long.BYTES + 1).putLong(1234L).put((byte) 9).array();
+        io.nats.client.Message message =
+                proxy(
+                        io.nats.client.Message.class,
+                        (method, args) -> {
+                            if (method.equals("getData")) {
+                                return body;
+                            }
+                            if (method.equals("ack")) {
+                                acknowledgements.incrementAndGet();
+                            }
+                            return null;
+                        });
+        fixture.messageHandler.onMessage(message);
+
+        assertSame(body, received.get());
+        assertEquals(1234L, timestamp.get());
+        assertEquals(1, acknowledgements.get());
+    }
+
     @Test
     void consumerClosesOnlyItsDispatcher() throws Exception {
         Fixture fixture = new Fixture();
@@ -85,6 +129,7 @@ class NatsBenchmarkConsumerLifecycleTest {
         private IOException subscribeFailure;
         private RuntimeException closeFailure;
         private boolean returnNullSubscription;
+        private io.nats.client.MessageHandler messageHandler;
 
         private Fixture() throws ReflectiveOperationException {
             Dispatcher dispatcher = proxy(Dispatcher.class, (method, args) -> null);
@@ -117,6 +162,9 @@ class NatsBenchmarkConsumerLifecycleTest {
                             (method, args) -> {
                                 if (subscribeFailure != null) {
                                     throw subscribeFailure;
+                                }
+                                if (method.equals("subscribe")) {
+                                    messageHandler = (io.nats.client.MessageHandler) args[2];
                                 }
                                 return returnNullSubscription ? null : subscription;
                             });

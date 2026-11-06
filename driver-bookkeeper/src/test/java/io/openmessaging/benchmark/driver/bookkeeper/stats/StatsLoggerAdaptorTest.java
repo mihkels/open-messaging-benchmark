@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.bookkeeper.stats;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +26,7 @@ import org.apache.bookkeeper.stats.OpStatsData;
 import org.apache.bookkeeper.stats.OpStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class StatsLoggerAdaptorTest {
 
@@ -69,5 +71,43 @@ class StatsLoggerAdaptorTest {
         var operations = adaptor.getThreadScopedOpStatsLogger("operations");
         operations.registerSuccessfulEvent(1, TimeUnit.MILLISECONDS);
         assertThat(operations.toOpStatsData().getNumSuccessfulEvents()).isZero();
+    }
+
+    @Test
+    void gaugesAndScopesDelegateAndUnregisterOnlyRegisteredResources() {
+        StatsLogger delegate = mock(StatsLogger.class);
+        StatsLogger scoped = mock(StatsLogger.class);
+        when(delegate.scope("worker")).thenReturn(scoped);
+        StatsLoggerAdaptor adaptor = new StatsLoggerAdaptor(delegate);
+        dlshade.org.apache.bookkeeper.stats.Gauge<Integer> gauge =
+                new dlshade.org.apache.bookkeeper.stats.Gauge<>() {
+                    @Override
+                    public Integer getDefaultValue() {
+                        return -1;
+                    }
+
+                    @Override
+                    public Integer getSample() {
+                        return 42;
+                    }
+                };
+
+        adaptor.registerGauge("depth", gauge);
+        ArgumentCaptor<org.apache.bookkeeper.stats.Gauge<Integer>> adaptedGauge =
+                ArgumentCaptor.forClass(org.apache.bookkeeper.stats.Gauge.class);
+        verify(delegate).registerGauge(eq("depth"), adaptedGauge.capture());
+        assertThat(adaptedGauge.getValue().getDefaultValue()).isEqualTo(-1);
+        assertThat(adaptedGauge.getValue().getSample()).isEqualTo(42);
+
+        adaptor.unregisterGauge("depth", gauge);
+        adaptor.unregisterGauge("missing", gauge);
+        verify(delegate).unregisterGauge("depth", adaptedGauge.getValue());
+        verify(delegate, org.mockito.Mockito.never())
+                .unregisterGauge(eq("missing"), org.mockito.ArgumentMatchers.any());
+
+        var adaptedScope = adaptor.scope("worker");
+        adaptor.removeScope("worker", adaptedScope);
+        adaptor.removeScope("worker", adaptedScope);
+        verify(delegate).removeScope("worker", scoped);
     }
 }

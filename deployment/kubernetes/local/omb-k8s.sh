@@ -72,13 +72,15 @@ log() {
     echo "==> $*"
 }
 
-# Rows of a suite table without comments, with fields trimmed and separated by "|"
+# Rows of a suite table without comments, with fields trimmed and separated by "|". Readers must
+# consume all of it: under pipefail, one that stops early (awk exit, head, grep -q) can make the
+# writer fail with SIGPIPE (exit 141)
 table() {
     grep -v -E '^[[:space:]]*(#|$)' "$1" | sed -E 's/[[:space:]]*\|[[:space:]]*/|/g; s/^[[:space:]]+//; s/[[:space:]]+$//'
 }
 
 stack_row() {
-    table "$SUITE_DIR/stacks.txt" | awk -F'|' -v s="$1" '$1 == s' | head -n 1
+    table "$SUITE_DIR/stacks.txt" | awk -F'|' -v s="$1" '$1 == s && !n++'
 }
 
 require_stack() {
@@ -87,7 +89,7 @@ require_stack() {
 }
 
 case_row() {
-    table "$SUITE_DIR/cases.txt" | awk -F'|' -v c="$1" '$1 == c' | head -n 1
+    table "$SUITE_DIR/cases.txt" | awk -F'|' -v c="$1" '$1 == c && !n++'
 }
 
 stack_cases() {
@@ -96,7 +98,7 @@ stack_cases() {
 
 # The driver plugin, which is also the image variant, of a stack
 stack_plugin() {
-    table "$SUITE_DIR/cases.txt" | awk -F'|' -v s="$1" '$3 == s { print $2; exit }'
+    table "$SUITE_DIR/cases.txt" | awk -F'|' -v s="$1" '$3 == s && !n++ { print $2 }'
 }
 
 # jms-* stacks reuse the broker of their provider
@@ -120,7 +122,7 @@ require_cluster() {
 }
 
 cluster_exists() {
-    kind get clusters 2>/dev/null | grep -qx "$CLUSTER"
+    kind get clusters 2>/dev/null | grep -x "$CLUSTER" >/dev/null
 }
 
 # Build an image with the given drivers through docker-bake.hcl and load it into kind
@@ -264,7 +266,7 @@ cmd_broker() {
     require_cluster
     row=$(stack_row "$stack")
     arch=$(cut -d'|' -f3 <<< "$row")
-    if [[ "$arch" == "emulated-amd64" ]] && ! kubectl get nodes -l kubernetes.io/arch=amd64 -o name | grep -q .; then
+    if [[ "$arch" == "emulated-amd64" ]] && ! kubectl get nodes -l kubernetes.io/arch=amd64 -o name | grep . >/dev/null; then
         die "stack $stack needs linux/amd64 broker images, but this cluster has no amd64 node (kind nodes use the host architecture)"
     fi
     dir=$(broker_dir "$stack")
@@ -343,8 +345,8 @@ cmd_deploy() {
     local stack=${1:-} contract
     require_stack "$stack"
     cmd_broker "$stack"
-    contract=$(table "$SUITE_DIR/cases.txt" | awk -F'|' -v s="$1" '$3 == s && $4 == "contract" { print $1; exit }')
-    contract=${contract:-$(stack_cases "$stack" | head -n 1)}
+    contract=$(table "$SUITE_DIR/cases.txt" | awk -F'|' -v s="$1" '$3 == s && $4 == "contract" && !n++ { print $1 }')
+    contract=${contract:-$(stack_cases "$stack" | awk 'NR == 1')}
     log "Installing the chart with an interactive coordinator ($contract configuration)"
     install_chart "$stack" "$contract" interactive
     wait_pods_ready "$(namespace "$stack")" "app.kubernetes.io/instance=$RELEASE,app.kubernetes.io/component=coordinator" ||

@@ -5,8 +5,9 @@ name: Docker image
 # Release tags also attach the distribution tarball and SHA256SUMS to the GitHub release as soon as
 # the distribution is built (the image scan does not gate it); only the latest release keeps them.
 # Pull requests never see registry credentials: only the publish job uses the dockerhub
-# environment, and it runs for pushes to main and v* tags only. No caches are used, so nothing a
-# pull request writes can end up in a published image.
+# environment, and it runs for pushes to main and v* tags only. Only pushes to main write caches
+# (pull request caches are scoped to their own ref) and release tags use none, so nothing a pull
+# request writes can end up in a published image.
 
 on:
   pull_request:
@@ -61,6 +62,16 @@ jobs:
         with:
           install_args: java maven
           cache: false
+
+      # Release tags resolve dependencies fresh; main and pull requests restore the Maven
+      # repository that pushes to main save in "Build and test"
+      - name: Restore Maven repository
+        if: github.ref_type != 'tag'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
 
       # Release tags run the full verification; main and pull requests are verified by the
       # "Build and test" workflow, so here only the distribution is packaged.

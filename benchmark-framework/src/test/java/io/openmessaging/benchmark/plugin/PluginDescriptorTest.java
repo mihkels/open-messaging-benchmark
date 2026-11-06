@@ -149,6 +149,83 @@ class PluginDescriptorTest {
                                         .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1)));
     }
 
+    @Test
+    void reportsMissingRequiredFieldsAsErrors() {
+        PluginDescriptor descriptor =
+                new PluginDescriptor(null, null, null, null, null, null, null, null, null, null);
+
+        assertThat(descriptor.drivers()).isEmpty();
+        assertThat(descriptor.classpath()).isEmpty();
+        assertThat(descriptor.optionalClasspath()).isEmpty();
+        assertThat(descriptor.classReferenceProperties()).isEmpty();
+        assertThat(descriptor.validate())
+                .anySatisfy(error -> assertThat(error).contains("unsupported descriptorVersion null"))
+                .anySatisfy(error -> assertThat(error).contains("id 'null'"))
+                .anySatisfy(error -> assertThat(error).contains("driverApiVersion null"))
+                .anySatisfy(error -> assertThat(error).contains("drivers must list at least one"))
+                .anySatisfy(error -> assertThat(error).contains("classpath must list at least one"));
+    }
+
+    @Test
+    void acceptsBundlesForTheRuntimeJavaVersion() {
+        PluginDescriptor descriptor =
+                new PluginDescriptor(
+                        1,
+                        "plugin",
+                        "1.0",
+                        DriverApiVersion.CURRENT,
+                        Runtime.version().feature(),
+                        List.of("test.Driver"),
+                        List.of("driver.jar"),
+                        List.of("lib/*.jar"),
+                        List.of("driverClass"),
+                        "desc");
+
+        assertThat(descriptor.validate()).isEmpty();
+    }
+
+    @Test
+    void reportsInvalidClasspathEntries() {
+        assertThat(classpathErrors(" ")).anySatisfy(e -> assertThat(e).contains("blank entries"));
+        assertThat(classpathErrors("\\driver.jar"))
+                .anySatisfy(e -> assertThat(e).contains("must be relative"));
+        assertThat(classpathErrors("."))
+                .anySatisfy(e -> assertThat(e).contains("escapes the bundle directory"));
+        assertThat(classpathErrors("lib*/driver.jar"))
+                .anySatisfy(e -> assertThat(e).contains("wildcards in the file name"));
+        assertThat(classpathErrors("lib?/driver.jar"))
+                .anySatisfy(e -> assertThat(e).contains("wildcards in the file name"));
+        assertThat(classpathErrors("lib/driver.jar")).isEmpty();
+    }
+
+    @Test
+    void reportsInvalidOptionalClasspathEntries() {
+        PluginDescriptor descriptor =
+                descriptor(
+                        1,
+                        "plugin",
+                        DriverApiVersion.CURRENT,
+                        List.of("test.Driver"),
+                        List.of("driver.jar"),
+                        List.of(""),
+                        List.of());
+
+        assertThat(descriptor.validate())
+                .containsExactly("optionalClasspath must not contain blank entries");
+    }
+
+    private static List<String> classpathErrors(String entry) {
+        return descriptor(
+                        1,
+                        "plugin",
+                        DriverApiVersion.CURRENT,
+                        List.of("test.Driver"),
+                        List.of(entry),
+                        List.of(),
+                        List.of())
+                .validate();
+    }
+
     private static PluginDescriptor validDescriptor() {
         return descriptor(
                 1,

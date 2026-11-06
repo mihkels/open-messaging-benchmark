@@ -220,6 +220,52 @@ class BenchmarkOutcomesTest {
     }
 
     @Test
+    void doesNotReuseWorkerAfterAFatalCleanupFailure() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Worker worker = mock(Worker.class);
+        when(worker.canReuseAfterFailure()).thenReturn(true);
+        WorkloadRun generator = mock(WorkloadRun.class);
+        when(generator.run()).thenReturn(result("first"));
+        when(generator.isQuiescentAfterClose()).thenReturn(true);
+        doThrow(new AssertionError("fatal cleanup failure")).when(generator).close();
+        Map<String, Workload> workloads = new LinkedHashMap<>();
+        workloads.put("first", workload("first"));
+        workloads.put("never", workload("never"));
+
+        assertThatThrownBy(
+                        () ->
+                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
+                .hasRootCauseMessage("fatal cleanup failure");
+        verify(worker, times(1)).initializeDriver(any());
+        verify(worker).close();
+    }
+
+    @Test
+    void stopsAfterAWorkloadInterruptsTheCoordinator() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Worker worker = mock(Worker.class);
+        WorkloadRun generator = mock(WorkloadRun.class);
+        when(generator.run())
+                .thenAnswer(
+                        invocation -> {
+                            Thread.currentThread().interrupt();
+                            return result("interrupted");
+                        });
+        Map<String, Workload> workloads = new LinkedHashMap<>();
+        workloads.put("first", workload("first"));
+        workloads.put("never", workload("never"));
+
+        try {
+            Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator);
+        } finally {
+            assertThat(Thread.interrupted()).isTrue();
+        }
+        assertThat(Files.readString(Path.of(arguments.output))).contains("interrupted");
+        verify(worker, times(1)).initializeDriver(any());
+        verify(worker).close();
+    }
+
+    @Test
     void processExitStatusReflectsWorkloadOutcome() throws Exception {
         Benchmark.Arguments arguments = arguments();
         Path driver = Path.of(arguments.drivers.getFirst());

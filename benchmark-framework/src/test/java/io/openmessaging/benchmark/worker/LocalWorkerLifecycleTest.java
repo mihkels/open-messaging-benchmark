@@ -934,6 +934,66 @@ class LocalWorkerLifecycleTest {
         }
     }
 
+    @Test
+    void rejectsNonPositiveLifecycleTimeouts() {
+        WorkerStats stats = mock(WorkerStats.class);
+        Duration ok = Duration.ofSeconds(1);
+        List<Duration[]> invalid =
+                List.of(
+                        new Duration[] {Duration.ZERO, ok, ok, ok},
+                        new Duration[] {ok, ok, ok, Duration.ZERO},
+                        new Duration[] {ok, Duration.ZERO, ok, ok},
+                        new Duration[] {ok, ok, Duration.ZERO, ok});
+        for (Duration[] timeouts : invalid) {
+            assertThatThrownBy(
+                            () -> new LocalWorker(stats, timeouts[0], timeouts[1], timeouts[2], timeouts[3]))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Lifecycle timeouts must be positive");
+        }
+    }
+
+    @Test
+    void rejectsDriverConfigurationsWithoutADriverClass() throws Exception {
+        Path missing = Files.writeString(directory.resolve("missing.yaml"), "name: test\n");
+        Path empty = Files.writeString(directory.resolve("empty.yaml"), "driverClass: ''\n");
+        Path unknown =
+                Files.writeString(directory.resolve("unknown.yaml"), "driverClass: no.such.Driver\n");
+        LocalWorker worker =
+                new LocalWorker(
+                        new PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(2));
+        try {
+            assertThatThrownBy(() -> worker.initializeDriver(missing))
+                    .hasMessageContaining("Driver configuration must specify a driverClass");
+            worker.stopAll();
+            assertThatThrownBy(() -> worker.initializeDriver(empty))
+                    .hasMessageContaining("Driver configuration must specify a driverClass");
+            worker.stopAll();
+            assertThatThrownBy(() -> worker.initializeDriver(unknown))
+                    .hasMessageContaining("no.such.Driver is not on the classpath");
+            worker.stopAll();
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+        } finally {
+            worker.close();
+        }
+    }
+
+    @Test
+    void rejectsInitializationWhileADriverIsActiveOrAfterClose() throws Exception {
+        LocalWorker worker = worker(new Scenario(List.of()), Duration.ofSeconds(2));
+        assertThat(worker.canReuseAfterFailure()).isFalse();
+        assertThatThrownBy(() -> initialize(worker, new Scenario(List.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Stop the previous driver");
+        worker.close();
+
+        assertThat(worker.canReuseAfterFailure()).isFalse();
+        assertThatThrownBy(() -> initialize(worker, new Scenario(List.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
+    }
+
     private LocalWorker worker(Scenario scenario, Duration timeout) throws Exception {
         LocalWorker worker =
                 new LocalWorker(

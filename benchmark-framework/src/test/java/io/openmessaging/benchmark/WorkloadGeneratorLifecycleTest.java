@@ -423,6 +423,37 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void rejectsNonPositiveControllerIntervals() {
+        Worker worker = mock(Worker.class);
+        Duration ok = Duration.ofSeconds(1);
+        List<Duration[]> invalid =
+                List.of(
+                        new Duration[] {Duration.ZERO, ok, ok},
+                        new Duration[] {ok, Duration.ofNanos(1), ok},
+                        new Duration[] {ok, ok, Duration.ZERO});
+        for (Duration[] durations : invalid) {
+            assertThatThrownBy(
+                            () ->
+                                    new WorkloadGenerator(
+                                            "driver", workload(), worker, durations[0], durations[1], durations[2]))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("must be positive");
+        }
+    }
+
+    @Test
+    void cannotRunAClosedGenerator() throws Exception {
+        Worker worker = mock(Worker.class);
+        WorkloadGenerator generator = generator(workload(), worker, Duration.ofSeconds(2));
+        generator.close();
+
+        assertThatThrownBy(generator::run)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed or has already run");
+        assertThat(generator.isQuiescentAfterClose()).isTrue();
+    }
+
+    @Test
     void closeWaitsForRealControllerExitAndAttemptsWorkerStopOnTimeout() throws Exception {
         Worker worker = worker();
         CountDownLatch controllerEntered = new CountDownLatch(1);

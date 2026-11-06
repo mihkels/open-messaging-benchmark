@@ -26,4 +26,18 @@ class PaddingDecimalFormatTest {
         assertThat(format.format(1000L)).isEqualTo(" 1000.0");
         assertThat(format.format(10000000L)).isEqualTo("10000000.0");
     }
+
+    @Test
+    void equalityConsidersPatternAndMinimumLength() {
+        PaddingDecimalFormat format = new PaddingDecimalFormat("0.0", 7);
+
+        assertThat(format)
+                .isEqualTo(format)
+                .isEqualTo(new PaddingDecimalFormat("0.0", 7))
+                .hasSameHashCodeAs(new PaddingDecimalFormat("0.0", 7))
+                .isNotEqualTo(new PaddingDecimalFormat("0.0", 8))
+                .isNotEqualTo(new PaddingDecimalFormat("0.00", 7))
+                .isNotEqualTo(new java.text.DecimalFormat("0.0"))
+                .isNotEqualTo(null);
+    }
 }

@@ -453,6 +453,100 @@ class PluginRegistryTest {
                 .contains(module.resolve("target/classes").toRealPath(), lib.toRealPath());
     }
 
+    @Test
+    void discoversBundlesFromTheHomeDirectoryAndPluginPath() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path extra = descriptor(dir.resolve("extra/jms"), "jms", List.of(JMS), "");
+        PluginFixtures.writeJar(extra.resolve("jms.jar"), Map.of("marker", new byte[0]));
+        Files.createDirectories(dir.resolve("extra/no-descriptor"));
+        Files.createDirectories(dir.resolve("module/target"));
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        String oldPath = System.getProperty(PluginRegistry.PLUGIN_PATH_PROPERTY);
+        try {
+            System.setProperty(PluginRegistry.HOME_PROPERTY, dir.toString());
+            System.setProperty(
+                    PluginRegistry.PLUGIN_PATH_PROPERTY,
+                    String.join(java.io.File.pathSeparator, " ", "extra", " drivers/kafka ", "absent"));
+
+            PluginRegistry registry = PluginRegistry.discover();
+
+            assertThat(registry.errors()).isEmpty();
+            assertThat(registry.bundles())
+                    .extracting(PluginBundle::directory)
+                    .containsExactly(kafka.toRealPath(), extra.toRealPath());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+            restoreProperty(PluginRegistry.PLUGIN_PATH_PROPERTY, oldPath);
+        }
+    }
+
+    @Test
+    void homeFallsBackToTheWorkingDirectoryWhenBlank() {
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        try {
+            System.setProperty(PluginRegistry.HOME_PROPERTY, " ");
+            assertThat(PluginRegistry.home()).isEqualTo(Path.of("").toAbsolutePath().normalize());
+
+            System.setProperty(PluginRegistry.HOME_PROPERTY, dir.toString());
+            assertThat(PluginRegistry.home()).isEqualTo(dir.toAbsolutePath().normalize());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+        }
+    }
+
+    @Test
+    void ignoresBlankAndSelfReferencesAndNullConfigs() throws IOException {
+        bundle("jms", List.of(JMS), "classReferenceProperties:\n  - delegate\n");
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(JMS, null).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+        assertThat(registry.resolve(JMS, Map.of("delegate", " ")).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+        assertThat(registry.resolve(JMS, Map.of("delegate", JMS)).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+    }
+
+    @Test
+    void overrideBundleFollowsClassReferencesToDiscoveredBundles() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        Path override =
+                descriptor(
+                        dir.resolve("override"),
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegate\n");
+        PluginFixtures.writeJar(override.resolve("jms.jar"), Map.of("marker", new byte[0]));
+
+        ResolvedDriver resolved = discover().resolveOverride(JMS, Map.of("delegate", KAFKA), override);
+
+        assertThat(resolved.bundles()).extracting(PluginBundle::id).containsExactly("jms", "kafka");
+    }
+
+    @Test
+    void resolvesJarOverrideAndRejectsOtherFiles() throws IOException {
+        Path jar = PluginFixtures.writeJar(dir.resolve("standalone.jar"), Map.of("m", new byte[0]));
+        Path text = Files.writeString(dir.resolve("standalone.txt"), "text");
+
+        ResolvedDriver resolved = discover().resolveOverride(KAFKA, Map.of(), jar);
+
+        assertThat(real(resolved.primary().classpath())).containsExactly(jar.toRealPath());
+        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), text))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not exist");
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
+    }
+
     private static List<Path> real(List<Path> paths) {
         return paths.stream()
                 .map(

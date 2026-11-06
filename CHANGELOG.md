@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.3...v0.2.0) (2026-11-06)
+
+
+### Features
+
+* add versioned result metadata, summaries, and optional histograms ([#124](https://github.com/mihkels/open-messaging-benchmark/issues/124)) ([50a013b](https://github.com/mihkels/open-messaging-benchmark/commit/50a013bb0d591b72e620a2cfb6b7067b6ecfc2be))
+* expose schedule-corrected publish latency ([#125](https://github.com/mihkels/open-messaging-benchmark/issues/125)) ([d29b646](https://github.com/mihkels/open-messaging-benchmark/commit/d29b646e2c3b5e0c98c6caa8e960e09fd546badc))
+
 ## [0.1.3](https://github.com/mihkels/open-messaging-benchmark/compare/v0.1.2...v0.1.3) (2026-11-06)
 
 

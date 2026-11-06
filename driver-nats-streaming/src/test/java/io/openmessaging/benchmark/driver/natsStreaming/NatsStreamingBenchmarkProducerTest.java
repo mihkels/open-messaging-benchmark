@@ -71,7 +71,8 @@ class NatsStreamingBenchmarkProducerTest {
                         });
         NatsStreamingBenchmarkProducer producer =
                 new NatsStreamingBenchmarkProducer(connection, "topic");
-        producer.sendAsync(Optional.empty(), new byte[] {1}).get(2, TimeUnit.SECONDS);
+        assertThat(producer.sendAsync(Optional.empty(), new byte[] {1}))
+                .succeedsWithin(2, TimeUnit.SECONDS);
         producer.close();
     }
 

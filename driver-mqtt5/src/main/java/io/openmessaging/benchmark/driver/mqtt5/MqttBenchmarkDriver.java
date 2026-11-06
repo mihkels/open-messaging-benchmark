@@ -63,7 +63,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkDriver.class);
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Pattern server_uri_pattern =
-            Pattern.compile("(?:[^:]*://)?([^:]+)(?::(\\w+))?");
+            Pattern.compile("(?:[^:]*+://)?+([^:]++)(?::(\\w++))?+");
     public static final MqttUtf8String USER_PROPERTY_KEY_PUBLISH_TIMESTAMP =
             MqttUtf8String.of("benchmark-publish-timestamp");
 

@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +29,9 @@ final class PayloadFactory {
     /**
      * The payloads to send.
      *
+     * <p>Not intended for value comparisons: the generated {@code equals}, {@code hashCode}, and
+     * {@code toString} methods use array identity, not array contents.
+     *
      * @param data the payload templates
      * @param weights the weight of each template, or {@code null} to pick them uniformly
      */
@@ -36,7 +40,7 @@ final class PayloadFactory {
     private PayloadFactory() {}
 
     static Payloads create(Workload workload) {
-        Random random = new Random();
+        Random random = ThreadLocalRandom.current();
         if (workload.usesMessageSizeDistribution()) {
             MessageSizeDistribution distribution =
                     new MessageSizeDistribution(workload.messageSizeDistribution);

@@ -32,7 +32,8 @@ class ResultsToCsvTest {
         Files.writeString(results.resolve("test-result.json"), withRates(golden, 100, 200, 80, 120));
         Files.writeString(
                 results.resolve("smaller-result.json"),
-                withRates(golden.replace("\"messageSize\" : 1024", "\"messageSize\" : 512"), 10, 20, 8, 12));
+                withRates(
+                        golden.replace("\"messageSize\" : 1024", "\"messageSize\" : 512"), 10, 20, 8, 12));
         Files.writeString(results.resolve("ignored.txt"), "not JSON");
 
         Path csv = tempDir.resolve("results.csv");
@@ -69,7 +70,8 @@ class ResultsToCsvTest {
         Files.writeString(results.resolve("bad.json"), "{");
         Path csv = tempDir.resolve("malformed.csv");
 
-        assertThatThrownBy(() -> new ResultsToCsv().writeAllResultFiles(results.toString(), csv.toFile()))
+        assertThatThrownBy(
+                        () -> new ResultsToCsv().writeAllResultFiles(results.toString(), csv.toFile()))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(csv).doesNotExist();
@@ -82,7 +84,11 @@ class ResultsToCsvTest {
     }
 
     private static String withRates(
-            String json, double publishRate1, double publishRate2, double consumeRate1, double consumeRate2) {
+            String json,
+            double publishRate1,
+            double publishRate2,
+            double consumeRate1,
+            double consumeRate2) {
         int closingBrace = json.lastIndexOf('}');
         return json.substring(0, closingBrace)
                 + ",\"publishRate\":["

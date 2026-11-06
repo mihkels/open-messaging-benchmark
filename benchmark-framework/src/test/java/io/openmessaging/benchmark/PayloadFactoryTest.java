@@ -56,7 +56,9 @@ class PayloadFactoryTest {
 
         PayloadFactory.Payloads payloads = PayloadFactory.create(workload);
 
-        assertThat(payloads.data()).extracting(payload -> payload.length).containsExactlyInAnyOrder(5, 15);
+        assertThat(payloads.data())
+                .extracting(payload -> payload.length)
+                .containsExactlyInAnyOrder(5, 15);
         assertThat(payloads.data()).allSatisfy(payload -> assertThat(payload).containsOnly((byte) 0));
         assertThat(payloads.weights()).containsExactlyInAnyOrder(1, 2);
     }

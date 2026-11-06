@@ -56,9 +56,7 @@ class FilePayloadReaderTest {
     @Test
     void reportsMissingPayloadFile() {
         assertThatThrownBy(
-                        () ->
-                                new FilePayloadReader(1)
-                                        .load(tempDir.resolve("missing.bin").toString()))
+                        () -> new FilePayloadReader(1).load(tempDir.resolve("missing.bin").toString()))
                 .isInstanceOf(PayloadException.class);
     }
 }

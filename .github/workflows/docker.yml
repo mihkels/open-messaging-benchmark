@@ -60,7 +60,7 @@ jobs:
 
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
-          install_args: java maven
+          install_args: java http:maven
           cache: false
 
       # Release tags resolve dependencies fresh; main and pull requests restore the Maven

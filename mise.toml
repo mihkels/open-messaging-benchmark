@@ -1,6 +1,7 @@
 [tools]
 java = "27"
-maven = "3.10.0"
+# From Maven Central: the default backend downloads from archive.apache.org, which throttles CI
+"http:maven" = { version = "3.10.0", url = "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/{{ version }}/apache-maven-{{ version }}-bin.tar.gz", checksum = "sha256:a46cc51bc74fa23fd267c7a0b9132b146dcf526da60d31aa5174e565632e9e0e", strip_components = 1, bin_path = "bin" }
 python = "3.15"
 helm = "4.3.1"
 kind = "0.33.0"

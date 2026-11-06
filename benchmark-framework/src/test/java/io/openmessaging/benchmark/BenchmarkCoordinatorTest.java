@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
@@ -63,9 +64,13 @@ class BenchmarkCoordinatorTest {
         List<String> arguments =
                 new ArrayList<>(
                         List.of(
-                                "--drivers", driver.toString(),
-                                "--output", output.toString(),
-                                "--driver-location", directory.toString()));
+                                "--drivers",
+                                driver.toString(),
+                                "--output",
+                                output.toString(),
+                                "--include-histograms",
+                                "--driver-location",
+                                directory.toString()));
         List<String> addresses = List.of("http://worker-1:8080", "http://worker-2:8080");
         if (topology.equals("workers")) {
             arguments.addAll(List.of("--workers", String.join(",", addresses), "--extra"));
@@ -100,6 +105,7 @@ class BenchmarkCoordinatorTest {
 
             assertThat(generators.constructed()).hasSize(1);
             verify(generators.constructed().getFirst()).run();
+            verify(generators.constructed().getFirst()).includeHistograms(true);
             verify(generators.constructed().getFirst()).close();
             if (topology.equals("local")) {
                 assertThat(processes.constructed()).hasSize(1);
@@ -107,6 +113,7 @@ class BenchmarkCoordinatorTest {
                 assertThat(clients.constructed()).isEmpty();
                 assertThat(selectedWorkers).containsExactly(processes.constructed().getFirst());
                 verify(processes.constructed().getFirst()).initializeDriver(driver);
+                verify(processes.constructed().getFirst()).setRunId(anyString());
                 verify(processes.constructed().getFirst()).stopAll();
                 verify(processes.constructed().getFirst()).close();
             } else {
@@ -115,6 +122,7 @@ class BenchmarkCoordinatorTest {
                 assertThat(selectedWorkers).singleElement().isInstanceOf(DistributedWorkersEnsemble.class);
                 for (HttpWorkerClient client : clients.constructed()) {
                     verify(client).initializeDriver(driver);
+                    verify(client).setRunId(anyString());
                     verify(client).stopAll();
                     verify(client).close();
                 }
@@ -124,6 +132,13 @@ class BenchmarkCoordinatorTest {
         assertThat(json.get("workload").stringValue()).isEqualTo("workload");
         assertThat(json.get("driver").stringValue()).isEqualTo("fixture");
         assertThat(json.get("publishRate").get(0).doubleValue()).isEqualTo(42.5);
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(2);
+        assertThat(json.get("metadata").get("runId").stringValue())
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
+        assertThat(json.get("metadata").get("driverConfig").get("password").stringValue())
+                .isEqualTo("[REDACTED]");
+        assertThat(json.get("metadata").get("driverConfig").get("authToken").stringValue())
+                .isEqualTo("[REDACTED]");
     }
 
     @Test
@@ -318,7 +333,12 @@ class BenchmarkCoordinatorTest {
 
     private Path driver(String name) throws IOException {
         Path config = directory.resolve(name + ".yaml");
-        Files.writeString(config, "name: " + name + "\ndriverClass: fixture.Driver\n");
+        Files.writeString(
+                config,
+                "name: "
+                        + name
+                        + "\ndriverClass: fixture.Driver\npassword: driver-password\n"
+                        + "authToken: driver-token\n");
         return config;
     }
 

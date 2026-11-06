@@ -86,6 +86,10 @@ public class WorkerStats {
         return registry;
     }
 
+    public void setRunId(String runId) {
+        registry.config().commonTags("run_id", runId);
+    }
+
     public void recordMessageSent() {
         totalMessagesSent.increment();
     }

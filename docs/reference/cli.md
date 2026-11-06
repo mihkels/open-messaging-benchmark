@@ -33,6 +33,7 @@ bin/benchmark [options] <workload.yaml>...
 | `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs. Cannot be combined with `--workers`                                                                              |
 | `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                         |
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                  |
+| `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                        |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                           |
 | `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                        |
 | `-h`, `--help`          |                       | Print usage and exit                                                                                                                                       |

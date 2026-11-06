@@ -16,6 +16,8 @@ package io.openmessaging.benchmark;
 interface WorkloadRun extends AutoCloseable {
     TestResult run() throws Exception;
 
+    default void includeHistograms(boolean include) {}
+
     boolean isQuiescentAfterClose();
 
     @Override

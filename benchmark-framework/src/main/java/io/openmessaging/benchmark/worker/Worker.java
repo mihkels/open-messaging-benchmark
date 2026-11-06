@@ -24,6 +24,8 @@ import java.util.List;
 
 public interface Worker extends AutoCloseable {
 
+    default void setRunId(String runId) {}
+
     /**
      * Initializes the driver selected by a driver configuration file. Where the driver is loaded from
      * is decided by the worker itself, for example by {@link ProcessWorker}'s driver location.

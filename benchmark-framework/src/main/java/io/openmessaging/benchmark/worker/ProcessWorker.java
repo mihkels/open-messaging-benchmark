@@ -72,6 +72,7 @@ public class ProcessWorker implements Worker {
     private volatile boolean closed;
     private volatile boolean unusable;
     private volatile boolean initializing;
+    private volatile String runId;
     // The current driver process, kept until it is fully stopped so that termination can be retried
     private volatile DriverProcess current;
 
@@ -147,6 +148,9 @@ public class ProcessWorker implements Worker {
         try {
             ensureOpen();
             starting.start(classpath.entries(), () -> closed);
+            if (runId != null) {
+                starting.client().setRunId(runId);
+            }
             starting.client().initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
             String failure = starting.describeFailure(e);
@@ -170,6 +174,15 @@ public class ProcessWorker implements Worker {
                     "Failed to initialize driver " + description + ": " + failure, e);
         } finally {
             initializing = false;
+        }
+    }
+
+    @Override
+    public synchronized void setRunId(String runId) {
+        this.runId = runId;
+        DriverProcess running = current;
+        if (running != null && running.client() != null) {
+            running.client().setRunId(runId);
         }
     }
 

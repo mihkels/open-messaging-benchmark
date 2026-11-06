@@ -172,19 +172,22 @@ class RocketMQ5BenchmarkDriverOptionsTest {
         InterruptedException topicFailure = new InterruptedException("topic interrupted");
         CountDownLatch adminCallStarted = new CountDownLatch(1);
         CountDownLatch releaseAdminCall = new CountDownLatch(1);
-        doAnswer(invocation -> {
-                    adminCallStarted.countDown();
-                    releaseAdminCall.await();
-                    throw topicFailure;
-                })
+        doAnswer(
+                        invocation -> {
+                            adminCallStarted.countDown();
+                            releaseAdminCall.await();
+                            throw topicFailure;
+                        })
                 .when(driver.admin)
                 .createAndUpdateTopicConfig(anyString(), any(TopicConfig.class));
 
         CompletableFuture<Void> topicCreation = driver.createTopic("topic", 1);
         assertThat(adminCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
         AtomicBoolean topicInterruptRestored = new AtomicBoolean();
-        CompletableFuture<Void> observed = topicCreation.whenComplete(
-                (ignored, failure) -> topicInterruptRestored.set(Thread.currentThread().isInterrupted()));
+        CompletableFuture<Void> observed =
+                topicCreation.whenComplete(
+                        (ignored, failure) ->
+                                topicInterruptRestored.set(Thread.currentThread().isInterrupted()));
         try {
             releaseAdminCall.countDown();
             assertThatThrownBy(observed::join).hasRootCause(topicFailure);

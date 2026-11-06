@@ -50,6 +50,8 @@ class TestResultJsonTest {
     private static final List<String> TIMING_DEPENDENT_SUMMARY =
             List.of("publishRateAvg", "consumeRateAvg", "throughputMbSec");
     private static final ObjectMapper mapper = new ObjectMapper();
+    private static final List<String> SCHEDULE_SUFFIXES =
+            List.of("Avg", "50pct", "75pct", "95pct", "99pct", "999pct", "9999pct", "Max");
 
     @Test
     void resultJsonMatchesTheDocumentedSchema() throws Exception {
@@ -58,6 +60,14 @@ class TestResultJsonTest {
             assertThat(actual.get(field)).hasSize(1);
             actual.remove(field);
         }
+        for (String suffix : SCHEDULE_SUFFIXES) {
+            assertThat(actual.get("publishScheduleLatency" + suffix).get(0).doubleValue()).isEqualTo(1.2);
+            assertThat(actual.get("aggregatedPublishScheduleLatency" + suffix).doubleValue())
+                    .isEqualTo(1.2);
+        }
+        assertThat(actual.get("aggregatedPublishScheduleLatencyQuantiles").get("100.0").doubleValue())
+                .isEqualTo(1.2);
+        removeScheduleFields(actual);
         for (String field : TIMING_DEPENDENT_SUMMARY) {
             assertThat(actual.get("summary").get(field).isNumber()).isTrue();
             ((ObjectNode) actual.get("summary")).remove(field);
@@ -82,9 +92,12 @@ class TestResultJsonTest {
         JsonNode golden = golden();
 
         TestResult result = mapper.treeToValue(golden, TestResult.class);
+        assertThat(result.publishScheduleLatency99pct).isEmpty();
+        assertThat(result.aggregatedPublishScheduleLatencyQuantiles).isEmpty();
 
         ObjectNode written = toTree(result);
         TIMING_DEPENDENT.forEach(written::remove);
+        removeScheduleFields(written);
         TIMING_DEPENDENT_SUMMARY.forEach(((ObjectNode) written.get("summary"))::remove);
         assertThat(written).isEqualTo(golden);
     }
@@ -138,6 +151,14 @@ class TestResultJsonTest {
         assertThat(nested.get("username")).isEqualTo("user");
     }
 
+    private static void removeScheduleFields(ObjectNode json) {
+        for (String suffix : SCHEDULE_SUFFIXES) {
+            json.remove("publishScheduleLatency" + suffix);
+            json.remove("aggregatedPublishScheduleLatency" + suffix);
+        }
+        json.remove("aggregatedPublishScheduleLatencyQuantiles");
+    }
+
     // Writes and re-reads the value, so that number node types match those parsed from the file
     private static ObjectNode toTree(Object value) {
         return (ObjectNode) mapper.readTree(mapper.writeValueAsString(value));
@@ -164,12 +185,14 @@ class TestResultJsonTest {
         Histogram publish = histogram(60_000_000L, 1_000, 2_000, 3_000, 40_000);
         Histogram delay = histogram(60_000_000L, 100, 500, 900);
         Histogram endToEnd = histogram(43_200_000_000L, 5_000, 7_000, 11_000);
+        Histogram schedule = histogram(60_000_000L, 1_200);
         PeriodStats period =
-                new PeriodStats(100, 2, 1_000, 90, 900, 400, 3, 380, publish, delay, endToEnd);
+                new PeriodStats(100, 2, 1_000, 90, 900, 400, 3, 380, publish, delay, endToEnd, schedule);
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency.add(publish);
         cumulative.publishDelayLatency.add(delay);
         cumulative.endToEndLatency.add(endToEnd);
+        cumulative.publishScheduleLatency.add(schedule);
 
         Worker worker = mock(Worker.class);
         when(worker.getPeriodStats()).thenReturn(period);

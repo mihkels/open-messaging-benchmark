@@ -20,7 +20,7 @@ This page explains exactly what each latency number measures and how backlog wor
 
 The time from the moment the driver's send call starts until its send future completes successfully,
 measured on the producer's monotonic clock. Only successful sends are recorded. Values are capped at
-60 seconds.
+60 seconds. This is the send's service time (`publishLatency`).
 
 Completion semantics depend on the driver and its configuration: for example, completion can
 represent client acceptance or a broker acknowledgment, with different replication and persistence
@@ -31,6 +31,7 @@ guarantees. See the relevant [driver page](../drivers/index.md) and
 
 Producers send on a schedule derived from the target rate. Publish delay is how late each send
 started compared with its scheduled time, in microseconds, also capped at 60 seconds.
+This is the schedule lag (`publishDelayLatency`).
 
 Publish latency is measured from the actual send, not the scheduled one. If the client blocks, for
 example because its buffer is full, later messages start late and their wait does not appear in
@@ -40,9 +41,23 @@ Low delay and an achieved publish rate close to the target suggest producers are
 their schedule. Large or growing delay signals that sends are starting late, but does not by itself
 prove the broker is saturated: inspect worker CPU, GC, errors and backlog too.
 
-For an individual successful send, the time from scheduled send to completion is its publish delay
-plus its publish latency. The result contains separate histograms, not paired per-message values;
-adding their p99 values does not yield the p99 of that combined time.
+## Schedule-corrected publish latency
+
+`publishScheduleLatency` measures the time from the intended send to successful completion on the
+producer's monotonic clock. For each successful send, this is its schedule lag plus its service
+time, recorded directly into a third histogram **before** computing percentiles. Adding the p99
+values of the two separate histograms does not yield the p99 of this combined time.
+
+Use this metric to see the latency a client on the intended schedule would experience, including
+late starts that `publishLatency` omits. For example, a send starting 100 ms late and completing
+1 ms later contributes 1 ms to service time, 100 ms to schedule lag and 101 ms to schedule-corrected
+latency. Near saturation the corrected tail can grow even when service-time p99 stays flat.
+
+Results and console logs report it in milliseconds, with microsecond precision, capped at 60 seconds.
+The cap applies to the combined duration, not to the sum of the separately capped metrics.
+With no schedule lag, it equals `publishLatency`. The counter-only producer readiness probe is
+unchanged. Rate discovery (`producerRate: 0`) still schedules the measured load at its current
+target rate, so that load can have schedule lag too.
 
 ## End-to-end latency
 
@@ -64,7 +79,7 @@ Consequences:
   and some have coarser resolution. See the "Semantics" section of each
   [driver page](../drivers/index.md).
 - **Range.** End-to-end values up to 12 hours can be recorded, so backlog drains are measured; a
-  larger value fails the run. Publish latency and publish delay are capped at 60 seconds.
+  larger value fails the run. All three producer latency metrics are capped at 60 seconds.
 
 ## Backlog
 

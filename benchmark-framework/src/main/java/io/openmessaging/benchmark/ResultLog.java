@@ -35,8 +35,9 @@ final class ResultLog {
     static void period(PeriodReport period) {
         Histogram publish = period.publishLatency();
         Histogram delay = period.publishDelayLatency();
+        Histogram schedule = period.publishScheduleLatency();
         log.info(
-                "Pub rate {} msg/s / {} MB/s | Pub err {} err/s | Cons rate {} msg/s / {} MB/s | Backlog: {} K | Pub Latency (ms) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {} | Pub Delay Latency (us) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {}",
+                "Pub rate {} msg/s / {} MB/s | Pub err {} err/s | Cons rate {} msg/s / {} MB/s | Backlog: {} K | Pub Latency (ms) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {} | Pub Delay Latency (us) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {} | Pub Schedule Latency (ms) avg: {} - 50%: {} - 99%: {} - 99.9%: {} - Max: {}",
                 rateFormat.format(period.publishRate()),
                 throughputFormat.format(period.publishThroughputMb()),
                 rateFormat.format(period.publishErrorRate()),
@@ -52,15 +53,21 @@ final class ResultLog {
                 dec.format(delay.getValueAtPercentile(50)),
                 dec.format(delay.getValueAtPercentile(99)),
                 dec.format(delay.getValueAtPercentile(99.9)),
-                throughputFormat.format(delay.getMaxValue()));
+                throughputFormat.format(delay.getMaxValue()),
+                dec.format(schedule.getMean() / 1000.0),
+                dec.format(schedule.getValueAtPercentile(50) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(99) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(99.9) / 1000.0),
+                throughputFormat.format(schedule.getMaxValue() / 1000.0));
     }
 
     @SuppressWarnings("checkstyle:LineLength")
     static void aggregate(CumulativeLatencies aggregate) {
         Histogram publish = aggregate.publishLatency;
         Histogram delay = aggregate.publishDelayLatency;
+        Histogram schedule = aggregate.publishScheduleLatency;
         log.info(
-                "----- Aggregated Pub Latency (ms) avg: {} - 50%: {} - 95%: {} - 99%: {} - 99.9%: {} - 99.99%: {} - Max: {} | Pub Delay (us)  avg: {} - 50%: {} - 95%: {} - 99%: {} - 99.9%: {} - 99.99%: {} - Max: {}",
+                "----- Aggregated Pub Latency (ms) avg: {} - 50%: {} - 95%: {} - 99%: {} - 99.9%: {} - 99.99%: {} - Max: {} | Pub Delay (us)  avg: {} - 50%: {} - 95%: {} - 99%: {} - 99.9%: {} - 99.99%: {} - Max: {} | Pub Schedule Latency (ms) avg: {} - 50%: {} - 95%: {} - 99%: {} - 99.9%: {} - 99.99%: {} - Max: {}",
                 dec.format(publish.getMean() / 1000.0),
                 dec.format(publish.getValueAtPercentile(50) / 1000.0),
                 dec.format(publish.getValueAtPercentile(95) / 1000.0),
@@ -74,6 +81,13 @@ final class ResultLog {
                 dec.format(delay.getValueAtPercentile(99)),
                 dec.format(delay.getValueAtPercentile(99.9)),
                 dec.format(delay.getValueAtPercentile(99.99)),
-                throughputFormat.format(delay.getMaxValue()));
+                throughputFormat.format(delay.getMaxValue()),
+                dec.format(schedule.getMean() / 1000.0),
+                dec.format(schedule.getValueAtPercentile(50) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(95) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(99) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(99.9) / 1000.0),
+                dec.format(schedule.getValueAtPercentile(99.99) / 1000.0),
+                throughputFormat.format(schedule.getMaxValue() / 1000.0));
     }
 }

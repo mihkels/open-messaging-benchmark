@@ -63,6 +63,15 @@ public class TestResult {
     public List<Double> publishLatency9999pct = new ArrayList<>();
     public List<Double> publishLatencyMax = new ArrayList<>();
 
+    public List<Double> publishScheduleLatencyAvg = new ArrayList<>();
+    public List<Double> publishScheduleLatency50pct = new ArrayList<>();
+    public List<Double> publishScheduleLatency75pct = new ArrayList<>();
+    public List<Double> publishScheduleLatency95pct = new ArrayList<>();
+    public List<Double> publishScheduleLatency99pct = new ArrayList<>();
+    public List<Double> publishScheduleLatency999pct = new ArrayList<>();
+    public List<Double> publishScheduleLatency9999pct = new ArrayList<>();
+    public List<Double> publishScheduleLatencyMax = new ArrayList<>();
+
     public List<Double> publishDelayLatencyAvg = new ArrayList<>();
     public List<Long> publishDelayLatency50pct = new ArrayList<>();
     public List<Long> publishDelayLatency75pct = new ArrayList<>();
@@ -81,6 +90,15 @@ public class TestResult {
     public double aggregatedPublishLatency9999pct;
     public double aggregatedPublishLatencyMax;
 
+    public double aggregatedPublishScheduleLatencyAvg;
+    public double aggregatedPublishScheduleLatency50pct;
+    public double aggregatedPublishScheduleLatency75pct;
+    public double aggregatedPublishScheduleLatency95pct;
+    public double aggregatedPublishScheduleLatency99pct;
+    public double aggregatedPublishScheduleLatency999pct;
+    public double aggregatedPublishScheduleLatency9999pct;
+    public double aggregatedPublishScheduleLatencyMax;
+
     public double aggregatedPublishDelayLatencyAvg;
     public long aggregatedPublishDelayLatency50pct;
     public long aggregatedPublishDelayLatency75pct;
@@ -91,6 +109,8 @@ public class TestResult {
     public long aggregatedPublishDelayLatencyMax;
 
     public Map<Double, Double> aggregatedPublishLatencyQuantiles = new TreeMap<>();
+
+    public Map<Double, Double> aggregatedPublishScheduleLatencyQuantiles = new TreeMap<>();
 
     public Map<Double, Long> aggregatedPublishDelayLatencyQuantiles = new TreeMap<>();
 
@@ -136,6 +156,16 @@ public class TestResult {
                 publishLatency99pct,
                 publishLatency999pct,
                 publishLatency9999pct);
+        appendMillis(
+                period.publishScheduleLatency(),
+                publishScheduleLatencyAvg,
+                publishScheduleLatencyMax,
+                publishScheduleLatency50pct,
+                publishScheduleLatency75pct,
+                publishScheduleLatency95pct,
+                publishScheduleLatency99pct,
+                publishScheduleLatency999pct,
+                publishScheduleLatency9999pct);
         appendMicros(
                 period.publishDelayLatency(),
                 publishDelayLatencyAvg,
@@ -178,6 +208,22 @@ public class TestResult {
                 .forEach(
                         value ->
                                 aggregatedPublishLatencyQuantiles.put(
+                                        value.getPercentile(), millis(value.getValueIteratedTo())));
+
+        Histogram schedule = aggregate.publishScheduleLatency;
+        aggregatedPublishScheduleLatencyAvg = millis(schedule.getMean());
+        aggregatedPublishScheduleLatency50pct = millisAt(schedule, 50);
+        aggregatedPublishScheduleLatency75pct = millisAt(schedule, 75);
+        aggregatedPublishScheduleLatency95pct = millisAt(schedule, 95);
+        aggregatedPublishScheduleLatency99pct = millisAt(schedule, 99);
+        aggregatedPublishScheduleLatency999pct = millisAt(schedule, 99.9);
+        aggregatedPublishScheduleLatency9999pct = millisAt(schedule, 99.99);
+        aggregatedPublishScheduleLatencyMax = millis(schedule.getMaxValue());
+        schedule
+                .percentiles(100)
+                .forEach(
+                        value ->
+                                aggregatedPublishScheduleLatencyQuantiles.put(
                                         value.getPercentile(), millis(value.getValueIteratedTo())));
 
         Histogram delay = aggregate.publishDelayLatency;

@@ -181,11 +181,14 @@ class WorkerHttpRoundTripTest {
         Histogram publish = histogram(11, 33);
         Histogram delay = histogram(22, 44);
         Histogram endToEnd = histogram(55, 77);
-        PeriodStats period = new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, publish, delay, endToEnd);
+        Histogram schedule = histogram(33, 77);
+        PeriodStats period =
+                new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, publish, delay, endToEnd, schedule);
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency = publish;
         cumulative.publishDelayLatency = delay;
         cumulative.endToEndLatency = endToEnd;
+        cumulative.publishScheduleLatency = schedule;
         CountersStats counters = new CountersStats(123, 17, 91);
         when(worker.getPeriodStats()).thenReturn(period);
         when(worker.getCumulativeLatencies()).thenReturn(cumulative);
@@ -197,6 +200,7 @@ class WorkerHttpRoundTripTest {
         assertThat(received.publishLatency).isEqualTo(publish);
         assertThat(received.publishDelayLatency).isEqualTo(delay);
         assertThat(received.endToEndLatency).isEqualTo(endToEnd);
+        assertThat(received.publishScheduleLatency).isEqualTo(schedule);
         received.publishLatency.reset();
         assertThat(publish.getTotalCount()).isEqualTo(2);
         verify(worker).getPeriodStats();

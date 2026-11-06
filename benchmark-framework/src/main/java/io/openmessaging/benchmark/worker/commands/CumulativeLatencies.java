@@ -22,6 +22,7 @@ public class CumulativeLatencies {
 
     public Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 5);
     public Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 5);
+    public Histogram publishScheduleLatency = new Histogram(SECONDS.toMicros(60), 5);
     public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 5);
 
     public CumulativeLatencies plus(CumulativeLatencies toAdd) {
@@ -29,10 +30,12 @@ public class CumulativeLatencies {
 
         result.publishLatency.add(this.publishLatency);
         result.publishDelayLatency.add(this.publishDelayLatency);
+        result.publishScheduleLatency.add(this.publishScheduleLatency);
         result.endToEndLatency.add(this.endToEndLatency);
 
         result.publishLatency.add(toAdd.publishLatency);
         result.publishDelayLatency.add(toAdd.publishDelayLatency);
+        result.publishScheduleLatency.add(toAdd.publishScheduleLatency);
         result.endToEndLatency.add(toAdd.endToEndLatency);
 
         return result;

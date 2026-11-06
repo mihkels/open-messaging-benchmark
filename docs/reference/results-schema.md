@@ -63,13 +63,14 @@ internally, while the existing result fields retain their documented units.
 
 ## Units
 
-|    Measurement     |        Unit         |                             Precision                              |
-|--------------------|---------------------|--------------------------------------------------------------------|
-| Publish latency    | milliseconds        | microseconds                                                       |
-| Publish delay      | **microseconds**    | microseconds                                                       |
-| End-to-end latency | milliseconds        | Millisecond clock differences; some drivers use coarser timestamps |
-| Rates              | messages per second |                                                                    |
-| Backlog            | messages            |                                                                    |
+|            Measurement             |        Unit         |                             Precision                              |
+|------------------------------------|---------------------|--------------------------------------------------------------------|
+| Publish latency                    | milliseconds        | microseconds                                                       |
+| Schedule-corrected publish latency | milliseconds        | microseconds                                                       |
+| Publish delay                      | **microseconds**    | microseconds                                                       |
+| End-to-end latency                 | milliseconds        | Millisecond clock differences; some drivers use coarser timestamps |
+| Rates                              | messages per second |                                                                    |
+| Backlog                            | messages            |                                                                    |
 
 ## Run description
 
@@ -89,33 +90,36 @@ These lists have one entry per 10-second sampling period of the measured phase. 
 included. For backlog workloads the measured phase includes the build-up and drain; see
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
-|                              Field                               |     Type     |                                                                      Description                                                                      |
-|------------------------------------------------------------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `publishRate`                                                    | number list  | Messages published per second                                                                                                                         |
-| `publishErrorRate`                                               | number list  | Failed publishes per second                                                                                                                           |
-| `consumeRate`                                                    | number list  | Messages received per second, across all subscriptions                                                                                                |
-| `backlog`                                                        | int list     | `subscriptionsPerTopic × total successfully published − total received` since load started (warm-up included), at the end of the period, floored at 0 |
-| `publishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number lists | Publish latency in ms                                                                                                                                 |
-| `publishDelayLatency{Avg,50pct,...,Max}`                         | lists        | Publish delay in µs; percentiles are integers                                                                                                         |
-| `endToEndLatency{Avg,50pct,...,Max}`                             | number lists | End-to-end latency in ms                                                                                                                              |
+|                                  Field                                   |     Type     |                                                                      Description                                                                      |
+|--------------------------------------------------------------------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `publishRate`                                                            | number list  | Messages published per second                                                                                                                         |
+| `publishErrorRate`                                                       | number list  | Failed publishes per second                                                                                                                           |
+| `consumeRate`                                                            | number list  | Messages received per second, across all subscriptions                                                                                                |
+| `backlog`                                                                | int list     | `subscriptionsPerTopic × total successfully published − total received` since load started (warm-up included), at the end of the period, floored at 0 |
+| `publishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}`         | number lists | Publish latency in ms                                                                                                                                 |
+| `publishDelayLatency{Avg,50pct,...,Max}`                                 | lists        | Publish delay in µs; percentiles are integers                                                                                                         |
+| `publishScheduleLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number lists | Intended send to successful completion in ms (schedule lag + service time, recorded per message)                                                      |
+| `endToEndLatency{Avg,50pct,...,Max}`                                     | number lists | End-to-end latency in ms                                                                                                                              |
 
 ## Aggregates
 
 Computed over the whole measured phase, not averaged from the periods.
 
-|                                   Field                                    |  Type  | Description |
-|----------------------------------------------------------------------------|--------|-------------|
-| `aggregatedPublishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number | ms          |
-| `aggregatedPublishDelayLatency{Avg,50pct,...,Max}`                         | number | µs          |
-| `aggregatedEndToEndLatency{Avg,50pct,...,Max}`                             | number | ms          |
+|                                       Field                                        |  Type  | Description |
+|------------------------------------------------------------------------------------|--------|-------------|
+| `aggregatedPublishLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}`         | number | ms          |
+| `aggregatedPublishDelayLatency{Avg,50pct,...,Max}`                                 | number | µs          |
+| `aggregatedPublishScheduleLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number | ms          |
+| `aggregatedEndToEndLatency{Avg,50pct,...,Max}`                                     | number | ms          |
 
 ## Quantile maps
 
-|                  Field                   | Values |
-|------------------------------------------|--------|
-| `aggregatedPublishLatencyQuantiles`      | ms     |
-| `aggregatedPublishDelayLatencyQuantiles` | µs     |
-| `aggregatedEndToEndLatencyQuantiles`     | ms     |
+|                    Field                    | Values |
+|---------------------------------------------|--------|
+| `aggregatedPublishLatencyQuantiles`         | ms     |
+| `aggregatedPublishDelayLatencyQuantiles`    | µs     |
+| `aggregatedPublishScheduleLatencyQuantiles` | ms     |
+| `aggregatedEndToEndLatencyQuantiles`        | ms     |
 
 Keys are percentiles from 0 to 100, written as strings, for example `"99.90234375"`. Values are the
 latency at that percentile. The keys are the HdrHistogram iteration points, so they are not round
@@ -147,3 +151,8 @@ comparing two results.
 ```
 
 The excerpt is shortened. Real files contain every field above.
+
+The `publishScheduleLatency*` and `aggregatedPublishScheduleLatency*` fields are additive;
+older result files do not contain them. Existing fields retain their names, units and meanings.
+See [Latency and backlog](../methodology/latency-and-backlog.md) for the distinction between service
+time, schedule lag and schedule-corrected latency.

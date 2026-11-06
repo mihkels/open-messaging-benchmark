@@ -146,6 +146,28 @@ class PluginRegistryTest {
     }
 
     @Test
+    void resolvesEveryDeclaredDriverNameAsAnAliasForItsBundle() throws IOException {
+        String alias = "test.kafka.LegacyKafkaDriver";
+        bundle("kafka", List.of(KAFKA, alias), "");
+
+        assertThat(discover().resolve(alias, Map.of()).primary().id()).isEqualTo("kafka");
+    }
+
+    @Test
+    void rejectsMissingOrMismatchedOverrideLocations() throws IOException {
+        Path wrongDriver = descriptor(dir.resolve("other"), "other", List.of(JMS), "");
+        PluginFixtures.writeJar(wrongDriver.resolve("other.jar"), Map.of("marker", new byte[0]));
+
+        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), dir.resolve("missing")))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not exist");
+        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), wrongDriver))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not provide")
+                .hasMessageContaining(JMS);
+    }
+
+    @Test
     void collectsErrorsOfAllInvalidBundles() throws IOException {
         bundle("kafka", List.of(KAFKA), "");
         Path badVersion = bundle("bad-version", List.of("a.A"), "");

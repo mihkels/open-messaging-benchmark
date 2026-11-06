@@ -93,9 +93,11 @@ class WorkerHttpRoundTripTest {
         List<String> topics = List.of("topic-α", "topic-\"quoted\"");
         when(worker.createTopics(any())).thenReturn(topics);
         assertThat(remote.id()).isEqualTo(host);
+        remote.setRunId("018f0000-0000-7000-8000-000000000001");
         assertThat(remote.createTopics(info)).containsExactlyElementsOf(topics);
         ArgumentCaptor<TopicsInfo> capturedInfo = ArgumentCaptor.forClass(TopicsInfo.class);
         verify(worker).createTopics(capturedInfo.capture());
+        verify(worker).setRunId("018f0000-0000-7000-8000-000000000001");
         assertThat(capturedInfo.getValue()).usingRecursiveComparison().isEqualTo(info);
 
         ConsumerAssignment consumers = new ConsumerAssignment();

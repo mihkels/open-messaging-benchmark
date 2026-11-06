@@ -18,13 +18,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
@@ -39,9 +43,12 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class TestResultJsonTest {
     private static final String GOLDEN = "/golden/test-result.json";
+    private static final String GOLDEN_V1 = "/golden/test-result-v1.json";
     // Rates depend on how long each report interval really took
     private static final List<String> TIMING_DEPENDENT =
             List.of("publishRate", "consumeRate", "publishErrorRate");
+    private static final List<String> TIMING_DEPENDENT_SUMMARY =
+            List.of("publishRateAvg", "consumeRateAvg", "throughputMbSec");
     private static final ObjectMapper mapper = new ObjectMapper();
 
     @Test
@@ -51,24 +58,84 @@ class TestResultJsonTest {
             assertThat(actual.get(field)).hasSize(1);
             actual.remove(field);
         }
+        for (String field : TIMING_DEPENDENT_SUMMARY) {
+            assertThat(actual.get("summary").get(field).isNumber()).isTrue();
+            ((ObjectNode) actual.get("summary")).remove(field);
+        }
 
-        if (Boolean.getBoolean("golden.update")) {
+        boolean updateGolden = Boolean.getBoolean("golden.update");
+        if (updateGolden) {
             Path golden = Path.of("src/test/resources" + GOLDEN);
             Files.createDirectories(golden.getParent());
             mapper.writerWithDefaultPrettyPrinter().writeValue(golden.toFile(), actual);
         }
-        assertThat(actual).isEqualTo(golden());
+        if (!updateGolden) {
+            assertThat(actual).isEqualTo(golden());
+        }
     }
 
     @Test
     void goldenResultSurvivesARoundTrip() throws Exception {
+        if (Boolean.getBoolean("golden.update")) {
+            return;
+        }
         JsonNode golden = golden();
 
         TestResult result = mapper.treeToValue(golden, TestResult.class);
 
         ObjectNode written = toTree(result);
         TIMING_DEPENDENT.forEach(written::remove);
+        TIMING_DEPENDENT_SUMMARY.forEach(((ObjectNode) written.get("summary"))::remove);
         assertThat(written).isEqualTo(golden);
+    }
+
+    @Test
+    void readsLegacyResultWithoutVersionedBlocks() throws Exception {
+        TestResult result = mapper.treeToValue(golden(GOLDEN_V1), TestResult.class);
+
+        assertThat(result.workload).isEqualTo("golden");
+        assertThat(result.aggregatedPublishLatency99pct).isEqualTo(40.0);
+        assertThat(result.schemaVersion).isEqualTo(2);
+    }
+
+    @Test
+    void histogramBlockContainsDecodableCompressedHistograms() throws Exception {
+        CumulativeLatencies aggregate = new CumulativeLatencies();
+        aggregate.publishLatency.recordValue(1_000);
+        aggregate.publishDelayLatency.recordValue(500);
+        aggregate.endToEndLatency.recordValue(5_000);
+        TestResult result = new TestResult();
+
+        result.recordHistogramData(aggregate);
+
+        assertThat(result.histograms).containsOnlyKeys("publish", "publishDelay", "endToEnd");
+        assertThat(decodeHistogram(result.histograms.get("publish")).getValueAtPercentile(100))
+                .isEqualTo(1_000);
+        assertThat(decodeHistogram(result.histograms.get("publishDelay")).getValueAtPercentile(100))
+                .isEqualTo(500);
+        assertThat(decodeHistogram(result.histograms.get("endToEnd")).getValueAtPercentile(100))
+                .isEqualTo(5_000);
+        assertThat(toTree(result).get("histograms")).isNotNull();
+    }
+
+    @Test
+    void redactsCredentialLikeDriverConfigurationKeysRecursively() {
+        Map<String, Object> config =
+                Map.of(
+                        "password", "driver-password",
+                        "authToken", "driver-token",
+                        "saslJaasConfig", "driver-jaas",
+                        "nested", Map.of("clientSecret", "driver-secret", "username", "user"));
+
+        Map<String, Object> redacted = ResultMetadata.redactDriverConfig(config);
+
+        assertThat(redacted)
+                .containsEntry("password", "[REDACTED]")
+                .containsEntry("authToken", "[REDACTED]")
+                .containsEntry("saslJaasConfig", "[REDACTED]");
+        Map<?, ?> nested = (Map<?, ?>) redacted.get("nested");
+        assertThat(nested.get("clientSecret")).isEqualTo("[REDACTED]");
+        assertThat(nested.get("username")).isEqualTo("user");
     }
 
     // Writes and re-reads the value, so that number node types match those parsed from the file
@@ -76,9 +143,19 @@ class TestResultJsonTest {
         return (ObjectNode) mapper.readTree(mapper.writeValueAsString(value));
     }
 
+    private static Histogram decodeHistogram(String encoded)
+            throws java.util.zip.DataFormatException {
+        return Histogram.decodeFromCompressedByteBuffer(
+                java.nio.ByteBuffer.wrap(Base64.getDecoder().decode(encoded)), Long.MIN_VALUE);
+    }
+
     private static JsonNode golden() throws Exception {
-        try (InputStream input = TestResultJsonTest.class.getResourceAsStream(GOLDEN)) {
-            assertThat(input).as("golden file " + GOLDEN).isNotNull();
+        return golden(GOLDEN);
+    }
+
+    private static JsonNode golden(String resource) throws Exception {
+        try (InputStream input = TestResultJsonTest.class.getResourceAsStream(resource)) {
+            assertThat(input).as("golden file " + resource).isNotNull();
             return mapper.readTree(input);
         }
     }
@@ -97,6 +174,7 @@ class TestResultJsonTest {
         Worker worker = mock(Worker.class);
         when(worker.getPeriodStats()).thenReturn(period);
         when(worker.getCumulativeLatencies()).thenReturn(cumulative);
+        when(worker.getCountersStats()).thenReturn(new CountersStats(4, 2, 3));
         Workload workload = new Workload();
         workload.name = "golden";
         workload.topics = 2;
@@ -113,7 +191,20 @@ class TestResultJsonTest {
                         Duration.ofMillis(5),
                         Duration.ofMillis(5),
                         Duration.ofSeconds(2))) {
-            return generator.printAndCollectStats(1, TimeUnit.NANOSECONDS);
+            TestResult result = generator.printAndCollectStats(1, TimeUnit.NANOSECONDS);
+            result.metadata =
+                    new ResultMetadata(
+                            "018f0000-0000-7000-8000-000000000001",
+                            Instant.parse("2026-01-01T00:00:00Z").toString(),
+                            Instant.parse("2026-01-01T00:01:00Z").toString(),
+                            "1.2.3",
+                            "abc123",
+                            "25",
+                            "",
+                            1,
+                            workload,
+                            Map.of("name", "driver"));
+            return result;
         }
     }
 

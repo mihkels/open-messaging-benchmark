@@ -13,8 +13,12 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -26,6 +30,16 @@ import org.HdrHistogram.Histogram;
  */
 public class TestResult {
     private static final double[] PERCENTILES = {50, 75, 95, 99, 99.9, 99.99};
+
+    public int schemaVersion = 2;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public ResultMetadata metadata;
+
+    public ResultSummary summary = ResultSummary.empty();
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Map<String, String> histograms;
 
     public String workload;
     public String driver;
@@ -197,6 +211,46 @@ public class TestResult {
                         value ->
                                 aggregatedEndToEndLatencyQuantiles.put(
                                         value.getPercentile(), millis(value.getValueIteratedTo())));
+    }
+
+    void recordSummary(CountersStats counters, double targetRate, long maxBacklog) {
+        double publishRateAvg = average(publishRate);
+        double consumeRateAvg = average(consumeRate);
+        summary =
+                new ResultSummary(
+                        publishRateAvg,
+                        consumeRateAvg,
+                        consumeRateAvg * messageSize / 1_000_000.0,
+                        counters.messagesSent(),
+                        counters.messageSendErrors(),
+                        maxBacklog,
+                        targetRate);
+    }
+
+    void recordHistogramData(CumulativeLatencies aggregate) {
+        histograms =
+                Map.of(
+                        "publish", encode(aggregate.publishLatency),
+                        "publishDelay", encode(aggregate.publishDelayLatency),
+                        "endToEnd", encode(aggregate.endToEndLatency));
+    }
+
+    private static double average(List<Double> values) {
+        return values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    }
+
+    private static String encode(Histogram histogram) {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        while (true) {
+            int written = histogram.encodeIntoCompressedByteBuffer(buffer);
+            if (written < buffer.capacity()) {
+                buffer.flip();
+                byte[] encoded = new byte[buffer.remaining()];
+                buffer.get(encoded);
+                return Base64.getEncoder().encodeToString(encoded);
+            }
+            buffer = ByteBuffer.allocate(buffer.capacity() * 2);
+        }
     }
 
     // Appends the average, maximum and PERCENTILES of a microsecond histogram in milliseconds.

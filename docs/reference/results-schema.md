@@ -17,6 +17,50 @@ limitations under the License.
 Each workload and driver combination writes one JSON file. See [Results](../guides/results.md) for
 how to read and chart it.
 
+New files use schema version 2. Existing metric fields remain unchanged, and readers can continue to
+read version 1 files, which have no `schemaVersion`, `metadata`, or `summary` fields. The
+[JSON Schema](results-schema.json) describes the version 2 document.
+
+## Version and run metadata
+
+|          Field           |  Type   |                                                   Description                                                    |
+|--------------------------|---------|------------------------------------------------------------------------------------------------------------------|
+| `schemaVersion`          | integer | Result schema version; currently `2`                                                                             |
+| `metadata.runId`         | string  | UUID version 7 created by the coordinator and propagated to workers                                              |
+| `metadata.startedAtUtc`  | string  | Run start time in UTC, ISO 8601 format                                                                           |
+| `metadata.finishedAtUtc` | string  | Run finish time in UTC, ISO 8601 format                                                                          |
+| `metadata.ombVersion`    | string  | OMB version, or `unknown` when unavailable                                                                       |
+| `metadata.gitCommit`     | string  | Commit from `omb.gitCommit`, `GIT_COMMIT`, `GITHUB_SHA`, or the current Git checkout; `unknown` when unavailable |
+| `metadata.jdk`           | string  | Java version                                                                                                     |
+| `metadata.jvmOptions`    | string  | JVM input options; credential-like `-D` properties are redacted                                                  |
+| `metadata.workerCount`   | integer | Number of workers used                                                                                           |
+| `metadata.workload`      | object  | Resolved workload configuration                                                                                  |
+| `metadata.driverConfig`  | object  | Driver YAML parsed as JSON; password-, token- and secret-like keys are replaced with `[REDACTED]`                |
+
+Set the `omb.gitCommit` system property, `GIT_COMMIT` environment variable or `GITHUB_SHA`
+environment variable to preserve the source commit in result files.
+
+## Summary
+
+The `summary` object contains headline values for the measured window, after warm-up.
+
+|        Field        |  Type   |                             Description                             |
+|---------------------|---------|---------------------------------------------------------------------|
+| `publishRateAvg`    | number  | Mean of the measured publish-rate samples, messages per second      |
+| `consumeRateAvg`    | number  | Mean of the measured consume-rate samples, messages per second      |
+| `throughputMbSec`   | number  | Mean consume rate multiplied by message size, decimal MB per second |
+| `totalMessagesSent` | integer | Successfully sent messages in the measured window                   |
+| `totalErrors`       | integer | Failed sends in the measured window                                 |
+| `maxBacklog`        | integer | Maximum sampled backlog during the measured window                  |
+| `targetRate`        | number  | Configured or discovered target publish rate, messages per second   |
+
+## Optional histograms
+
+`histograms` is omitted unless the coordinator is run with `--include-histograms`. When present, it
+contains base64-encoded compressed HdrHistograms for `publish`, `publishDelay`, and `endToEnd`.
+Histograms are aggregated over the measured window; publish and end-to-end values use microseconds
+internally, while the existing result fields retain their documented units.
+
 ## Units
 
 |    Measurement     |        Unit         |                             Precision                              |

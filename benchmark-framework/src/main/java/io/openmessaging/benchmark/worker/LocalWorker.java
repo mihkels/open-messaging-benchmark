@@ -182,6 +182,11 @@ public final class LocalWorker implements Worker {
     }
 
     @Override
+    public void setRunId(String runId) {
+        stats.setRunId(runId);
+    }
+
+    @Override
     public List<String> createTopics(TopicsInfo topicsInfo) {
         Run current = requireRun();
         Timer timer = new Timer();

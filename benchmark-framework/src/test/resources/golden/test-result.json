@@ -51,6 +51,39 @@
   "endToEndLatencyAvg" : [ 7.666666666666667 ],
   "endToEndLatencyMax" : [ 11.0 ],
   "messageSize" : 1024,
+  "metadata" : {
+    "driverConfig" : {
+      "name" : "driver"
+    },
+    "finishedAtUtc" : "2026-01-01T00:01:00Z",
+    "gitCommit" : "abc123",
+    "jdk" : "25",
+    "jvmOptions" : "",
+    "ombVersion" : "1.2.3",
+    "runId" : "018f0000-0000-7000-8000-000000000001",
+    "startedAtUtc" : "2026-01-01T00:00:00Z",
+    "workerCount" : 1,
+    "workload" : {
+      "backlogDrainRatio" : 1.0,
+      "consumerBacklogSizeGB" : 0,
+      "consumerPerSubscription" : 2,
+      "keyDistributor" : "NO_KEY",
+      "messageSize" : 1024,
+      "messageSizeDistribution" : null,
+      "name" : "golden",
+      "partitionsPerTopic" : 3,
+      "payloadFile" : null,
+      "producerRate" : 0,
+      "producersPerTopic" : 1,
+      "randomBytesRatio" : 0.0,
+      "randomizedPayloadPoolSize" : 0,
+      "subscriptionsPerTopic" : 1,
+      "testDurationMinutes" : 0,
+      "topics" : 2,
+      "useRandomizedPayloads" : false,
+      "warmupDurationMinutes" : 1
+    }
+  },
   "partitions" : 3,
   "producersPerTopic" : 1,
   "publishDelayLatency50pct" : [ 500 ],
@@ -69,6 +102,13 @@
   "publishLatency99pct" : [ 40.0 ],
   "publishLatencyAvg" : [ 11.5 ],
   "publishLatencyMax" : [ 40.0 ],
+  "schemaVersion" : 2,
+  "summary" : {
+    "maxBacklog" : 20,
+    "targetRate" : 0.0,
+    "totalErrors" : 2,
+    "totalMessagesSent" : 4
+  },
   "topics" : 2,
   "workload" : "golden"
 }

@@ -17,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -33,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -222,6 +225,184 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void sustainableRateControllerRampsUpThenBacksOffWhenBacklogGrows() throws Exception {
+        Worker worker = worker();
+        when(worker.getCountersStats())
+                .thenReturn(new CountersStats(), new CountersStats(), new CountersStats(2_000, 0, 0));
+        List<Double> adjustedRates = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch adjustments = new CountDownLatch(2);
+        doAnswer(
+                        invocation -> {
+                            adjustedRates.add(invocation.getArgument(0));
+                            adjustments.countDown();
+                            return null;
+                        })
+                .when(worker)
+                .adjustPublishRate(anyDouble());
+
+        Workload workload = workload();
+        workload.producerRate = 0;
+        AtomicReference<Throwable> runFailure = new AtomicReference<>();
+        WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2));
+        Thread runner =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        generator.run();
+                                    } catch (Throwable t) {
+                                        runFailure.set(t);
+                                    }
+                                });
+        try {
+            assertThat(adjustments.await(2, TimeUnit.SECONDS)).isTrue();
+            generator.close();
+            runner.join(2000);
+            assertThat(runner.isAlive()).isFalse();
+            assertThat(adjustedRates).contains(20_000.0, 0.0);
+            assertThat(runFailure.get()).isInstanceOf(InterruptedException.class);
+        } finally {
+            generator.close();
+            runner.join(2000);
+        }
+        verify(worker).stopAll();
+    }
+
+    @Test
+    void runsProducerOnlyAndConsumerOnlyWorkloads() throws Exception {
+        Worker consumerOnlyWorker = worker();
+        when(consumerOnlyWorker.getCountersStats()).thenReturn(new CountersStats(0, 0, 1));
+        CountDownLatch consumerOnlyStarted = new CountDownLatch(1);
+        doAnswer(
+                        ignored -> {
+                            consumerOnlyStarted.countDown();
+                            return null;
+                        })
+                .when(consumerOnlyWorker)
+                .startLoad(any());
+        Workload consumerOnly = workload();
+        consumerOnly.producersPerTopic = 0;
+        consumerOnly.subscriptionsPerTopic = 1;
+        consumerOnly.consumerPerSubscription = 1;
+        WorkloadGenerator consumerOnlyGenerator =
+                generator(consumerOnly, consumerOnlyWorker, Duration.ofSeconds(2));
+        AtomicReference<Throwable> consumerOnlyFailure = new AtomicReference<>();
+        Thread consumerOnlyRun =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        consumerOnlyGenerator.run();
+                                    } catch (Throwable t) {
+                                        consumerOnlyFailure.set(t);
+                                    }
+                                });
+        try {
+            assertThat(consumerOnlyStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            consumerOnlyGenerator.close();
+            consumerOnlyRun.join(2000);
+        }
+        assertThat(consumerOnlyRun.isAlive()).isFalse();
+        assertThat(consumerOnlyFailure.get()).isInstanceOf(InterruptedException.class);
+        verify(consumerOnlyWorker).createProducers(List.of());
+        verify(consumerOnlyWorker).createConsumers(
+                org.mockito.ArgumentMatchers.argThat(
+                        assignment -> assignment.topicsSubscriptions.size() == 1));
+
+        Worker producerOnlyWorker = worker();
+        CountDownLatch producerOnlyStarted = new CountDownLatch(1);
+        doAnswer(
+                        ignored -> {
+                            producerOnlyStarted.countDown();
+                            return null;
+                        })
+                .when(producerOnlyWorker)
+                .startLoad(any());
+        Workload producerOnly = workload();
+        producerOnly.subscriptionsPerTopic = 0;
+        WorkloadGenerator producerOnlyGenerator =
+                generator(producerOnly, producerOnlyWorker, Duration.ofSeconds(2));
+        AtomicReference<Throwable> producerOnlyFailure = new AtomicReference<>();
+        Thread producerOnlyRun =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        producerOnlyGenerator.run();
+                                    } catch (Throwable t) {
+                                        producerOnlyFailure.set(t);
+                                    }
+                                });
+        try {
+            assertThat(producerOnlyStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            producerOnlyGenerator.close();
+            producerOnlyRun.join(2000);
+        }
+        assertThat(producerOnlyRun.isAlive()).isFalse();
+        assertThat(producerOnlyFailure.get()).isInstanceOf(InterruptedException.class);
+        verify(producerOnlyWorker).createProducers(List.of("topic"));
+        verify(producerOnlyWorker).createConsumers(
+                org.mockito.ArgumentMatchers.argThat(
+                        assignment -> assignment.topicsSubscriptions.isEmpty()));
+    }
+
+    @Test
+    void buildsAndDrainsTheConfiguredBacklogBeforeReporting() throws Exception {
+        Worker worker = worker();
+        AtomicInteger counterReads = new AtomicInteger();
+        when(worker.getCountersStats())
+                .thenAnswer(
+                        ignored ->
+                                switch (counterReads.getAndIncrement()) {
+                                    case 0 -> new CountersStats(1, 0, 1);
+                                    case 1 -> new CountersStats(1_025, 0, 1);
+                                    default -> new CountersStats(1_025, 0, 1_025);
+                                });
+        CountDownLatch backlogDrained = new CountDownLatch(1);
+        doAnswer(
+                        ignored -> {
+                            backlogDrained.countDown();
+                            return null;
+                        })
+                .when(worker)
+                .resumeConsumers();
+        Workload workload = workload();
+        workload.messageSize = 1024 * 1024;
+        workload.subscriptionsPerTopic = 1;
+        workload.consumerPerSubscription = 1;
+        workload.consumerBacklogSizeGB = 1;
+        workload.testDurationMinutes = 1;
+
+        WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2));
+        AtomicReference<Throwable> runFailure = new AtomicReference<>();
+        Thread run =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        generator.run();
+                                    } catch (Throwable t) {
+                                        runFailure.set(t);
+                                    }
+                                });
+        try {
+            assertThat(backlogDrained.await(3, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            generator.close();
+            run.join(2000);
+        }
+
+        assertThat(run.isAlive()).isFalse();
+        assertThat(runFailure.get()).isInstanceOf(InterruptedException.class);
+        verify(worker).pauseConsumers();
+        verify(worker).resumeConsumers();
+        verify(worker).resetStats();
+        assertThat(counterReads.get()).isGreaterThanOrEqualTo(3);
+    }
+
+    @Test
     void propagatesProducerFailureFromTheWorkerBoundary() throws Exception {
         Worker worker = worker();
         when(worker.getPeriodStats()).thenThrow(new IllegalStateException("producer task failed"));
@@ -293,6 +474,8 @@ class WorkloadGeneratorLifecycleTest {
         Worker worker = mock(Worker.class);
         when(worker.createTopics(any())).thenReturn(List.of("topic"));
         when(worker.getCountersStats()).thenReturn(new CountersStats());
+        when(worker.getPeriodStats()).thenReturn(new PeriodStats());
+        when(worker.getCumulativeLatencies()).thenReturn(new CumulativeLatencies());
         return worker;
     }
 

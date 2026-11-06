@@ -104,6 +104,45 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    void adjustsPublishRateAndResetsPeriodAndCumulativeStats() throws Exception {
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            worker.resetStats();
+            assertThat(worker.getCountersStats().messagesSent()).isZero();
+            assertThat(worker.getPeriodStats().messagesSent()).isZero();
+            assertThat(worker.getCumulativeLatencies().publishLatency.getTotalCount()).isZero();
+
+            worker.startLoad(
+                    new ProducerWorkAssignment(List.of(new byte[8]), 10, KeyDistributorType.NO_KEY));
+            waitUntil(() -> worker.getCountersStats().messagesSent() > 0);
+
+            worker.adjustPublishRate(10_000);
+            waitUntil(() -> worker.getCountersStats().messagesSent() >= 10);
+        }
+    }
+
+    @Test
+    void propagatesProducerAndConsumerCreationFailures() throws Exception {
+        Scenario scenario = new Scenario(List.of());
+        scenario.createProducers =
+                () -> CompletableFuture.failedFuture(new IOException("producer creation failed"));
+        scenario.createConsumers =
+                () -> CompletableFuture.failedFuture(new IOException("consumer creation failed"));
+
+        try (LocalWorker worker = worker(scenario, Duration.ofSeconds(2))) {
+            assertThatThrownBy(() -> worker.createProducers(List.of("topic")))
+                    .hasRootCauseMessage("producer creation failed");
+            assertThatThrownBy(() -> worker.createConsumers(assignmentForConsumer()))
+                    .hasRootCauseMessage("consumer creation failed");
+            worker.stopAll();
+            assertThat(scenario.closeCount.get()).isEqualTo(1);
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+        }
+    }
+
+    @Test
     void producersDoNotShareAKeyDistributor() throws Exception {
         int producerCount = Runtime.getRuntime().availableProcessors() * 2 + 1;
         int keysPerProducer = 50;
@@ -987,6 +1026,8 @@ class LocalWorkerLifecycleTest {
     private static final class Scenario {
         private Supplier<CompletableFuture<List<BenchmarkProducer>>> createProducers;
         private List<BenchmarkConsumer> consumers = List.of();
+        private Supplier<CompletableFuture<List<BenchmarkConsumer>>> createConsumers =
+                () -> CompletableFuture.completedFuture(consumers);
         private final AtomicInteger producerCreationStarted = new AtomicInteger();
         private final AtomicInteger closeCount = new AtomicInteger();
         private volatile ConsumerCallback callback;
@@ -1042,7 +1083,7 @@ class LocalWorkerLifecycleTest {
             if (!consumers.isEmpty()) {
                 scenario.callback = consumers.getFirst().consumerCallback();
             }
-            return CompletableFuture.completedFuture(scenario.consumers);
+            return scenario.createConsumers.get();
         }
 
         @Override

@@ -165,6 +165,30 @@ class ProcessWorkerTest {
     }
 
     @Test
+    void cleansUpFailedChildJvmStartupAndAllowsRestart() throws Exception {
+        String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
+        try (ProcessWorker worker = newWorker()) {
+            System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, "-XX:+DefinitelyInvalidOption");
+            assertThatThrownBy(() -> worker.initializeDriver(config("fixture.alpha.AlphaDriver")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Failed to initialize driver")
+                    .hasMessageContaining("exited during startup");
+            assertThat(worker.pid()).isNull();
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+
+            System.clearProperty(ProcessWorker.JVM_OPTS_PROPERTY);
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
+        } finally {
+            if (oldOptions == null) {
+                System.clearProperty(ProcessWorker.JVM_OPTS_PROPERTY);
+            } else {
+                System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, oldOptions);
+            }
+        }
+    }
+
+    @Test
     void preservesCleanupFailureWhenInitializationFails() throws Exception {
         try (ProcessWorker worker = newWorker()) {
             assertThatThrownBy(

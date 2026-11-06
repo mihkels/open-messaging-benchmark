@@ -266,7 +266,7 @@ final class PendingSends {
                 stop(new IllegalStateException("RabbitMQ producer is closed")), closeChannel);
     }
 
-    List<PendingSend> stop(Throwable cause) {
+    private synchronized List<PendingSend> stop(Throwable cause) {
         if (closedCause == null) {
             closedCause = cause;
         }

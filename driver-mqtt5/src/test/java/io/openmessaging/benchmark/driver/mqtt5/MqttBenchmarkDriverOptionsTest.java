@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.mqtt5;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -98,6 +99,16 @@ class MqttBenchmarkDriverOptionsTest {
         assertThatThrownBy(() -> new MqttBenchmarkDriver(config).createProducer("topic").join())
                 .hasCauseInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid serverUri");
+    }
+
+    @Test
+    void longServerUriSchemeIsParsedWithoutBacktracking() {
+        MqttConfig config = new MqttConfig();
+        config.client.serverUri = "s".repeat(20_000) + "://broker.example:1883";
+        Mqtt5ClientConfig built =
+                new MqttBenchmarkDriver(config).createClient("id", () -> true).getConfig();
+        assertThat(built.getServerAddress().getHostString()).isEqualTo("broker.example");
+        assertThat(built.getServerAddress().getPort()).isEqualTo(1883);
     }
 
     @Test
@@ -239,8 +250,8 @@ class MqttBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void closeOfTheDriverIsANoOp() throws Exception {
-        new MqttBenchmarkDriver().close();
+    void closeOfTheDriverIsANoOp() {
+        assertThatCode(() -> new MqttBenchmarkDriver().close()).doesNotThrowAnyException();
     }
 
     private static Mqtt5AsyncClient failingClient(Throwable failure, MqttClientState state) {

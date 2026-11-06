@@ -28,10 +28,53 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class ResourceCreatorComposeTest {
+    @Test
+    void timeoutAfterPartialCreationClosesCreatedResourcesAndCompletesQuiescence() {
+        Resource partial = new Resource();
+        TimeoutException timeout = new TimeoutException("creation timed out");
+        AtomicInteger aggregates = new AtomicInteger();
+        CompletableFuture<Aggregate> result =
+                ResourceCreator.compose(
+                        CompletableFuture.completedFuture(List.of(0, 1)),
+                        index ->
+                                index == 0
+                                        ? CompletableFuture.completedFuture(partial)
+                                        : CompletableFuture.failedFuture(timeout),
+                        resources -> {
+                            aggregates.incrementAndGet();
+                            return new Aggregate(resources);
+                        });
+        CompletableFuture<Void> quiescence = quiescence(result);
+
+        assertSame(timeout, assertThrows(CompletionException.class, result::join).getCause());
+        quiescence.join();
+        assertEquals(1, partial.closes.get());
+        assertEquals(0, aggregates.get());
+    }
+
+    @Test
+    void failedRequestLookupFailsCompositionWithoutStartingCreations() {
+        RuntimeException failure = new RuntimeException("lookup failed");
+        AtomicInteger started = new AtomicInteger();
+        CompletableFuture<Aggregate> result =
+                ResourceCreator.compose(
+                        CompletableFuture.failedFuture(failure),
+                        ignored -> {
+                            started.incrementAndGet();
+                            return CompletableFuture.completedFuture(new Resource());
+                        },
+                        Aggregate::new);
+
+        assertSame(failure, assertThrows(CompletionException.class, result::join).getCause());
+        assertEquals(0, started.get());
+        quiescence(result).join();
+    }
+
     @Test
     void transfersAnOrderedAggregateOnlyAfterEveryCreationSucceeds() throws Exception {
         CompletableFuture<List<Integer>> lookup = new CompletableFuture<>();

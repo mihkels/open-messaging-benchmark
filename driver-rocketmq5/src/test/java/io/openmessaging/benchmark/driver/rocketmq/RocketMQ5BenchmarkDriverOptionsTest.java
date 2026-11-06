@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -33,6 +34,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.rocketmq.client.apis.ClientConfiguration;
 import org.apache.rocketmq.client.apis.ClientServiceProvider;
 import org.apache.rocketmq.client.apis.consumer.PushConsumer;
@@ -156,6 +161,52 @@ class RocketMQ5BenchmarkDriverOptionsTest {
                         () -> driver.createConsumer("topic", "sub", mock(ConsumerCallback.class)).join())
                 .hasMessageContaining("Failed to create subscription [topic_sub]");
         driver.close();
+    }
+
+    @Test
+    void interruptedAdminOperationsRestoreInterruptStatus() throws Exception {
+        TestDriver driver = new TestDriver();
+        driver.initialize(config(BASE + "sendDelayMsg: false\n"), null);
+        when(driver.admin.examineBrokerClusterInfo()).thenReturn(cluster("c1", "b1:1"));
+
+        InterruptedException topicFailure = new InterruptedException("topic interrupted");
+        CountDownLatch adminCallStarted = new CountDownLatch(1);
+        CountDownLatch releaseAdminCall = new CountDownLatch(1);
+        doAnswer(
+                        invocation -> {
+                            adminCallStarted.countDown();
+                            releaseAdminCall.await();
+                            throw topicFailure;
+                        })
+                .when(driver.admin)
+                .createAndUpdateTopicConfig(anyString(), any(TopicConfig.class));
+
+        CompletableFuture<Void> topicCreation = driver.createTopic("topic", 1);
+        assertThat(adminCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        AtomicBoolean topicInterruptRestored = new AtomicBoolean();
+        CompletableFuture<Void> observed =
+                topicCreation.whenComplete(
+                        (ignored, failure) ->
+                                topicInterruptRestored.set(Thread.currentThread().isInterrupted()));
+        try {
+            releaseAdminCall.countDown();
+            assertThatThrownBy(observed::join).hasRootCause(topicFailure);
+            assertThat(topicInterruptRestored).isTrue();
+        } finally {
+            releaseAdminCall.countDown();
+        }
+
+        InterruptedException groupFailure = new InterruptedException("group interrupted");
+        doThrow(groupFailure)
+                .when(driver.admin)
+                .createAndUpdateSubscriptionGroupConfig(anyString(), any(SubscriptionGroupConfig.class));
+        try {
+            assertThatThrownBy(() -> driver.createSubscriptionGroup("group")).hasCause(groupFailure);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+            driver.close();
+        }
     }
 
     @Test

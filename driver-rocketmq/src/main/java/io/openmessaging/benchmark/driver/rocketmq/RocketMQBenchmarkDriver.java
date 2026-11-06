@@ -154,6 +154,13 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                         for (String brokerAddr : brokerList) {
                             this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
                         }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(
+                                String.format(
+                                        "Failed to create topic [%s] to cluster [%s]",
+                                        topic, this.rmqClientConfig.clusterName),
+                                e);
                     } catch (Exception e) {
                         throw new RuntimeException(
                                 String.format(

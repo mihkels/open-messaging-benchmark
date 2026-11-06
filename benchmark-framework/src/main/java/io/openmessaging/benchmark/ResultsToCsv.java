@@ -33,6 +33,10 @@ public class ResultsToCsv {
     private static final Logger log = LoggerFactory.getLogger(ResultsToCsv.class);
 
     public void writeAllResultFiles(String directory) {
+        writeAllResultFiles(directory, new File("results-" + Instant.now().getEpochSecond() + ".csv"));
+    }
+
+    void writeAllResultFiles(String directory, File outputFile) {
         try {
             File dir = new File(directory);
             File[] directoryListing = dir.listFiles();
@@ -68,12 +72,11 @@ public class ResultsToCsv {
                 lines.add(extractResults(tr));
             }
 
-            String resultsFileName = "results-" + Instant.now().getEpochSecond() + ".csv";
-            try (FileWriter writer = new FileWriter(resultsFileName)) {
+            try (FileWriter writer = new FileWriter(outputFile)) {
                 for (String str : lines) {
                     writer.write(str + System.lineSeparator());
                 }
-                log.info("Results extracted into CSV {}", resultsFileName);
+                log.info("Results extracted into CSV {}", outputFile);
             }
         } catch (IOException e) {
             log.error("Failed creating csv file.", e);

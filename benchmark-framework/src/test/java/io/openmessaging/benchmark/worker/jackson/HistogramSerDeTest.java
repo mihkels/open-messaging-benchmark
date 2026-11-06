@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.worker.jackson;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.ByteBuffer;
 import java.util.Random;
@@ -42,6 +43,30 @@ class HistogramSerDeTest {
         Histogram deserialized = mapper.readValue(serialized, Histogram.class);
 
         assertThat(deserialized).isEqualTo(value);
+    }
+
+    @Test
+    void roundTripsEmptyHistogram() {
+        ObjectMapper mapper = mapper();
+        Histogram histogram = new Histogram(100_000, 3);
+
+        assertThat(mapper.readValue(mapper.writeValueAsBytes(histogram), Histogram.class))
+                .isEqualTo(histogram);
+    }
+
+    @Test
+    void rejectsInvalidHistogramEncoding() {
+        ObjectMapper mapper = mapper();
+
+        assertThatThrownBy(() -> mapper.readValue("\"\"", Histogram.class))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    private static ObjectMapper mapper() {
+        SimpleModule module = new SimpleModule();
+        module.addSerializer(Histogram.class, new HistogramSerializer());
+        module.addDeserializer(Histogram.class, new HistogramDeserializer());
+        return JsonMapper.builder().addModule(module).build();
     }
 
     /**

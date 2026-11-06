@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.utils;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -33,5 +34,24 @@ class ListPartitionTest {
                             assertThat(s.get(1)).isEqualTo(asList(2, 5, 8));
                             assertThat(s.get(2)).isEqualTo(asList(3, 6, 9));
                         });
+    }
+
+    @Test
+    void partitionsShortListsAndPadsWithEmptyPartitions() {
+        assertThat(ListPartition.partitionList(List.of(1, 2), 4))
+                .containsExactly(List.of(1), List.of(2), List.of(), List.of());
+    }
+
+    @Test
+    void returnsNoPartitionsForEmptyOrInvalidInput() {
+        assertThat(ListPartition.partitionList(List.of(), 3)).isEmpty();
+        assertThat(ListPartition.partitionList(List.of(1), 0)).isEmpty();
+        assertThat(ListPartition.partitionList(null, 3)).isEmpty();
+    }
+
+    @Test
+    void partitionsListIntoIndividualPartitionsWhenSizeMatches() {
+        assertThat(ListPartition.partitionList(new ArrayList<>(List.of(1, 2)), 2))
+                .containsExactly(List.of(1), List.of(2));
     }
 }

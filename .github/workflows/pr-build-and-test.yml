@@ -33,10 +33,32 @@ jobs:
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: java maven python
+          # Only pushes to main write caches; pull requests restore them read-only
+          cache_save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          cache_key_prefix: mise-v1-jvm
+
+      # Every Maven job restores this cache; only this job, which resolves the most dependencies,
+      # saves it from main
+      - name: Restore Maven repository
+        id: maven-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
 
       # Fails when a module's coverage drops below its jacoco.min.* floor
       - name: Build and Verify
         run: mvn --no-transfer-progress --batch-mode verify
+
+      - name: Save Maven repository
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main'
+          && steps.maven-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: ${{ steps.maven-cache.outputs.cache-primary-key }}
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         name: upload coverage reports
@@ -105,6 +127,15 @@ jobs:
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: java maven python
+          # The build job writes this cache
+          cache_save: false
+          cache_key_prefix: mise-v1-jvm
+      - name: Restore Maven repository
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
       - name: Build and verify opt-in harness
         run: mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install
       - name: Check comparison and sampling logic

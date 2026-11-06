@@ -42,6 +42,15 @@ jobs:
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install_args: java maven python
+          # Restores the caches main writes in "Build and test" without writing its own
+          cache_save: false
+          cache_key_prefix: mise-v1-jvm
+      - name: Restore Maven repository
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
       - name: Build opt-in tooling
         run: mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install -DskipTests
       - name: Run resource experiment

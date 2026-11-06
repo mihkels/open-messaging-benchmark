@@ -54,7 +54,8 @@ hand.
   not persist credentials.
 - Registry credentials live in the `dockerhub` environment, which only `main` and `v*` tags can
   use. Only the publish jobs reference it, and they never run for pull requests.
-- Publishing workflows use no caches, so a pull request cannot poison what is published.
+- Only pushes to `main` write caches, and release tags use none, so a pull request cannot poison
+  what is published.
 - Images and charts are signed keylessly with cosign through GitHub's OIDC token: no signing keys
   are stored. Images carry SBOM and SLSA provenance attestations.
 - Trivy scans every image and sends all findings to code scanning. Fixable critical and high

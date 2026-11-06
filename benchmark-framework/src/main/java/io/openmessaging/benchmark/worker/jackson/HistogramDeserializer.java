@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.worker.jackson;
 
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.HexFormat;
 import org.HdrHistogram.Histogram;
@@ -23,12 +22,8 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.deser.std.StdDeserializer;
-import tools.jackson.databind.util.ByteBufferBackedOutputStream;
 
 public class HistogramDeserializer extends StdDeserializer<Histogram> {
-
-    private final ThreadLocal<ByteBuffer> threadBuffer =
-            ThreadLocal.withInitial(() -> ByteBuffer.allocate(8 * 1024 * 1024));
 
     public HistogramDeserializer() {
         super(Histogram.class);
@@ -37,22 +32,20 @@ public class HistogramDeserializer extends StdDeserializer<Histogram> {
     @Override
     public Histogram deserialize(JsonParser jsonParser, DeserializationContext deserializationContext)
             throws JacksonException {
-        ByteBuffer buffer = threadBuffer.get();
-        buffer.clear();
-        try (OutputStream os = new ByteBufferBackedOutputStream(buffer)) {
-            jsonParser.readBinaryValue(os);
-            buffer.flip();
+        byte[] encodedHistogram = jsonParser.getBinaryValue();
+        ByteBuffer buffer = ByteBuffer.wrap(encodedHistogram);
+        try {
             // Long.MIN_VALUE used so that Histogram will defer to the value encoded in the histogram
             // value. This assumes that it is acceptable for the deserialized value we create to
             // share the same parameters of the source histogram that was serialized.
             return Histogram.decodeFromCompressedByteBuffer(buffer, Long.MIN_VALUE);
         } catch (Exception e) {
-            ByteBuffer content = buffer.duplicate();
-            byte[] bytes = new byte[Math.min(content.remaining(), 4096)];
+            byte[] bytes = new byte[Math.min(encodedHistogram.length, 4096)];
+            ByteBuffer content = ByteBuffer.wrap(encodedHistogram);
             content.get(bytes);
             log.error(
                     "Failed to decode publish delay latency ({} bytes): {}",
-                    buffer.remaining(),
+                    encodedHistogram.length,
                     HexFormat.ofDelimiter(" ").formatHex(bytes));
             throw new RuntimeException(e);
         }

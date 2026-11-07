@@ -423,7 +423,8 @@ class RedisBenchmarkConsumerTest {
         }
     }
 
-    @SuppressWarnings("java:S2925") // polls the closing flag, which exposes no completion hook
+    // Spins instead of sleeping: close() interrupts the reader thread, and an interrupted sleep would
+    // make the callback fail before the entry is acknowledged.
     private static void awaitClosing(RedisBenchmarkConsumer consumer) throws Exception {
         Field closing = RedisBenchmarkConsumer.class.getDeclaredField("closing");
         closing.setAccessible(true);
@@ -432,7 +433,7 @@ class RedisBenchmarkConsumerTest {
             if (System.nanoTime() > deadline) {
                 throw new AssertionError("consumer did not start closing");
             }
-            Thread.sleep(1);
+            Thread.onSpinWait();
         }
     }
 

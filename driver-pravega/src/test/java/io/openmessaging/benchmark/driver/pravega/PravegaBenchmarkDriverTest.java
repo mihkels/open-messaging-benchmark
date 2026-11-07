@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -192,7 +193,7 @@ class PravegaBenchmarkDriverTest {
             closeThread.get().interrupt();
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (closeThread.get().isInterrupted() && System.nanoTime() < deadline) {
-                Thread.sleep(1);
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
             }
             assertThat(closeThread.get().isInterrupted()).isFalse();
             release.countDown();

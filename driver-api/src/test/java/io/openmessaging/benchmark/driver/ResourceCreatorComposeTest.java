@@ -352,8 +352,7 @@ class ResourceCreatorComposeTest {
 
     @Test
     void cancellationAndSuccessfulHandoffHaveExactlyOneOwner() throws Exception {
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             for (int iteration = 0; iteration < 100; iteration++) {
                 Resource resource = new Resource();
                 CompletableFuture<Resource> creation = new CompletableFuture<>();
@@ -378,8 +377,6 @@ class ResourceCreatorComposeTest {
                 }
                 assertEquals(1, resource.closes.get());
             }
-        } finally {
-            executor.shutdownNow();
         }
     }
 
@@ -431,8 +428,8 @@ class ResourceCreatorComposeTest {
 
         lookup.complete(List.of(0));
 
-        assertSame(
-                earlier, assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        CompletableFuture<Aggregate> composed = result.get();
+        assertSame(earlier, assertThrows(CompletionException.class, composed::join).getCause());
         assertSame(failure, earlier.getSuppressed()[0]);
         assertEquals(1, resource.closes.get());
     }
@@ -453,8 +450,8 @@ class ResourceCreatorComposeTest {
 
         lookup.complete(List.of(0));
 
-        assertSame(
-                failure, assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+        CompletableFuture<Aggregate> composed = result.get();
+        assertSame(failure, assertThrows(CompletionException.class, composed::join).getCause());
         assertEquals(0, failure.getSuppressed().length);
     }
 
@@ -499,9 +496,8 @@ class ResourceCreatorComposeTest {
 
         assertSame(winner, result.get().join());
         assertEquals(1, resource.closes.get());
-        assertSame(
-                closeFailure,
-                assertThrows(CompletionException.class, () -> quiescence(result.get()).join()).getCause());
+        CompletableFuture<Void> quiescence = quiescence(result.get());
+        assertSame(closeFailure, assertThrows(CompletionException.class, quiescence::join).getCause());
     }
 
     @Test

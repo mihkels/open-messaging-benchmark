@@ -129,6 +129,7 @@ public final class FunctionalSmoke {
         }
     }
 
+    @SuppressWarnings("java:S2925") // polls remote worker counters; no completion signal exists
     private static CountersStats awaitMessages(
             Worker worker,
             CountersStats baseline,

@@ -68,12 +68,14 @@ class PluginRegistryTest {
     void rejectsStaleVersionOneBundleBuiltAgainstPrometheusRegistrySpi() throws Exception {
         String oldDriver = "fixture.legacy.LegacyDriver";
         String oldApi =
-                "package io.openmessaging.benchmark.driver;\n"
-                        + "public interface BenchmarkDriver extends AutoCloseable {\n"
-                        + "  void initialize(java.nio.file.Path config,"
-                        + " io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry)"
-                        + " throws java.io.IOException, InterruptedException;\n"
-                        + "}\n";
+                """
+                package io.openmessaging.benchmark.driver;
+                public interface BenchmarkDriver extends AutoCloseable {
+                  void initialize(java.nio.file.Path config, \
+                io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry) \
+                throws java.io.IOException, InterruptedException;
+                }
+                """;
         String oldDriverSource =
                 driverSource(oldDriver, "\"legacy\"", "")
                         .replace(
@@ -123,8 +125,12 @@ class PluginRegistryTest {
         bundle(
                 "jms",
                 List.of(JMS),
-                "optionalClasspath:\n  - \"ext/*.jar\"\n"
-                        + "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+                """
+                optionalClasspath:
+                  - "ext/*.jar"
+                classReferenceProperties:
+                  - delegateForAdminOperationsClassName
+                """);
         PluginRegistry registry = discover();
 
         assertThat(registry.resolve(JMS, Map.of()).bundles())
@@ -134,8 +140,9 @@ class PluginRegistryTest {
                         registry.resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA)).bundles())
                 .extracting(PluginBundle::id)
                 .containsExactly("jms", "kafka");
-        assertThatThrownBy(
-                        () -> registry.resolve(JMS, Map.of("delegateForAdminOperationsClassName", "x.Missing")))
+        Map<String, Object> missingDelegate =
+                Map.of("delegateForAdminOperationsClassName", "x.Missing");
+        assertThatThrownBy(() -> registry.resolve(JMS, missingDelegate))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("delegateForAdminOperationsClassName")
                 .hasMessageContaining("x.Missing");
@@ -145,7 +152,9 @@ class PluginRegistryTest {
     void reportsUnknownDriverClass() throws IOException {
         bundle("kafka", List.of(KAFKA), "");
 
-        assertThatThrownBy(() -> discover().resolve("x.Unknown", Map.of()))
+        PluginRegistry registry = discover();
+
+        assertThatThrownBy(() -> registry.resolve("x.Unknown", Map.of()))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("x.Unknown")
                 .hasMessageContaining(KAFKA);
@@ -164,10 +173,13 @@ class PluginRegistryTest {
         Path wrongDriver = descriptor(dir.resolve("other"), "other", List.of(JMS), "");
         PluginFixtures.writeJar(wrongDriver.resolve("other.jar"), Map.of("marker", new byte[0]));
 
-        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), dir.resolve("missing")))
+        PluginRegistry registry = discover();
+        Path missing = dir.resolve("missing");
+
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), missing))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("does not exist");
-        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), wrongDriver))
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), wrongDriver))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("does not provide")
                 .hasMessageContaining(JMS);
@@ -326,7 +338,9 @@ class PluginRegistryTest {
         ResolvedDriver resolved =
                 discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
 
-        assertThatThrownBy(() -> RuntimeClasspath.compose(new HostRuntime(List.of()), resolved))
+        HostRuntime host = new HostRuntime(List.of());
+
+        assertThatThrownBy(() -> RuntimeClasspath.compose(host, resolved))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("org.example:client:1.0")
                 .hasMessageContaining("org.example:client:2.0");
@@ -400,9 +414,10 @@ class PluginRegistryTest {
         Files.createDirectories(jar.getParent());
         Files.writeString(jar, "not a jar");
 
-        assertThatThrownBy(() ->
-                        RuntimeClasspath.compose(
-                                new HostRuntime(List.of()), discover().resolve(KAFKA, Map.of())))
+        HostRuntime host = new HostRuntime(List.of());
+        ResolvedDriver resolved = discover().resolve(KAFKA, Map.of());
+
+        assertThatThrownBy(() -> RuntimeClasspath.compose(host, resolved))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("broken.jar")
                 .hasMessageContaining("inspect");
@@ -548,10 +563,11 @@ class PluginRegistryTest {
         Path jar = PluginFixtures.writeJar(dir.resolve("standalone.jar"), Map.of("m", new byte[0]));
         Path text = Files.writeString(dir.resolve("standalone.txt"), "text");
 
-        ResolvedDriver resolved = discover().resolveOverride(KAFKA, Map.of(), jar);
+        PluginRegistry registry = discover();
+        ResolvedDriver resolved = registry.resolveOverride(KAFKA, Map.of(), jar);
 
         assertThat(real(resolved.primary().classpath())).containsExactly(jar.toRealPath());
-        assertThatThrownBy(() -> discover().resolveOverride(KAFKA, Map.of(), text))
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), text))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("does not exist");
     }

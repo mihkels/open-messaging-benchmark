@@ -108,12 +108,8 @@ class ResourceBatchTest {
             Thread.interrupted();
         }
         assertSame(interruption, failure.getSuppressed()[0]);
-        assertSame(
-                interruption,
-                assertThrows(
-                                CompletionException.class,
-                                () -> ((ResourceCreationCompletion) batch).quiescence().join())
-                        .getCause());
+        CompletableFuture<Void> quiescence = ((ResourceCreationCompletion) batch).quiescence();
+        assertSame(interruption, assertThrows(CompletionException.class, quiescence::join).getCause());
     }
 
     @Test

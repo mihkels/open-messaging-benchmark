@@ -80,7 +80,7 @@ class RabbitMqBenchmarkConsumerTest {
     }
 
     @Test
-    void callbackFailurePreventsManualAcknowledgementAndCloseFailureIsPropagated() throws Exception {
+    void callbackFailurePreventsManualAcknowledgementAndCloseFailureIsPropagated() {
         Fixture fixture = new Fixture();
         IllegalStateException callbackFailure = new IllegalStateException("callback failed");
         ConsumerCallback throwingCallback =
@@ -97,16 +97,15 @@ class RabbitMqBenchmarkConsumerTest {
         RabbitMqBenchmarkConsumer consumer =
                 new RabbitMqBenchmarkConsumer(fixture.channel, throwingCallback, true);
 
+        Envelope envelope = new Envelope(3L, false, "", "queue");
+        BasicProperties properties = new BasicProperties.Builder().timestamp(new Date(2L)).build();
+        byte[] body = {1};
+
         assertSame(
                 callbackFailure,
                 assertThrows(
                         IllegalStateException.class,
-                        () ->
-                                consumer.handleDelivery(
-                                        "tag",
-                                        new Envelope(3L, false, "", "queue"),
-                                        new BasicProperties.Builder().timestamp(new Date(2L)).build(),
-                                        new byte[] {1})));
+                        () -> consumer.handleDelivery("tag", envelope, properties, body)));
 
         assertEquals(0, fixture.acknowledgements.get());
         IOException closeFailure = new IOException("channel close failed");

@@ -44,9 +44,10 @@ class NatsStreamingBenchmarkDriverTest {
     @Test
     void consumerCallbackConvertsNanosecondTimestampToMilliseconds() throws Exception {
         StreamingConnection connection = mock(StreamingConnection.class);
+        Subscription subscription = mock(Subscription.class);
         when(connection.subscribe(
                         anyString(), anyString(), any(MessageHandler.class), any(SubscriptionOptions.class)))
-                .thenReturn(mock(Subscription.class));
+                .thenReturn(subscription);
         NatsStreamingBenchmarkDriver driver =
                 new NatsStreamingBenchmarkDriver((cluster, client, options) -> connection);
         ConsumerCallback callback = mock(ConsumerCallback.class);

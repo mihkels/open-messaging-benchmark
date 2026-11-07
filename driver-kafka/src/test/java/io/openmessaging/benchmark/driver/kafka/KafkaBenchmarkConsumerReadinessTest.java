@@ -63,7 +63,7 @@ class KafkaBenchmarkConsumerReadinessTest {
         TopicPartition partition = new TopicPartition("topic", 0);
         AtomicBoolean positionReady = new AtomicBoolean();
         CountDownLatch positionChecked = new CountDownLatch(1);
-        when(fixture.consumer.position(eq(partition), eq(Duration.ZERO)))
+        when(fixture.consumer.position(partition, Duration.ZERO))
                 .thenAnswer(ignored -> {
                     positionChecked.countDown();
                     if (!positionReady.get()) {
@@ -322,7 +322,7 @@ class KafkaBenchmarkConsumerReadinessTest {
                     .when(consumer)
                     .subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
             when(consumer.assignment()).thenAnswer(ignored -> assignment.get());
-            when(consumer.partitionsFor(eq("topic"), eq(Duration.ZERO)))
+            when(consumer.partitionsFor("topic", Duration.ZERO))
                     .thenAnswer(ignored -> {
                         metadataChecked.countDown();
                         return metadata.get();

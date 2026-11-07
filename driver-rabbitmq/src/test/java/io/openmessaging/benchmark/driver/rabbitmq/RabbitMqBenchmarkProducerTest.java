@@ -301,9 +301,8 @@ class RabbitMqBenchmarkProducerTest {
             sequence.setAccessible(true);
             sequence.setLong(delegate, 1);
             RecoverableTransportChannel transportChannel = new RecoverableTransportChannel(delegate);
-            RabbitMqBenchmarkProducer realProducer =
-                    new RabbitMqBenchmarkProducer(transportChannel, "exchange", false);
-            try {
+            try (RabbitMqBenchmarkProducer realProducer =
+                    new RabbitMqBenchmarkProducer(transportChannel, "exchange", false)) {
                 byte[] payload = new byte[4096];
                 for (int i = 0; i < payload.length; i++) {
                     payload[i] = (byte) (i * 13);
@@ -323,7 +322,6 @@ class RabbitMqBenchmarkProducerTest {
                 assertThat(body.getType()).isEqualTo(AMQP.FRAME_BODY);
                 assertThat(body.getPayload()).isEqualTo(expected);
             } finally {
-                realProducer.close();
                 work.shutdown();
             }
         } finally {
@@ -409,7 +407,7 @@ class RabbitMqBenchmarkProducerTest {
     }
 
     @Test
-    void closeStillSettlesSendsWhenChannelCloseFails() throws Exception {
+    void closeStillSettlesSendsWhenChannelCloseFails() {
         CompletableFuture<Void> pending = send();
         IOException error = new IOException("close failed");
         channel.closeFailure = error;
@@ -423,7 +421,7 @@ class RabbitMqBenchmarkProducerTest {
     }
 
     @Test
-    void closeAttemptsAllCleanupAndPreservesSuppressedFailures() throws Exception {
+    void closeAttemptsAllCleanupAndPreservesSuppressedFailures() {
         CompletableFuture<Void> pending = send();
         IllegalStateException removeConfirm = new IllegalStateException("remove confirm");
         IllegalArgumentException removeShutdown = new IllegalArgumentException("remove shutdown");
@@ -533,7 +531,9 @@ class RabbitMqBenchmarkProducerTest {
             assertThatThrownBy(pending::join)
                     .isInstanceOf(CompletionException.class)
                     .hasRootCauseMessage("RabbitMQ channel is recovering");
-            assertThatThrownBy(() -> recoveringProducer.sendAsync(Optional.empty(), new byte[0]).join())
+            CompletableFuture<Void> rejected =
+                    recoveringProducer.sendAsync(Optional.empty(), new byte[0]);
+            assertThatThrownBy(rejected::join)
                     .isInstanceOf(CompletionException.class)
                     .hasRootCauseMessage("RabbitMQ channel is recovering");
             assertThat(recoveringChannel.sequenceLookups).hasValue(1);
@@ -556,7 +556,9 @@ class RabbitMqBenchmarkProducerTest {
         try {
             Recoverable recoverable = (Recoverable) recoveringChannel.proxy;
             recoveringChannel.recoveryListener.handleRecoveryStarted(recoverable);
-            assertThatThrownBy(() -> recoveringProducer.sendAsync(Optional.empty(), new byte[0]).join())
+            CompletableFuture<Void> rejected =
+                    recoveringProducer.sendAsync(Optional.empty(), new byte[0]);
+            assertThatThrownBy(rejected::join)
                     .isInstanceOf(CompletionException.class)
                     .hasRootCauseMessage("RabbitMQ channel is recovering");
             assertThat(recoveringChannel.sequenceLookups).hasValue(0);
@@ -587,7 +589,9 @@ class RabbitMqBenchmarkProducerTest {
                         }
                     };
             recoveringChannel.recover();
-            assertThatThrownBy(() -> recoveringProducer.sendAsync(Optional.empty(), new byte[0]).join())
+            CompletableFuture<Void> rejected =
+                    recoveringProducer.sendAsync(Optional.empty(), new byte[0]);
+            assertThatThrownBy(rejected::join)
                     .isInstanceOf(CompletionException.class)
                     .hasRootCauseMessage("RabbitMQ channel is recovering");
             assertThat(recoveringChannel.sequenceLookups).hasValue(0);
@@ -1008,7 +1012,7 @@ class RabbitMqBenchmarkProducerTest {
     }
 
     @Test
-    void shutdownCallbackCanReenterSendWithoutWaitingForThePublishingThread() throws Exception {
+    void shutdownCallbackCanReenterSendWithoutWaitingForThePublishingThread() {
         CompletableFuture<Void> first = send();
         ShutdownSignalException signal = shutdownSignal(channel);
         AtomicBoolean insidePublish = new AtomicBoolean();

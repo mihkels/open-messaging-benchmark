@@ -161,7 +161,7 @@ class ProcessWorkerTest {
     }
 
     @Test
-    void reportsDriverInitializationFailures() throws Exception {
+    void reportsDriverInitializationFailures() {
         try (ProcessWorker worker = newWorker()) {
             assertThatThrownBy(() -> worker.initializeDriver(config("fixture.broken.BrokenDriver")))
                     .hasMessageContaining("fixture.broken.BrokenDriver")
@@ -178,8 +178,9 @@ class ProcessWorkerTest {
     void cleansUpFailedChildJvmStartupAndAllowsRestart() throws Exception {
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
         try (ProcessWorker worker = newWorker()) {
+            Path alphaConfig = config("fixture.alpha.AlphaDriver");
             System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, "-XX:+DefinitelyInvalidOption");
-            assertThatThrownBy(() -> worker.initializeDriver(config("fixture.alpha.AlphaDriver")))
+            assertThatThrownBy(() -> worker.initializeDriver(alphaConfig))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Failed to initialize driver")
                     .hasMessageContaining("exited during startup");
@@ -199,7 +200,7 @@ class ProcessWorkerTest {
     }
 
     @Test
-    void preservesCleanupFailureWhenInitializationFails() throws Exception {
+    void preservesCleanupFailureWhenInitializationFails() {
         try (ProcessWorker worker = newWorker()) {
             assertThatThrownBy(
                             () -> worker.initializeDriver(config("fixture.brokenclose.BrokenCloseDriver")))
@@ -235,12 +236,12 @@ class ProcessWorkerTest {
     void reportsCrashedDriverProcesses() throws Exception {
         try (ProcessWorker worker = newWorker()) {
             worker.initializeDriver(config("fixture.crash.CrashDriver"));
+            TopicsInfo topics = new TopicsInfo(1, 1);
 
-            assertThatThrownBy(() -> worker.createTopics(new TopicsInfo(1, 1)))
+            assertThatThrownBy(() -> worker.createTopics(topics))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("exited with code 42");
-            assertThatThrownBy(() -> worker.getCountersStats())
-                    .hasMessageContaining("exited with code 42");
+            assertThatThrownBy(worker::getCountersStats).hasMessageContaining("exited with code 42");
             assertThatThrownBy(worker::scrapeMetrics).hasMessageContaining("exited with code 42");
 
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
@@ -264,10 +265,11 @@ class ProcessWorkerTest {
     }
 
     @Test
-    void cannotReinitializeClosedWorker() throws Exception {
+    void cannotReinitializeClosedWorker() throws IOException {
+        Path alphaConfig = config("fixture.alpha.AlphaDriver");
         ProcessWorker worker = newWorker();
         worker.close();
-        assertThatThrownBy(() -> worker.initializeDriver(config("fixture.alpha.AlphaDriver")))
+        assertThatThrownBy(() -> worker.initializeDriver(alphaConfig))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed ProcessWorker");
     }
@@ -292,31 +294,25 @@ class ProcessWorkerTest {
     }
 
     @Test
-    void reportsMissingDriverLocationOverride() throws Exception {
-        ProcessWorker worker =
+    void reportsMissingDriverLocationOverride() {
+        try (ProcessWorker worker =
                 new ProcessWorker(
                         dir.resolve("no-such-driver"),
                         () -> PluginRegistry.discover(List.of(plugins)),
-                        HostRuntime::current);
-        try {
+                        HostRuntime::current)) {
             assertThatThrownBy(() -> worker.initializeDriver(config("fixture.alpha.AlphaDriver")))
                     .hasMessageContaining("does not exist");
-        } finally {
-            worker.close();
         }
     }
 
     @Test
-    void operationsWithoutADriverProcessAreRejectedOrNoOps() throws Exception {
-        ProcessWorker worker = newWorker();
-        try {
+    void operationsWithoutADriverProcessAreRejectedOrNoOps() {
+        try (ProcessWorker worker = newWorker()) {
             assertThat(worker.scrapeMetrics()).isEmpty();
             worker.stopAll();
             assertThatThrownBy(worker::getPeriodStats)
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("No driver process is running");
-        } finally {
-            worker.close();
         }
     }
 
@@ -452,6 +448,7 @@ class ProcessWorkerTest {
         CLOSE
     }
 
+    @SuppressWarnings("java:S2925") // polls for a marker file written by another JVM process
     private static void verifySupervisorExit(ExitMode mode, String driverClass) throws Exception {
         String suffix = driverClass + "-" + mode;
         Path marker = dir.resolve("hung-" + suffix + ".pid");
@@ -511,6 +508,7 @@ class ProcessWorkerTest {
     }
 
     public static final class BlockingSupervisor {
+        @SuppressWarnings("java:S2925") // polls for a marker file written by the driver JVM process
         public static void main(String[] args) throws Exception {
             Path location = Path.of(args[0]);
             try (ProcessWorker worker =

@@ -417,7 +417,8 @@ class MqttBenchmarkProducerTest {
 
     private static Mqtt5AsyncClient client() {
         Mqtt5AsyncClient client = mock(Mqtt5AsyncClient.class);
-        when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+        Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+        when(client.getConfig()).thenReturn(clientConfig);
         when(client.disconnect()).thenReturn(CompletableFuture.completedFuture(null));
         return client;
     }

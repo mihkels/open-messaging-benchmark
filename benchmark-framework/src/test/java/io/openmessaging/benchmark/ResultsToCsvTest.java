@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -69,9 +70,11 @@ class ResultsToCsvTest {
         Path results = Files.createDirectory(tempDir.resolve("malformed"));
         Files.writeString(results.resolve("bad.json"), "{");
         Path csv = tempDir.resolve("malformed.csv");
+        ResultsToCsv resultsToCsv = new ResultsToCsv();
+        String resultsDirectory = results.toString();
+        File csvFile = csv.toFile();
 
-        assertThatThrownBy(
-                        () -> new ResultsToCsv().writeAllResultFiles(results.toString(), csv.toFile()))
+        assertThatThrownBy(() -> resultsToCsv.writeAllResultFiles(resultsDirectory, csvFile))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(csv).doesNotExist();

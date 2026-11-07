@@ -440,22 +440,36 @@ class PulsarBenchmarkDriverTest {
     private static ClientBuilder initialize(Path temp, PulsarAdmin admin, boolean secure)
             throws Exception {
         Path configuration = Files.createTempFile(temp, "pulsar", ".yaml");
-        Files.writeString(
-                configuration,
-                secure
-                        ? "client:\n  serviceUrl: pulsar+ssl://localhost:6651\n  httpUrl: https://localhost:8443\n"
-                                + "  tlsTrustCertsFilePath: /certs/ca.pem\n  namespacePrefix: benchmark/ns\n"
-                                + "  clusterName: local\n"
-                                + "  authentication:\n    plugin: token\n    data: secret\n"
-                        : "client:\n  serviceUrl: pulsar://localhost:6650\n  httpUrl: http://localhost:8080\n"
-                                + "  namespacePrefix: benchmark/ns\n  clusterName: local\n"
-                                + "  authentication:\n    plugin: \"\"\n");
+        String secureConfiguration =
+                """
+                client:
+                  serviceUrl: pulsar+ssl://localhost:6651
+                  httpUrl: https://localhost:8443
+                  tlsTrustCertsFilePath: /certs/ca.pem
+                  namespacePrefix: benchmark/ns
+                  clusterName: local
+                  authentication:
+                    plugin: token
+                    data: secret
+                """;
+        String plainConfiguration =
+                """
+                client:
+                  serviceUrl: pulsar://localhost:6650
+                  httpUrl: http://localhost:8080
+                  namespacePrefix: benchmark/ns
+                  clusterName: local
+                  authentication:
+                    plugin: ""
+                """;
+        Files.writeString(configuration, secure ? secureConfiguration : plainConfiguration);
         ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
         PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
         PulsarClient client = mock();
         when(clientBuilder.build()).thenReturn(client);
         when(adminBuilder.build()).thenReturn(admin);
-        when(client.newProducer()).thenReturn(mock(ProducerBuilder.class, RETURNS_SELF));
+        ProducerBuilder<byte[]> producerBuilder = mock(ProducerBuilder.class, RETURNS_SELF);
+        when(client.newProducer()).thenReturn(producerBuilder);
         PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
         try (var clients = mockStatic(PulsarClient.class);
                 var admins = mockStatic(PulsarAdmin.class)) {

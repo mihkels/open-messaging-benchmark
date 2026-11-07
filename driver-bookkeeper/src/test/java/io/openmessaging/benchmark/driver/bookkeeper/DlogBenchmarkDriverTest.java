@@ -180,7 +180,7 @@ class DlogBenchmarkDriverTest {
     }
 
     @Test
-    void namespaceCloseFailureIsPropagated() throws Exception {
+    void namespaceCloseFailureIsPropagated() {
         Namespace namespace = mock(Namespace.class);
         IOException closeFailure = new IOException("namespace close failed");
         doThrow(closeFailure).when(namespace).close();

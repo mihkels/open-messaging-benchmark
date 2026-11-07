@@ -233,6 +233,7 @@ class RabbitMqE2eIT extends BaseE2eIT {
         return factory;
     }
 
+    @SuppressWarnings("java:S2925") // retry backoff while the broker restarts; no readiness signal
     private static Connection waitForRabbitMq() throws Exception {
         ConnectionFactory factory = connectionFactory();
         long deadline = System.nanoTime() + Duration.ofMinutes(2).toNanos();

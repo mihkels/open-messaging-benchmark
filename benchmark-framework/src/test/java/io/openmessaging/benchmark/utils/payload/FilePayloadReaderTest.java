@@ -46,8 +46,10 @@ class FilePayloadReaderTest {
     void rejectsPayloadWithUnexpectedLength() throws Exception {
         Path payload = tempDir.resolve("payload.bin");
         Files.write(payload, new byte[] {1, 2});
+        FilePayloadReader reader = new FilePayloadReader(3);
+        String path = payload.toString();
 
-        assertThatThrownBy(() -> new FilePayloadReader(3).load(payload.toString()))
+        assertThatThrownBy(() -> reader.load(path))
                 .isInstanceOf(PayloadException.class)
                 .hasMessageContaining("Actual is: 2")
                 .hasMessageContaining("expected: 3");
@@ -55,8 +57,9 @@ class FilePayloadReaderTest {
 
     @Test
     void reportsMissingPayloadFile() {
-        assertThatThrownBy(
-                        () -> new FilePayloadReader(1).load(tempDir.resolve("missing.bin").toString()))
-                .isInstanceOf(PayloadException.class);
+        FilePayloadReader reader = new FilePayloadReader(1);
+        String missing = tempDir.resolve("missing.bin").toString();
+
+        assertThatThrownBy(() -> reader.load(missing)).isInstanceOf(PayloadException.class);
     }
 }

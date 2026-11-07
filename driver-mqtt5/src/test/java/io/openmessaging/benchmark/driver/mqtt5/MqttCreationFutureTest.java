@@ -64,7 +64,7 @@ class MqttCreationFutureTest {
     }
 
     @Test
-    void cleanupFailureIsVisibleInQuiescenceAndOriginalFailure() throws Exception {
+    void cleanupFailureIsVisibleInQuiescenceAndOriginalFailure() {
         IOException cleanupFailure = new IOException("cleanup failed");
         IOException creationFailure = new IOException("connection failed");
         MqttCreationFuture<AutoCloseable> future =

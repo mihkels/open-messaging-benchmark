@@ -66,6 +66,7 @@ class KafkaTopicCreatorBatchFailureTest {
     }
 
     @Test
+    @SuppressWarnings("java:S2925") // stubbed createTopics simulates a hung admin call
     void repeatedCancellationReportsTheFirstOutcome() {
         AdminClient admin = mock(AdminClient.class);
         when(admin.createTopics(any()))

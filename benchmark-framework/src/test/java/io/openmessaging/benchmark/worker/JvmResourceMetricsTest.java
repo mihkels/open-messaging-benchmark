@@ -24,7 +24,7 @@ class JvmResourceMetricsTest {
     void reportsResourceUnitsWithoutChangingMessageMetrics() {
         var readings = new JvmResourceMetrics();
         var snapshot = readings.snapshot();
-        assertThat(snapshot.get("pid")).isEqualTo((double) ProcessHandle.current().pid());
+        assertThat(snapshot).containsEntry("pid", (double) ProcessHandle.current().pid());
         assertThat(snapshot.get("heap_used_bytes")).isPositive();
         assertThat(snapshot.get("heap_committed_bytes"))
                 .isGreaterThanOrEqualTo(snapshot.get("heap_used_bytes"));

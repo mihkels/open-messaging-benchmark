@@ -47,8 +47,9 @@ class RabbitMqBenchmarkDriverTest {
     void unsupportedPartitionsCompleteExceptionally() {
         RabbitMqBenchmarkDriver driver = new RabbitMqBenchmarkDriver();
 
-        CompletionException failure =
-                assertThrows(CompletionException.class, () -> driver.createTopic("topic", 2).join());
+        CompletableFuture<Void> creation = driver.createTopic("topic", 2);
+
+        CompletionException failure = assertThrows(CompletionException.class, creation::join);
         assertTrue(failure.getCause() instanceof IllegalArgumentException);
     }
 
@@ -57,18 +58,15 @@ class RabbitMqBenchmarkDriverTest {
         FailureDriver driver = new FailureDriver();
         initialize(driver, "rabbitmq-creation-test.yaml");
         try {
+            var producers = driver.createProducers(List.of(new ProducerInfo(0, "topic")));
             CompletionException producerFailure =
-                    assertThrows(
-                            CompletionException.class,
-                            () -> driver.createProducers(List.of(new ProducerInfo(0, "topic"))).join());
+                    assertThrows(CompletionException.class, producers::join);
             assertSame(driver.cause, producerFailure.getCause());
             assertEquals(11, driver.producerAttempts.get());
 
+            var consumers = driver.createConsumers(List.of(new ConsumerInfo(0, "topic", "s", null)));
             CompletionException consumerFailure =
-                    assertThrows(
-                            CompletionException.class,
-                            () ->
-                                    driver.createConsumers(List.of(new ConsumerInfo(0, "topic", "s", null))).join());
+                    assertThrows(CompletionException.class, consumers::join);
             assertSame(driver.cause, consumerFailure.getCause());
             assertEquals(11, driver.consumerAttempts.get());
         } finally {
@@ -164,10 +162,8 @@ class RabbitMqBenchmarkDriverTest {
                 proxy(Connection.class, (method, args) -> method.equals("createChannel") ? channel : null);
         connections(driver).put("amqp://test", connection);
         try {
-            CompletionException failure =
-                    assertThrows(
-                            CompletionException.class,
-                            () -> driver.createProducer("amqp://test?exchange=example").join());
+            var producer = driver.createProducer("amqp://test?exchange=example");
+            CompletionException failure = assertThrows(CompletionException.class, producer::join);
             assertSame(cause, failure.getCause());
             assertSame(closeFailure, cause.getSuppressed()[0]);
             assertEquals(1, channelCloses.get());
@@ -198,10 +194,8 @@ class RabbitMqBenchmarkDriverTest {
                 proxy(Connection.class, (method, args) -> method.equals("createChannel") ? channel : null);
         connections(driver).put("amqp://test", connection);
         try {
-            CompletionException failure =
-                    assertThrows(
-                            CompletionException.class,
-                            () -> driver.createConsumer("amqp://test?exchange=example", "sub", null).join());
+            var consumer = driver.createConsumer("amqp://test?exchange=example", "sub", null);
+            CompletionException failure = assertThrows(CompletionException.class, consumer::join);
             assertSame(cause, failure.getCause());
             assertEquals(1, channelCloses.get());
         } finally {
@@ -270,6 +264,7 @@ class RabbitMqBenchmarkDriverTest {
                         (instance, method, args) -> invocation.invoke(method.getName(), args)));
     }
 
+    @SuppressWarnings("java:S2925") // polling helper for async state that exposes no completion hook
     private static void await(BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {

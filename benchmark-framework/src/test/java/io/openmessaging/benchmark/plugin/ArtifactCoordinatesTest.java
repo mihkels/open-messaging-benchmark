@@ -33,9 +33,9 @@ class ArtifactCoordinatesTest {
         ArtifactCoordinates main = new ArtifactCoordinates("g", "a", "1");
         ArtifactCoordinates linux = new ArtifactCoordinates("g", "a", "1", "linux");
 
-        assertThat(main.toString()).isEqualTo("g:a:1");
+        assertThat(main).hasToString("g:a:1");
         assertThat(main.variantKey()).isEqualTo("g:a");
-        assertThat(linux.toString()).isEqualTo("g:a:1:linux");
+        assertThat(linux).hasToString("g:a:1:linux");
         assertThat(linux.variantKey()).isEqualTo("g:a:linux");
         assertThat(linux.key()).isEqualTo("g:a");
     }

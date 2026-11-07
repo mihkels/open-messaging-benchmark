@@ -216,8 +216,13 @@ class RedisBenchmarkDriverTest {
         Path config = temp.resolve("redis.yaml");
         Files.writeString(
                 config,
-                "redisHost: localhost\nredisPort: 6379\nredisPass: secret\n"
-                        + "jedisPoolMaxTotal: 1\njedisPoolMaxIdle: 1\n");
+                """
+                redisHost: localhost
+                redisPort: 6379
+                redisPass: secret
+                jedisPoolMaxTotal: 1
+                jedisPoolMaxIdle: 1
+                """);
         RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
         driver.initialize(config, mock(MeterRegistry.class));
         try {

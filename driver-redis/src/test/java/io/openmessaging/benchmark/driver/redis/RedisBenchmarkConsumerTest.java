@@ -173,14 +173,12 @@ class RedisBenchmarkConsumerTest {
 
     @Test
     void rejectsNonPositiveCloseTimeout() {
+        JedisPool pool = mock(JedisPool.class);
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
         assertThatThrownBy(() ->
                         new RedisBenchmarkConsumer(
-                                "consumer",
-                                "topic",
-                                "subscription",
-                                mock(JedisPool.class),
-                                mock(ConsumerCallback.class),
-                                Duration.ZERO))
+                                "consumer", "topic", "subscription", pool, callback, Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -349,6 +347,7 @@ class RedisBenchmarkConsumerTest {
         }
     }
 
+    @SuppressWarnings("java:S2925") // polls thread wait counters, which expose no completion hook
     private static long awaitWaitCount(Thread thread, long expected) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
@@ -403,10 +402,10 @@ class RedisBenchmarkConsumerTest {
         Field field = RedisBenchmarkConsumer.class.getDeclaredField("consumerTask");
         field.setAccessible(true);
         Future<?> task = (Future<?>) field.get(consumer);
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (!task.isDone()) {
-            assertThat(System.nanoTime()).isLessThan(deadline);
-            Thread.sleep(5);
+        try {
+            task.get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException _) {
+            // The reader is expected to die with the stubbed failure.
         }
         return consumer;
     }

@@ -527,7 +527,7 @@ class NsqBenchmarkProducerTest {
 
         @Override
         public boolean isTerminated() {
-            return shutdown;
+            return isShutdown();
         }
 
         @Override

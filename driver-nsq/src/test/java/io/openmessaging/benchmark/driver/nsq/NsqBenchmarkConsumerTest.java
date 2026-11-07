@@ -1450,7 +1450,9 @@ class NsqBenchmarkConsumerTest {
         }
 
         @Override
-        public void addLookupAddress(String address, int port) {}
+        public void addLookupAddress(String address, int port) {
+            // no-op: test stub
+        }
     }
 
     private static final class StubBroker implements AutoCloseable {

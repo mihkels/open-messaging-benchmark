@@ -49,13 +49,10 @@ class KafkaTopicCreatorLifecycleTest {
         when(topics.values()).thenReturn(Map.of("topic", topic));
         when(topic.get()).thenThrow(interrupted);
 
+        KafkaTopicCreator creator = new KafkaTopicCreator(admin, Map.of(), (short) 1, 1);
+        List<TopicInfo> batch = List.of(new TopicInfo("topic", 1));
         CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () ->
-                                new KafkaTopicCreator(admin, Map.of(), (short) 1, 1)
-                                        .create(List.of(new TopicInfo("topic", 1)))
-                                        .join());
+                assertThrows(CompletionException.class, () -> creator.create(batch).join());
         assertSame(interrupted, failure.getCause().getCause());
         verify(admin, times(1)).createTopics(any());
         verify(admin, never()).listTopics();
@@ -110,6 +107,7 @@ class KafkaTopicCreatorLifecycleTest {
         verify(admin, never()).createTopics(any());
     }
 
+    @SuppressWarnings("java:S2925") // bounded polling helper; Awaitility is not available
     private static void await(BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {

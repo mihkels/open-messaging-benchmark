@@ -233,14 +233,16 @@ class RocketMQ5BenchmarkDriverOptionsTest {
     private static ProducerBuilder producerBuilder(TestDriver driver) throws Exception {
         ProducerBuilder builder = mock(ProducerBuilder.class, RETURNS_SELF);
         when(driver.provider.newProducerBuilder()).thenReturn(builder);
-        when(builder.build()).thenReturn(mock(Producer.class));
+        Producer producer = mock(Producer.class);
+        when(builder.build()).thenReturn(producer);
         return builder;
     }
 
     private static PushConsumerBuilder consumerBuilder(TestDriver driver) throws Exception {
         PushConsumerBuilder builder = mock(PushConsumerBuilder.class, RETURNS_SELF);
         when(driver.provider.newPushConsumerBuilder()).thenReturn(builder);
-        when(builder.build()).thenReturn(mock(PushConsumer.class));
+        PushConsumer consumer = mock(PushConsumer.class);
+        when(builder.build()).thenReturn(consumer);
         return builder;
     }
 

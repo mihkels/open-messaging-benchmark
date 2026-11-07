@@ -203,7 +203,8 @@ class DistributedWorkersEnsembleTest {
         assertThatThrownBy(() -> new DistributedWorkersEnsemble(List.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("At least two workers are required");
-        assertThatThrownBy(() -> new DistributedWorkersEnsemble(workers(1), true))
+        List<Worker> singleWorker = workers(1);
+        assertThatThrownBy(() -> new DistributedWorkersEnsemble(singleWorker, true))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

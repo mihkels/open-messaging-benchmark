@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -96,10 +97,9 @@ class NatsBenchmarkConsumerLifecycleTest {
         fixture.subscribeFailure = cause;
         fixture.closeFailure = closeFailure;
 
-        CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () -> fixture.driver.createConsumer("topic", "subscription", null).join());
+        CompletableFuture<BenchmarkConsumer> creation =
+                fixture.driver.createConsumer("topic", "subscription", null);
+        CompletionException failure = assertThrows(CompletionException.class, creation::join);
 
         assertSame(cause, failure.getCause());
         assertEquals(1, cause.getSuppressed().length);
@@ -113,10 +113,9 @@ class NatsBenchmarkConsumerLifecycleTest {
         Fixture fixture = new Fixture();
         fixture.returnNullSubscription = true;
 
-        CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () -> fixture.driver.createConsumer("topic", "subscription", null).join());
+        CompletableFuture<BenchmarkConsumer> creation =
+                fixture.driver.createConsumer("topic", "subscription", null);
+        CompletionException failure = assertThrows(CompletionException.class, creation::join);
 
         assertEquals(NullPointerException.class, failure.getCause().getClass());
         assertEquals(1, fixture.dispatcherCloses.get());

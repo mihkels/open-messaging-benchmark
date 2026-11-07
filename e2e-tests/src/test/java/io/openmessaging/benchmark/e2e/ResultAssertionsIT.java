@@ -31,20 +31,25 @@ class ResultAssertionsIT extends BaseE2eIT {
     @Test
     void rejectsMissingMessagesAndPublishErrors() {
         Workload workload = createSimpleWorkload();
-        assertThatThrownBy(() -> validateResults(new SmokeResult(9, 0, 10, 1.0), workload))
+        SmokeResult tooFewSent = new SmokeResult(9, 0, 10, 1.0);
+        SmokeResult tooFewReceived = new SmokeResult(10, 0, 9, 1.0);
+        SmokeResult publishErrors = new SmokeResult(10, 1, 10, 1.0);
+        assertThatThrownBy(() -> validateResults(tooFewSent, workload))
                 .isInstanceOf(AssertionError.class);
-        assertThatThrownBy(() -> validateResults(new SmokeResult(10, 0, 9, 1.0), workload))
+        assertThatThrownBy(() -> validateResults(tooFewReceived, workload))
                 .isInstanceOf(AssertionError.class);
-        assertThatThrownBy(() -> validateResults(new SmokeResult(10, 1, 10, 1.0), workload))
+        assertThatThrownBy(() -> validateResults(publishErrors, workload))
                 .isInstanceOf(AssertionError.class);
     }
 
     @Test
     void rejectsInvalidLatency() {
         Workload workload = createSimpleWorkload();
-        assertThatThrownBy(() -> validateResults(new SmokeResult(10, 0, 10, Double.NaN), workload))
+        SmokeResult nanLatency = new SmokeResult(10, 0, 10, Double.NaN);
+        SmokeResult negativeLatency = new SmokeResult(10, 0, 10, -1.0);
+        assertThatThrownBy(() -> validateResults(nanLatency, workload))
                 .isInstanceOf(AssertionError.class);
-        assertThatThrownBy(() -> validateResults(new SmokeResult(10, 0, 10, -1.0), workload))
+        assertThatThrownBy(() -> validateResults(negativeLatency, workload))
                 .isInstanceOf(AssertionError.class);
     }
 }

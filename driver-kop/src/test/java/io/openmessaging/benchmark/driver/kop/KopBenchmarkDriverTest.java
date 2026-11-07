@@ -26,10 +26,10 @@ import java.nio.file.Path;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
-public class KopBenchmarkDriverTest {
+class KopBenchmarkDriverTest {
 
     @Test
-    public void testLoadDefaultConfig() throws URISyntaxException, IOException {
+    void testLoadDefaultConfig() throws URISyntaxException, IOException {
         final URL url = getClass().getClassLoader().getResource("kop_required.yaml");
         assertThat(url).isNotNull();
 
@@ -49,11 +49,11 @@ public class KopBenchmarkDriverTest {
         assertThat(pulsarConfig.maxTotalReceiverQueueSizeAcrossPartitions()).isEqualTo(50000);
         assertThat(pulsarConfig.receiverQueueSize()).isEqualTo(1000);
 
-        assertThat(config.getKafkaProperties().get("bootstrap.servers")).isEqualTo("localhost:9092");
+        assertThat(config.getKafkaProperties()).containsEntry("bootstrap.servers", "localhost:9092");
     }
 
     @Test
-    public void nullConfigValuesFallBackToDefaults() {
+    void nullConfigValuesFallBackToDefaults() {
         Config config = new Config(null, null, null, (Long) null, null);
 
         assertThat(config.producerType()).isEqualTo(ClientType.KAFKA);
@@ -65,17 +65,18 @@ public class KopBenchmarkDriverTest {
     }
 
     @Test
-    public void kafkaPropertiesRequireBootstrapServers() {
-        assertThatThrownBy(() -> new Config().getKafkaProperties())
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Config(null, null, null, 100L, "   ").getKafkaProperties())
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Config(null, null, null, 100L, "client.id=x").getKafkaProperties())
+    void kafkaPropertiesRequireBootstrapServers() {
+        Config missing = new Config();
+        Config blank = new Config(null, null, null, 100L, "   ");
+        Config withoutBootstrap = new Config(null, null, null, 100L, "client.id=x");
+        assertThatThrownBy(missing::getKafkaProperties).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(blank::getKafkaProperties).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(withoutBootstrap::getKafkaProperties)
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    public void testLoadCustomConfig() throws Exception {
+    void testLoadCustomConfig() throws Exception {
         final URL url = this.getClass().getClassLoader().getResource("kop_custom.yaml");
         assertThat(url).isNotNull();
 
@@ -97,13 +98,13 @@ public class KopBenchmarkDriverTest {
 
         final Properties props = config.getKafkaProperties();
         assertThat(props).hasSize(3);
-        assertThat(props.get("bootstrap.servers")).isEqualTo("localhost:9092");
-        assertThat(props.get("linger.ms")).isEqualTo("1");
-        assertThat(props.get("batch.size")).isEqualTo("1048576");
+        assertThat(props).containsEntry("bootstrap.servers", "localhost:9092");
+        assertThat(props).containsEntry("linger.ms", "1");
+        assertThat(props).containsEntry("batch.size", "1048576");
     }
 
     @Test
-    public void testLoadWrongKafkaConfig() throws Exception {
+    void testLoadWrongKafkaConfig() throws Exception {
         final URL url = this.getClass().getClassLoader().getResource("kop_wrong_kafka_config.yaml");
         assertThat(url).isNotNull();
 

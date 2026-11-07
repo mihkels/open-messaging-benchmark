@@ -39,9 +39,10 @@ class ProducerWorkAssignmentTest {
 
     @Test
     void requiresOneWeightPerPayload() {
-        assertThatThrownBy(() ->
-                        new ProducerWorkAssignment(
-                                List.of(new byte[] {1}), 10, KeyDistributorType.NO_KEY, new int[] {1, 2}))
+        List<byte[]> payloads = List.of(new byte[] {1});
+        int[] weights = {1, 2};
+        assertThatThrownBy(
+                        () -> new ProducerWorkAssignment(payloads, 10, KeyDistributorType.NO_KEY, weights))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -60,8 +61,10 @@ class ProducerWorkAssignmentTest {
                         KeyDistributorType.NO_KEY,
                         new int[] {1, 3});
 
-        assertThat(assignment).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo("other");
         assertThat(assignment)
+                .isEqualTo(same)
+                .hasSameHashCodeAs(same)
+                .isNotEqualTo("other")
                 .isNotEqualTo(
                         new ProducerWorkAssignment(
                                 List.of(new byte[] {1}, new byte[] {9}),

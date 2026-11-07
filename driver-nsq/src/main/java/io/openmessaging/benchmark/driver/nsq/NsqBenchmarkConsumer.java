@@ -275,17 +275,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 dispatcher = consumer;
             }
             while (!closed) {
-                try {
-                    if (refreshConnections(true)) {
-                        awaitStartupCleanup();
-                        completeCreation();
-                        return;
-                    }
-                } catch (SubscriptionRejected failure) {
-                    for (Throwable cleanupFailure : failure.getSuppressed()) {
-                        failure.getCause().addSuppressed(cleanupFailure);
-                    }
-                    failStartup(failure.getCause());
+                if (attemptStartup()) {
                     return;
                 }
                 Thread.sleep(retryMillis);
@@ -298,6 +288,24 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             if (failure instanceof Error error) {
                 throw error;
             }
+        }
+    }
+
+    // Returns true once startup has finished, either ready or failed by a rejected subscription.
+    private boolean attemptStartup() throws Exception {
+        try {
+            if (refreshConnections(true)) {
+                awaitStartupCleanup();
+                completeCreation();
+                return true;
+            }
+            return false;
+        } catch (SubscriptionRejected failure) {
+            for (Throwable cleanupFailure : failure.getSuppressed()) {
+                failure.getCause().addSuppressed(cleanupFailure);
+            }
+            failStartup(failure.getCause());
+            return true;
         }
     }
 
@@ -316,6 +324,24 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             throw new InterruptedException("NSQ lookup interrupted");
         }
         List<Connection> removed = new ArrayList<>();
+        if (!removeStaleConnections(discovered, removed)) {
+            return false;
+        }
+        closeConnections(removed, null);
+        if (initial && cleanupOutcome() != null) {
+            throw new IOException("Unable to close an NSQ connection", cleanupOutcome());
+        }
+        if (!connectDiscovered(discovered, initial)) {
+            return false;
+        }
+        if (!allConnected(discovered) || (initial && !publisherPresent.test(discovered))) {
+            return false;
+        }
+        return allConnected(discovered);
+    }
+
+    // Moves dead or no longer discovered connections into removed; returns false once closed.
+    private boolean removeStaleConnections(Set<ServerAddress> discovered, List<Connection> removed) {
         synchronized (lock) {
             if (closed) {
                 return false;
@@ -323,19 +349,25 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             Iterator<Map.Entry<ServerAddress, Connection>> iterator = connections.entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry<ServerAddress, Connection> entry = iterator.next();
-                Connection connection = entry.getValue();
-                if (!connection.isConnected()
-                        || !connection.isHeartbeatStatusOK()
-                        || (!discovered.isEmpty() && !discovered.contains(entry.getKey()))) {
+                if (isStale(entry.getKey(), entry.getValue(), discovered)) {
                     iterator.remove();
-                    removed.add(connection);
+                    removed.add(entry.getValue());
                 }
             }
+            return true;
         }
-        closeConnections(removed, null);
-        if (initial && cleanupOutcome() != null) {
-            throw new IOException("Unable to close an NSQ connection", cleanupOutcome());
-        }
+    }
+
+    private static boolean isStale(
+            ServerAddress address, Connection connection, Set<ServerAddress> discovered) {
+        return !connection.isConnected()
+                || !connection.isHeartbeatStatusOK()
+                || (!discovered.isEmpty() && !discovered.contains(address));
+    }
+
+    // Connects to every discovered address without a connection; returns false once closed.
+    private boolean connectDiscovered(Set<ServerAddress> discovered, boolean initial)
+            throws Exception {
         for (ServerAddress address : discovered) {
             synchronized (lock) {
                 if (closed) {
@@ -345,33 +377,40 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                     continue;
                 }
             }
-            try {
-                connect(address);
-            } catch (SubscriptionRejected failure) {
-                if (initial) {
-                    throw failure;
-                }
-                log.warn("NSQ subscription rejected by {}", address, failure.getCause());
-            } catch (InterruptedException interrupted) {
-                throw interrupted;
-            } catch (Exception failure) {
-                if (!closed) {
-                    if (initial && cleanupOutcome() != null) {
-                        throw failure;
-                    }
-                    if (initial) {
-                        lastConnectionFailure = failure;
-                        log.debug("Unable to connect NSQ consumer to {}", address, failure);
-                    } else {
-                        log.warn("Unable to connect NSQ consumer to {}", address, failure);
-                    }
-                }
+            connectOrReport(address, initial);
+        }
+        return true;
+    }
+
+    private void connectOrReport(ServerAddress address, boolean initial) throws Exception {
+        try {
+            connect(address);
+        } catch (SubscriptionRejected failure) {
+            if (initial) {
+                throw failure;
             }
+            log.warn("NSQ subscription rejected by {}", address, failure.getCause());
+        } catch (InterruptedException interrupted) {
+            throw interrupted;
+        } catch (Exception failure) {
+            reportConnectFailure(address, initial, failure);
         }
-        if (!allConnected(discovered) || (initial && !publisherPresent.test(discovered))) {
-            return false;
+    }
+
+    private void reportConnectFailure(ServerAddress address, boolean initial, Exception failure)
+            throws Exception {
+        if (closed) {
+            return;
         }
-        return allConnected(discovered);
+        if (initial && cleanupOutcome() != null) {
+            throw failure;
+        }
+        if (initial) {
+            lastConnectionFailure = failure;
+            log.debug("Unable to connect NSQ consumer to {}", address, failure);
+        } else {
+            log.warn("Unable to connect NSQ consumer to {}", address, failure);
+        }
     }
 
     private boolean allConnected(Set<ServerAddress> discovered) {
@@ -637,17 +676,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 }
             }
         }
-        while (true) {
-            try {
-                eventLoopGroup.pendingCloses().get();
-                break;
-            } catch (InterruptedException ignored) {
-                interrupted = true;
-            } catch (ExecutionException failure) {
-                recordCleanupFailure(failure.getCause(), startupFailure);
-                break;
-            }
-        }
+        interrupted |= awaitPendingCloses();
         io.netty.util.concurrent.Future<?> channels = eventLoopGroup.terminationFuture();
         channels.awaitUninterruptibly();
         if (!channels.isSuccess()) {
@@ -656,6 +685,24 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         if (interrupted) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    // Waits for pending channel closes, recording a close failure; returns true if interrupted.
+    private boolean awaitPendingCloses() {
+        boolean interrupted = false;
+        boolean finished = false;
+        while (!finished) {
+            try {
+                eventLoopGroup.pendingCloses().get();
+                finished = true;
+            } catch (InterruptedException _) {
+                interrupted = true;
+            } catch (ExecutionException failure) {
+                recordCleanupFailure(failure.getCause(), startupFailure);
+                finished = true;
+            }
+        }
+        return interrupted;
     }
 
     private void finishCreationQuiescence() {
@@ -731,50 +778,68 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     private void closeGracefully(Closing closing, Thread initiator) throws Exception {
-        Throwable failure = null;
+        Throwable failure = requestStartClose(closing.active());
         try {
-            for (Connection connection : closing.active()) {
-                try {
-                    if (!connection.isConnected()) {
-                        continue;
-                    }
-                    NSQFrame response = connection.commandAndWait(NSQCommand.startClose());
-                    if (response instanceof ErrorFrame error
-                            && error.getErrorMessage().startsWith("E_INVALID")) {
-                        throw new IllegalStateException(error.getErrorMessage());
-                    }
-                    if (response == null) {
-                        Thread.currentThread().interrupt();
-                        throw new InterruptedException("NSQ consumer close interrupted");
-                    }
-                } catch (Throwable closeFailure) {
-                    failure = merge(failure, closeFailure);
-                    if (closeFailure instanceof InterruptedException) {
-                        break;
-                    }
-                }
-            }
+            failure = drainCallbacks(failure);
         } finally {
-            try {
-                callbacks.shutdown();
-                if (!callbacks.awaitTermination(CALLBACK_DRAIN_SECONDS, TimeUnit.SECONDS)) {
-                    callbacks.shutdownNow();
-                    failure =
-                            merge(
-                                    failure,
-                                    new TimeoutException("NSQ consumer callbacks did not finish during close"));
-                }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                callbacks.shutdownNow();
-                failure = merge(failure, interrupted);
-            } catch (Throwable closeFailure) {
-                failure = merge(failure, closeFailure);
-            } finally {
-                failure = finishClose(closing, failure, initiator);
-            }
+            failure = finishClose(closing, failure, initiator);
         }
         throwFailure(failure);
+    }
+
+    // Asks each connected connection to stop delivering; stops at the first interruption.
+    private static Throwable requestStartClose(List<Connection> active) {
+        Throwable failure = null;
+        for (Connection connection : active) {
+            Throwable closeFailure = startClose(connection);
+            if (closeFailure != null) {
+                failure = merge(failure, closeFailure);
+                if (closeFailure instanceof InterruptedException) {
+                    break;
+                }
+            }
+        }
+        return failure;
+    }
+
+    private static Throwable startClose(Connection connection) {
+        try {
+            if (!connection.isConnected()) {
+                return null;
+            }
+            return startCloseFailure(connection.commandAndWait(NSQCommand.startClose()));
+        } catch (Throwable closeFailure) {
+            return closeFailure;
+        }
+    }
+
+    private static Throwable startCloseFailure(NSQFrame response) {
+        if (response instanceof ErrorFrame error && error.getErrorMessage().startsWith("E_INVALID")) {
+            return new IllegalStateException(error.getErrorMessage());
+        }
+        if (response == null) {
+            Thread.currentThread().interrupt();
+            return new InterruptedException("NSQ consumer close interrupted");
+        }
+        return null;
+    }
+
+    private Throwable drainCallbacks(Throwable failure) {
+        try {
+            callbacks.shutdown();
+            if (!callbacks.awaitTermination(CALLBACK_DRAIN_SECONDS, TimeUnit.SECONDS)) {
+                callbacks.shutdownNow();
+                return merge(
+                        failure, new TimeoutException("NSQ consumer callbacks did not finish during close"));
+            }
+            return failure;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            callbacks.shutdownNow();
+            return merge(failure, interrupted);
+        } catch (Throwable closeFailure) {
+            return merge(failure, closeFailure);
+        }
     }
 
     private Throwable finishClose(Closing closing, Throwable failure, Thread initiator) {

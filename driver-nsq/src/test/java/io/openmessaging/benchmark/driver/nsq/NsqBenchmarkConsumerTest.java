@@ -1190,6 +1190,232 @@ class NsqBenchmarkConsumerTest {
         }
     }
 
+    @Test
+    void refreshLogsRejectedAndFailedConnectionsAndKeepsReconnecting() throws Exception {
+        ServerAddress first = new ServerAddress("one", 1);
+        ServerAddress second = new ServerAddress("two", 2);
+        Connection initial = readyConnection(response("CLOSE_WAIT"));
+        ErrorFrame rejection = new ErrorFrame();
+        rejection.setData("E_BAD_TOPIC rejected".getBytes(StandardCharsets.UTF_8));
+        Connection rejecting = readyConnection(response("CLOSE_WAIT"));
+        when(rejecting.commandAndWait(any(NSQCommand.class))).thenReturn(rejection);
+        Connection healthy = readyConnection(response("CLOSE_WAIT"));
+        AtomicInteger created = new AtomicInteger();
+        MutableLookup lookup = new MutableLookup(Set.of(first));
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        lookup,
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        20,
+                        (address, config) ->
+                                switch (created.getAndIncrement()) {
+                                    case 0 -> initial;
+                                    case 1 -> rejecting;
+                                    case 2 -> throw new IOException("refresh connect failed");
+                                    default -> healthy;
+                                });
+        consumer.startAsync().get(5, TimeUnit.SECONDS);
+
+        lookup.addresses.set(Set.of(second));
+        verify(initial, timeout(5000)).close();
+        verify(rejecting, timeout(5000)).close();
+        verify(healthy, timeout(5000)).command(any(NSQCommand.class));
+        consumer.close();
+        verify(healthy).close();
+    }
+
+    @Test
+    void initialCleanupFailureOfAStaleConnectionFailsStartup() throws Exception {
+        AtomicBoolean connected = new AtomicBoolean(true);
+        RuntimeException closeFailure = new IllegalStateException("stale close failed");
+        Connection stale = readyConnection(response("CLOSE_WAIT"));
+        when(stale.isConnected()).thenAnswer(invocation -> connected.get());
+        doThrow(closeFailure).when(stale).close();
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1))),
+                        (data, time) -> {},
+                        addresses -> {
+                            connected.set(false);
+                            return false;
+                        },
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> stale);
+        consumers.remove(consumer);
+        CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
+
+        assertThat(startupFailure(creation))
+                .isInstanceOf(IOException.class)
+                .hasMessage("Unable to close an NSQ connection")
+                .hasCause(closeFailure);
+        quiescence(creation).handle((ignored, failure) -> null).get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void initialConnectFailureWithCleanupFailureFailsStartup() throws Exception {
+        Connection connection = readyConnection(response("CLOSE_WAIT"));
+        ChannelFuture failedWrite = mock(ChannelFuture.class);
+        when(failedWrite.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(failedWrite.isSuccess()).thenReturn(false);
+        when(connection.command(any(NSQCommand.class))).thenReturn(failedWrite);
+        RuntimeException closeFailure = new IllegalStateException("attempt close failed");
+        doThrow(closeFailure).when(connection).close();
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> connection);
+        consumers.remove(consumer);
+        CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
+
+        Throwable failure = startupFailure(creation);
+        assertThat(failure)
+                .isInstanceOf(IOException.class)
+                .hasMessageStartingWith("NSQ RDY command failed");
+        assertThat(failure.getSuppressed()).contains(closeFailure);
+        quiescence(creation).handle((ignored, cause) -> null).get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void connectFailureAfterCancellationIsIgnoredAndSkipsRemainingNodes() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger created = new AtomicInteger();
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        new MutableLookup(Set.of(new ServerAddress("one", 1), new ServerAddress("two", 2))),
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> {
+                            created.incrementAndGet();
+                            entered.countDown();
+                            awaitClearingInterrupts(release);
+                            throw new IOException("late connect failure");
+                        });
+        CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(creation.cancel(true)).isTrue();
+        release.countDown();
+        quiescence(creation).handle((ignored, failure) -> null).get(5, TimeUnit.SECONDS);
+        assertThat(created).hasValue(1);
+    }
+
+    @Test
+    void lookupFinishingAfterCancellationDoesNotTouchConnections() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger created = new AtomicInteger();
+        NSQLookup lookup =
+                new NSQLookup() {
+                    @Override
+                    public Set<ServerAddress> lookup(String topic) {
+                        entered.countDown();
+                        awaitClearingInterrupts(release);
+                        return Set.of(new ServerAddress("one", 1));
+                    }
+
+                    @Override
+                    public void addLookupAddress(String address, int port) {
+                        // no-op: test stub
+                    }
+                };
+        NsqBenchmarkConsumer consumer =
+                consumer(
+                        lookup,
+                        (data, time) -> {},
+                        addresses -> true,
+                        new NsqEventLoopGroup(io),
+                        5000,
+                        60_000,
+                        (address, config) -> {
+                            created.incrementAndGet();
+                            return readyConnection(response("CLOSE_WAIT"));
+                        });
+        CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(creation.cancel(true)).isTrue();
+        release.countDown();
+        quiescence(creation).handle((ignored, failure) -> null).get(5, TimeUnit.SECONDS);
+        assertThat(created).hasValue(0);
+    }
+
+    @Test
+    void interruptedCallbackDrainDuringCloseIsReported() throws Exception {
+        try (StubBroker broker = new StubBroker(false, false, false)) {
+            CountDownLatch entered = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            NsqBenchmarkConsumer consumer =
+                    consumer(
+                            new MutableLookup(Set.of(broker.address())),
+                            (data, time) -> {
+                                entered.countDown();
+                                try {
+                                    release.await();
+                                } catch (InterruptedException _) {
+                                    Thread.currentThread().interrupt();
+                                }
+                            });
+            consumers.remove(consumer);
+            consumer.startAsync().get(5, TimeUnit.SECONDS);
+            broker.awaitCommand("RDY ");
+            broker.sendMessage(new byte[] {1}, System.currentTimeMillis());
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            ExecutorService closer = Executors.newSingleThreadExecutor();
+            try {
+                Future<?> closing =
+                        closer.submit(() -> {
+                            consumer.close();
+                            return null;
+                        });
+                assertThat(broker.awaitCommand("CLS")).isEqualTo("CLS");
+                Thread.getAllStackTraces().keySet().stream()
+                        .filter(thread -> thread.getName().equals("nsq-consumer-cleanup"))
+                        .forEach(Thread::interrupt);
+                assertThatThrownBy(() -> closing.get(5, TimeUnit.SECONDS))
+                        .isInstanceOf(ExecutionException.class)
+                        .hasCauseInstanceOf(InterruptedException.class);
+            } finally {
+                release.countDown();
+                closer.shutdownNow();
+            }
+        }
+    }
+
+    private static Throwable startupFailure(CompletableFuture<BenchmarkConsumer> creation)
+            throws Exception {
+        try {
+            creation.get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException failure) {
+            return failure.getCause();
+        }
+        throw new AssertionError("NSQ consumer creation unexpectedly succeeded");
+    }
+
+    private static void awaitClearingInterrupts(CountDownLatch latch) {
+        boolean released = false;
+        while (!released) {
+            try {
+                released = latch.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException _) {
+                // The consumer interrupts its connector on cancellation; keep waiting for release.
+            }
+        }
+    }
+
     private static NsqBenchmarkDriver batchDriver(CompletableFuture<BenchmarkConsumer> creation) {
         return new NsqBenchmarkDriver() {
             @Override

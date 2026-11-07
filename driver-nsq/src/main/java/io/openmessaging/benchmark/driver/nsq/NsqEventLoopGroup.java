@@ -134,56 +134,80 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     }
 
     private ChannelFuture registerChannel(Channel channel, ChannelPromise promise) {
-        ChannelFuture registration;
-        Throwable registrationFailure = null;
-        boolean rejected;
+        Registration registration;
         synchronized (lock) {
-            rejected = !accepting;
-            if (rejected) {
-                ChannelPromise rejectedPromise =
-                        promise == null
-                                ? new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE)
-                                : promise;
-                registration =
-                        rejectedPromise.setFailure(new RejectedExecutionException("NSQ consumer is closed"));
-            } else {
-                try {
-                    registration = promise == null ? delegate.register(channel) : delegate.register(promise);
-                } catch (RuntimeException | Error failure) {
-                    ChannelPromise completed =
-                            new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
-                    registration =
-                            channel.isRegistered() ? completed.setSuccess() : completed.setFailure(failure);
-                    registrationFailure = failure;
-                }
-            }
-            channels.put(channel, registration);
+            registration =
+                    accepting
+                            ? delegateRegistration(channel, promise)
+                            : rejectedRegistration(channel, promise);
+            channels.put(channel, registration.future());
             if (attempt != null) {
                 attempt.add(channel);
             }
         }
+        Throwable registrationFailure = watchClose(channel, registration.failure());
+        if (registration.rejected() || registrationFailure != null) {
+            return abandonRegistration(channel, registration.future(), registrationFailure);
+        }
+        closeIfRegistrationFails(channel, registration.future());
+        return registration.future();
+    }
+
+    private static Registration rejectedRegistration(Channel channel, ChannelPromise promise) {
+        ChannelPromise rejectedPromise =
+                promise == null
+                        ? new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE)
+                        : promise;
+        return new Registration(
+                rejectedPromise.setFailure(new RejectedExecutionException("NSQ consumer is closed")),
+                null,
+                true);
+    }
+
+    private Registration delegateRegistration(Channel channel, ChannelPromise promise) {
+        try {
+            return new Registration(
+                    promise == null ? delegate.register(channel) : delegate.register(promise), null, false);
+        } catch (RuntimeException | Error failure) {
+            ChannelPromise completed =
+                    new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+            return new Registration(
+                    channel.isRegistered() ? completed.setSuccess() : completed.setFailure(failure),
+                    failure,
+                    false);
+        }
+    }
+
+    // Returns the registration failure to report: the delegate's, else a failure to watch for close.
+    private Throwable watchClose(Channel channel, Throwable registrationFailure) {
         try {
             channel.closeFuture().addListener(ignored -> channelClosed(channel));
         } catch (RuntimeException | Error failure) {
             recordCleanupFailure(failure);
             if (registrationFailure == null) {
-                registrationFailure = failure;
+                return failure;
             }
         }
-        if (rejected || registrationFailure != null) {
-            requestClose(channel);
-            if (registrationFailure == null) {
-                return registration;
-            }
-            Throwable closeFailure = cleanupFailure();
-            if (closeFailure != null && closeFailure != registrationFailure) {
-                registrationFailure.addSuppressed(closeFailure);
-            }
-            if (registrationFailure instanceof RuntimeException exception) {
-                throw exception;
-            }
-            throw (Error) registrationFailure;
+        return registrationFailure;
+    }
+
+    private ChannelFuture abandonRegistration(
+            Channel channel, ChannelFuture registration, Throwable registrationFailure) {
+        requestClose(channel);
+        if (registrationFailure == null) {
+            return registration;
         }
+        Throwable closeFailure = cleanupFailure();
+        if (closeFailure != null && closeFailure != registrationFailure) {
+            registrationFailure.addSuppressed(closeFailure);
+        }
+        if (registrationFailure instanceof RuntimeException exception) {
+            throw exception;
+        }
+        throw (Error) registrationFailure;
+    }
+
+    private void closeIfRegistrationFails(Channel channel, ChannelFuture registration) {
         try {
             registration.addListener(result -> {
                 if (!result.isSuccess()) {
@@ -195,7 +219,6 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
             requestClose(channel);
             throw failure;
         }
-        return registration;
     }
 
     private void channelClosed(Channel channel) {
@@ -389,6 +412,8 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
         return termination.await(timeout, unit);
     }
+
+    private record Registration(ChannelFuture future, Throwable failure, boolean rejected) {}
 
     private static final class CloseRequest {
         private boolean closed;

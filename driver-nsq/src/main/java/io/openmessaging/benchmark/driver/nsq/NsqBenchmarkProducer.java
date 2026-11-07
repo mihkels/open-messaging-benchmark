@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NsqBenchmarkProducer implements BenchmarkProducer {
+    private static final String CLOSED_MESSAGE = "NSQ producer is closed";
+
     private final NSQProducer nsqProducer;
     private final String topic;
     private final ExecutorService executor;
@@ -73,7 +75,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
             if (acquired) {
                 semaphore.release();
             }
-            return CompletableFuture.failedFuture(new IllegalStateException("NSQ producer is closed"));
+            return CompletableFuture.failedFuture(new IllegalStateException(CLOSED_MESSAGE));
         }
 
         SendTask task;
@@ -87,7 +89,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
 
         synchronized (lifecycleLock) {
             if (closed) {
-                task.fail(new IllegalStateException("NSQ producer is closed"));
+                task.fail(new IllegalStateException(CLOSED_MESSAGE));
             } else {
                 pending.add(task);
                 try {
@@ -121,32 +123,36 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
         }
 
         try {
-            RuntimeException failure = null;
-            try {
-                executor.shutdownNow();
-            } catch (RuntimeException e) {
-                failure = e;
-            }
-            for (SendTask task : outstanding) {
-                task.fail(new IllegalStateException("NSQ producer is closed"));
-            }
-            try {
-                nsqProducer.shutdown();
-            } catch (RuntimeException e) {
-                if (failure == null) {
-                    failure = e;
-                } else if (failure != e) {
-                    failure.addSuppressed(e);
-                }
-            }
-            if (failure != null) {
-                throw failure;
-            }
+            shutdownResources(outstanding);
         } catch (RuntimeException | Error failure) {
             termination.completeExceptionally(failure);
             throw failure;
         } finally {
             termination.complete(null);
+        }
+    }
+
+    private void shutdownResources(List<SendTask> outstanding) {
+        RuntimeException failure = null;
+        try {
+            executor.shutdownNow();
+        } catch (RuntimeException e) {
+            failure = e;
+        }
+        for (SendTask task : outstanding) {
+            task.fail(new IllegalStateException(CLOSED_MESSAGE));
+        }
+        try {
+            nsqProducer.shutdown();
+        } catch (RuntimeException e) {
+            if (failure == null) {
+                failure = e;
+            } else if (failure != e) {
+                failure.addSuppressed(e);
+            }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 
@@ -180,10 +186,10 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
                 if (!future.isDone() && !closed) {
                     nsqProducer.produce(topic, payload);
                     if (closed) {
-                        failure = new IllegalStateException("NSQ producer is closed");
+                        failure = new IllegalStateException(CLOSED_MESSAGE);
                     }
                 } else if (!future.isDone()) {
-                    failure = new IllegalStateException("NSQ producer is closed");
+                    failure = new IllegalStateException(CLOSED_MESSAGE);
                 }
             } catch (Throwable cause) {
                 if (cause instanceof InterruptedException

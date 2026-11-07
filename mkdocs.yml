@@ -134,6 +134,7 @@ nav:
       - Payloads and keys: guides/payloads-and-keys.md
       - Workload generation: guides/workload-generation.md
       - Results: guides/results.md
+      - CI performance gates: guides/ci-gating.md
       - Monitoring: guides/monitoring.md
       - Containers and Kubernetes: guides/containers-and-kubernetes.md
       - Local Kubernetes: guides/kubernetes-local.md

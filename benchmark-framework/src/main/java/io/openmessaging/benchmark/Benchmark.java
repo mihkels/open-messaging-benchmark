@@ -43,6 +43,7 @@ import tools.jackson.databind.ObjectWriter;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class Benchmark {
+    static final int THRESHOLD_FAILURE_EXIT_CODE = 2;
 
     static class Arguments {
 
@@ -199,7 +200,11 @@ public final class Benchmark {
             log.info("Using local driver process worker");
         }
 
-        runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+        try {
+            runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+        } catch (ThresholdFailureException e) {
+            System.exit(thresholdFailureExitCode());
+        }
     }
 
     static void runWorkloads(
@@ -209,6 +214,7 @@ public final class Benchmark {
             GeneratorFactory generatorFactory)
             throws Exception {
         Throwable failures = null;
+        boolean thresholdFailed = false;
         boolean safeToContinue = true;
         try {
             try {
@@ -232,6 +238,7 @@ public final class Benchmark {
                                 worker,
                                 generatorFactory);
                 failures = append(failures, outcome.failure());
+                thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
             }
         } catch (Throwable e) {
@@ -249,6 +256,9 @@ public final class Benchmark {
             throw new IllegalStateException(
                     "One or more workloads or required cleanup operations failed", failures);
         }
+        if (thresholdFailed) {
+            throw new ThresholdFailureException();
+        }
     }
 
     /**
@@ -265,8 +275,9 @@ public final class Benchmark {
      *
      * @param failure the run or cleanup failure, or {@code null}
      * @param safeToContinue whether the worker can run the next combination
+     * @param thresholdFailed whether the run completed but failed an SLO threshold
      */
-    private record Outcome(Throwable failure, boolean safeToContinue) {}
+    private record Outcome(Throwable failure, boolean safeToContinue, boolean thresholdFailed) {}
 
     // Workloads in name order, each with every driver in the order given
     private static List<Combination> combinations(
@@ -290,6 +301,7 @@ public final class Benchmark {
         WorkloadRun generator = null;
         Throwable failure = null;
         boolean safeToContinue = true;
+        boolean thresholdFailed = false;
         try {
             Map<String, Object> driverConfig =
                     driverConfigReader.readValue(new File(combination.driverConfig()));
@@ -317,6 +329,11 @@ public final class Benchmark {
                             worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                             workload,
                             driverConfig);
+            if (workload.thresholds != null) {
+                result.thresholds = workload.thresholds.evaluate(result);
+                result.thresholds.print();
+                thresholdFailed = !result.thresholds.passed();
+            }
             String fileName =
                     resultFileName(
                             output,
@@ -352,7 +369,7 @@ public final class Benchmark {
                     combination.driverConfig(),
                     failure);
         }
-        return new Outcome(failure, safeToContinue);
+        return new Outcome(failure, safeToContinue, thresholdFailed);
     }
 
     // The explicit output file, or a generated name in the results directory. Without a results
@@ -407,4 +424,14 @@ public final class Benchmark {
 
     // Directory for result files written without --output, for example in a read-only container
     static final String RESULTS_DIR_ENV = "OMB_RESULTS_DIR";
+
+    static final class ThresholdFailureException extends RuntimeException {
+        ThresholdFailureException() {
+            super("One or more workload threshold checks failed");
+        }
+    }
+
+    static int thresholdFailureExitCode() {
+        return THRESHOLD_FAILURE_EXIT_CODE;
+    }
 }

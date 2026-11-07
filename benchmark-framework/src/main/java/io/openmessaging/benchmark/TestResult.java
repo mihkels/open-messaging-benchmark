@@ -39,6 +39,9 @@ public class TestResult {
     public ResultSummary summary = ResultSummary.empty();
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Thresholds.Result thresholds;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public Map<String, String> histograms;
 
     public String workload;

@@ -75,4 +75,15 @@ class WorkloadTest {
 
         assertThatThrownBy(workload::validate).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void rejectsThroughputRatioThresholdForRateDiscovery() {
+        Workload workload = new Workload();
+        workload.thresholds = new Thresholds();
+        workload.thresholds.minThroughputRatio = 0.9;
+
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("minThroughputRatio requires a positive producerRate");
+    }
 }

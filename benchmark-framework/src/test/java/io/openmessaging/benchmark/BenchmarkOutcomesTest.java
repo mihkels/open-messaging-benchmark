@@ -39,6 +39,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 class BenchmarkOutcomesTest {
     @TempDir Path directory;
@@ -270,14 +272,36 @@ class BenchmarkOutcomesTest {
         Benchmark.Arguments arguments = arguments();
         Path driver = Path.of(arguments.drivers.getFirst());
         Path output = directory.resolve("child-result.json");
-        ProbeResult success = exitProbe(driver, output, false);
+        ProbeResult success = exitProbe(driver, output, false, false);
         assertThat(success.exitCode()).as(success.output()).isZero();
         assertThat(Files.exists(output)).isTrue();
 
-        ProbeResult failure = exitProbe(driver, output, true);
+        ProbeResult failure = exitProbe(driver, output, true, false);
         assertThat(failure.exitCode()).as(failure.output()).isNotZero();
         assertThat(failure.output()).contains("fixture workload failure");
         assertThat(Files.exists(output)).isTrue();
+    }
+
+    @Test
+    void thresholdFailureHasDedicatedProcessExitCodeAndKeepsTheResult() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Path driver = Path.of(arguments.drivers.getFirst());
+        Path output = directory.resolve("threshold-result.json");
+
+        ProbeResult result = exitProbe(driver, output, false, true);
+
+        assertThat(result.exitCode())
+                .as(result.output())
+                .isEqualTo(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
+        JsonNode thresholds = new ObjectMapper().readTree(Files.readString(output)).get("thresholds");
+        assertThat(thresholds.get("status").stringValue()).isEqualTo("FAIL");
+        assertThat(thresholds.get("checks").get("minThroughputRatio").get("limit").doubleValue())
+                .isEqualTo(0.9);
+        assertThat(thresholds.get("checks").get("minThroughputRatio").get("observed").doubleValue())
+                .isEqualTo(0.8);
+        assertThat(thresholds.get("checks").get("minThroughputRatio").get("status").stringValue())
+                .isEqualTo("FAIL");
+        assertThat(result.output()).contains("Thresholds: FAIL", "minThroughputRatio");
     }
 
     @Test
@@ -314,7 +338,8 @@ class BenchmarkOutcomesTest {
         assertThat(Files.readString(output)).isEqualTo("previous successful result");
     }
 
-    private ProbeResult exitProbe(Path driver, Path output, boolean fail) throws Exception {
+    private ProbeResult exitProbe(Path driver, Path output, boolean fail, boolean thresholdFailure)
+            throws Exception {
         String classpath =
                 System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         ProcessBuilder builder =
@@ -325,7 +350,8 @@ class BenchmarkOutcomesTest {
                         ExitProbe.class.getName(),
                         driver.toString(),
                         output.toString(),
-                        Boolean.toString(fail));
+                        Boolean.toString(fail),
+                        Boolean.toString(thresholdFailure));
         return waitForProbe(builder, directory.resolve("child-" + fail + ".log"));
     }
 
@@ -395,28 +421,43 @@ class BenchmarkOutcomesTest {
             arguments.drivers = List.of(args[0]);
             arguments.output = args[1];
             boolean fail = Boolean.parseBoolean(args[2]);
-            Benchmark.runWorkloads(
-                    arguments,
-                    Map.of("fixture", workload("fixture")),
-                    worker,
-                    (driver, workload, ownedWorker) ->
-                            new WorkloadRun() {
-                                @Override
-                                public TestResult run() throws Exception {
-                                    if (fail) {
-                                        throw new IOException("fixture workload failure");
+            boolean thresholdFailure = Boolean.parseBoolean(args[3]);
+            Workload workload = workload("fixture");
+            if (thresholdFailure) {
+                workload.producerRate = 100;
+                workload.thresholds = new Thresholds();
+                workload.thresholds.minThroughputRatio = 0.9;
+            }
+            try {
+                Benchmark.runWorkloads(
+                        arguments,
+                        Map.of("fixture", workload),
+                        worker,
+                        (driver, selectedWorkload, ownedWorker) ->
+                                new WorkloadRun() {
+                                    @Override
+                                    public TestResult run() throws Exception {
+                                        if (fail) {
+                                            throw new IOException("fixture workload failure");
+                                        }
+                                        TestResult result = result("successful");
+                                        if (thresholdFailure) {
+                                            result.summary = new ResultSummary(80, 80, 0, 0, 0, 0, 100);
+                                        }
+                                        return result;
                                     }
-                                    return result("successful");
-                                }
 
-                                @Override
-                                public boolean isQuiescentAfterClose() {
-                                    return true;
-                                }
+                                    @Override
+                                    public boolean isQuiescentAfterClose() {
+                                        return true;
+                                    }
 
-                                @Override
-                                public void close() {}
-                            });
+                                    @Override
+                                    public void close() {}
+                                });
+            } catch (Benchmark.ThresholdFailureException e) {
+                System.exit(Benchmark.thresholdFailureExitCode());
+            }
         }
     }
 }

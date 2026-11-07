@@ -56,6 +56,8 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   `Failed to run the workload '<name>' for driver '<config>'` with the cause and continues with the
   next combination when it is safe to do so. The process exits with a non-zero status if any
   combination or required cleanup fails; results from successful combinations remain available.
+  A completed run that fails a workload threshold exits with status `2`, distinct from a run or
+  configuration error. See [CI gating](../guides/ci-gating.md).
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
   workload files, no `--drivers`, or a workload that fails validation (pool size, size distribution,
   backlog settings) print a message and exit with a non-zero status before any broker resources are

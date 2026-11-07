@@ -184,14 +184,8 @@ public final class PluginRegistry {
                             + " and "
                             + bundle.directory();
             errors.add(error);
-            sameId
-                    .descriptor()
-                    .drivers()
-                    .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
-            bundle
-                    .descriptor()
-                    .drivers()
-                    .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
+            sameId.descriptor().drivers().forEach(driver -> addDriverError(driver, error));
+            bundle.descriptor().drivers().forEach(driver -> addDriverError(driver, error));
         }
 
         private void rejectDuplicateDriver(String driver, PluginBundle other, PluginBundle bundle) {
@@ -208,13 +202,12 @@ public final class PluginRegistry {
                             + bundle.directory()
                             + ")";
             errors.add(error);
-            addDriverError(errorsByDriverClass, driver, error);
+            addDriverError(driver, error);
         }
-    }
 
-    private static void addDriverError(
-            Map<String, List<String>> errorsByDriverClass, String driver, String error) {
-        errorsByDriverClass.computeIfAbsent(driver, unused -> new ArrayList<>()).add(error);
+        private void addDriverError(String driver, String error) {
+            errorsByDriverClass.computeIfAbsent(driver, unused -> new ArrayList<>()).add(error);
+        }
     }
 
     public static Path home() {

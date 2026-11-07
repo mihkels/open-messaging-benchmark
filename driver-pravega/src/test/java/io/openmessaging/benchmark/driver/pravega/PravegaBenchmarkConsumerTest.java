@@ -95,10 +95,14 @@ class PravegaBenchmarkConsumerTest {
 
         try {
             assertThatThrownBy(consumer::close).isSameAs(interrupted);
+            assertThat(Thread.interrupted()).isTrue();
+            // A repeated close reports the same failure and restores the interrupt again.
+            assertThatThrownBy(consumer::close).isSameAs(interrupted);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
         }
+        verify(reader, times(1)).close();
     }
 
     @Test
@@ -144,6 +148,44 @@ class PravegaBenchmarkConsumerTest {
         } finally {
             consumer.close();
         }
+        verify(reader).close();
+    }
+
+    @Test
+    void callbackFailureDoesNotStopReadingUntimestampedEvents() throws Exception {
+        EventStreamClientFactory factory = mock();
+        ReaderGroupManager groups = mock();
+        EventStreamReader<ByteBuffer> reader = mock();
+        EventRead<ByteBuffer> first = mock();
+        EventRead<ByteBuffer> second = mock();
+        EventRead<ByteBuffer> empty = mock();
+        ConsumerCallback callback = mock();
+        when(factory.<ByteBuffer>createReader(anyString(), eq("subscription"), any(), any()))
+                .thenReturn(reader);
+        when(reader.readNextEvent(anyLong())).thenReturn(first, second, empty);
+        when(first.getEvent()).thenReturn(ByteBuffer.allocate(1));
+        when(second.getEvent()).thenReturn(ByteBuffer.allocate(1));
+        long untimestamped = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+        CountDownLatch delivered = new CountDownLatch(2);
+        doAnswer(
+                        invocation -> {
+                            delivered.countDown();
+                            if (delivered.getCount() == 1) {
+                                throw new IllegalStateException("callback failed");
+                            }
+                            return null;
+                        })
+                .when(callback)
+                .messageReceived(any(ByteBuffer.class), eq(untimestamped));
+        PravegaBenchmarkConsumer consumer =
+                PravegaBenchmarkConsumer.create(
+                        "stream", "scope", "subscription", callback, factory, groups, false);
+        try {
+            assertThat(delivered.await(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            consumer.close();
+        }
+        verify(callback, times(2)).messageReceived(any(ByteBuffer.class), eq(untimestamped));
         verify(reader).close();
     }
 

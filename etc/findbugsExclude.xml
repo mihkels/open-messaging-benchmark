@@ -61,17 +61,17 @@
   </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver" />
-    <Method name="close" />
+    <Method name="sealAndDeleteTopics" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkConsumer" />
-    <Method name="close" />
+    <Method name="closeReader" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkTransactionProducer" />
-    <Method name="sendAsync" />
+    <Method name="abortAfterFailure" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>

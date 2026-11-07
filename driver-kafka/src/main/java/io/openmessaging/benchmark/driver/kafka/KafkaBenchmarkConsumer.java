@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
     private static final Logger log = LoggerFactory.getLogger(KafkaBenchmarkConsumer.class);
+    private static final String CONSUME_FAILURE_MESSAGE = "exception occur while consuming message";
 
     private enum StartupState {
         WAITING,
@@ -179,40 +180,52 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
 
     private void consume(ConsumerCallback callback, long pollTimeoutMs) {
         while (!closing) {
-            ConsumerRecords<String, byte[]> records;
-            try {
-                records = consumer.poll(Duration.ofMillis(pollTimeoutMs));
-            } catch (Exception error) {
-                if (!closing) {
-                    handlePollFailure(error);
-                }
-                continue;
+            ConsumerRecords<String, byte[]> records = poll(pollTimeoutMs);
+            if (records != null) {
+                deliver(records, callback);
+                checkReadiness();
             }
+        }
+    }
 
-            try {
-                Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-                for (ConsumerRecord<String, byte[]> record : records) {
-                    if (closing) {
-                        break;
-                    }
-                    callback.messageReceived(record.value(), record.timestamp());
-                    offsetMap.put(
-                            new TopicPartition(record.topic(), record.partition()),
-                            new OffsetAndMetadata(record.offset() + 1));
-                }
-                if (!closing && !autoCommit && !offsetMap.isEmpty()) {
-                    consumer.commitAsync(offsetMap, null);
-                }
-            } catch (Exception error) {
-                log.error("exception occur while consuming message", error);
+    // Polls once; returns null when the poll failed and the iteration should be skipped.
+    private ConsumerRecords<String, byte[]> poll(long pollTimeoutMs) {
+        try {
+            return consumer.poll(Duration.ofMillis(pollTimeoutMs));
+        } catch (Exception error) {
+            if (!closing) {
+                handlePollFailure(error);
             }
+            return null;
+        }
+    }
 
-            if (!closing && readiness != null) {
-                try {
-                    completeWhenReady();
-                } catch (Exception error) {
-                    handlePollFailure(error);
+    private void deliver(ConsumerRecords<String, byte[]> records, ConsumerCallback callback) {
+        try {
+            Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+            for (ConsumerRecord<String, byte[]> consumerRecord : records) {
+                if (closing) {
+                    break;
                 }
+                callback.messageReceived(consumerRecord.value(), consumerRecord.timestamp());
+                offsetMap.put(
+                        new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
+                        new OffsetAndMetadata(consumerRecord.offset() + 1));
+            }
+            if (!closing && !autoCommit && !offsetMap.isEmpty()) {
+                consumer.commitAsync(offsetMap, null);
+            }
+        } catch (Exception error) {
+            log.error(CONSUME_FAILURE_MESSAGE, error);
+        }
+    }
+
+    private void checkReadiness() {
+        if (!closing && readiness != null) {
+            try {
+                completeWhenReady();
+            } catch (Exception error) {
+                handlePollFailure(error);
             }
         }
     }
@@ -262,7 +275,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
                 return;
             }
         }
-        log.error("exception occur while consuming message", error);
+        log.error(CONSUME_FAILURE_MESSAGE, error);
     }
 
     private void finishConsumer() {

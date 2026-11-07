@@ -69,46 +69,60 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             return CompletableFuture.failedFuture(new IllegalStateException("Producer is closed"));
         }
         try {
-            if (transaction == null) {
-                transaction = transactionWriter.beginTxn();
-            }
-            if (this.probeRequested(
-                    key)) { // Populate probe transaction with the sufficient amount of events.
-                // Probe events must use the same encoding as regular events: readers expect the timestamp
-                while (eventCount < this.eventsPerTransaction - 1) {
-                    writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
-                    eventCount++;
-                }
-            }
-            writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
-            if (++eventCount >= eventsPerTransaction) {
-                eventCount = 0;
-                transaction.commit();
-                transaction = null;
-            }
+            writeToTransaction(key, payload);
         } catch (Exception e) {
             // Pravega can propagate checked controller failures from beginTxn without declaring them.
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            Transaction<ByteBuffer> failed = transaction;
-            transaction = null;
-            eventCount = 0;
-            if (failed != null) {
-                try {
-                    failed.abort();
-                } catch (Exception abortFailure) {
-                    if (abortFailure instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                    }
-                    if (abortFailure != e) {
-                        e.addSuppressed(abortFailure);
-                    }
-                }
-            }
-            return CompletableFuture.failedFuture(e);
+            return failTransaction(e);
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    @GuardedBy("this")
+    private void writeToTransaction(Optional<String> key, byte[] payload) throws TxnFailedException {
+        if (transaction == null) {
+            transaction = transactionWriter.beginTxn();
+        }
+        if (this.probeRequested(key)) {
+            // Populate probe transaction with the sufficient amount of events.
+            // Probe events must use the same encoding as regular events: readers expect the timestamp
+            while (eventCount < this.eventsPerTransaction - 1) {
+                writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
+                eventCount++;
+            }
+        }
+        writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
+        if (++eventCount >= eventsPerTransaction) {
+            eventCount = 0;
+            transaction.commit();
+            transaction = null;
+        }
+    }
+
+    @GuardedBy("this")
+    private CompletableFuture<Void> failTransaction(Exception e) {
+        if (e instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        Transaction<ByteBuffer> failed = transaction;
+        transaction = null;
+        eventCount = 0;
+        if (failed != null) {
+            abortAfterFailure(failed, e);
+        }
+        return CompletableFuture.failedFuture(e);
+    }
+
+    private static void abortAfterFailure(Transaction<ByteBuffer> failed, Exception e) {
+        try {
+            failed.abort();
+        } catch (Exception abortFailure) {
+            if (abortFailure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            if (abortFailure != e) {
+                e.addSuppressed(abortFailure);
+            }
+        }
     }
 
     private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {

@@ -97,38 +97,49 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         PravegaBenchmarkConsumer consumer = new PravegaBenchmarkConsumer(reader, executor);
 
         // Start a thread to read events.
-        executor.submit(() -> {
-            consumer.readerThread = Thread.currentThread();
-            try {
-                while (!consumer.closed.get()) {
-                    try {
-                        final ByteBuffer event = reader.readNextEvent(1000).getEvent();
-                        if (event != null && !consumer.closed.get()) {
-                            long eventTimestamp;
-                            if (includeTimestampInEvent) {
-                                eventTimestamp = event.getLong();
-                            } else {
-                                // This will result in an invalid end-to-end latency measurement of 0 seconds.
-                                eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
-                            }
-                            consumerCallback.messageReceived(event, eventTimestamp);
-                        }
-                    } catch (ReinitializationRequiredException e) {
-                        // The reader group was reset, so this reader can never read again. Nothing
-                        // inspects the task's future, so stop here rather than rethrowing into it.
-                        log.error("Reader group requires reinitialization; stopping this reader", e);
-                        return;
-                    } catch (RuntimeException e) {
-                        // The task's future is never inspected, so an escaping exception would stop
-                        // this reader silently and strand its segments for the rest of the run.
-                        log.error("Failed to process event; continuing to read", e);
-                    }
-                }
-            } finally {
-                consumer.readerThread = null;
-            }
-        });
+        executor.submit(() -> consumer.readEvents(consumerCallback, includeTimestampInEvent));
         return consumer;
+    }
+
+    private void readEvents(ConsumerCallback consumerCallback, boolean includeTimestampInEvent) {
+        readerThread = Thread.currentThread();
+        try {
+            boolean keepReading = true;
+            while (keepReading && !closed.get()) {
+                keepReading = readNextEvent(consumerCallback, includeTimestampInEvent);
+            }
+        } finally {
+            readerThread = null;
+        }
+    }
+
+    private boolean readNextEvent(
+            ConsumerCallback consumerCallback, boolean includeTimestampInEvent) {
+        try {
+            final ByteBuffer event = reader.readNextEvent(1000).getEvent();
+            if (event != null && !closed.get()) {
+                consumerCallback.messageReceived(event, eventTimestamp(event, includeTimestampInEvent));
+            }
+            return true;
+        } catch (ReinitializationRequiredException e) {
+            // The reader group was reset, so this reader can never read again. Nothing
+            // inspects the task's future, so stop here rather than rethrowing into it.
+            log.error("Reader group requires reinitialization; stopping this reader", e);
+            return false;
+        } catch (RuntimeException e) {
+            // The task's future is never inspected, so an escaping exception would stop
+            // this reader silently and strand its segments for the rest of the run.
+            log.error("Failed to process event; continuing to read", e);
+            return true;
+        }
+    }
+
+    private static long eventTimestamp(ByteBuffer event, boolean includeTimestampInEvent) {
+        if (includeTimestampInEvent) {
+            return event.getLong();
+        }
+        // This will result in an invalid end-to-end latency measurement of 0 seconds.
+        return TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
     }
 
     @Override
@@ -138,53 +149,74 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         }
         synchronized (closeLock) {
             if (closed.getAndSet(true)) {
-                if (closeFailure != null) {
-                    if (closeFailure instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                    }
-                    throw closeFailure;
-                }
+                rethrowPreviousCloseFailure();
                 return;
             }
-            Exception failure = null;
-            boolean interrupted = false;
-            try {
-                executor.shutdown();
-                if (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
-                    failure = new TimeoutException("Timed out waiting for the Pravega reader to stop");
-                    executor.shutdownNow();
-                }
-            } catch (Exception shutdownFailure) {
-                if (failure == null) {
-                    failure = shutdownFailure;
-                } else {
-                    failure.addSuppressed(shutdownFailure);
-                }
-                if (shutdownFailure instanceof InterruptedException) {
-                    interrupted = true;
-                    try {
-                        executor.shutdownNow();
-                    } catch (RuntimeException additional) {
-                        failure.addSuppressed(additional);
-                    }
-                }
-            }
-            try {
-                reader.close();
-            } catch (Exception readerFailure) {
-                interrupted |= readerFailure instanceof InterruptedException;
-                if (failure == null) {
-                    failure = readerFailure;
-                } else if (failure != readerFailure) {
-                    failure.addSuppressed(readerFailure);
-                }
-            }
-            closeFailure = failure;
-            if (interrupted) {
+            CloseOutcome outcome = new CloseOutcome();
+            shutdownExecutor(outcome);
+            closeReader(outcome);
+            closeFailure = outcome.failure;
+            if (outcome.interrupted) {
                 Thread.currentThread().interrupt();
             }
-            if (failure != null) {
-                throw failure;
+            if (outcome.failure != null) {
+                throw outcome.failure;
+            }
+        }
+    }
+
+    private void rethrowPreviousCloseFailure() throws Exception {
+        if (closeFailure != null) {
+            if (closeFailure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw closeFailure;
+        }
+    }
+
+    private void shutdownExecutor(CloseOutcome outcome) {
+        try {
+            executor.shutdown();
+            if (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
+                outcome.add(new TimeoutException("Timed out waiting for the Pravega reader to stop"));
+                executor.shutdownNow();
+            }
+        } catch (Exception shutdownFailure) {
+            outcome.add(shutdownFailure);
+            if (shutdownFailure instanceof InterruptedException) {
+                outcome.interrupted = true;
+                forceShutdownExecutor(outcome);
+            }
+        }
+    }
+
+    private void forceShutdownExecutor(CloseOutcome outcome) {
+        try {
+            executor.shutdownNow();
+        } catch (RuntimeException additional) {
+            outcome.add(additional);
+        }
+    }
+
+    private void closeReader(CloseOutcome outcome) {
+        try {
+            reader.close();
+        } catch (Exception readerFailure) {
+            outcome.interrupted |= readerFailure instanceof InterruptedException;
+            outcome.add(readerFailure);
+        }
+    }
+
+    /** Collects the first close failure and suppresses later distinct ones onto it. */
+    private static final class CloseOutcome {
+        private Exception failure;
+        private boolean interrupted;
+
+        private void add(Exception additional) {
+            if (failure == null) {
+                failure = additional;
+            } else if (failure != additional) {
+                failure.addSuppressed(additional);
             }
         }
     }

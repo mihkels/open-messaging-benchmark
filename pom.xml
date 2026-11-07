@@ -49,19 +49,19 @@
         <maven.compiler.source>27</maven.compiler.source>
         <maven.compiler.target>27</maven.compiler.target>
         <maven.compiler.release>27</maven.compiler.release>
-        <guava.version>33.7.2-jre</guava.version>
+        <guava.version>33.8.0-jre</guava.version>
         <assertj.version>3.27.7</assertj.version>
         <bookkeeper.version>4.18.2</bookkeeper.version>
         <checkstyle.version>14.4.0</checkstyle.version>
         <jcommander.version>3.0</jcommander.version>
         <junit.jupiter.version>6.1.3</junit.jupiter.version>
         <mockito.junit.jupiter.version>5.24.0</mockito.junit.jupiter.version>
-        <bytebuddy.version>1.18.16</bytebuddy.version>
+        <bytebuddy.version>1.18.17</bytebuddy.version>
         <commons.lang3.version>3.21.0</commons.lang3.version>
         <jackson.version>3.2.4</jackson.version>
         <jackson.annotations.version>2.22</jackson.annotations.version>
         <!-- Keep at least the version async-http-client is built against -->
-        <netty.version>4.2.19.Final</netty.version>
+        <netty.version>4.2.20.Final</netty.version>
         <log4j.version>2.26.1</log4j.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.16</jacoco.plugin.version>

@@ -93,12 +93,11 @@ class NsqBenchmarkProducerTest {
             AtomicReference<CompletableFuture<Void>> interruptedSend = new AtomicReference<>();
             AtomicBoolean interruptPreserved = new AtomicBoolean();
             Thread interrupted =
-                    new Thread(
-                            () -> {
-                                Thread.currentThread().interrupt();
-                                interruptedSend.set(producer.sendAsync(Optional.empty(), new byte[] {2}));
-                                interruptPreserved.set(Thread.currentThread().isInterrupted());
-                            });
+                    new Thread(() -> {
+                        Thread.currentThread().interrupt();
+                        interruptedSend.set(producer.sendAsync(Optional.empty(), new byte[] {2}));
+                        interruptPreserved.set(Thread.currentThread().isInterrupted());
+                    });
             interrupted.start();
             interrupted.join(2000);
             assertThat(interruptPreserved).isTrue();
@@ -110,12 +109,11 @@ class NsqBenchmarkProducerTest {
             CountDownLatch waiterReturned = new CountDownLatch(1);
             AtomicReference<CompletableFuture<Void>> waitingSend = new AtomicReference<>();
             Thread waiter =
-                    new Thread(
-                            () -> {
-                                waiterStarted.countDown();
-                                waitingSend.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                                waiterReturned.countDown();
-                            });
+                    new Thread(() -> {
+                        waiterStarted.countDown();
+                        waitingSend.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                        waiterReturned.countDown();
+                    });
             waiter.start();
             assertThat(waiterStarted.await(2, TimeUnit.SECONDS)).isTrue();
             assertThat(waiterReturned.await(150, TimeUnit.MILLISECONDS)).isFalse();
@@ -252,12 +250,11 @@ class NsqBenchmarkProducerTest {
             CountDownLatch waiterReturned = new CountDownLatch(1);
             AtomicReference<CompletableFuture<Void>> waitingSend = new AtomicReference<>();
             Thread waiter =
-                    new Thread(
-                            () -> {
-                                waiterStarted.countDown();
-                                waitingSend.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                                waiterReturned.countDown();
-                            });
+                    new Thread(() -> {
+                        waiterStarted.countDown();
+                        waitingSend.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                        waiterReturned.countDown();
+                    });
             waiter.start();
             assertThat(waiterStarted.await(2, TimeUnit.SECONDS)).isTrue();
             assertThat(waiterReturned.await(150, TimeUnit.MILLISECONDS)).isFalse();
@@ -321,11 +318,10 @@ class NsqBenchmarkProducerTest {
             assertThat(stoppingExecutor.await(2, TimeUnit.SECONDS)).isTrue();
             CountDownLatch secondStarted = new CountDownLatch(1);
             Future<?> secondClose =
-                    closers.submit(
-                            () -> {
-                                secondStarted.countDown();
-                                producer.close();
-                            });
+                    closers.submit(() -> {
+                        secondStarted.countDown();
+                        producer.close();
+                    });
             assertThat(secondStarted.await(2, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> secondClose.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -349,15 +345,14 @@ class NsqBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CountDownLatch occupied = new CountDownLatch(1);
         CountDownLatch releaseWorker = new CountDownLatch(1);
-        executor.execute(
-                () -> {
-                    occupied.countDown();
-                    try {
-                        releaseWorker.await();
-                    } catch (InterruptedException interrupted) {
-                        Thread.currentThread().interrupt();
-                    }
-                });
+        executor.execute(() -> {
+            occupied.countDown();
+            try {
+                releaseWorker.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
         NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1);
         ExecutorService closer = Executors.newSingleThreadExecutor();
         try {
@@ -365,19 +360,17 @@ class NsqBenchmarkProducerTest {
             CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
             AtomicReference<Thread> callbackThread = new AtomicReference<>();
             CompletableFuture<Void> callback =
-                    send.handle(
-                            (result, failure) -> {
-                                callbackThread.set(Thread.currentThread());
-                                producer.close();
-                                return null;
-                            });
+                    send.handle((result, failure) -> {
+                        callbackThread.set(Thread.currentThread());
+                        producer.close();
+                        return null;
+                    });
             AtomicReference<Thread> closeThread = new AtomicReference<>();
             Future<?> closing =
-                    closer.submit(
-                            () -> {
-                                closeThread.set(Thread.currentThread());
-                                producer.close();
-                            });
+                    closer.submit(() -> {
+                        closeThread.set(Thread.currentThread());
+                        producer.close();
+                    });
             closing.get(2, TimeUnit.SECONDS);
             callback.get(2, TimeUnit.SECONDS);
             assertThat(callbackThread.get()).isSameAs(closeThread.get());
@@ -602,12 +595,11 @@ class NsqBenchmarkProducerTest {
                 .when(client)
                 .produce(anyString(), any(byte[].class));
         ExecutorService executor =
-                Executors.newSingleThreadExecutor(
-                        task -> {
-                            Thread thread = new Thread(task, "nsq-chained-send-test");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "nsq-chained-send-test");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         try (NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1)) {
             CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();

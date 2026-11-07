@@ -59,23 +59,22 @@ class RedisBenchmarkConsumerTest {
         CountDownLatch release = new CountDownLatch(1);
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            boolean interrupted = false;
-                            while (true) {
-                                try {
-                                    release.await();
-                                    break;
-                                } catch (InterruptedException e) {
-                                    interrupted = true;
-                                }
-                            }
-                            if (interrupted) {
-                                Thread.currentThread().interrupt();
-                            }
-                            return List.of();
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    boolean interrupted = false;
+                    while (true) {
+                        try {
+                            release.await();
+                            break;
+                        } catch (InterruptedException e) {
+                            interrupted = true;
+                        }
+                    }
+                    if (interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return List.of();
+                });
         RedisBenchmarkConsumer consumer =
                 new RedisBenchmarkConsumer(
                         "consumer",
@@ -103,12 +102,11 @@ class RedisBenchmarkConsumerTest {
         CountDownLatch started = new CountDownLatch(1);
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            new CountDownLatch(1).await();
-                            return List.of();
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    new CountDownLatch(1).await();
+                    return List.of();
+                });
         RedisBenchmarkConsumer consumer =
                 new RedisBenchmarkConsumer(
                         "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class));
@@ -136,15 +134,14 @@ class RedisBenchmarkConsumerTest {
                         new StreamEntryID(1, 0), Map.of("payload".getBytes(UTF_8), new byte[] {1}));
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation -> {
-                            if (firstRead.getAndSet(false)) {
-                                allowRead.await(5, TimeUnit.SECONDS);
-                                return List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
-                            }
-                            new CountDownLatch(1).await();
-                            return List.of();
-                        });
+                .thenAnswer(invocation -> {
+                    if (firstRead.getAndSet(false)) {
+                        allowRead.await(5, TimeUnit.SECONDS);
+                        return List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
+                    }
+                    new CountDownLatch(1).await();
+                    return List.of();
+                });
         ConsumerCallback callback = mock();
         AtomicReference<RedisBenchmarkConsumer> holder = new AtomicReference<>();
         AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -176,15 +173,14 @@ class RedisBenchmarkConsumerTest {
 
     @Test
     void rejectsNonPositiveCloseTimeout() {
-        assertThatThrownBy(
-                        () ->
-                                new RedisBenchmarkConsumer(
-                                        "consumer",
-                                        "topic",
-                                        "subscription",
-                                        mock(JedisPool.class),
-                                        mock(ConsumerCallback.class),
-                                        Duration.ZERO))
+        assertThatThrownBy(() ->
+                        new RedisBenchmarkConsumer(
+                                "consumer",
+                                "topic",
+                                "subscription",
+                                mock(JedisPool.class),
+                                mock(ConsumerCallback.class),
+                                Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -204,21 +200,20 @@ class RedisBenchmarkConsumerTest {
         AtomicInteger reads = new AtomicInteger();
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation ->
-                                switch (reads.getAndIncrement()) {
-                                    case 0 -> null;
-                                    case 1 -> List.of();
-                                    case 2 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
-                                    case 3 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(missingPayload)));
-                                    case 4 -> throw new JedisDataException("ERR unexpected");
-                                    case 5 -> throw new IllegalStateException("connection lost");
-                                    default -> {
-                                        blocked.countDown();
-                                        new CountDownLatch(1).await();
-                                        yield List.of();
-                                    }
-                                });
+                .thenAnswer(invocation ->
+                        switch (reads.getAndIncrement()) {
+                            case 0 -> null;
+                            case 1 -> List.of();
+                            case 2 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
+                            case 3 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(missingPayload)));
+                            case 4 -> throw new JedisDataException("ERR unexpected");
+                            case 5 -> throw new IllegalStateException("connection lost");
+                            default -> {
+                                blocked.countDown();
+                                new CountDownLatch(1).await();
+                                yield List.of();
+                            }
+                        });
         ConsumerCallback callback = mock();
         RedisBenchmarkConsumer consumer =
                 new RedisBenchmarkConsumer("consumer", "topic", "subscription", pool, callback);
@@ -247,16 +242,15 @@ class RedisBenchmarkConsumerTest {
         CountDownLatch blocked = new CountDownLatch(1);
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation -> {
-                            blocked.countDown();
-                            try {
-                                new CountDownLatch(1).await();
-                            } catch (InterruptedException interrupted) {
-                                throw failure;
-                            }
-                            return List.of();
-                        });
+                .thenAnswer(invocation -> {
+                    blocked.countDown();
+                    try {
+                        new CountDownLatch(1).await();
+                    } catch (InterruptedException interrupted) {
+                        throw failure;
+                    }
+                    return List.of();
+                });
         RedisBenchmarkConsumer consumer =
                 new RedisBenchmarkConsumer(
                         "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class));
@@ -282,11 +276,10 @@ class RedisBenchmarkConsumerTest {
             Thread.currentThread().interrupt();
             assertThatThrownBy(consumer::close)
                     .isInstanceOf(InterruptedException.class)
-                    .satisfies(
-                            error ->
-                                    assertThat(error.getSuppressed())
-                                            .singleElement()
-                                            .isInstanceOf(ExecutionException.class));
+                    .satisfies(error ->
+                            assertThat(error.getSuppressed())
+                                    .singleElement()
+                                    .isInstanceOf(ExecutionException.class));
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
@@ -301,11 +294,10 @@ class RedisBenchmarkConsumerTest {
             Thread.currentThread().interrupt();
             assertThatThrownBy(consumer::close)
                     .isInstanceOf(InterruptedException.class)
-                    .satisfies(
-                            error ->
-                                    assertThat(error.getSuppressed())
-                                            .singleElement()
-                                            .isInstanceOf(TimeoutException.class));
+                    .satisfies(error ->
+                            assertThat(error.getSuppressed())
+                                    .singleElement()
+                                    .isInstanceOf(TimeoutException.class));
         } finally {
             Thread.interrupted();
             release.countDown();
@@ -327,19 +319,18 @@ class RedisBenchmarkConsumerTest {
         AtomicBoolean interruptedAfterClose = new AtomicBoolean();
         Thread closer =
                 Thread.ofPlatform()
-                        .start(
-                                () -> {
-                                    if (interruptedBeforeClose) {
-                                        Thread.currentThread().interrupt();
-                                    }
-                                    try {
-                                        consumer.close();
-                                    } catch (Throwable error) {
-                                        failure.set(error);
-                                    } finally {
-                                        interruptedAfterClose.set(Thread.currentThread().isInterrupted());
-                                    }
-                                });
+                        .start(() -> {
+                            if (interruptedBeforeClose) {
+                                Thread.currentThread().interrupt();
+                            }
+                            try {
+                                consumer.close();
+                            } catch (Throwable error) {
+                                failure.set(error);
+                            } finally {
+                                interruptedAfterClose.set(Thread.currentThread().isInterrupted());
+                            }
+                        });
         try {
             long firstWait = awaitWaitCount(closer, 1);
             closer.interrupt();
@@ -381,18 +372,17 @@ class RedisBenchmarkConsumerTest {
         CountDownLatch started = new CountDownLatch(1);
         when(jedis.xreadGroupBinary(
                         any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            while (true) {
-                                try {
-                                    release.await();
-                                    return List.of();
-                                } catch (InterruptedException ignored) {
-                                    // Simulate a client call that ignores interruption.
-                                }
-                            }
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    while (true) {
+                        try {
+                            release.await();
+                            return List.of();
+                        } catch (InterruptedException ignored) {
+                            // Simulate a client call that ignores interruption.
+                        }
+                    }
+                });
         RedisBenchmarkConsumer consumer =
                 new RedisBenchmarkConsumer(
                         "consumer", "topic", "subscription", pool, mock(ConsumerCallback.class), timeout);

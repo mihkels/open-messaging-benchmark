@@ -97,36 +97,35 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         PravegaBenchmarkConsumer consumer = new PravegaBenchmarkConsumer(reader, executor);
 
         // Start a thread to read events.
-        executor.submit(
-                () -> {
-                    consumer.readerThread = Thread.currentThread();
+        executor.submit(() -> {
+            consumer.readerThread = Thread.currentThread();
+            try {
+                while (!consumer.closed.get()) {
                     try {
-                        while (!consumer.closed.get()) {
-                            try {
-                                final ByteBuffer event = reader.readNextEvent(1000).getEvent();
-                                if (event != null && !consumer.closed.get()) {
-                                    long eventTimestamp;
-                                    if (includeTimestampInEvent) {
-                                        eventTimestamp = event.getLong();
-                                    } else {
-                                        // This will result in an invalid end-to-end latency measurement of 0 seconds.
-                                        eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
-                                    }
-                                    consumerCallback.messageReceived(event, eventTimestamp);
-                                }
-                            } catch (ReinitializationRequiredException e) {
-                                log.error("Exception during read", e);
-                                throw e;
-                            } catch (RuntimeException e) {
-                                // The task's future is never inspected, so an escaping exception would stop
-                                // this reader silently and strand its segments for the rest of the run.
-                                log.error("Failed to process event; continuing to read", e);
+                        final ByteBuffer event = reader.readNextEvent(1000).getEvent();
+                        if (event != null && !consumer.closed.get()) {
+                            long eventTimestamp;
+                            if (includeTimestampInEvent) {
+                                eventTimestamp = event.getLong();
+                            } else {
+                                // This will result in an invalid end-to-end latency measurement of 0 seconds.
+                                eventTimestamp = TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
                             }
+                            consumerCallback.messageReceived(event, eventTimestamp);
                         }
-                    } finally {
-                        consumer.readerThread = null;
+                    } catch (ReinitializationRequiredException e) {
+                        log.error("Exception during read", e);
+                        throw e;
+                    } catch (RuntimeException e) {
+                        // The task's future is never inspected, so an escaping exception would stop
+                        // this reader silently and strand its segments for the rest of the run.
+                        log.error("Failed to process event; continuing to read", e);
                     }
-                });
+                }
+            } finally {
+                consumer.readerThread = null;
+            }
+        });
         return consumer;
     }
 

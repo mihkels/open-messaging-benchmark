@@ -208,10 +208,9 @@ public class TestResult {
         aggregatedPublishLatencyMax = millis(publish.getMaxValue());
         publish
                 .percentiles(100)
-                .forEach(
-                        value ->
-                                aggregatedPublishLatencyQuantiles.put(
-                                        value.getPercentile(), millis(value.getValueIteratedTo())));
+                .forEach(value ->
+                        aggregatedPublishLatencyQuantiles.put(
+                                value.getPercentile(), millis(value.getValueIteratedTo())));
 
         Histogram schedule = aggregate.publishScheduleLatency;
         aggregatedPublishScheduleLatencyAvg = millis(schedule.getMean());
@@ -224,10 +223,9 @@ public class TestResult {
         aggregatedPublishScheduleLatencyMax = millis(schedule.getMaxValue());
         schedule
                 .percentiles(100)
-                .forEach(
-                        value ->
-                                aggregatedPublishScheduleLatencyQuantiles.put(
-                                        value.getPercentile(), millis(value.getValueIteratedTo())));
+                .forEach(value ->
+                        aggregatedPublishScheduleLatencyQuantiles.put(
+                                value.getPercentile(), millis(value.getValueIteratedTo())));
 
         Histogram delay = aggregate.publishDelayLatency;
         aggregatedPublishDelayLatencyAvg = delay.getMean();
@@ -240,10 +238,9 @@ public class TestResult {
         aggregatedPublishDelayLatencyMax = delay.getMaxValue();
         delay
                 .percentiles(100)
-                .forEach(
-                        value ->
-                                aggregatedPublishDelayLatencyQuantiles.put(
-                                        value.getPercentile(), value.getValueIteratedTo()));
+                .forEach(value ->
+                        aggregatedPublishDelayLatencyQuantiles.put(
+                                value.getPercentile(), value.getValueIteratedTo()));
 
         Histogram endToEnd = aggregate.endToEndLatency;
         aggregatedEndToEndLatencyAvg = millis(endToEnd.getMean());
@@ -256,10 +253,9 @@ public class TestResult {
         aggregatedEndToEndLatencyMax = millis(endToEnd.getMaxValue());
         endToEnd
                 .percentiles(100)
-                .forEach(
-                        value ->
-                                aggregatedEndToEndLatencyQuantiles.put(
-                                        value.getPercentile(), millis(value.getValueIteratedTo())));
+                .forEach(value ->
+                        aggregatedEndToEndLatencyQuantiles.put(
+                                value.getPercentile(), millis(value.getValueIteratedTo())));
     }
 
     void recordSummary(CountersStats counters, double targetRate, long maxBacklog) {

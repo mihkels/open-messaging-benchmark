@@ -86,14 +86,13 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         }
 
         try {
-            return CompletableFuture.runAsync(
-                    () -> {
-                        try {
-                            session.createAddress(SimpleString.of(topic), RoutingType.MULTICAST, true);
-                        } catch (ActiveMQException e) {
-                            throw new CompletionException(e);
-                        }
-                    });
+            return CompletableFuture.runAsync(() -> {
+                try {
+                    session.createAddress(SimpleString.of(topic), RoutingType.MULTICAST, true);
+                } catch (ActiveMQException e) {
+                    throw new CompletionException(e);
+                }
+            });
         } catch (RuntimeException e) {
             return CompletableFuture.failedFuture(e);
         }
@@ -135,12 +134,11 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
                                     throw new CompletionException(e);
                                 }
                             })
-                    .whenComplete(
-                            (unused, failure) -> {
-                                if (failure != null) {
-                                    future.completeExceptionally(failure);
-                                }
-                            });
+                    .whenComplete((unused, failure) -> {
+                        if (failure != null) {
+                            future.completeExceptionally(failure);
+                        }
+                    });
         } catch (RuntimeException e) {
             future.completeExceptionally(e);
         }

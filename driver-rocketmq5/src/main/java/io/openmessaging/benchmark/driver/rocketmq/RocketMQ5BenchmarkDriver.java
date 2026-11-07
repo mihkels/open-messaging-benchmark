@@ -121,47 +121,45 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(final String topic, final int partitions) {
-        return CompletableFuture.runAsync(
-                () -> {
-                    TopicConfig topicConfig = new TopicConfig();
-                    topicConfig.setOrder(false);
-                    topicConfig.setPerm(6);
-                    topicConfig.setReadQueueNums(partitions);
-                    topicConfig.setWriteQueueNums(partitions);
-                    topicConfig.setTopicName(topic);
-                    Map<String, String> properties = new HashMap<>();
-                    String topicType =
-                            rmqClientConfig.sendDelayMsg
-                                    ? TopicMessageType.DELAY.getValue()
-                                    : TopicMessageType.NORMAL.getValue();
-                    properties.put("+message.type", topicType);
-                    topicConfig.setAttributes(properties);
+        return CompletableFuture.runAsync(() -> {
+            TopicConfig topicConfig = new TopicConfig();
+            topicConfig.setOrder(false);
+            topicConfig.setPerm(6);
+            topicConfig.setReadQueueNums(partitions);
+            topicConfig.setWriteQueueNums(partitions);
+            topicConfig.setTopicName(topic);
+            Map<String, String> properties = new HashMap<>();
+            String topicType =
+                    rmqClientConfig.sendDelayMsg
+                            ? TopicMessageType.DELAY.getValue()
+                            : TopicMessageType.NORMAL.getValue();
+            properties.put("+message.type", topicType);
+            topicConfig.setAttributes(properties);
 
-                    try {
-                        Set<String> brokerList =
-                                fetchMasterAndSlaveAddrByClusterName(
-                                        this.rmqAdmin, this.rmqClientConfig.clusterName);
-                        topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
-                        topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
+            try {
+                Set<String> brokerList =
+                        fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+                topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
+                topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
 
-                        for (String brokerAddr : brokerList) {
-                            this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(
-                                String.format(
-                                        "Failed to create topic [%s] to cluster [%s]",
-                                        topic, this.rmqClientConfig.clusterName),
-                                e);
-                    } catch (Exception e) {
-                        throw new RuntimeException(
-                                String.format(
-                                        "Failed to create topic [%s] to cluster [%s]",
-                                        topic, this.rmqClientConfig.clusterName),
-                                e);
-                    }
-                });
+                for (String brokerAddr : brokerList) {
+                    this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(
+                        String.format(
+                                "Failed to create topic [%s] to cluster [%s]",
+                                topic, this.rmqClientConfig.clusterName),
+                        e);
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        String.format(
+                                "Failed to create topic [%s] to cluster [%s]",
+                                topic, this.rmqClientConfig.clusterName),
+                        e);
+            }
+        });
     }
 
     @Override
@@ -251,13 +249,12 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
                             .setConsumerGroup(fullSubName)
                             // Set the subscription for the consumer.
                             .setSubscriptionExpressions(Collections.singletonMap(topic, filterExpression))
-                            .setMessageListener(
-                                    messageView -> {
-                                        // Handle the received message and return consume result.
-                                        consumerCallback.messageReceived(
-                                                messageView.getBody(), messageView.getBornTimestamp());
-                                        return ConsumeResult.SUCCESS;
-                                    })
+                            .setMessageListener(messageView -> {
+                                // Handle the received message and return consume result.
+                                consumerCallback.messageReceived(
+                                        messageView.getBody(), messageView.getBornTimestamp());
+                                return ConsumeResult.SUCCESS;
+                            })
                             .build();
             return CompletableFuture.completedFuture(new RocketMQ5BenchmarkConsumer(rmqConsumer));
         } catch (Exception e) {

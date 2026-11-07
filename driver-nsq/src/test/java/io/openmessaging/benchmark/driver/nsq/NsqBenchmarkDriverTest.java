@@ -246,11 +246,10 @@ class NsqBenchmarkDriverTest {
         RuntimeException cleanupFailure = new RuntimeException("consumer cleanup failed");
         AtomicReference<NsqBenchmarkDriver> owner = new AtomicReference<>();
         when(consumer.startAsync())
-                .thenAnswer(
-                        invocation -> {
-                            owner.get().close();
-                            return CompletableFuture.completedFuture(consumer);
-                        });
+                .thenAnswer(invocation -> {
+                    owner.get().close();
+                    return CompletableFuture.completedFuture(consumer);
+                });
         doThrow(cleanupFailure).when(consumer).close();
         Path inModule = Path.of("nsq.yaml");
         Path config = Files.exists(inModule) ? inModule : Path.of("driver-nsq", "nsq.yaml");
@@ -498,11 +497,10 @@ class NsqBenchmarkDriverTest {
         NsqBenchmarkConsumer consumer = mock(NsqBenchmarkConsumer.class);
         AtomicReference<NsqBenchmarkDriver> owner = new AtomicReference<>();
         when(consumer.startAsync())
-                .thenAnswer(
-                        invocation -> {
-                            owner.get().close();
-                            return start.apply(consumer);
-                        });
+                .thenAnswer(invocation -> {
+                    owner.get().close();
+                    return start.apply(consumer);
+                });
         try (NsqBenchmarkDriver driver = driverWith(NSQProducer::new, () -> consumer)) {
             owner.set(driver);
             driver.initialize(moduleConfig(), null);

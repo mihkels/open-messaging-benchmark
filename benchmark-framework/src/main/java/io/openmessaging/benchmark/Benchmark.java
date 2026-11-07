@@ -283,10 +283,9 @@ public final class Benchmark {
     private static List<Combination> combinations(
             Map<String, Workload> workloads, List<String> driverConfigs) {
         List<Combination> combinations = new ArrayList<>();
-        workloads.forEach(
-                (name, workload) ->
-                        driverConfigs.forEach(
-                                driverConfig -> combinations.add(new Combination(name, workload, driverConfig))));
+        workloads.forEach((name, workload) ->
+                driverConfigs.forEach(
+                        driverConfig -> combinations.add(new Combination(name, workload, driverConfig))));
         return combinations;
     }
 

@@ -56,9 +56,8 @@ class ArtemisBenchmarkConsumerTest {
 
         assertThatThrownBy(fixture::create)
                 .isSameAs(cause)
-                .satisfies(
-                        error ->
-                                assertThat(error.getSuppressed()).containsExactly(consumerFailure, sessionFailure));
+                .satisfies(error ->
+                        assertThat(error.getSuppressed()).containsExactly(consumerFailure, sessionFailure));
         verify(fixture.consumer).close();
         verify(fixture.session).close();
     }

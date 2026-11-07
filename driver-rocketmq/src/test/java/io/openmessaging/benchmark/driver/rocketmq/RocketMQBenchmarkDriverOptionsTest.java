@@ -104,7 +104,8 @@ class RocketMQBenchmarkDriverOptionsTest {
     @Test
     void skipsUnsetProducerSettingsAndAclWithoutCredentials() throws Exception {
         TestDriver driver = new TestDriver();
-        driver.initialize(config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\naccessKey: ' '\n"), null);
+        driver.initialize(
+                config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\naccessKey: ' '\n"), null);
         assertThat(driver.isAclEnabled()).isFalse();
         assertThat(driver.hooks).containsOnlyNulls();
 
@@ -146,7 +147,8 @@ class RocketMQBenchmarkDriverOptionsTest {
     @Test
     void createsBatchTopicOnEveryBrokerAndCachesTheBrokerList() throws Exception {
         TestDriver driver = new TestDriver();
-        driver.initialize(config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\nbatchCQ: true\n"), null);
+        driver.initialize(
+                config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\nbatchCQ: true\n"), null);
         when(driver.admin.examineBrokerClusterInfo()).thenReturn(cluster("c1", "b1:10911", "b2:10911"));
 
         driver.createTopic("topic", 8).join();
@@ -189,19 +191,21 @@ class RocketMQBenchmarkDriverOptionsTest {
         InterruptedException interrupted = new InterruptedException("interrupted");
         CountDownLatch adminCallStarted = new CountDownLatch(1);
         CountDownLatch releaseAdminCall = new CountDownLatch(1);
-        doAnswer(invocation -> {
-                    adminCallStarted.countDown();
-                    releaseAdminCall.await();
-                    throw interrupted;
-                })
+        doAnswer(
+                        invocation -> {
+                            adminCallStarted.countDown();
+                            releaseAdminCall.await();
+                            throw interrupted;
+                        })
                 .when(driver.admin)
                 .createAndUpdateTopicConfig(anyString(), any(TopicConfig.class));
 
         CompletableFuture<Void> topicCreation = driver.createTopic("topic", 1);
         assertThat(adminCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
         AtomicBoolean interruptRestored = new AtomicBoolean();
-        CompletableFuture<Void> observed = topicCreation.whenComplete(
-                (ignored, failure) -> interruptRestored.set(Thread.currentThread().isInterrupted()));
+        CompletableFuture<Void> observed =
+                topicCreation.whenComplete(
+                        (ignored, failure) -> interruptRestored.set(Thread.currentThread().isInterrupted()));
 
         try {
             releaseAdminCall.countDown();
@@ -240,8 +244,7 @@ class RocketMQBenchmarkDriverOptionsTest {
         TestDriver driver = new TestDriver();
         IllegalStateException failure = new IllegalStateException("boom");
         doThrow(failure).when(driver.admin).start();
-        assertThatThrownBy(
-                        () -> driver.initialize(config("clusterName: c1\nnamesrvAddr: x:1\n"), null))
+        assertThatThrownBy(() -> driver.initialize(config("clusterName: c1\nnamesrvAddr: x:1\n"), null))
                 .isSameAs(failure);
         verify(driver.admin).shutdown();
     }
@@ -250,10 +253,7 @@ class RocketMQBenchmarkDriverOptionsTest {
         Path file = dir.resolve("rocketmq-" + System.nanoTime() + ".yaml");
         Files.writeString(
                 file,
-                "name: RocketMQ\ndriverClass: "
-                        + RocketMQBenchmarkDriver.class.getName()
-                        + "\n"
-                        + yaml);
+                "name: RocketMQ\ndriverClass: " + RocketMQBenchmarkDriver.class.getName() + "\n" + yaml);
         return file;
     }
 

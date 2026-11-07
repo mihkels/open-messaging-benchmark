@@ -65,17 +65,16 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
                             .setRoutingType(RoutingType.MULTICAST)
                             .setDurable(true));
             tempConsumer = tempSession.createConsumer(queueName);
-            tempConsumer.setMessageHandler(
-                    message -> {
-                        byte[] payload = new byte[message.getBodyBuffer().readableBytes()];
-                        message.getBodyBuffer().readBytes(payload);
-                        callback.messageReceived(payload, message.getTimestamp());
-                        try {
-                            message.acknowledge();
-                        } catch (ActiveMQException e) {
-                            log.warn("Failed to acknowledge message", e);
-                        }
-                    });
+            tempConsumer.setMessageHandler(message -> {
+                byte[] payload = new byte[message.getBodyBuffer().readableBytes()];
+                message.getBodyBuffer().readBytes(payload);
+                callback.messageReceived(payload, message.getTimestamp());
+                try {
+                    message.acknowledge();
+                } catch (ActiveMQException e) {
+                    log.warn("Failed to acknowledge message", e);
+                }
+            });
 
             tempSession.start();
 

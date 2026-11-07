@@ -61,18 +61,17 @@ class BenchmarkOutcomesTest {
         workloads.put("last", workload("last"));
 
         Throwable failure =
-                catchThrowable(
-                        () ->
-                                Benchmark.runWorkloads(
-                                        arguments,
-                                        workloads,
-                                        worker,
-                                        (driver, workload, ignored) ->
-                                                switch (workload.name) {
-                                                    case "first" -> first;
-                                                    case "successful" -> success;
-                                                    default -> last;
-                                                }));
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                workloads,
+                                worker,
+                                (driver, workload, ignored) ->
+                                        switch (workload.name) {
+                                            case "first" -> first;
+                                            case "successful" -> success;
+                                            default -> last;
+                                        }));
         assertThat(messages(failure)).contains("first failed", "last failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("successful");
         verify(worker, times(3)).initializeDriver(any());
@@ -95,9 +94,8 @@ class BenchmarkOutcomesTest {
         workloads.put("never", workload("never"));
 
         Throwable failure =
-                catchThrowable(
-                        () ->
-                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
         assertThat(messages(failure)).contains("run cleanup failed", "worker close failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("completed");
         verify(worker, times(1)).initializeDriver(any());
@@ -120,14 +118,13 @@ class BenchmarkOutcomesTest {
         workloads.put("first", workload("first"));
         workloads.put("second", workload("second"));
 
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(
-                                        arguments,
-                                        workloads,
-                                        worker,
-                                        (driver, workload, ignored) ->
-                                                workload.name.equals("first") ? failedCleanup : next))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                workloads,
+                                worker,
+                                (driver, workload, ignored) ->
+                                        workload.name.equals("first") ? failedCleanup : next))
                 .hasRootCauseMessage("driver cleanup failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("second");
         verify(worker, times(2)).initializeDriver(any());
@@ -147,9 +144,8 @@ class BenchmarkOutcomesTest {
         workloads.put("first", workload("first"));
         workloads.put("never", workload("never"));
 
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
                 .hasRootCauseMessage("controller did not exit");
         verify(worker, times(1)).initializeDriver(any());
         verify(worker).close();
@@ -168,9 +164,8 @@ class BenchmarkOutcomesTest {
         workloads.put("never", workload("never"));
 
         Throwable failure =
-                catchThrowable(
-                        () ->
-                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator));
         assertThat(messages(failure))
                 .contains("fatal run failure", "run close failed", "worker close failed");
         verify(worker, times(1)).initializeDriver(any());
@@ -185,13 +180,9 @@ class BenchmarkOutcomesTest {
         doThrow(new IOException("worker close failed")).when(worker).close();
 
         Throwable failure =
-                catchThrowable(
-                        () ->
-                                Benchmark.runWorkloads(
-                                        arguments,
-                                        Map.of("first", workload("first")),
-                                        worker,
-                                        (d, w, ignored) -> null));
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(
+                                arguments, Map.of("first", workload("first")), worker, (d, w, ignored) -> null));
         assertThat(messages(failure)).contains("worker close failed");
         assertThat(failure).hasCauseInstanceOf(NullPointerException.class);
         verify(worker).close();
@@ -211,9 +202,8 @@ class BenchmarkOutcomesTest {
         workloads.put("first", workload("first"));
         workloads.put("second", workload("second"));
 
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
                 .hasRootCauseMessage("initialization failed");
         assertThat(Files.readString(Path.of(arguments.output))).contains("second");
         verify(worker, times(2)).initializeDriver(any());
@@ -234,9 +224,8 @@ class BenchmarkOutcomesTest {
         workloads.put("first", workload("first"));
         workloads.put("never", workload("never"));
 
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(arguments, workloads, worker, (d, w, ignored) -> generator))
                 .hasRootCauseMessage("fatal cleanup failure");
         verify(worker, times(1)).initializeDriver(any());
         verify(worker).close();
@@ -248,11 +237,10 @@ class BenchmarkOutcomesTest {
         Worker worker = mock(Worker.class);
         WorkloadRun generator = mock(WorkloadRun.class);
         when(generator.run())
-                .thenAnswer(
-                        invocation -> {
-                            Thread.currentThread().interrupt();
-                            return result("interrupted");
-                        });
+                .thenAnswer(invocation -> {
+                    Thread.currentThread().interrupt();
+                    return result("interrupted");
+                });
         Map<String, Workload> workloads = new LinkedHashMap<>();
         workloads.put("first", workload("first"));
         workloads.put("never", workload("never"));

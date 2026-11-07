@@ -82,7 +82,8 @@ class NatsE2eIT extends BaseE2eIT {
             driver.initialize(config, null);
             String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
-            try (var firstConsumer = driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
+            try (var firstConsumer =
+                            driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
                     var secondConsumer =
                             driver.createConsumer(topic, "group-b", second).get(10, TimeUnit.SECONDS);
                     var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {

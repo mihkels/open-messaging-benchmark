@@ -70,27 +70,26 @@ final class DriverCoverageExtension implements BeforeAllCallback, TestWatcher {
     private static void record(ExtensionContext context, String status) {
         context
                 .getTestMethod()
-                .ifPresent(
-                        method -> {
-                            DriverContract contract = method.getAnnotation(DriverContract.class);
-                            if (contract == null) {
-                                return;
-                            }
-                            synchronized (OUTCOMES) {
-                                if (pluginIds == null) {
-                                    return;
-                                }
-                                String test = method.getDeclaringClass().getSimpleName() + "#" + method.getName();
-                                OUTCOMES
-                                        .computeIfAbsent(contract.value(), ignored -> new TreeMap<>())
-                                        .put(test, status);
-                                try {
-                                    writeReport();
-                                } catch (IOException e) {
-                                    throw new IllegalStateException("Cannot write Testcontainers coverage report", e);
-                                }
-                            }
-                        });
+                .ifPresent(method -> {
+                    DriverContract contract = method.getAnnotation(DriverContract.class);
+                    if (contract == null) {
+                        return;
+                    }
+                    synchronized (OUTCOMES) {
+                        if (pluginIds == null) {
+                            return;
+                        }
+                        String test = method.getDeclaringClass().getSimpleName() + "#" + method.getName();
+                        OUTCOMES
+                                .computeIfAbsent(contract.value(), ignored -> new TreeMap<>())
+                                .put(test, status);
+                        try {
+                            writeReport();
+                        } catch (IOException e) {
+                            throw new IllegalStateException("Cannot write Testcontainers coverage report", e);
+                        }
+                    }
+                });
     }
 
     static Set<String> discoverPluginIds(Path root) throws IOException {

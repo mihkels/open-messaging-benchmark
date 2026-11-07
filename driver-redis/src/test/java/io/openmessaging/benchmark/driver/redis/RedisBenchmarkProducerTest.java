@@ -46,14 +46,13 @@ class RedisBenchmarkProducerTest {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(jedis.xadd(any(byte[].class), anyMap(), any(XAddParams.class)))
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("timed out waiting for send release");
-                            }
-                            return new byte[0];
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("timed out waiting for send release");
+                    }
+                    return new byte[0];
+                });
         RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -62,12 +61,11 @@ class RedisBenchmarkProducerTest {
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
             CountDownLatch closing = new CountDownLatch(1);
             Future<?> close =
-                    executor.submit(
-                            () -> {
-                                closing.countDown();
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        closing.countDown();
+                        producer.close();
+                        return null;
+                    });
             assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> close.get(100, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -123,12 +121,11 @@ class RedisBenchmarkProducerTest {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(jedis.xadd(any(byte[].class), anyMap(), any(XAddParams.class)))
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            release.await(5, TimeUnit.SECONDS);
-                            return new byte[0];
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    release.await(5, TimeUnit.SECONDS);
+                    return new byte[0];
+                });
         RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {

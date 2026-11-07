@@ -284,12 +284,11 @@ class NsqBenchmarkConsumerTest {
         when(connection.isHeartbeatStatusOK()).thenReturn(true);
         when(connection.commandAndWait(any(NSQCommand.class))).thenReturn(ok);
         when(connection.command(any(NSQCommand.class)))
-                .thenAnswer(
-                        invocation -> {
-                            writingReady.countDown();
-                            awaitIgnoringInterrupts(releaseWrite);
-                            return write;
-                        });
+                .thenAnswer(invocation -> {
+                    writingReady.countDown();
+                    awaitIgnoringInterrupts(releaseWrite);
+                    return write;
+                });
         when(write.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(write.isSuccess()).thenReturn(true);
         NsqBenchmarkConsumer consumer =
@@ -432,11 +431,10 @@ class NsqBenchmarkConsumerTest {
                         50,
                         Connection::new);
         CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
-        creation.whenComplete(
-                (handle, failure) -> {
-                    callbackEntered.countDown();
-                    awaitIgnoringInterrupts(releaseCallback);
-                });
+        creation.whenComplete((handle, failure) -> {
+            callbackEntered.countDown();
+            awaitIgnoringInterrupts(releaseCallback);
+        });
         try {
             assertThat(callbackEntered.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(creation).isCompletedExceptionally();
@@ -454,14 +452,13 @@ class NsqBenchmarkConsumerTest {
                     consumer(new MutableLookup(Set.of(broker.address())), (data, time) -> {});
             CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
             CompletableFuture<Void> closed =
-                    creation.thenAccept(
-                            handle -> {
-                                try {
-                                    handle.close();
-                                } catch (Exception failure) {
-                                    throw new IllegalStateException(failure);
-                                }
-                            });
+                    creation.thenAccept(handle -> {
+                        try {
+                            handle.close();
+                        } catch (Exception failure) {
+                            throw new IllegalStateException(failure);
+                        }
+                    });
             assertThat(broker.subReceived.await(5, TimeUnit.SECONDS)).isTrue();
             broker.releaseSub.countDown();
 
@@ -484,15 +481,14 @@ class NsqBenchmarkConsumerTest {
                         Connection::new);
         CompletableFuture<BenchmarkConsumer> creation = consumer.startAsync();
         CompletableFuture<Void> closed =
-                creation.handle(
-                        (handle, failure) -> {
-                            try {
-                                consumer.close();
-                            } catch (Exception closeFailure) {
-                                throw new IllegalStateException(closeFailure);
-                            }
-                            return null;
-                        });
+                creation.handle((handle, failure) -> {
+                    try {
+                        consumer.close();
+                    } catch (Exception closeFailure) {
+                        throw new IllegalStateException(closeFailure);
+                    }
+                    return null;
+                });
 
         closed.get(5, TimeUnit.SECONDS);
         quiescence(creation).get(5, TimeUnit.SECONDS);
@@ -1065,11 +1061,10 @@ class NsqBenchmarkConsumerTest {
         ExecutorService closer = Executors.newSingleThreadExecutor();
         try {
             Future<?> result =
-                    closer.submit(
-                            () -> {
-                                consumer.close();
-                                return null;
-                            });
+                    closer.submit(() -> {
+                        consumer.close();
+                        return null;
+                    });
             result.get(5, TimeUnit.SECONDS);
             verify(connection).close();
         } finally {
@@ -1137,21 +1132,19 @@ class NsqBenchmarkConsumerTest {
             ExecutorService closer = Executors.newFixedThreadPool(2);
             try {
                 Future<?> closing =
-                        closer.submit(
-                                () -> {
-                                    consumer.close();
-                                    return null;
-                                });
+                        closer.submit(() -> {
+                            consumer.close();
+                            return null;
+                        });
                 assertThat(broker.awaitCommand("CLS")).isEqualTo("CLS");
                 assertThat(closing).isNotDone();
                 CountDownLatch secondStarted = new CountDownLatch(1);
                 Future<?> closingAgain =
-                        closer.submit(
-                                () -> {
-                                    secondStarted.countDown();
-                                    consumer.close();
-                                    return null;
-                                });
+                        closer.submit(() -> {
+                            secondStarted.countDown();
+                            consumer.close();
+                            return null;
+                        });
                 assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
                 assertThat(closingAgain).isNotDone();
                 release.countDown();

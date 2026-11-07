@@ -125,14 +125,13 @@ class JMSBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Exception> closeFailure = new AtomicReference<>();
-        first.whenComplete(
-                (unused, failure) -> {
-                    try {
-                        producer.close();
-                    } catch (Exception e) {
-                        closeFailure.set(e);
-                    }
-                });
+        first.whenComplete((unused, failure) -> {
+            try {
+                producer.close();
+            } catch (Exception e) {
+                closeFailure.set(e);
+            }
+        });
 
         fixture.listeners.get(0).onCompletion(null);
 
@@ -161,14 +160,13 @@ class JMSBenchmarkProducerTest {
         AtomicReference<Throwable> firstFailure = new AtomicReference<>();
         Thread firstClose =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        producer.close();
-                                    } catch (Throwable failure) {
-                                        firstFailure.set(failure);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                producer.close();
+                            } catch (Throwable failure) {
+                                firstFailure.set(failure);
+                            }
+                        });
         try {
             assertTrue(closing.await(5, TimeUnit.SECONDS));
             producer.close();
@@ -202,14 +200,13 @@ class JMSBenchmarkProducerTest {
         try {
             assertTrue(sending.await(5, TimeUnit.SECONDS));
             CompletableFuture<Void> close =
-                    CompletableFuture.runAsync(
-                            () -> {
-                                try {
-                                    producer.close();
-                                } catch (Exception failure) {
-                                    throw new CompletionException(failure);
-                                }
-                            });
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            producer.close();
+                        } catch (Exception failure) {
+                            throw new CompletionException(failure);
+                        }
+                    });
             assertThrows(TimeoutException.class, () -> close.get(100, TimeUnit.MILLISECONDS));
             assertEquals(0, fixture.sessionCloses.get());
             release.countDown();

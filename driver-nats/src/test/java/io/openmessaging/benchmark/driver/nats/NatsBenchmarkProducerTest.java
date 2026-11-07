@@ -59,12 +59,11 @@ class NatsBenchmarkProducerTest {
         AtomicReference<byte[]> publishedPayload = new AtomicReference<>();
         CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
         JetStream jetStream =
-                jetStream(
-                        (topic, message) -> {
-                            publishedTopic.set(topic);
-                            publishedPayload.set(message);
-                            return acknowledgement;
-                        });
+                jetStream((topic, message) -> {
+                    publishedTopic.set(topic);
+                    publishedPayload.set(message);
+                    return acknowledgement;
+                });
         NatsBenchmarkProducer producer = new NatsBenchmarkProducer(jetStream, TOPIC);
 
         long before = System.currentTimeMillis();
@@ -92,11 +91,10 @@ class NatsBenchmarkProducerTest {
         CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    publishedPayload.set(message);
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            publishedPayload.set(message);
+                            return acknowledgement;
+                        }),
                         TOPIC);
 
         long before = System.currentTimeMillis();
@@ -118,19 +116,18 @@ class NatsBenchmarkProducerTest {
         List<Publication> publications = new CopyOnWriteArrayList<>();
         CountDownLatch allPublishing = new CountDownLatch(sendCount);
         JetStream jetStream =
-                jetStream(
-                        (topic, message) -> {
-                            CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
-                            publications.add(new Publication(topic, message, acknowledgement));
-                            allPublishing.countDown();
-                            try {
-                                assertTrue(allPublishing.await(10, TimeUnit.SECONDS), "sends did not overlap");
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                throw new AssertionError("interrupted while waiting for concurrent sends", e);
-                            }
-                            return acknowledgement;
-                        });
+                jetStream((topic, message) -> {
+                    CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
+                    publications.add(new Publication(topic, message, acknowledgement));
+                    allPublishing.countDown();
+                    try {
+                        assertTrue(allPublishing.await(10, TimeUnit.SECONDS), "sends did not overlap");
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError("interrupted while waiting for concurrent sends", e);
+                    }
+                    return acknowledgement;
+                });
         NatsBenchmarkProducer producer = new NatsBenchmarkProducer(jetStream, TOPIC);
         ExecutorService executor = Executors.newFixedThreadPool(sendCount);
         CountDownLatch start = new CountDownLatch(1);
@@ -139,11 +136,10 @@ class NatsBenchmarkProducerTest {
             long before = System.currentTimeMillis();
             for (int i = 0; i < sendCount; i++) {
                 calls.add(
-                        executor.submit(
-                                () -> {
-                                    assertTrue(start.await(10, TimeUnit.SECONDS));
-                                    return producer.sendAsync(Optional.empty(), payload);
-                                }));
+                        executor.submit(() -> {
+                            assertTrue(start.await(10, TimeUnit.SECONDS));
+                            return producer.sendAsync(Optional.empty(), payload);
+                        }));
             }
             start.countDown();
 
@@ -202,11 +198,10 @@ class NatsBenchmarkProducerTest {
         CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    publishedPayload.set(message);
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            publishedPayload.set(message);
+                            return acknowledgement;
+                        }),
                         TOPIC);
 
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), payload);
@@ -224,11 +219,10 @@ class NatsBenchmarkProducerTest {
         List<byte[]> published = new ArrayList<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    published.add(message);
-                                    return CompletableFuture.completedFuture(null);
-                                }),
+                        jetStream((topic, message) -> {
+                            published.add(message);
+                            return CompletableFuture.completedFuture(null);
+                        }),
                         TOPIC);
 
         for (int length = 0; length < Long.BYTES; length++) {

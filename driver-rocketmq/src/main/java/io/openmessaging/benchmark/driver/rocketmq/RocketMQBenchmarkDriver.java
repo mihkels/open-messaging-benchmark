@@ -130,45 +130,43 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(final String topic, final int partitions) {
-        return CompletableFuture.runAsync(
-                () -> {
-                    TopicConfig topicConfig = new TopicConfig();
-                    topicConfig.setOrder(false);
-                    topicConfig.setPerm(6);
-                    topicConfig.setReadQueueNums(partitions);
-                    topicConfig.setWriteQueueNums(partitions);
-                    topicConfig.setTopicName(topic);
-                    if (Boolean.TRUE.equals(this.rmqClientConfig.batchCQ)) {
-                        topicConfig
-                                .getAttributes()
-                                .put("+" + TopicAttributes.QUEUE_TYPE_ATTRIBUTE.getName(), "BatchCQ");
-                    }
+        return CompletableFuture.runAsync(() -> {
+            TopicConfig topicConfig = new TopicConfig();
+            topicConfig.setOrder(false);
+            topicConfig.setPerm(6);
+            topicConfig.setReadQueueNums(partitions);
+            topicConfig.setWriteQueueNums(partitions);
+            topicConfig.setTopicName(topic);
+            if (Boolean.TRUE.equals(this.rmqClientConfig.batchCQ)) {
+                topicConfig
+                        .getAttributes()
+                        .put("+" + TopicAttributes.QUEUE_TYPE_ATTRIBUTE.getName(), "BatchCQ");
+            }
 
-                    try {
-                        Set<String> brokerList =
-                                fetchMasterAndSlaveAddrByClusterName(
-                                        this.rmqAdmin, this.rmqClientConfig.clusterName);
-                        topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
-                        topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
+            try {
+                Set<String> brokerList =
+                        fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+                topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
+                topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
 
-                        for (String brokerAddr : brokerList) {
-                            this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(
-                                String.format(
-                                        "Failed to create topic [%s] to cluster [%s]",
-                                        topic, this.rmqClientConfig.clusterName),
-                                e);
-                    } catch (Exception e) {
-                        throw new RuntimeException(
-                                String.format(
-                                        "Failed to create topic [%s] to cluster [%s]",
-                                        topic, this.rmqClientConfig.clusterName),
-                                e);
-                    }
-                });
+                for (String brokerAddr : brokerList) {
+                    this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(
+                        String.format(
+                                "Failed to create topic [%s] to cluster [%s]",
+                                topic, this.rmqClientConfig.clusterName),
+                        e);
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        String.format(
+                                "Failed to create topic [%s] to cluster [%s]",
+                                topic, this.rmqClientConfig.clusterName),
+                        e);
+            }
+        });
     }
 
     @Override

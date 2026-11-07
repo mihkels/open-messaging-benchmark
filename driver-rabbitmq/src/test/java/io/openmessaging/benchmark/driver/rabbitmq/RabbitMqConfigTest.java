@@ -27,12 +27,11 @@ class RabbitMqConfigTest {
                 "{\"amqpUris\":[\"amqp://local\"],\"messagePersistence\":true,\"queueType\":\"QUORUM\"}";
         RabbitMqConfig value = new ObjectMapper().readValue(config, RabbitMqConfig.class);
         assertThat(value)
-                .satisfies(
-                        v -> {
-                            assertThat(v.amqpUris).containsOnly("amqp://local");
-                            assertThat(v.messagePersistence).isTrue();
-                            assertThat(v.queueType).isEqualTo(RabbitMqConfig.QueueType.QUORUM);
-                        });
+                .satisfies(v -> {
+                    assertThat(v.amqpUris).containsOnly("amqp://local");
+                    assertThat(v.messagePersistence).isTrue();
+                    assertThat(v.queueType).isEqualTo(RabbitMqConfig.QueueType.QUORUM);
+                });
     }
 
     @Test
@@ -40,13 +39,12 @@ class RabbitMqConfigTest {
         String config = "{\"amqpUris\":[\"amqp://local\"]}";
         RabbitMqConfig value = new ObjectMapper().readValue(config, RabbitMqConfig.class);
         assertThat(value)
-                .satisfies(
-                        v -> {
-                            assertThat(v.amqpUris).containsOnly("amqp://local");
-                            assertThat(v.messagePersistence).isFalse();
-                            assertThat(v.queueType).isEqualTo(RabbitMqConfig.QueueType.CLASSIC);
-                            assertThat(v.resourceCreationMaxRetries).isEqualTo(10);
-                        });
+                .satisfies(v -> {
+                    assertThat(v.amqpUris).containsOnly("amqp://local");
+                    assertThat(v.messagePersistence).isFalse();
+                    assertThat(v.queueType).isEqualTo(RabbitMqConfig.QueueType.CLASSIC);
+                    assertThat(v.resourceCreationMaxRetries).isEqualTo(10);
+                });
     }
 
     @Test

@@ -61,12 +61,11 @@ class PravegaBenchmarkDriverTest {
         assertThatThrownBy(() -> fixture.driver.createTopic("topic", 1).join()).hasCause(topicFailure);
         assertThatThrownBy(() -> fixture.driver.createProducer("topic").join())
                 .hasCause(producerFailure);
-        assertThatThrownBy(
-                        () ->
-                                fixture
-                                        .driver
-                                        .createConsumer("topic", "subscription", mock(ConsumerCallback.class))
-                                        .join())
+        assertThatThrownBy(() ->
+                        fixture
+                                .driver
+                                .createConsumer("topic", "subscription", mock(ConsumerCallback.class))
+                                .join())
                 .hasCause(consumerFailure);
         fixture.driver.close();
         verify(fixture.streams, never()).sealStream("scope", "topic");
@@ -77,10 +76,9 @@ class PravegaBenchmarkDriverTest {
         Fixture fixture = new Fixture();
         InterruptedException cause = new InterruptedException("controller interrupted");
         when(fixture.streams.createScope("scope"))
-                .thenAnswer(
-                        invocation -> {
-                            throw cause;
-                        });
+                .thenAnswer(invocation -> {
+                    throw cause;
+                });
         try {
             assertThatThrownBy(() -> fixture.driver.createTopic("topic", 1).join()).hasCause(cause);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
@@ -106,10 +104,9 @@ class PravegaBenchmarkDriverTest {
 
         assertThatThrownBy(fixture.driver::close)
                 .isSameAs(factoryFailure)
-                .satisfies(
-                        error ->
-                                assertThat(error.getSuppressed())
-                                        .containsExactly(groupFailure, topicFailure, streamFailure));
+                .satisfies(error ->
+                        assertThat(error.getSuppressed())
+                                .containsExactly(groupFailure, topicFailure, streamFailure));
         fixture.driver.close();
         verify(fixture.factory, times(1)).close();
         verify(fixture.groups, times(1)).close();
@@ -124,24 +121,22 @@ class PravegaBenchmarkDriverTest {
         CountDownLatch creating = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(fixture.streams.createStream(eq("scope"), eq("late"), any()))
-                .thenAnswer(
-                        invocation -> {
-                            creating.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("topic creation was not released");
-                            }
-                            return true;
-                        });
+                .thenAnswer(invocation -> {
+                    creating.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("topic creation was not released");
+                    }
+                    return true;
+                });
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             var creation = executor.submit(() -> fixture.driver.createTopic("late", 1).join());
             assertThat(creating.await(5, TimeUnit.SECONDS)).isTrue();
             var close =
-                    executor.submit(
-                            () -> {
-                                fixture.driver.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        fixture.driver.close();
+                        return null;
+                    });
 
             assertThatThrownBy(() -> close.get(100, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -169,32 +164,30 @@ class PravegaBenchmarkDriverTest {
         AtomicReference<Thread> closeThread = new AtomicReference<>();
         AtomicBoolean interruptRestored = new AtomicBoolean();
         when(fixture.streams.createStream(eq("scope"), eq("late"), any()))
-                .thenAnswer(
-                        invocation -> {
-                            creating.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("topic creation was not released");
-                            }
-                            return true;
-                        });
+                .thenAnswer(invocation -> {
+                    creating.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("topic creation was not released");
+                    }
+                    return true;
+                });
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             var creation = executor.submit(() -> fixture.driver.createTopic("late", 1).join());
             assertThat(creating.await(5, TimeUnit.SECONDS)).isTrue();
             var close =
-                    executor.submit(
-                            () -> {
-                                closeThread.set(Thread.currentThread());
-                                closing.countDown();
-                                try {
-                                    fixture.driver.close();
-                                    return null;
-                                } catch (Exception failure) {
-                                    return failure;
-                                } finally {
-                                    interruptRestored.set(Thread.currentThread().isInterrupted());
-                                }
-                            });
+                    executor.submit(() -> {
+                        closeThread.set(Thread.currentThread());
+                        closing.countDown();
+                        try {
+                            fixture.driver.close();
+                            return null;
+                        } catch (Exception failure) {
+                            return failure;
+                        } finally {
+                            interruptRestored.set(Thread.currentThread().isInterrupted());
+                        }
+                    });
             assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
             closeThread.get().interrupt();
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
@@ -268,10 +261,9 @@ class PravegaBenchmarkDriverTest {
                     .thenReturn(groups);
             factories
                     .when(() -> EventStreamClientFactory.withScope(eq("scope"), any(ClientConfig.class)))
-                    .thenAnswer(
-                            invocation -> {
-                                throw interrupted;
-                            });
+                    .thenAnswer(invocation -> {
+                        throw interrupted;
+                    });
 
             assertThatThrownBy(() -> driver.initialize(configuration, mock(MeterRegistry.class)))
                     .isSameAs(interrupted);
@@ -290,10 +282,9 @@ class PravegaBenchmarkDriverTest {
         fixture.driver.createTopic("topic", 1).join();
         InterruptedException interrupted = new InterruptedException("seal interrupted");
         when(fixture.streams.sealStream("scope", "topic"))
-                .thenAnswer(
-                        invocation -> {
-                            throw interrupted;
-                        });
+                .thenAnswer(invocation -> {
+                    throw interrupted;
+                });
         try {
             assertThatThrownBy(fixture.driver::close).isSameAs(interrupted);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();

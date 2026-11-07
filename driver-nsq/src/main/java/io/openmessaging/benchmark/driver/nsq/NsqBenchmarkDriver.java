@@ -85,18 +85,17 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
                         .build();
         return httpClient
                 .sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(
-                        response -> {
-                            if (response.statusCode() != 200) {
-                                throw new IllegalStateException(
-                                        "Failed to create NSQ topic "
-                                                + topic
-                                                + ": HTTP "
-                                                + response.statusCode()
-                                                + " "
-                                                + response.body());
-                            }
-                        });
+                .thenAccept(response -> {
+                    if (response.statusCode() != 200) {
+                        throw new IllegalStateException(
+                                "Failed to create NSQ topic "
+                                        + topic
+                                        + ": HTTP "
+                                        + response.statusCode()
+                                        + " "
+                                        + response.body());
+                    }
+                });
     }
 
     @Override
@@ -157,12 +156,11 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
                     return CompletableFuture.failedFuture(failure);
                 }
             } else {
-                creation.whenComplete(
-                        (handle, failure) -> {
-                            synchronized (this) {
-                                consumerCreations.remove(creation);
-                            }
-                        });
+                creation.whenComplete((handle, failure) -> {
+                    synchronized (this) {
+                        consumerCreations.remove(creation);
+                    }
+                });
             }
             return creation;
         } catch (Exception failure) {

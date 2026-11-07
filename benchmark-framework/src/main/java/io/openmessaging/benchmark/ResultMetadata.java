@@ -91,9 +91,8 @@ public record ResultMetadata(
 
     private static Map<String, Object> redactMap(Map<String, ?> values) {
         Map<String, Object> redacted = new LinkedHashMap<>();
-        values.forEach(
-                (key, value) ->
-                        redacted.put(key, SECRET_KEY.matcher(key).matches() ? REDACTED : redactValue(value)));
+        values.forEach((key, value) ->
+                redacted.put(key, SECRET_KEY.matcher(key).matches() ? REDACTED : redactValue(value)));
         return redacted;
     }
 

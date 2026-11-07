@@ -185,9 +185,8 @@ class RocketMQ5BenchmarkDriverOptionsTest {
         assertThat(adminCallStarted.await(5, TimeUnit.SECONDS)).isTrue();
         AtomicBoolean topicInterruptRestored = new AtomicBoolean();
         CompletableFuture<Void> observed =
-                topicCreation.whenComplete(
-                        (ignored, failure) ->
-                                topicInterruptRestored.set(Thread.currentThread().isInterrupted()));
+                topicCreation.whenComplete((ignored, failure) ->
+                        topicInterruptRestored.set(Thread.currentThread().isInterrupted()));
         try {
             releaseAdminCall.countDown();
             assertThatThrownBy(observed::join).hasRootCause(topicFailure);

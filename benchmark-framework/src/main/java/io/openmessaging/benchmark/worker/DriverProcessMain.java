@@ -62,14 +62,13 @@ public final class DriverProcessMain {
         LocalWorker worker = new LocalWorker(registry);
         WorkerHandler handler = new WorkerHandler(worker);
         Javalin app =
-                Javalin.create(
-                        config -> {
-                            config.startup.showJavalinBanner = false;
-                            handler.configure(config);
-                            config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
-                            config.routes.post(
-                                    INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
-                        });
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    handler.configure(config);
+                    config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
+                    config.routes.post(
+                            INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
+                });
         app.start("127.0.0.1", 0);
 
         Runnable shutdown =
@@ -110,17 +109,16 @@ public final class DriverProcessMain {
         Thread.ofPlatform()
                 .daemon()
                 .name("driver-shutdown-watchdog")
-                .start(
-                        () -> {
-                            try {
-                                Thread.sleep(SHUTDOWN_TIMEOUT);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                return;
-                            }
-                            log.error("Driver shutdown exceeded {}; forcing exit", SHUTDOWN_TIMEOUT);
-                            Runtime.getRuntime().halt(1);
-                        });
+                .start(() -> {
+                    try {
+                        Thread.sleep(SHUTDOWN_TIMEOUT);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    log.error("Driver shutdown exceeded {}; forcing exit", SHUTDOWN_TIMEOUT);
+                    Runtime.getRuntime().halt(1);
+                });
         System.exit(0);
     }
 }

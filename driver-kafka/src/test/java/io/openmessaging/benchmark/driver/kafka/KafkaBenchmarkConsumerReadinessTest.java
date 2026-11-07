@@ -64,14 +64,13 @@ class KafkaBenchmarkConsumerReadinessTest {
         AtomicBoolean positionReady = new AtomicBoolean();
         CountDownLatch positionChecked = new CountDownLatch(1);
         when(fixture.consumer.position(eq(partition), eq(Duration.ZERO)))
-                .thenAnswer(
-                        ignored -> {
-                            positionChecked.countDown();
-                            if (!positionReady.get()) {
-                                throw new TimeoutException("position pending");
-                            }
-                            return 42L;
-                        });
+                .thenAnswer(ignored -> {
+                    positionChecked.countDown();
+                    if (!positionReady.get()) {
+                        throw new TimeoutException("position pending");
+                    }
+                    return 42L;
+                });
         CompletableFuture<BenchmarkConsumer> future = fixture.start();
         try {
             assertTrue(fixture.pollStarted.await(5, TimeUnit.SECONDS));
@@ -132,11 +131,10 @@ class KafkaBenchmarkConsumerReadinessTest {
         CountDownLatch failedPoll = new CountDownLatch(1);
         CompletableFuture<BenchmarkConsumer> future = fixture.start();
         try {
-            fixture.steps.add(
-                    () -> {
-                        failedPoll.countDown();
-                        throw new TimeoutException("transient broker failure");
-                    });
+            fixture.steps.add(() -> {
+                failedPoll.countDown();
+                throw new TimeoutException("transient broker failure");
+            });
             assertTrue(failedPoll.await(5, TimeUnit.SECONDS));
             assertFalse(future.isDone());
             fixture.assign(Set.of());
@@ -160,10 +158,9 @@ class KafkaBenchmarkConsumerReadinessTest {
                 .close();
         CompletableFuture<BenchmarkConsumer> future = fixture.start();
         try {
-            fixture.steps.add(
-                    () -> {
-                        throw failure;
-                    });
+            fixture.steps.add(() -> {
+                throw failure;
+            });
             ExecutionException result =
                     assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
             assertSame(failure, result.getCause());
@@ -220,18 +217,17 @@ class KafkaBenchmarkConsumerReadinessTest {
         CountDownLatch callbackFinished = new CountDownLatch(1);
         AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
         try {
-            future.whenComplete(
-                    (handle, error) -> {
-                        try {
-                            if (error == null) {
-                                handle.close();
-                            }
-                        } catch (Exception closeError) {
-                            callbackFailure.set(closeError);
-                        } finally {
-                            callbackFinished.countDown();
-                        }
-                    });
+            future.whenComplete((handle, error) -> {
+                try {
+                    if (error == null) {
+                        handle.close();
+                    }
+                } catch (Exception closeError) {
+                    callbackFailure.set(closeError);
+                } finally {
+                    callbackFinished.countDown();
+                }
+            });
             fixture.assign(Set.of());
             assertTrue(callbackFinished.await(5, TimeUnit.SECONDS));
             assertTrue(fixture.closed.await(5, TimeUnit.SECONDS));
@@ -264,24 +260,22 @@ class KafkaBenchmarkConsumerReadinessTest {
             fixture.assign(Set.of());
             BenchmarkConsumer handle = future.get(5, TimeUnit.SECONDS);
             TopicPartition partition = new TopicPartition("topic", 0);
-            fixture.steps.add(
-                    () ->
-                            new ConsumerRecords<>(
-                                    java.util.Map.of(
-                                            partition,
-                                            List.of(
-                                                    new org.apache.kafka.clients.consumer.ConsumerRecord<>(
-                                                            "topic", 0, 1, "key", new byte[] {1})))));
+            fixture.steps.add(() ->
+                    new ConsumerRecords<>(
+                            java.util.Map.of(
+                                    partition,
+                                    List.of(
+                                            new org.apache.kafka.clients.consumer.ConsumerRecord<>(
+                                                    "topic", 0, 1, "key", new byte[] {1})))));
             assertTrue(callbackStarted.await(5, TimeUnit.SECONDS));
             Future<?> close =
-                    executor.submit(
-                            () -> {
-                                try {
-                                    handle.close();
-                                } catch (Exception error) {
-                                    throw new RuntimeException(error);
-                                }
-                            });
+                    executor.submit(() -> {
+                        try {
+                            handle.close();
+                        } catch (Exception error) {
+                            throw new RuntimeException(error);
+                        }
+                    });
             assertTrue(fixture.wakeupRequested.await(5, TimeUnit.SECONDS));
             assertFalse(close.isDone());
             release.countDown();
@@ -328,28 +322,25 @@ class KafkaBenchmarkConsumerReadinessTest {
                     .subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
             when(consumer.assignment()).thenAnswer(ignored -> assignment.get());
             when(consumer.partitionsFor(eq("topic"), eq(Duration.ZERO)))
-                    .thenAnswer(
-                            ignored -> {
-                                metadataChecked.countDown();
-                                return metadata.get();
-                            });
+                    .thenAnswer(ignored -> {
+                        metadataChecked.countDown();
+                        return metadata.get();
+                    });
             when(consumer.poll(any(Duration.class)))
-                    .thenAnswer(
-                            ignored -> {
-                                pollStarted.countDown();
-                                PollStep step = steps.poll(5, TimeUnit.SECONDS);
-                                if (step == null) {
-                                    throw new TimeoutException("no scripted poll");
-                                }
-                                return step.poll();
-                            });
+                    .thenAnswer(ignored -> {
+                        pollStarted.countDown();
+                        PollStep step = steps.poll(5, TimeUnit.SECONDS);
+                        if (step == null) {
+                            throw new TimeoutException("no scripted poll");
+                        }
+                        return step.poll();
+                    });
             doAnswer(
                             ignored -> {
                                 wakeupRequested.countDown();
-                                steps.add(
-                                        () -> {
-                                            throw new WakeupException();
-                                        });
+                                steps.add(() -> {
+                                    throw new WakeupException();
+                                });
                                 return null;
                             })
                     .when(consumer)
@@ -373,12 +364,11 @@ class KafkaBenchmarkConsumerReadinessTest {
         }
 
         private void assign(Set<TopicPartition> partitions) {
-            steps.add(
-                    () -> {
-                        assignment.set(partitions);
-                        listener.get().onPartitionsAssigned(partitions);
-                        return ConsumerRecords.empty();
-                    });
+            steps.add(() -> {
+                assignment.set(partitions);
+                listener.get().onPartitionsAssigned(partitions);
+                return ConsumerRecords.empty();
+            });
         }
 
         private void emptyPoll() {

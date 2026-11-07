@@ -75,11 +75,10 @@ class KopBenchmarkDriverOwnershipTest {
                                             .when(mock)
                                             .subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
                                     when(mock.poll(any(Duration.class)))
-                                            .thenAnswer(
-                                                    invocation -> {
-                                                        Thread.sleep(1);
-                                                        return ConsumerRecords.empty();
-                                                    });
+                                            .thenAnswer(invocation -> {
+                                                Thread.sleep(1);
+                                                return ConsumerRecords.empty();
+                                            });
                                     when(mock.partitionsFor(eq("topic"), eq(Duration.ZERO)))
                                             .thenReturn(List.of(partition));
                                 })) {

@@ -69,11 +69,10 @@ class KafkaBenchmarkDriverOwnershipTest {
                                             .when(consumer)
                                             .subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
                                     when(consumer.poll(any(Duration.class)))
-                                            .thenAnswer(
-                                                    ignored -> {
-                                                        Thread.sleep(2);
-                                                        return ConsumerRecords.empty();
-                                                    });
+                                            .thenAnswer(ignored -> {
+                                                Thread.sleep(2);
+                                                return ConsumerRecords.empty();
+                                            });
                                     when(consumer.partitionsFor(eq("topic"), eq(Duration.ZERO)))
                                             .thenReturn(List.of(partition));
                                 })) {

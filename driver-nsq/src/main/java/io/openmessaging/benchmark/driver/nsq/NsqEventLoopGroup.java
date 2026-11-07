@@ -185,12 +185,11 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
             throw (Error) registrationFailure;
         }
         try {
-            registration.addListener(
-                    result -> {
-                        if (!result.isSuccess()) {
-                            requestClose(channel);
-                        }
-                    });
+            registration.addListener(result -> {
+                if (!result.isSuccess()) {
+                    requestClose(channel);
+                }
+            });
         } catch (RuntimeException | Error failure) {
             recordCleanupFailure(failure);
             requestClose(channel);
@@ -248,25 +247,22 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
             closing.put(channel, request);
         }
         try {
-            registration.addListener(
-                    result -> {
-                        if (!result.isSuccess()) {
-                            forceClose(channel, request, null);
-                            return;
-                        }
-                        try {
-                            channel
-                                    .close()
-                                    .addListener(
-                                            closed ->
-                                                    finishClose(
-                                                            channel,
-                                                            request,
-                                                            closed.isSuccess() ? null : closeFailure(closed.cause())));
-                        } catch (RuntimeException | Error failure) {
-                            forceClose(channel, request, failure);
-                        }
-                    });
+            registration.addListener(result -> {
+                if (!result.isSuccess()) {
+                    forceClose(channel, request, null);
+                    return;
+                }
+                try {
+                    channel
+                            .close()
+                            .addListener(closed -> {
+                                finishClose(
+                                        channel, request, closed.isSuccess() ? null : closeFailure(closed.cause()));
+                            });
+                } catch (RuntimeException | Error failure) {
+                    forceClose(channel, request, failure);
+                }
+            });
         } catch (RuntimeException | Error failure) {
             forceClose(channel, request, failure);
         }
@@ -335,14 +331,13 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     private Future<Void> terminationView() {
         Promise<Void> view = ImmediateEventExecutor.INSTANCE.newPromise();
         view.setUncancellable();
-        termination.addListener(
-                finished -> {
-                    if (finished.isSuccess()) {
-                        view.trySuccess(null);
-                    } else {
-                        view.tryFailure(closeFailure(finished.cause()));
-                    }
-                });
+        termination.addListener(finished -> {
+            if (finished.isSuccess()) {
+                view.trySuccess(null);
+            } else {
+                view.tryFailure(closeFailure(finished.cause()));
+            }
+        });
         return view;
     }
 

@@ -242,23 +242,21 @@ class DistributedWorkersEnsembleTest {
                         2, 1, 20, 2, 20, 2, 1, 2, secondHistogram, secondHistogram, secondHistogram);
         CountDownLatch started = new CountDownLatch(2);
         when(first.getPeriodStats())
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            if (!started.await(5, TimeUnit.SECONDS)) {
-                                throw new IllegalStateException("Workers were not polled concurrently");
-                            }
-                            return firstStats;
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    if (!started.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Workers were not polled concurrently");
+                    }
+                    return firstStats;
+                });
         when(second.getPeriodStats())
-                .thenAnswer(
-                        invocation -> {
-                            started.countDown();
-                            if (!started.await(5, TimeUnit.SECONDS)) {
-                                throw new IllegalStateException("Workers were not polled concurrently");
-                            }
-                            return secondStats;
-                        });
+                .thenAnswer(invocation -> {
+                    started.countDown();
+                    if (!started.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Workers were not polled concurrently");
+                    }
+                    return secondStats;
+                });
 
         try (var ensemble = new DistributedWorkersEnsemble(List.of(first, second), false)) {
             PeriodStats result = ensemble.getPeriodStats();

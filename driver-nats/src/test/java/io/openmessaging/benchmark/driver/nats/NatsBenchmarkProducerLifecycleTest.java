@@ -50,12 +50,11 @@ class NatsBenchmarkProducerLifecycleTest {
     void closeSettlesOnlyItsOwnSendsAndLeavesTheSharedClientUsable() {
         List<CompletableFuture<PublishAck>> acknowledgements = new ArrayList<>();
         JetStream shared =
-                jetStream(
-                        (topic, message) -> {
-                            CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
-                            acknowledgements.add(acknowledgement);
-                            return acknowledgement;
-                        });
+                jetStream((topic, message) -> {
+                    CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
+                    acknowledgements.add(acknowledgement);
+                    return acknowledgement;
+                });
         NatsBenchmarkProducer producer = new NatsBenchmarkProducer(shared, TOPIC);
         NatsBenchmarkProducer other = new NatsBenchmarkProducer(shared, TOPIC);
         byte[] payload = samplePayload();
@@ -99,11 +98,10 @@ class NatsBenchmarkProducerLifecycleTest {
         AtomicInteger publishCalls = new AtomicInteger();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    publishCalls.incrementAndGet();
-                                    return new CompletableFuture<>();
-                                }),
+                        jetStream((topic, message) -> {
+                            publishCalls.incrementAndGet();
+                            return new CompletableFuture<>();
+                        }),
                         TOPIC);
         byte[] payload = samplePayload();
         byte[] original = payload.clone();
@@ -120,12 +118,11 @@ class NatsBenchmarkProducerLifecycleTest {
         List<CompletableFuture<PublishAck>> acknowledgements = new ArrayList<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
-                                    acknowledgements.add(acknowledgement);
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
+                            acknowledgements.add(acknowledgement);
+                            return acknowledgement;
+                        }),
                         TOPIC);
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), samplePayload());
         CompletableFuture<Void> callback =
@@ -147,11 +144,10 @@ class NatsBenchmarkProducerLifecycleTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), samplePayload());
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), samplePayload());
         CompletableFuture<Void> callback =
-                first.handle(
-                        (unused, failure) -> {
-                            assertThrows(IllegalStateException.class, producer::close);
-                            return null;
-                        });
+                first.handle((unused, failure) -> {
+                    assertThrows(IllegalStateException.class, producer::close);
+                    return null;
+                });
 
         producer.close();
 
@@ -167,13 +163,12 @@ class NatsBenchmarkProducerLifecycleTest {
         CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    if (publishCalls.getAndIncrement() == 0) {
-                                        throw failure;
-                                    }
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            if (publishCalls.getAndIncrement() == 0) {
+                                throw failure;
+                            }
+                            return acknowledgement;
+                        }),
                         TOPIC);
         byte[] payload = samplePayload();
         byte[] original = payload.clone();
@@ -219,12 +214,11 @@ class NatsBenchmarkProducerLifecycleTest {
         List<CompletableFuture<PublishAck>> acknowledgements = new ArrayList<>();
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
-                                    acknowledgements.add(acknowledgement);
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            CompletableFuture<PublishAck> acknowledgement = new CompletableFuture<>();
+                            acknowledgements.add(acknowledgement);
+                            return acknowledgement;
+                        }),
                         TOPIC);
         List<CompletableFuture<Void>> sends = new ArrayList<>();
         CountDownLatch callbackEntered = new CountDownLatch(1);
@@ -233,13 +227,12 @@ class NatsBenchmarkProducerLifecycleTest {
         for (int i = 0; i < 3; i++) {
             CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), samplePayload());
             sends.add(send);
-            send.whenComplete(
-                    (ignored, failure) -> {
-                        if (blockFirst.compareAndSet(true, false)) {
-                            callbackEntered.countDown();
-                            await(releaseCallback);
-                        }
-                    });
+            send.whenComplete((ignored, failure) -> {
+                if (blockFirst.compareAndSet(true, false)) {
+                    callbackEntered.countDown();
+                    await(releaseCallback);
+                }
+            });
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -288,21 +281,19 @@ class NatsBenchmarkProducerLifecycleTest {
                 List<Future<CompletableFuture<Void>>> calls = new ArrayList<>();
                 for (int i = 0; i < senderCount; i++) {
                     calls.add(
-                            executor.submit(
-                                    () -> {
-                                        ready.countDown();
-                                        assertTrue(start.await(5, TimeUnit.SECONDS));
-                                        return producer.sendAsync(Optional.empty(), payload);
-                                    }));
+                            executor.submit(() -> {
+                                ready.countDown();
+                                assertTrue(start.await(5, TimeUnit.SECONDS));
+                                return producer.sendAsync(Optional.empty(), payload);
+                            }));
                 }
                 Future<?> closing =
-                        executor.submit(
-                                () -> {
-                                    ready.countDown();
-                                    assertTrue(start.await(5, TimeUnit.SECONDS));
-                                    producer.close();
-                                    return null;
-                                });
+                        executor.submit(() -> {
+                            ready.countDown();
+                            assertTrue(start.await(5, TimeUnit.SECONDS));
+                            producer.close();
+                            return null;
+                        });
                 assertTrue(ready.await(5, TimeUnit.SECONDS));
                 start.countDown();
                 closing.get(5, TimeUnit.SECONDS);
@@ -335,25 +326,23 @@ class NatsBenchmarkProducerLifecycleTest {
                 CountDownLatch ready = new CountDownLatch(2);
                 CountDownLatch start = new CountDownLatch(1);
                 Future<?> acknowledging =
-                        executor.submit(
-                                () -> {
-                                    ready.countDown();
-                                    assertTrue(start.await(5, TimeUnit.SECONDS));
-                                    if (succeed) {
-                                        acknowledgement.complete(null);
-                                    } else {
-                                        acknowledgement.completeExceptionally(acknowledgementFailure);
-                                    }
-                                    return null;
-                                });
+                        executor.submit(() -> {
+                            ready.countDown();
+                            assertTrue(start.await(5, TimeUnit.SECONDS));
+                            if (succeed) {
+                                acknowledgement.complete(null);
+                            } else {
+                                acknowledgement.completeExceptionally(acknowledgementFailure);
+                            }
+                            return null;
+                        });
                 Future<?> closing =
-                        executor.submit(
-                                () -> {
-                                    ready.countDown();
-                                    assertTrue(start.await(5, TimeUnit.SECONDS));
-                                    producer.close();
-                                    return null;
-                                });
+                        executor.submit(() -> {
+                            ready.countDown();
+                            assertTrue(start.await(5, TimeUnit.SECONDS));
+                            producer.close();
+                            return null;
+                        });
                 assertTrue(ready.await(5, TimeUnit.SECONDS));
                 start.countDown();
                 acknowledging.get(5, TimeUnit.SECONDS);
@@ -385,15 +374,14 @@ class NatsBenchmarkProducerLifecycleTest {
         IllegalStateException publishFailure = new IllegalStateException("synchronous publish failure");
         NatsBenchmarkProducer producer =
                 new NatsBenchmarkProducer(
-                        jetStream(
-                                (topic, message) -> {
-                                    entered.countDown();
-                                    await(release);
-                                    if (throwSynchronously) {
-                                        throw publishFailure;
-                                    }
-                                    return acknowledgement;
-                                }),
+                        jetStream((topic, message) -> {
+                            entered.countDown();
+                            await(release);
+                            if (throwSynchronously) {
+                                throw publishFailure;
+                            }
+                            return acknowledgement;
+                        }),
                         TOPIC);
         byte[] payload = samplePayload();
         byte[] original = payload.clone();

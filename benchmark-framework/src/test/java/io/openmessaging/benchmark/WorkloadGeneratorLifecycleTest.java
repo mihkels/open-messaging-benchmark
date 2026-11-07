@@ -253,14 +253,13 @@ class WorkloadGeneratorLifecycleTest {
         WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2));
         Thread runner =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        generator.run();
-                                    } catch (Throwable t) {
-                                        runFailure.set(t);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                generator.run();
+                            } catch (Throwable t) {
+                                runFailure.set(t);
+                            }
+                        });
         try {
             assertThat(adjustments.await(2, TimeUnit.SECONDS)).isTrue();
             generator.close();
@@ -296,14 +295,13 @@ class WorkloadGeneratorLifecycleTest {
         AtomicReference<Throwable> consumerOnlyFailure = new AtomicReference<>();
         Thread consumerOnlyRun =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        consumerOnlyGenerator.run();
-                                    } catch (Throwable t) {
-                                        consumerOnlyFailure.set(t);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                consumerOnlyGenerator.run();
+                            } catch (Throwable t) {
+                                consumerOnlyFailure.set(t);
+                            }
+                        });
         try {
             assertThat(consumerOnlyStarted.await(2, TimeUnit.SECONDS)).isTrue();
         } finally {
@@ -334,14 +332,13 @@ class WorkloadGeneratorLifecycleTest {
         AtomicReference<Throwable> producerOnlyFailure = new AtomicReference<>();
         Thread producerOnlyRun =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        producerOnlyGenerator.run();
-                                    } catch (Throwable t) {
-                                        producerOnlyFailure.set(t);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                producerOnlyGenerator.run();
+                            } catch (Throwable t) {
+                                producerOnlyFailure.set(t);
+                            }
+                        });
         try {
             assertThat(producerOnlyStarted.await(2, TimeUnit.SECONDS)).isTrue();
         } finally {
@@ -362,13 +359,12 @@ class WorkloadGeneratorLifecycleTest {
         Worker worker = worker();
         AtomicInteger counterReads = new AtomicInteger();
         when(worker.getCountersStats())
-                .thenAnswer(
-                        ignored ->
-                                switch (counterReads.getAndIncrement()) {
-                                    case 0 -> new CountersStats(1, 0, 1);
-                                    case 1 -> new CountersStats(1_025, 0, 1);
-                                    default -> new CountersStats(1_025, 0, 1_025);
-                                });
+                .thenAnswer(ignored ->
+                        switch (counterReads.getAndIncrement()) {
+                            case 0 -> new CountersStats(1, 0, 1);
+                            case 1 -> new CountersStats(1_025, 0, 1);
+                            default -> new CountersStats(1_025, 0, 1_025);
+                        });
         CountDownLatch backlogDrained = new CountDownLatch(1);
         doAnswer(
                         ignored -> {
@@ -388,14 +384,13 @@ class WorkloadGeneratorLifecycleTest {
         AtomicReference<Throwable> runFailure = new AtomicReference<>();
         Thread run =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        generator.run();
-                                    } catch (Throwable t) {
-                                        runFailure.set(t);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                generator.run();
+                            } catch (Throwable t) {
+                                runFailure.set(t);
+                            }
+                        });
         try {
             assertThat(backlogDrained.await(3, TimeUnit.SECONDS)).isTrue();
         } finally {
@@ -439,10 +434,9 @@ class WorkloadGeneratorLifecycleTest {
                         new Duration[] {ok, Duration.ofNanos(1), ok},
                         new Duration[] {ok, ok, Duration.ZERO});
         for (Duration[] durations : invalid) {
-            assertThatThrownBy(
-                            () ->
-                                    new WorkloadGenerator(
-                                            "driver", workload(), worker, durations[0], durations[1], durations[2]))
+            assertThatThrownBy(() ->
+                            new WorkloadGenerator(
+                                    "driver", workload(), worker, durations[0], durations[1], durations[2]))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("must be positive");
         }
@@ -468,15 +462,14 @@ class WorkloadGeneratorLifecycleTest {
         AtomicInteger calls = new AtomicInteger();
         AtomicReference<Boolean> controllerDaemon = new AtomicReference<>();
         when(worker.getCountersStats())
-                .thenAnswer(
-                        ignored -> {
-                            if (calls.getAndIncrement() > 0) {
-                                controllerDaemon.set(Thread.currentThread().isDaemon());
-                                controllerEntered.countDown();
-                                awaitIgnoringInterrupts(release);
-                            }
-                            return new CountersStats();
-                        });
+                .thenAnswer(ignored -> {
+                    if (calls.getAndIncrement() > 0) {
+                        controllerDaemon.set(Thread.currentThread().isDaemon());
+                        controllerEntered.countDown();
+                        awaitIgnoringInterrupts(release);
+                    }
+                    return new CountersStats();
+                });
         doThrow(new IllegalStateException("worker stop failed")).when(worker).stopAll();
         Workload workload = workload();
         workload.producerRate = 0;
@@ -484,14 +477,13 @@ class WorkloadGeneratorLifecycleTest {
         AtomicReference<Throwable> runFailure = new AtomicReference<>();
         Thread run =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        generator.run();
-                                    } catch (Throwable t) {
-                                        runFailure.set(t);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                generator.run();
+                            } catch (Throwable t) {
+                                runFailure.set(t);
+                            }
+                        });
         try {
             assertThat(controllerEntered.await(2, TimeUnit.SECONDS)).isTrue();
             assertThat(controllerDaemon.get()).isTrue();

@@ -267,11 +267,10 @@ public class ProcessWorker implements Worker {
     }
 
     private void run(Consumer<HttpWorkerClient> action) {
-        call(
-                client -> {
-                    action.accept(client);
-                    return null;
-                });
+        call(client -> {
+            action.accept(client);
+            return null;
+        });
     }
 
     @Override

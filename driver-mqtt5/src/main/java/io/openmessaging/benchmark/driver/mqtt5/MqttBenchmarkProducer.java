@@ -77,26 +77,25 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         try {
             this.client
                     .publish(message)
-                    .whenComplete(
-                            (result, ex) -> {
-                                try {
-                                    if (ex != null) {
-                                        pending.completeFromClient(future, ex);
-                                        log.error("Failed to publish MQTT message, topic={}", topic, ex);
-                                    } else if (result == null) {
-                                        pending.completeFromClient(
-                                                future, new IllegalStateException("Missing MQTT publish result"));
-                                    } else if (result.getError().isPresent()) {
-                                        Throwable error = result.getError().get();
-                                        pending.completeFromClient(future, error);
-                                        log.error("Failed to publish MQTT message, topic={}", topic, error);
-                                    } else {
-                                        pending.completeFromClient(future, null);
-                                    }
-                                } catch (Exception failure) {
-                                    pending.completeFromClient(future, failure);
-                                }
-                            });
+                    .whenComplete((result, ex) -> {
+                        try {
+                            if (ex != null) {
+                                pending.completeFromClient(future, ex);
+                                log.error("Failed to publish MQTT message, topic={}", topic, ex);
+                            } else if (result == null) {
+                                pending.completeFromClient(
+                                        future, new IllegalStateException("Missing MQTT publish result"));
+                            } else if (result.getError().isPresent()) {
+                                Throwable error = result.getError().get();
+                                pending.completeFromClient(future, error);
+                                log.error("Failed to publish MQTT message, topic={}", topic, error);
+                            } else {
+                                pending.completeFromClient(future, null);
+                            }
+                        } catch (Exception failure) {
+                            pending.completeFromClient(future, failure);
+                        }
+                    });
         } catch (Exception failure) {
             future.completeExceptionally(failure);
         } finally {

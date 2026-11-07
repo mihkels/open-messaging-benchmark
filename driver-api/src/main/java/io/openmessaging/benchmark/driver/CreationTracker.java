@@ -69,16 +69,15 @@ final class CreationTracker {
         try {
             completion
                     .quiescence()
-                    .whenComplete(
-                            (ignored, error) -> {
-                                try {
-                                    if (error != null) {
-                                        record(Failures.unwrap(error));
-                                    }
-                                } finally {
-                                    release();
-                                }
-                            });
+                    .whenComplete((ignored, error) -> {
+                        try {
+                            if (error != null) {
+                                record(Failures.unwrap(error));
+                            }
+                        } finally {
+                            release();
+                        }
+                    });
         } catch (Throwable error) {
             record(error);
             release();

@@ -58,8 +58,8 @@ starts a separate JVM with that driver's plugin and any required delegate plugin
 and stops it when the next driver is initialized. The driver JVM heap defaults to 4 GiB; set
 `HEAP_OPTS` on the worker to change it. See [Runtime and plugins](../reference/runtime-and-plugins.md).
 
-> **Note:** `--stats-port` is deprecated and ignored, but it must differ from `--port`. Its default
-> is 8081, so pass `--stats-port` with another value if you run the worker on port 8081.
+> **Note:** `--stats-port` is deprecated and ignored. The worker still accepts it so existing
+> launch scripts keep working.
 
 Workers expose Prometheus metrics at `http://<worker>:8080/metrics`; see
 [Monitoring](../guides/monitoring.md).

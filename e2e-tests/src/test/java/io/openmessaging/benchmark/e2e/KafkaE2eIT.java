@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.e2e;
 
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -144,10 +145,15 @@ class KafkaE2eIT extends BaseE2eIT {
         try (var adminClient = org.apache.kafka.clients.admin.AdminClient.create(props)) {
             var descriptions = adminClient.describeTopics(createdTopics).allTopicNames().get(10, TimeUnit.SECONDS);
             assertThat(descriptions.values())
+                    .isNotEmpty()
                     .allSatisfy(topic -> assertThat(topic.partitions()).hasSize(workload.partitionsPerTopic));
 
             Map<String, Integer> groupsWithDeliveries = new HashMap<>();
-            for (var group : adminClient.listConsumerGroups().all().get(10, TimeUnit.SECONDS)) {
+            for (var group
+                    : adminClient
+                            .listGroups(ListGroupsOptions.forConsumerGroups())
+                            .all()
+                            .get(10, TimeUnit.SECONDS)) {
                 var offsets =
                         adminClient
                                 .listConsumerGroupOffsets(group.groupId())

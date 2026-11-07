@@ -117,8 +117,8 @@ driver process.
 - uses Javalin to serve the handler routes and `GET /metrics` on `-p` / `--port` (default 8080);
 - on JVM shutdown, stops the HTTP server and closes the worker, which stops the driver process.
 
-`-sp` / `--stats-port` is deprecated and no longer starts a listener. The worker still checks that
-its value differs from `--port`.
+`-sp` / `--stats-port` is deprecated and ignored. The worker still accepts it, with a warning, so existing launch
+scripts keep working.
 
 ### `WorkerHandler` routes
 

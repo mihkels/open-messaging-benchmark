@@ -50,9 +50,8 @@ class KafkaTopicCreatorLifecycleTest {
         when(topic.get()).thenThrow(interrupted);
 
         KafkaTopicCreator creator = new KafkaTopicCreator(admin, Map.of(), (short) 1, 1);
-        List<TopicInfo> batch = List.of(new TopicInfo("topic", 1));
-        CompletionException failure =
-                assertThrows(CompletionException.class, () -> creator.create(batch).join());
+        CompletableFuture<Void> creation = creator.create(List.of(new TopicInfo("topic", 1)));
+        CompletionException failure = assertThrows(CompletionException.class, creation::join);
         assertSame(interrupted, failure.getCause().getCause());
         verify(admin, times(1)).createTopics(any());
         verify(admin, never()).listTopics();

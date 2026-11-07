@@ -26,7 +26,6 @@ import javax.jms.Connection;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
 import javax.jms.MessageListener;
-import javax.jms.Session;
 import org.junit.jupiter.api.Test;
 
 class JMSBenchmarkConsumerTest {
@@ -108,7 +107,7 @@ class JMSBenchmarkConsumerTest {
     }
 
     @Test
-    void closeClosesConnectionWithoutIndividuallyClosingSessionOrConsumer() throws Exception {
+    void closeClosesConnectionWithoutIndividuallyClosingConsumer() throws Exception {
         Fixture fixture = new Fixture();
         JMSBenchmarkConsumer benchmarkConsumer =
                 JMSBenchmarkConsumer.create(
@@ -117,7 +116,6 @@ class JMSBenchmarkConsumerTest {
         benchmarkConsumer.close();
 
         assertEquals(1, fixture.connectionCloses.get());
-        assertEquals(0, fixture.sessionCloses.get());
         assertEquals(0, fixture.consumerCloses.get());
     }
 
@@ -143,7 +141,6 @@ class JMSBenchmarkConsumerTest {
         private final AtomicReference<MessageListener> listener = new AtomicReference<>();
         private final AtomicInteger connectionStarts = new AtomicInteger();
         private final AtomicInteger connectionCloses = new AtomicInteger();
-        private final AtomicInteger sessionCloses = new AtomicInteger();
         private final AtomicInteger consumerCloses = new AtomicInteger();
         private final AtomicInteger acknowledgements = new AtomicInteger();
         private final Connection connection =
@@ -154,15 +151,6 @@ class JMSBenchmarkConsumerTest {
                                 connectionStarts.incrementAndGet();
                             } else if (method.equals("close")) {
                                 connectionCloses.incrementAndGet();
-                            }
-                            return null;
-                        });
-        private final Session session =
-                proxy(
-                        Session.class,
-                        (method, args) -> {
-                            if (method.equals("close")) {
-                                sessionCloses.incrementAndGet();
                             }
                             return null;
                         });

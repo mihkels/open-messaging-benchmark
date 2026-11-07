@@ -166,6 +166,8 @@ class WorkloadGenerationToolTest {
                 messageSizeDistribution:
                   "32": 100
                 backlogDrainRatio: 0.25
+                thresholds:
+                  maxPublishLatency99Ms: 25
                 """);
 
         WorkloadGenerationTool.main(
@@ -186,6 +188,7 @@ class WorkloadGenerationToolTest {
         assertThat(workload.producerRate).isEqualTo(10000);
         assertThat(workload.messageSizeDistribution).isNull();
         assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+        assertThat(workload.thresholds).isNull();
     }
 
     @Test

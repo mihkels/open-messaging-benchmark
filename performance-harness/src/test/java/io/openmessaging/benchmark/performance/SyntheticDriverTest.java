@@ -238,14 +238,13 @@ class SyntheticDriverTest {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread sender =
                 Thread.ofPlatform()
-                        .start(
-                                () -> {
-                                    try {
-                                        producer.sendAsync(Optional.empty(), new byte[1]).join();
-                                    } catch (Throwable error) {
-                                        failure.set(error);
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                producer.sendAsync(Optional.empty(), new byte[1]).join();
+                            } catch (Throwable error) {
+                                failure.set(error);
+                            }
+                        });
         try {
             assertTrue(entered.await(2, TimeUnit.SECONDS));
             assertThrows(IOException.class, driver::close);

@@ -117,12 +117,11 @@ class NsqLookupTest {
             AtomicReference<Thread> thread = new AtomicReference<>();
             AtomicBoolean interrupted = new AtomicBoolean();
             Future<?> result =
-                    worker.submit(
-                            () -> {
-                                thread.set(Thread.currentThread());
-                                assertThat(lookup.lookup("topic")).isEmpty();
-                                interrupted.set(Thread.currentThread().isInterrupted());
-                            });
+                    worker.submit(() -> {
+                        thread.set(Thread.currentThread());
+                        assertThat(lookup.lookup("topic")).isEmpty();
+                        interrupted.set(Thread.currentThread().isInterrupted());
+                    });
             try {
                 assertThat(requestReceived.await(5, TimeUnit.SECONDS)).isTrue();
                 thread.get().interrupt();

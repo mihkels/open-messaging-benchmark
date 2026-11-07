@@ -59,11 +59,10 @@ class WorkerHttpRoundTripTest {
     @BeforeEach
     void startServer() {
         app =
-                Javalin.create(
-                        config -> {
-                            config.startup.showJavalinBanner = false;
-                            handler.configure(config);
-                        });
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    handler.configure(config);
+                });
         app.start("127.0.0.1", 0);
         host = "http://127.0.0.1:" + app.port();
         remote = new HttpWorkerClient(host);
@@ -264,14 +263,13 @@ class WorkerHttpRoundTripTest {
     @ValueSource(strings = {"", "temporarily unavailable"})
     void reportsNon500StatusesWithAndWithoutResponseBodies(String body) throws Exception {
         Javalin unavailable =
-                Javalin.create(
-                        config -> {
-                            config.startup.showJavalinBanner = false;
-                            config.routes.get(WorkerHandler.COUNTERS_STATS, ctx -> ctx.status(503).result(body));
-                            config.routes.post(WorkerHandler.RESET_STATS, ctx -> ctx.status(503).result(body));
-                            config.routes.post(WorkerHandler.CREATE_TOPICS, ctx -> ctx.status(503).result(body));
-                            config.routes.post(WorkerHandler.STOP_ALL, ctx -> ctx.status(503).result(body));
-                        });
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    config.routes.get(WorkerHandler.COUNTERS_STATS, ctx -> ctx.status(503).result(body));
+                    config.routes.post(WorkerHandler.RESET_STATS, ctx -> ctx.status(503).result(body));
+                    config.routes.post(WorkerHandler.CREATE_TOPICS, ctx -> ctx.status(503).result(body));
+                    config.routes.post(WorkerHandler.STOP_ALL, ctx -> ctx.status(503).result(body));
+                });
         try {
             unavailable.start("127.0.0.1", 0);
             String unavailableHost = "http://127.0.0.1:" + unavailable.port();
@@ -296,10 +294,8 @@ class WorkerHttpRoundTripTest {
         doThrow(new IllegalArgumentException("payload list must not be empty"))
                 .when(worker)
                 .startLoad(any());
-        assertThatThrownBy(
-                        () ->
-                                remote.startLoad(
-                                        new ProducerWorkAssignment(List.of(), 10, KeyDistributorType.NO_KEY)))
+        assertThatThrownBy(() ->
+                        remote.startLoad(new ProducerWorkAssignment(List.of(), 10, KeyDistributorType.NO_KEY)))
                 .hasMessageContaining(
                         "code 500: java.lang.IllegalArgumentException: payload list must not be empty");
         verify(worker).startLoad(any());

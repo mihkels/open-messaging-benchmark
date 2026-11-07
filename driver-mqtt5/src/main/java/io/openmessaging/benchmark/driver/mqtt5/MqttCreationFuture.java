@@ -34,18 +34,17 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
 
     MqttCreationFuture(T resource) {
         this.resource = resource;
-        whenComplete(
-                (value, failure) -> {
-                    if (isCancelled()) {
-                        boolean shouldClose;
-                        synchronized (lock) {
-                            shouldClose = connected;
-                        }
-                        if (shouldClose) {
-                            closeUntransferred();
-                        }
-                    }
-                });
+        whenComplete((value, failure) -> {
+            if (isCancelled()) {
+                boolean shouldClose;
+                synchronized (lock) {
+                    shouldClose = connected;
+                }
+                if (shouldClose) {
+                    closeUntransferred();
+                }
+            }
+        });
     }
 
     void connected() {
@@ -95,14 +94,13 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
             return;
         }
         closeUntransferred()
-                .whenComplete(
-                        (unused, closeError) -> {
-                            Throwable cause = unwrap(closeError);
-                            if (cause != null && cause != failure) {
-                                failure.addSuppressed(cause);
-                            }
-                            completeExceptionally(failure);
-                        });
+                .whenComplete((unused, closeError) -> {
+                    Throwable cause = unwrap(closeError);
+                    if (cause != null && cause != failure) {
+                        failure.addSuppressed(cause);
+                    }
+                    completeExceptionally(failure);
+                });
     }
 
     void retain() {
@@ -162,14 +160,13 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
 
     private void startRetained(Runnable action, Consumer<Throwable> launchFailure) {
         try {
-            Thread.startVirtualThread(
-                    () -> {
-                        try {
-                            action.run();
-                        } finally {
-                            finished();
-                        }
-                    });
+            Thread.startVirtualThread(() -> {
+                try {
+                    action.run();
+                } finally {
+                    finished();
+                }
+            });
         } catch (RuntimeException | Error failure) {
             try {
                 launchFailure.accept(failure);

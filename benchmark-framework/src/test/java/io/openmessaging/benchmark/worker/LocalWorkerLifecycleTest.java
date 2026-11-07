@@ -71,11 +71,10 @@ class LocalWorkerLifecycleTest {
         CountDownLatch sent = new CountDownLatch(1);
         CountDownLatch closed = new CountDownLatch(1);
         when(producer.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            sent.countDown();
-                            return send;
-                        });
+                .thenAnswer(ignored -> {
+                    sent.countDown();
+                    return send;
+                });
         doAnswer(
                         ignored -> {
                             closed.countDown();
@@ -154,12 +153,11 @@ class LocalWorkerLifecycleTest {
             keys.add(producerKeys);
             BenchmarkProducer producer = mock(BenchmarkProducer.class);
             when(producer.sendAsync(any(), any()))
-                    .thenAnswer(
-                            invocation -> {
-                                java.util.Optional<String> key = invocation.getArgument(0);
-                                producerKeys.add(key.orElseThrow());
-                                return CompletableFuture.completedFuture(null);
-                            });
+                    .thenAnswer(invocation -> {
+                        java.util.Optional<String> key = invocation.getArgument(0);
+                        producerKeys.add(key.orElseThrow());
+                        return CompletableFuture.completedFuture(null);
+                    });
             producers.add(producer);
         }
         try (LocalWorker worker = worker(new Scenario(producers), Duration.ofSeconds(2))) {
@@ -492,11 +490,10 @@ class LocalWorkerLifecycleTest {
         CompletableFuture<Void> send = new CompletableFuture<>();
         CountDownLatch sent = new CountDownLatch(1);
         when(producer.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            sent.countDown();
-                            return send;
-                        });
+                .thenAnswer(ignored -> {
+                    sent.countDown();
+                    return send;
+                });
         Scenario scenario = new Scenario(List.of(producer));
         try (LocalWorker worker = worker(scenario, Duration.ofMillis(150))) {
             worker.createProducers(List.of("topic"));
@@ -519,18 +516,17 @@ class LocalWorkerLifecycleTest {
         assertThat(callbacks.beginSend()).isTrue();
         Thread completion =
                 Thread.ofVirtual()
-                        .start(
-                                () ->
-                                        callbacks.completeSend(
-                                                8,
-                                                0,
-                                                0,
-                                                () -> {
-                                                    entered.countDown();
-                                                    awaitIgnoringInterrupts(release);
-                                                    return 0L;
-                                                },
-                                                null));
+                        .start(() ->
+                                callbacks.completeSend(
+                                        8,
+                                        0,
+                                        0,
+                                        () -> {
+                                            entered.countDown();
+                                            awaitIgnoringInterrupts(release);
+                                            return 0L;
+                                        },
+                                        null));
         try {
             assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
             long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(150);
@@ -583,12 +579,11 @@ class LocalWorkerLifecycleTest {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(producer.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            entered.countDown();
-                            awaitIgnoringInterrupts(release);
-                            return CompletableFuture.completedFuture(null);
-                        });
+                .thenAnswer(ignored -> {
+                    entered.countDown();
+                    awaitIgnoringInterrupts(release);
+                    return CompletableFuture.completedFuture(null);
+                });
         LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofMillis(150));
         try {
             worker.createProducers(List.of("topic"));
@@ -611,15 +606,14 @@ class LocalWorkerLifecycleTest {
         try (LocalWorker worker = worker(new Scenario(List.of(broken)), Duration.ofSeconds(2))) {
             worker.createProducers(List.of("topic"));
             worker.startLoad(assignment());
-            waitUntil(
-                    () -> {
-                        try {
-                            worker.getCountersStats();
-                            return false;
-                        } catch (IllegalStateException e) {
-                            return e.getMessage().contains("Producer or callback task failed");
-                        }
-                    });
+            waitUntil(() -> {
+                try {
+                    worker.getCountersStats();
+                    return false;
+                } catch (IllegalStateException e) {
+                    return e.getMessage().contains("Producer or callback task failed");
+                }
+            });
             worker.stopAll();
 
             BenchmarkProducer failedSend = mock(BenchmarkProducer.class);
@@ -665,18 +659,16 @@ class LocalWorkerLifecycleTest {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(failing.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
-                            return CompletableFuture.failedFuture(new IOException("probe rejected"));
-                        });
+                .thenAnswer(ignored -> {
+                    assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
+                    return CompletableFuture.failedFuture(new IOException("probe rejected"));
+                });
         when(waiting.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            entered.countDown();
-                            awaitIgnoringInterrupts(release);
-                            return CompletableFuture.completedFuture(null);
-                        });
+                .thenAnswer(ignored -> {
+                    entered.countDown();
+                    awaitIgnoringInterrupts(release);
+                    return CompletableFuture.completedFuture(null);
+                });
         LocalWorker worker = worker(new Scenario(List.of(failing, waiting)), Duration.ofSeconds(2));
         try {
             worker.createProducers(List.of("first", "second"));
@@ -693,11 +685,10 @@ class LocalWorkerLifecycleTest {
         BenchmarkProducer producer = mock(BenchmarkProducer.class);
         CountDownLatch release = new CountDownLatch(1);
         when(producer.sendAsync(any(), any()))
-                .thenAnswer(
-                        ignored -> {
-                            awaitIgnoringInterrupts(release);
-                            return CompletableFuture.completedFuture(null);
-                        });
+                .thenAnswer(ignored -> {
+                    awaitIgnoringInterrupts(release);
+                    return CompletableFuture.completedFuture(null);
+                });
         LocalWorker worker =
                 new LocalWorker(
                         new PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
@@ -1021,14 +1012,13 @@ class LocalWorkerLifecycleTest {
 
     private static Thread thread(ThrowingRunnable action, AtomicReference<Throwable> failure) {
         return Thread.ofVirtual()
-                .start(
-                        () -> {
-                            try {
-                                action.run();
-                            } catch (Throwable t) {
-                                failure.set(t);
-                            }
-                        });
+                .start(() -> {
+                    try {
+                        action.run();
+                    } catch (Throwable t) {
+                        failure.set(t);
+                    }
+                });
     }
 
     private static void waitUntil(Check condition) throws Exception {

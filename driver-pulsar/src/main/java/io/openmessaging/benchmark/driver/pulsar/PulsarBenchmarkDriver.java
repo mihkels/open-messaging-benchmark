@@ -234,15 +234,14 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                 .newConsumer(Schema.BYTEBUFFER)
                 .priorityLevel(0)
                 .subscriptionType(config.consumer.subscriptionType)
-                .messageListener(
-                        (c, msg) -> {
-                            try {
-                                consumerCallback.messageReceived(msg.getValue(), msg.getPublishTime());
-                                c.acknowledgeAsync(msg);
-                            } finally {
-                                msg.release();
-                            }
-                        })
+                .messageListener((c, msg) -> {
+                    try {
+                        consumerCallback.messageReceived(msg.getValue(), msg.getPublishTime());
+                        c.acknowledgeAsync(msg);
+                    } finally {
+                        msg.release();
+                    }
+                })
                 .topic(topic)
                 .subscriptionName(subscriptionName)
                 .receiverQueueSize(config.consumer.receiverQueueSize)

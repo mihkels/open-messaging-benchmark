@@ -98,15 +98,14 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        pending.close(
-                () -> {
-                    Session sessionToClose;
-                    synchronized (lifecycleLock) {
-                        // Wait for a send that started before close to finish using the session.
-                        sessionToClose = session;
-                    }
-                    sessionToClose.close();
-                });
+        pending.close(() -> {
+            Session sessionToClose;
+            synchronized (lifecycleLock) {
+                // Wait for a send that started before close to finish using the session.
+                sessionToClose = session;
+            }
+            sessionToClose.close();
+        });
     }
 
     @Override

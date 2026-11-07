@@ -215,13 +215,12 @@ class BenchmarkCoordinatorTest {
         Worker worker = mock(Worker.class);
         WorkloadRun run = mock(WorkloadRun.class);
         when(run.run()).thenReturn(new TestResult());
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(
-                                        arguments,
-                                        Map.of("workload", workload("workload")),
-                                        worker,
-                                        (d, w, selected) -> run))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("workload", workload("workload")),
+                                worker,
+                                (d, w, selected) -> run))
                 .isInstanceOf(IllegalStateException.class)
                 .hasStackTraceContaining("missing-parent")
                 .hasMessage("One or more workloads or required cleanup operations failed");
@@ -242,13 +241,12 @@ class BenchmarkCoordinatorTest {
         doThrow(new IllegalStateException("initial stop failed")).when(worker).stopAll();
         WorkloadRun run = mock(WorkloadRun.class);
         when(run.run()).thenReturn(new TestResult());
-        assertThatThrownBy(
-                        () ->
-                                Benchmark.runWorkloads(
-                                        arguments,
-                                        Map.of("workload", workload("workload")),
-                                        worker,
-                                        (d, w, selected) -> run))
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("workload", workload("workload")),
+                                worker,
+                                (d, w, selected) -> run))
                 .hasRootCauseMessage("initial stop failed");
         if (reusable) {
             verify(run).run();

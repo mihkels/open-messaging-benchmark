@@ -39,12 +39,11 @@ class PayloadFactoryTest {
         assertThat(payloads.weights()).isNull();
         assertThat(payloads.data()).hasSize(3);
         assertThat(payloads.data())
-                .allSatisfy(
-                        payload -> {
-                            assertThat(payload).hasSize(10);
-                            assertThat(Arrays.copyOf(payload, 5)).isNotEqualTo(new byte[5]);
-                            assertThat(Arrays.copyOfRange(payload, 5, 10)).containsOnly((byte) 0);
-                        });
+                .allSatisfy(payload -> {
+                    assertThat(payload).hasSize(10);
+                    assertThat(Arrays.copyOf(payload, 5)).isNotEqualTo(new byte[5]);
+                    assertThat(Arrays.copyOfRange(payload, 5, 10)).containsOnly((byte) 0);
+                });
     }
 
     @Test

@@ -86,19 +86,18 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        pending.close(
-                () -> {
-                    ClientSession sessionToClose;
-                    ClientProducer producerToClose;
-                    synchronized (lifecycleLock) {
-                        // Wait for a send that started before close to finish using the session.
-                        sessionToClose = session;
-                        producerToClose = producer;
-                    }
-                    try (sessionToClose) {
-                        producerToClose.close();
-                    }
-                });
+        pending.close(() -> {
+            ClientSession sessionToClose;
+            ClientProducer producerToClose;
+            synchronized (lifecycleLock) {
+                // Wait for a send that started before close to finish using the session.
+                sessionToClose = session;
+                producerToClose = producer;
+            }
+            try (sessionToClose) {
+                producerToClose.close();
+            }
+        });
     }
 
     @Override

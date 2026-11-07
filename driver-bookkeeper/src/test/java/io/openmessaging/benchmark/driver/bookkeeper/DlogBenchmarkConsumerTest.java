@@ -55,11 +55,10 @@ class DlogBenchmarkConsumerTest {
         CountDownLatch reconnected = new CountDownLatch(1);
         when(initial.readNext(false)).thenReturn(record).thenThrow(new IOException("read failed"));
         when(manager.openLogReader(lastDlsn))
-                .thenAnswer(
-                        invocation -> {
-                            reconnected.countDown();
-                            return reopened;
-                        });
+                .thenAnswer(invocation -> {
+                    reconnected.countDown();
+                    return reopened;
+                });
         doAnswer(
                         invocation -> {
                             received.complete(new Received(invocation.getArgument(0), invocation.getArgument(1)));
@@ -96,11 +95,10 @@ class DlogBenchmarkConsumerTest {
         LogRecordWithDLSN first = record(1);
         LogRecordWithDLSN second = record(2);
         when(reader.readNext(false))
-                .thenAnswer(
-                        invocation -> {
-                            awaitUninterruptibly(release);
-                            return first;
-                        })
+                .thenAnswer(invocation -> {
+                    awaitUninterruptibly(release);
+                    return first;
+                })
                 .thenReturn(second)
                 .thenReturn(null);
         doAnswer(
@@ -141,12 +139,11 @@ class DlogBenchmarkConsumerTest {
         CountDownLatch reading = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(reader.readNext(false))
-                .thenAnswer(
-                        invocation -> {
-                            reading.countDown();
-                            awaitUninterruptibly(release);
-                            return null;
-                        });
+                .thenAnswer(invocation -> {
+                    reading.countDown();
+                    awaitUninterruptibly(release);
+                    return null;
+                });
         doAnswer(
                         invocation -> {
                             release.countDown();
@@ -177,13 +174,12 @@ class DlogBenchmarkConsumerTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicReference<Thread> worker = new AtomicReference<>();
         when(reader.readNext(false))
-                .thenAnswer(
-                        invocation -> {
-                            worker.set(Thread.currentThread());
-                            reading.countDown();
-                            awaitUninterruptibly(release);
-                            return null;
-                        });
+                .thenAnswer(invocation -> {
+                    worker.set(Thread.currentThread());
+                    reading.countDown();
+                    awaitUninterruptibly(release);
+                    return null;
+                });
         DlogBenchmarkConsumer consumer =
                 new DlogBenchmarkConsumer(manager, reader, mock(ConsumerCallback.class), 100);
         try {
@@ -213,13 +209,12 @@ class DlogBenchmarkConsumerTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicReference<Thread> worker = new AtomicReference<>();
         when(reader.readNext(false))
-                .thenAnswer(
-                        invocation -> {
-                            worker.set(Thread.currentThread());
-                            reading.countDown();
-                            awaitUninterruptibly(release);
-                            return record(1);
-                        });
+                .thenAnswer(invocation -> {
+                    worker.set(Thread.currentThread());
+                    reading.countDown();
+                    awaitUninterruptibly(release);
+                    return record(1);
+                });
         DlogBenchmarkConsumer consumer = new DlogBenchmarkConsumer(manager, reader, callback, 50);
         try {
             assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
@@ -248,13 +243,12 @@ class DlogBenchmarkConsumerTest {
         AtomicReference<Thread> worker = new AtomicReference<>();
         AtomicReference<Thread> cleanup = new AtomicReference<>();
         when(reader.readNext(false))
-                .thenAnswer(
-                        invocation -> {
-                            worker.set(Thread.currentThread());
-                            reading.countDown();
-                            awaitUninterruptibly(releaseRead);
-                            return null;
-                        });
+                .thenAnswer(invocation -> {
+                    worker.set(Thread.currentThread());
+                    reading.countDown();
+                    awaitUninterruptibly(releaseRead);
+                    return null;
+                });
         doAnswer(
                         invocation -> {
                             cleanup.set(Thread.currentThread());
@@ -398,13 +392,12 @@ class DlogBenchmarkConsumerTest {
         AtomicReference<Thread> worker = new AtomicReference<>();
         when(initial.readNext(false)).thenReturn(record).thenThrow(new IOException("read failed"));
         when(manager.openLogReader(lastDlsn))
-                .thenAnswer(
-                        invocation -> {
-                            worker.set(Thread.currentThread());
-                            reopening.countDown();
-                            awaitUninterruptibly(release);
-                            return late;
-                        });
+                .thenAnswer(invocation -> {
+                    worker.set(Thread.currentThread());
+                    reopening.countDown();
+                    awaitUninterruptibly(release);
+                    return late;
+                });
         doThrow(lateFailure).when(late).close();
         DlogBenchmarkConsumer consumer = new DlogBenchmarkConsumer(manager, initial, callback, 50);
         try {

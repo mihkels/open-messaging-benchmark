@@ -64,77 +64,73 @@ final class ResourceComposition {
         tracker.follow(requests);
         AtomicReference<ResourceBatch<C>> active = new AtomicReference<>();
         tracker.retain();
-        result.whenComplete(
-                (value, error) -> {
-                    try {
-                        ResourceBatch<C> batch = active.get();
-                        if (batch != null) {
-                            batch.future().cancel(false);
-                        }
-                    } finally {
-                        tracker.release();
-                    }
-                });
-        requests.whenComplete(
-                (resources, error) -> {
-                    try {
-                        if (error != null) {
-                            result.completeExceptionally(Failures.unwrap(error));
-                            return;
-                        }
-                        if (result.isDone()) {
-                            return;
-                        }
-                        final List<R> inputs;
-                        try {
-                            inputs = List.copyOf(resources);
-                        } catch (RuntimeException failure) {
-                            result.completeExceptionally(failure);
-                            return;
-                        }
+        result.whenComplete((value, error) -> {
+            try {
+                ResourceBatch<C> batch = active.get();
+                if (batch != null) {
+                    batch.future().cancel(false);
+                }
+            } finally {
+                tracker.release();
+            }
+        });
+        requests.whenComplete((resources, error) -> {
+            try {
+                if (error != null) {
+                    result.completeExceptionally(Failures.unwrap(error));
+                    return;
+                }
+                if (result.isDone()) {
+                    return;
+                }
+                final List<R> inputs;
+                try {
+                    inputs = List.copyOf(resources);
+                } catch (RuntimeException failure) {
+                    result.completeExceptionally(failure);
+                    return;
+                }
 
-                        if (inputs.isEmpty()) {
-                            completeAggregate(List.of(), aggregate, result, tracker);
-                            return;
-                        }
-                        ResourceBatch<C> batch = new ResourceBatch<>(inputs.size(), () -> {});
-                        tracker.retain();
-                        batch
-                                .quiescence()
-                                .whenComplete(
-                                        (ignored, failure) -> {
-                                            try {
-                                                if (failure != null) {
-                                                    tracker.record(Failures.unwrap(failure));
-                                                }
-                                            } finally {
-                                                tracker.release();
-                                            }
-                                        });
-                        tracker.retain();
-                        batch
-                                .future()
-                                .whenComplete(
-                                        (created, failure) -> {
-                                            try {
-                                                if (failure != null) {
-                                                    result.completeExceptionally(Failures.unwrap(failure));
-                                                } else {
-                                                    completeAggregate(created, aggregate, result, tracker);
-                                                }
-                                            } finally {
-                                                tracker.release();
-                                            }
-                                        });
-                        active.set(batch);
-                        if (result.isDone()) {
-                            batch.future().cancel(false);
-                        }
-                        batch.start(inputs, create);
-                    } finally {
-                        tracker.release();
-                    }
-                });
+                if (inputs.isEmpty()) {
+                    completeAggregate(List.of(), aggregate, result, tracker);
+                    return;
+                }
+                ResourceBatch<C> batch = new ResourceBatch<>(inputs.size(), () -> {});
+                tracker.retain();
+                batch
+                        .quiescence()
+                        .whenComplete((ignored, failure) -> {
+                            try {
+                                if (failure != null) {
+                                    tracker.record(Failures.unwrap(failure));
+                                }
+                            } finally {
+                                tracker.release();
+                            }
+                        });
+                tracker.retain();
+                batch
+                        .future()
+                        .whenComplete((created, failure) -> {
+                            try {
+                                if (failure != null) {
+                                    result.completeExceptionally(Failures.unwrap(failure));
+                                } else {
+                                    completeAggregate(created, aggregate, result, tracker);
+                                }
+                            } finally {
+                                tracker.release();
+                            }
+                        });
+                active.set(batch);
+                if (result.isDone()) {
+                    batch.future().cancel(false);
+                }
+                batch.start(inputs, create);
+            } finally {
+                tracker.release();
+            }
+        });
         return result;
     }
 

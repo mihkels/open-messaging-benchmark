@@ -175,10 +175,9 @@ class PluginDescriptorTest {
                         List.of());
 
         assertThat(descriptor.validate())
-                .anySatisfy(
-                        error ->
-                                assertThat(error)
-                                        .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1)));
+                .anySatisfy(error ->
+                        assertThat(error)
+                                .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1)));
     }
 
     @Test

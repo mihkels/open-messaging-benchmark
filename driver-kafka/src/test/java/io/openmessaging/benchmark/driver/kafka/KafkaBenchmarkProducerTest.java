@@ -171,15 +171,14 @@ class KafkaBenchmarkProducerTest {
         KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected = new CompletableFuture<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                        rejected.complete(null);
-                    } catch (Exception failure) {
-                        rejected.complete(failure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+                rejected.complete(null);
+            } catch (Exception failure) {
+                rejected.complete(failure);
+            }
+        });
         ArgumentCaptor<Callback> callback = ArgumentCaptor.forClass(Callback.class);
         verify(client).send(any(), callback.capture());
         callback.getValue().onCompletion(null, null);
@@ -201,15 +200,14 @@ class KafkaBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         CompletableFuture<Throwable> rejected = new CompletableFuture<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                        rejected.complete(null);
-                    } catch (Exception failure) {
-                        rejected.complete(failure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+                rejected.complete(null);
+            } catch (Exception failure) {
+                rejected.complete(failure);
+            }
+        });
 
         producer.close();
 

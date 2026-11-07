@@ -64,16 +64,14 @@ class UniformRateLimiterTest {
         AtomicBoolean interrupted = new AtomicBoolean();
         Thread waiter =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    started.countDown();
-                                    try {
-                                        UniformRateLimiter.interruptibleSleepNs(
-                                                System.nanoTime() + SECONDS.toNanos(30));
-                                    } catch (InterruptedException e) {
-                                        interrupted.set(true);
-                                    }
-                                });
+                        .start(() -> {
+                            started.countDown();
+                            try {
+                                UniformRateLimiter.interruptibleSleepNs(System.nanoTime() + SECONDS.toNanos(30));
+                            } catch (InterruptedException e) {
+                                interrupted.set(true);
+                            }
+                        });
         assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
         waiter.interrupt();
         waiter.join(1000);

@@ -58,14 +58,13 @@ class BenchmarkDriverBatchTest {
         CompletableFuture<BenchmarkProducer> lateFuture = new CompletableFuture<>();
         CompletableFuture<BenchmarkProducer> failedFuture = new CompletableFuture<>();
         TestDriver driver =
-                new TestDriver(
-                        topic ->
-                                switch (topic) {
-                                    case "first" -> CompletableFuture.completedFuture(brokenClose);
-                                    case "second" -> CompletableFuture.completedFuture(other);
-                                    case "late" -> lateFuture;
-                                    default -> failedFuture;
-                                });
+                new TestDriver(topic ->
+                        switch (topic) {
+                            case "first" -> CompletableFuture.completedFuture(brokenClose);
+                            case "second" -> CompletableFuture.completedFuture(other);
+                            case "late" -> lateFuture;
+                            default -> failedFuture;
+                        });
         CompletableFuture<List<BenchmarkProducer>> batch =
                 driver.createProducers(producers("first", "second", "late", "failed"));
         IllegalArgumentException cause = new IllegalArgumentException("creation failed");
@@ -113,13 +112,12 @@ class BenchmarkDriverBatchTest {
         CompletableFuture<BenchmarkProducer> lateFuture = new CompletableFuture<>();
         IllegalStateException cause = new IllegalStateException("failed to start");
         TestDriver driver =
-                new TestDriver(
-                        topic -> {
-                            if (topic.equals("first")) {
-                                return lateFuture;
-                            }
-                            throw cause;
-                        });
+                new TestDriver(topic -> {
+                    if (topic.equals("first")) {
+                        return lateFuture;
+                    }
+                    throw cause;
+                });
         CompletableFuture<List<BenchmarkProducer>> batch =
                 driver.createProducers(producers("first", "second"));
         assertSame(cause, assertThrows(CompletionException.class, batch::join).getCause());
@@ -141,19 +139,17 @@ class BenchmarkDriverBatchTest {
             CountDownLatch start = new CountDownLatch(1);
             Thread producer =
                     Thread.ofVirtual()
-                            .start(
-                                    () -> {
-                                        await(start);
-                                        first.complete(a);
-                                        second.complete(b);
-                                    });
+                            .start(() -> {
+                                await(start);
+                                first.complete(a);
+                                second.complete(b);
+                            });
             Thread canceller =
                     Thread.ofVirtual()
-                            .start(
-                                    () -> {
-                                        await(start);
-                                        batch.cancel(true);
-                                    });
+                            .start(() -> {
+                                await(start);
+                                batch.cancel(true);
+                            });
             start.countDown();
             producer.join();
             canceller.join();

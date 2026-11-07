@@ -56,11 +56,10 @@ class KafkaTopicCreatorBatchFailureTest {
                 new RuntimeException(new IllegalStateException(new InterruptedException()));
         when(admin.createTopics(any())).thenThrow(wrapped);
 
-        assertThatThrownBy(
-                        () ->
-                                new KafkaTopicCreator(admin, Map.of(), (short) 1, 1)
-                                        .create(List.of(new TopicInfo("topic", 1)))
-                                        .join())
+        assertThatThrownBy(() ->
+                        new KafkaTopicCreator(admin, Map.of(), (short) 1, 1)
+                                .create(List.of(new TopicInfo("topic", 1)))
+                                .join())
                 .hasCause(wrapped);
         verify(admin, times(1)).createTopics(any());
         verify(admin, never()).listTopics();
@@ -70,11 +69,10 @@ class KafkaTopicCreatorBatchFailureTest {
     void repeatedCancellationReportsTheFirstOutcome() {
         AdminClient admin = mock(AdminClient.class);
         when(admin.createTopics(any()))
-                .thenAnswer(
-                        invocation -> {
-                            Thread.sleep(10_000);
-                            return null;
-                        });
+                .thenAnswer(invocation -> {
+                    Thread.sleep(10_000);
+                    return null;
+                });
         CompletableFuture<Void> result =
                 new KafkaTopicCreator(admin, Map.of(), (short) 1)
                         .create(List.of(new TopicInfo("topic", 1)));

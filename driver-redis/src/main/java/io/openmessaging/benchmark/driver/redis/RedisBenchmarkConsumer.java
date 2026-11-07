@@ -77,57 +77,55 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
                 Collections.singletonMap(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
         this.consumerTask =
-                this.executor.submit(
-                        () -> {
-                            consumerThread = Thread.currentThread();
-                            while (!closing) {
-                                // Get a fresh Jedis connection from the pool for each iteration
-                                try (Jedis jedis = pool.getResource()) {
-                                    // Use block(1000) for 1 second timeout instead of block(0) which blocks
-                                    // indefinitely
-                                    // This allows the loop to check the closing flag periodically
-                                    List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
-                                            jedis.xreadGroupBinary(
-                                                    groupName,
-                                                    consumerName,
-                                                    XReadGroupParams.xReadGroupParams()
-                                                            .count(100) // Read up to 100 messages at a time
-                                                            .block(1000), // 1 second timeout
-                                                    streamQuery);
+                this.executor.submit(() -> {
+                    consumerThread = Thread.currentThread();
+                    while (!closing) {
+                        // Get a fresh Jedis connection from the pool for each iteration
+                        try (Jedis jedis = pool.getResource()) {
+                            // Use block(1000) for 1 second timeout instead of block(0) which blocks
+                            // indefinitely
+                            // This allows the loop to check the closing flag periodically
+                            List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
+                                    jedis.xreadGroupBinary(
+                                            groupName,
+                                            consumerName,
+                                            XReadGroupParams.xReadGroupParams()
+                                                    .count(100) // Read up to 100 messages at a time
+                                                    .block(1000), // 1 second timeout
+                                            streamQuery);
 
-                                    if (range != null && !range.isEmpty()) {
-                                        for (var streamEntries : range) {
-                                            for (StreamEntryBinary entry : streamEntries.getValue()) {
-                                                if (closing) {
-                                                    break;
-                                                }
-                                                long timestamp = entry.getID().getTime();
-                                                byte[] payload = readPayload(entry);
-                                                consumerCallback.messageReceived(payload, timestamp);
-
-                                                // Acknowledge the message
-                                                jedis.xack(topic, subscriptionName, entry.getID());
-                                            }
+                            if (range != null && !range.isEmpty()) {
+                                for (var streamEntries : range) {
+                                    for (StreamEntryBinary entry : streamEntries.getValue()) {
+                                        if (closing) {
+                                            break;
                                         }
-                                    }
-                                } catch (redis.clients.jedis.exceptions.JedisDataException e) {
-                                    // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
-                                    if (closing && e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
-                                        log.debug(
-                                                "Stream or consumer group no longer exists (expected during shutdown)");
-                                        break;
-                                    } else if (!closing) {
-                                        log.error("Failed to read from consumer instance.", e);
-                                    }
-                                } catch (Exception e) {
-                                    if (!closing) {
-                                        log.error("Failed to read from consumer instance.", e);
+                                        long timestamp = entry.getID().getTime();
+                                        byte[] payload = readPayload(entry);
+                                        consumerCallback.messageReceived(payload, timestamp);
+
+                                        // Acknowledge the message
+                                        jedis.xack(topic, subscriptionName, entry.getID());
                                     }
                                 }
                             }
-                            log.info(
-                                    "Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
-                        });
+                        } catch (redis.clients.jedis.exceptions.JedisDataException e) {
+                            // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
+                            if (closing && e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
+                                log.debug("Stream or consumer group no longer exists (expected during shutdown)");
+                                break;
+                            } else if (!closing) {
+                                log.error("Failed to read from consumer instance.", e);
+                            }
+                        } catch (Exception e) {
+                            if (!closing) {
+                                log.error("Failed to read from consumer instance.", e);
+                            }
+                        }
+                    }
+                    log.info(
+                            "Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
+                });
     }
 
     private static byte[] readPayload(StreamEntryBinary entry) {

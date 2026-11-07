@@ -59,27 +59,26 @@ class WorkloadSetGeneratorTest {
 
         assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
-                .satisfies(
-                        workload -> {
-                            assertThat(workload.name).isEqualTo("1-topics-1-partitions-1kb-1p-1c-10k");
-                            assertThat(workload.topics).isEqualTo(1);
-                            assertThat(workload.partitionsPerTopic).isEqualTo(1);
-                            assertThat(workload.messageSize).isEqualTo(1024);
-                            assertThat(workload.subscriptionsPerTopic).isEqualTo(1);
-                            assertThat(workload.producersPerTopic).isEqualTo(1);
-                            assertThat(workload.consumerPerSubscription).isEqualTo(1);
-                            assertThat(workload.producerRate).isEqualTo(10000);
-                            assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.NO_KEY);
-                            assertThat(workload.payloadFile).isNull();
-                            assertThat(workload.useRandomizedPayloads).isFalse();
-                            assertThat(workload.randomBytesRatio).isEqualTo(0.0);
-                            assertThat(workload.randomizedPayloadPoolSize).isZero();
-                            assertThat(workload.consumerBacklogSizeGB).isZero();
-                            assertThat(workload.testDurationMinutes).isEqualTo(5);
-                            assertThat(workload.warmupDurationMinutes).isEqualTo(1);
-                            assertThat(workload.messageSizeDistribution).isNull();
-                            assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
-                        });
+                .satisfies(workload -> {
+                    assertThat(workload.name).isEqualTo("1-topics-1-partitions-1kb-1p-1c-10k");
+                    assertThat(workload.topics).isEqualTo(1);
+                    assertThat(workload.partitionsPerTopic).isEqualTo(1);
+                    assertThat(workload.messageSize).isEqualTo(1024);
+                    assertThat(workload.subscriptionsPerTopic).isEqualTo(1);
+                    assertThat(workload.producersPerTopic).isEqualTo(1);
+                    assertThat(workload.consumerPerSubscription).isEqualTo(1);
+                    assertThat(workload.producerRate).isEqualTo(10000);
+                    assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.NO_KEY);
+                    assertThat(workload.payloadFile).isNull();
+                    assertThat(workload.useRandomizedPayloads).isFalse();
+                    assertThat(workload.randomBytesRatio).isEqualTo(0.0);
+                    assertThat(workload.randomizedPayloadPoolSize).isZero();
+                    assertThat(workload.consumerBacklogSizeGB).isZero();
+                    assertThat(workload.testDurationMinutes).isEqualTo(5);
+                    assertThat(workload.warmupDurationMinutes).isEqualTo(1);
+                    assertThat(workload.messageSizeDistribution).isNull();
+                    assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+                });
     }
 
     @Test
@@ -105,16 +104,15 @@ class WorkloadSetGeneratorTest {
 
         assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
-                .satisfies(
-                        workload -> {
-                            assertThat(workload.messageSize).isEqualTo(1024);
-                            assertThat(workload.producerRate).isEqualTo(10000);
-                            assertThat(workload.keyDistributor).isNull();
-                            assertThat(workload.payloadFile).isNull();
-                            assertThat(workload.testDurationMinutes).isZero();
-                            assertThat(workload.warmupDurationMinutes).isZero();
-                            assertThat(workload.name).isEqualTo("${keyDistributor}|${payloadFile}");
-                        });
+                .satisfies(workload -> {
+                    assertThat(workload.messageSize).isEqualTo(1024);
+                    assertThat(workload.producerRate).isEqualTo(10000);
+                    assertThat(workload.keyDistributor).isNull();
+                    assertThat(workload.payloadFile).isNull();
+                    assertThat(workload.testDurationMinutes).isZero();
+                    assertThat(workload.warmupDurationMinutes).isZero();
+                    assertThat(workload.name).isEqualTo("${keyDistributor}|${payloadFile}");
+                });
     }
 
     @Test

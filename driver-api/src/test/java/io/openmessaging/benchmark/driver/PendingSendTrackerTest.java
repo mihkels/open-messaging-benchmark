@@ -65,10 +65,9 @@ class PendingSendTrackerTest {
                     assertThrows(
                             InterruptedException.class,
                             () ->
-                                    tracker.close(
-                                            () -> {
-                                                throw interrupted;
-                                            })));
+                                    tracker.close(() -> {
+                                        throw interrupted;
+                                    })));
             assertTrue(Thread.currentThread().isInterrupted());
             CompletionException failure = assertThrows(CompletionException.class, unresolved::join);
             assertSame(interrupted, failure.getCause().getCause());
@@ -125,11 +124,10 @@ class PendingSendTrackerTest {
         CompletableFuture<Void> first = tracker.register();
         CompletableFuture<Void> second = tracker.register();
         CompletableFuture<Void> callback =
-                first.handle(
-                        (unused, failure) -> {
-                            assertThrows(IllegalStateException.class, tracker::beginClose);
-                            return null;
-                        });
+                first.handle((unused, failure) -> {
+                    assertThrows(IllegalStateException.class, tracker::beginClose);
+                    return null;
+                });
 
         assertTrue(tracker.beginClose());
         tracker.failRemaining();

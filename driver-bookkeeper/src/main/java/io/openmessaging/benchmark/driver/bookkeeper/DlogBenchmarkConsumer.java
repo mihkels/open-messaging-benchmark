@@ -76,11 +76,10 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
                                 .build());
         try {
             this.readerTask =
-                    executor.submit(
-                            () -> {
-                                read();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        read();
+                        return null;
+                    });
         } catch (RuntimeException | Error failure) {
             try {
                 executor.shutdownNow();
@@ -223,14 +222,13 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
             // DistributedLog close can wait on a monitor held by the reader thread.
             Thread.ofVirtual()
                     .name("dlog-benchmark-" + name + "-close")
-                    .start(
-                            () -> {
-                                try {
-                                    closeResource(owned, name);
-                                } finally {
-                                    completed.complete(null);
-                                }
-                            });
+                    .start(() -> {
+                        try {
+                            closeResource(owned, name);
+                        } finally {
+                            completed.complete(null);
+                        }
+                    });
         } catch (RuntimeException | Error failure) {
             failures.add(failure);
             completed.complete(null);

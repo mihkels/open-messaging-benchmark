@@ -42,16 +42,15 @@ class HostRuntimeTest {
                 .extracting(entry -> entry.coordinates().artifactId())
                 .contains("benchmark-framework", "driver-api");
         assertThat(runtime.entries())
-                .anySatisfy(
-                        entry ->
-                                assertThat(entry.path())
-                                        .isEqualTo(
-                                                Path.of(
-                                                        BenchmarkDriver.class
-                                                                .getProtectionDomain()
-                                                                .getCodeSource()
-                                                                .getLocation()
-                                                                .getPath())));
+                .anySatisfy(entry ->
+                        assertThat(entry.path())
+                                .isEqualTo(
+                                        Path.of(
+                                                BenchmarkDriver.class
+                                                        .getProtectionDomain()
+                                                        .getCodeSource()
+                                                        .getLocation()
+                                                        .getPath())));
     }
 
     @Test

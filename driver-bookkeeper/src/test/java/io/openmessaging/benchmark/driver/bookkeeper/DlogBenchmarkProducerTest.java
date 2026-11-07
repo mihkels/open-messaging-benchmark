@@ -49,11 +49,10 @@ class DlogBenchmarkProducerTest {
         AtomicReference<LogRecord> written = new AtomicReference<>();
         CompletableFuture<DLSN> acknowledgement = new CompletableFuture<>();
         when(writer.write(any(LogRecord.class)))
-                .thenAnswer(
-                        invocation -> {
-                            written.set(invocation.getArgument(0));
-                            return acknowledgement;
-                        });
+                .thenAnswer(invocation -> {
+                    written.set(invocation.getArgument(0));
+                    return acknowledgement;
+                });
         DlogBenchmarkProducer producer = new DlogBenchmarkProducer(writer);
         byte[] payload = {1, 2, 3};
 
@@ -82,10 +81,9 @@ class DlogBenchmarkProducerTest {
         AsyncLogWriter writer = mock(AsyncLogWriter.class);
         InterruptedException cause = new InterruptedException("write interrupted");
         when(writer.write(any(LogRecord.class)))
-                .thenAnswer(
-                        invocation -> {
-                            throw cause;
-                        });
+                .thenAnswer(invocation -> {
+                    throw cause;
+                });
         DlogBenchmarkProducer producer = new DlogBenchmarkProducer(writer);
 
         try {
@@ -122,11 +120,10 @@ class DlogBenchmarkProducerTest {
         CompletableFuture<DLSN> acknowledgement = new CompletableFuture<>();
         when(writer.write(any(LogRecord.class))).thenReturn(acknowledgement);
         when(writer.asyncClose())
-                .thenAnswer(
-                        invocation -> {
-                            acknowledgement.complete(null);
-                            return CompletableFuture.completedFuture(null);
-                        });
+                .thenAnswer(invocation -> {
+                    acknowledgement.complete(null);
+                    return CompletableFuture.completedFuture(null);
+                });
         DlogBenchmarkProducer producer = new DlogBenchmarkProducer(writer);
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
 
@@ -177,14 +174,13 @@ class DlogBenchmarkProducerTest {
         CountDownLatch writing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(writer.write(any(LogRecord.class)))
-                .thenAnswer(
-                        invocation -> {
-                            writing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("write was not released");
-                            }
-                            return new CompletableFuture<DLSN>();
-                        });
+                .thenAnswer(invocation -> {
+                    writing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("write was not released");
+                    }
+                    return new CompletableFuture<DLSN>();
+                });
         when(writer.asyncClose()).thenReturn(CompletableFuture.completedFuture(null));
         DlogBenchmarkProducer producer = new DlogBenchmarkProducer(writer);
         var executor = Executors.newFixedThreadPool(2);
@@ -192,11 +188,10 @@ class DlogBenchmarkProducerTest {
             var sending = executor.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(writing.await(5, TimeUnit.SECONDS)).isTrue();
             var closing =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             assertThatThrownBy(() -> closing.get(100, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
             verify(writer, never()).asyncClose();
@@ -296,21 +291,19 @@ class DlogBenchmarkProducerTest {
         CountDownLatch closingWriter = new CountDownLatch(1);
         when(writer.write(any(LogRecord.class))).thenReturn(acknowledgement);
         when(writer.asyncClose())
-                .thenAnswer(
-                        invocation -> {
-                            closingWriter.countDown();
-                            return writerClose;
-                        });
+                .thenAnswer(invocation -> {
+                    closingWriter.countDown();
+                    return writerClose;
+                });
         DlogBenchmarkProducer producer = new DlogBenchmarkProducer(manager, writer);
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         var executor = Executors.newSingleThreadExecutor();
         try {
             var firstClose =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             assertThat(closingWriter.await(5, TimeUnit.SECONDS)).isTrue();
             producer.close();
             assertThat(send).isNotDone();

@@ -272,17 +272,16 @@ class MqttBenchmarkDriverTest {
             CompletableFuture<BenchmarkProducer> future = null;
             try {
                 Future<Integer> connections =
-                        executor.submit(
-                                () -> {
-                                    try (Socket first = broker.accept()) {
-                                        acknowledgeConnection(first, 0x87);
-                                    }
-                                    try (Socket second = broker.accept()) {
-                                        return 2;
-                                    } catch (SocketTimeoutException expected) {
-                                        return 1;
-                                    }
-                                });
+                        executor.submit(() -> {
+                            try (Socket first = broker.accept()) {
+                                acknowledgeConnection(first, 0x87);
+                            }
+                            try (Socket second = broker.accept()) {
+                                return 2;
+                            } catch (SocketTimeoutException expected) {
+                                return 1;
+                            }
+                        });
                 MqttConfig config = new MqttConfig();
                 config.client.serverUri = "tcp://127.0.0.1:" + broker.getLocalPort();
                 future = new MqttBenchmarkDriver(config).createProducer("topic");
@@ -317,22 +316,21 @@ class MqttBenchmarkDriverTest {
             CompletableFuture<BenchmarkProducer> future = null;
             try {
                 Future<Integer> connections =
-                        executor.submit(
-                                () -> {
-                                    try (Socket first = broker.accept()) {
-                                        accepted.countDown();
-                                        if (!release.await(3, TimeUnit.SECONDS)) {
-                                            throw new IOException("Timed out waiting to acknowledge CONNECT");
-                                        }
-                                        acknowledgeConnection(first, 0);
-                                        assertThat(first.getInputStream().read()).isEqualTo(0xe0);
-                                    }
-                                    try (Socket second = broker.accept()) {
-                                        return 2;
-                                    } catch (SocketTimeoutException expected) {
-                                        return 1;
-                                    }
-                                });
+                        executor.submit(() -> {
+                            try (Socket first = broker.accept()) {
+                                accepted.countDown();
+                                if (!release.await(3, TimeUnit.SECONDS)) {
+                                    throw new IOException("Timed out waiting to acknowledge CONNECT");
+                                }
+                                acknowledgeConnection(first, 0);
+                                assertThat(first.getInputStream().read()).isEqualTo(0xe0);
+                            }
+                            try (Socket second = broker.accept()) {
+                                return 2;
+                            } catch (SocketTimeoutException expected) {
+                                return 1;
+                            }
+                        });
                 MqttConfig config = new MqttConfig();
                 config.client.serverUri = "tcp://127.0.0.1:" + broker.getLocalPort();
                 future = new MqttBenchmarkDriver(config).createProducer("topic");
@@ -361,21 +359,20 @@ class MqttBenchmarkDriverTest {
             ExecutorService executor = Executors.newSingleThreadExecutor();
             try {
                 Future<?> connections =
-                        executor.submit(
-                                () -> {
-                                    try (Socket first = broker.accept()) {
-                                        acknowledgeConnection(first, 0);
-                                        if (!dropConnection.await(3, TimeUnit.SECONDS)) {
-                                            throw new IOException("Timed out waiting to drop connection");
-                                        }
-                                    }
-                                    try (Socket second = broker.accept()) {
-                                        acknowledgeConnection(second, 0);
-                                        reconnected.countDown();
-                                        assertThat(second.getInputStream().read()).isEqualTo(0xe0);
-                                    }
-                                    return null;
-                                });
+                        executor.submit(() -> {
+                            try (Socket first = broker.accept()) {
+                                acknowledgeConnection(first, 0);
+                                if (!dropConnection.await(3, TimeUnit.SECONDS)) {
+                                    throw new IOException("Timed out waiting to drop connection");
+                                }
+                            }
+                            try (Socket second = broker.accept()) {
+                                acknowledgeConnection(second, 0);
+                                reconnected.countDown();
+                                assertThat(second.getInputStream().read()).isEqualTo(0xe0);
+                            }
+                            return null;
+                        });
                 MqttConfig config = new MqttConfig();
                 config.client.serverUri = "tcp://127.0.0.1:" + broker.getLocalPort();
                 AtomicReference<Mqtt5AsyncClient> client = new AtomicReference<>();
@@ -547,22 +544,20 @@ class MqttBenchmarkDriverTest {
         CompletableFuture<Void> disconnect = new CompletableFuture<>();
         CountDownLatch disconnectStarted = new CountDownLatch(1);
         when(client.disconnect())
-                .thenAnswer(
-                        invocation -> {
-                            disconnectStarted.countDown();
-                            return disconnect;
-                        });
+                .thenAnswer(invocation -> {
+                    disconnectStarted.countDown();
+                    return disconnect;
+                });
         MqttBenchmarkConsumer consumer = new MqttBenchmarkConsumer();
         consumer.setClient(client);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         IOException failure = new IOException("disconnect failed");
         try {
             Future<?> closing =
-                    executor.submit(
-                            () -> {
-                                consumer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        consumer.close();
+                        return null;
+                    });
             assertThat(disconnectStarted.await(2, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> closing.get(100, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -675,11 +670,10 @@ class MqttBenchmarkDriverTest {
             Mqtt5ClientConfig config = mock(Mqtt5ClientConfig.class);
             when(client.getConfig()).thenReturn(config);
             when(client.disconnect())
-                    .thenAnswer(
-                            invocation -> {
-                                closedAtDisconnect = closed.get();
-                                return CompletableFuture.completedFuture(null);
-                            });
+                    .thenAnswer(invocation -> {
+                        closedAtDisconnect = closed.get();
+                        return CompletableFuture.completedFuture(null);
+                    });
         }
 
         @Override

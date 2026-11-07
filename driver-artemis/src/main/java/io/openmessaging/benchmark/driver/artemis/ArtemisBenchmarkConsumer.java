@@ -20,6 +20,7 @@ import org.apache.activemq.artemis.api.core.QueueConfiguration;
 import org.apache.activemq.artemis.api.core.RoutingType;
 import org.apache.activemq.artemis.api.core.SimpleString;
 import org.apache.activemq.artemis.api.core.client.ClientConsumer;
+import org.apache.activemq.artemis.api.core.client.ClientMessage;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
 import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.slf4j.Logger;
@@ -65,16 +66,7 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
                             .setRoutingType(RoutingType.MULTICAST)
                             .setDurable(true));
             tempConsumer = tempSession.createConsumer(queueName);
-            tempConsumer.setMessageHandler(message -> {
-                byte[] payload = new byte[message.getBodyBuffer().readableBytes()];
-                message.getBodyBuffer().readBytes(payload);
-                callback.messageReceived(payload, message.getTimestamp());
-                try {
-                    message.acknowledge();
-                } catch (ActiveMQException e) {
-                    log.warn("Failed to acknowledge message", e);
-                }
-            });
+            tempConsumer.setMessageHandler(message -> handleMessage(message, callback));
 
             tempSession.start();
 
@@ -82,25 +74,20 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             return new ArtemisBenchmarkConsumer(tempSession, tempConsumer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            if (tempConsumer != null) {
-                try {
-                    tempConsumer.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
-            if (tempSession != null) {
-                try {
-                    tempSession.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
+            ArtemisResources.closeAfterFailure(tempConsumer, e);
+            ArtemisResources.closeAfterFailure(tempSession, e);
             throw e;
+        }
+    }
+
+    private static void handleMessage(ClientMessage message, ConsumerCallback callback) {
+        byte[] payload = new byte[message.getBodyBuffer().readableBytes()];
+        message.getBodyBuffer().readBytes(payload);
+        callback.messageReceived(payload, message.getTimestamp());
+        try {
+            message.acknowledge();
+        } catch (ActiveMQException e) {
+            log.warn("Failed to acknowledge message", e);
         }
     }
 

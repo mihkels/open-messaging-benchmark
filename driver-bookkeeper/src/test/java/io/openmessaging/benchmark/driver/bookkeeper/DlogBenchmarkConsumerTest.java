@@ -421,6 +421,50 @@ class DlogBenchmarkConsumerTest {
         return new LogRecordWithDLSN(new DLSN(1, timestamp, 0), timestamp, new byte[] {1}, 0);
     }
 
+    @Test
+    void closeInterruptsTheBackoffAfterAFailedReopen() throws Exception {
+        DistributedLogManager manager = mock(DistributedLogManager.class);
+        LogReader initial = mock(LogReader.class);
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        CountDownLatch reopenFailed = new CountDownLatch(1);
+        when(initial.readNext(false)).thenThrow(new IOException("read failed"));
+        when(manager.openLogReader(DLSN.InitialDLSN))
+                .thenAnswer(invocation -> {
+                    reopenFailed.countDown();
+                    throw new IOException("reopen failed");
+                });
+        DlogBenchmarkConsumer consumer = new DlogBenchmarkConsumer(manager, initial, callback);
+        try {
+            assertThat(reopenFailed.await(5, TimeUnit.SECONDS)).isTrue();
+            awaitReaderSleeping();
+        } finally {
+            consumer.close();
+        }
+
+        verify(manager, times(1)).openLogReader(DLSN.InitialDLSN);
+        verify(initial, times(1)).close();
+        verify(manager, times(1)).close();
+        verifyNoInteractions(callback);
+    }
+
+    @SuppressWarnings(
+            "java:S2925") // polls the reader thread state; a sleeping thread exposes no hook
+    private static void awaitReaderSleeping() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            boolean sleeping =
+                    Thread.getAllStackTraces().keySet().stream()
+                            .anyMatch(thread ->
+                                    thread.getName().startsWith("dlog-benchmark-reader-thread-")
+                                            && thread.getState() == Thread.State.TIMED_WAITING);
+            if (sleeping) {
+                return;
+            }
+            Thread.sleep(10);
+        }
+        throw new AssertionError("reader did not start its reopen backoff");
+    }
+
     private static void awaitUninterruptibly(CountDownLatch latch) {
         boolean interrupted = false;
         try {

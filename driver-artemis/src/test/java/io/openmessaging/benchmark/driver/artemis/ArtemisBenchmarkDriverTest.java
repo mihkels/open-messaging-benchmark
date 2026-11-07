@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -115,6 +116,25 @@ class ArtemisBenchmarkDriverTest {
         verify(consumer, times(1)).close();
         verify(session, times(1)).close();
         assertThat(creation).isCancelled();
+    }
+
+    @Test
+    void closeUntransferredSwallowsFailuresAndRestoresInterrupt() throws Exception {
+        BenchmarkConsumer interrupted = mock(BenchmarkConsumer.class);
+        doThrow(new InterruptedException("interrupted")).when(interrupted).close();
+        BenchmarkConsumer failing = mock(BenchmarkConsumer.class);
+        doThrow(new IllegalStateException("close failed")).when(failing).close();
+
+        try {
+            ArtemisBenchmarkDriver.closeUntransferred(interrupted);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        ArtemisBenchmarkDriver.closeUntransferred(failing);
+        assertThat(Thread.currentThread().isInterrupted()).isFalse();
+        verify(interrupted).close();
+        verify(failing).close();
     }
 
     @Test

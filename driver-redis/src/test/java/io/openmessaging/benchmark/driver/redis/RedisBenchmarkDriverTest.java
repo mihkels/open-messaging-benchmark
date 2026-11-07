@@ -197,6 +197,21 @@ class RedisBenchmarkDriverTest {
     }
 
     @Test
+    void missingConsumerGroupIsCreated() throws Exception {
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        driver.jedisPool = pool;
+        when(pool.getResource()).thenReturn(jedis);
+
+        BenchmarkConsumer consumer =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join();
+
+        verify(jedis).xgroupCreate("topic", "subscription", null, true);
+        consumer.close();
+    }
+
+    @Test
     void groupCreationFailureWithoutMessageIsReported() {
         RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
         JedisPool pool = mock();

@@ -62,24 +62,8 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
             return new ArtemisBenchmarkProducer(tempSession, tempProducer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            if (tempProducer != null) {
-                try {
-                    tempProducer.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
-            if (tempSession != null) {
-                try {
-                    tempSession.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
+            ArtemisResources.closeAfterFailure(tempProducer, e);
+            ArtemisResources.closeAfterFailure(tempSession, e);
             throw e;
         }
     }

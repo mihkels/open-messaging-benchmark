@@ -179,36 +179,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             DefaultMQProducer producer = null;
             try {
                 producer = newProducer("ProducerGroup_" + ResourceNames.randomSuffix(), rpcHook);
-                producer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
-                producer.setInstanceName("ProducerInstance" + ResourceNames.randomSuffix());
-                if (null != this.rmqClientConfig.vipChannelEnabled) {
-                    producer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
-                }
-                if (null != this.rmqClientConfig.maxMessageSize) {
-                    producer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
-                }
-                if (null != this.rmqClientConfig.compressMsgBodyOverHowmuch) {
-                    producer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
-                }
-
-                if (null != this.rmqClientConfig.autoBatch) {
-                    producer.setAutoBatch(this.rmqClientConfig.autoBatch);
-                }
-                if (null != this.rmqClientConfig.batchMaxBytes) {
-                    producer.batchMaxBytes(this.rmqClientConfig.batchMaxBytes);
-                }
-                if (null != this.rmqClientConfig.batchMaxDelayMs) {
-                    producer.batchMaxDelayMs(this.rmqClientConfig.batchMaxDelayMs);
-                }
-                if (null != this.rmqClientConfig.totalBatchMaxBytes) {
-                    producer.totalBatchMaxBytes(this.rmqClientConfig.totalBatchMaxBytes);
-                }
-                if (null != this.rmqClientConfig.enableBackpressure) {
-                    producer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
-                }
-                if (null != this.rmqClientConfig.backpressureConcurrency) {
-                    producer.setBackPressureForAsyncSendNum(this.rmqClientConfig.backpressureConcurrency);
-                }
+                configureProducer(producer);
                 producer.start();
                 rmqProducer = producer;
             } catch (Exception e) {
@@ -220,6 +191,39 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         }
 
         return CompletableFuture.completedFuture(new RocketMQBenchmarkProducer(rmqProducer, topic));
+    }
+
+    private void configureProducer(DefaultMQProducer producer) {
+        producer.setNamesrvAddr(this.rmqClientConfig.namesrvAddr);
+        producer.setInstanceName("ProducerInstance" + ResourceNames.randomSuffix());
+        if (null != this.rmqClientConfig.vipChannelEnabled) {
+            producer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
+        }
+        if (null != this.rmqClientConfig.maxMessageSize) {
+            producer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
+        }
+        if (null != this.rmqClientConfig.compressMsgBodyOverHowmuch) {
+            producer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
+        }
+
+        if (null != this.rmqClientConfig.autoBatch) {
+            producer.setAutoBatch(this.rmqClientConfig.autoBatch);
+        }
+        if (null != this.rmqClientConfig.batchMaxBytes) {
+            producer.batchMaxBytes(this.rmqClientConfig.batchMaxBytes);
+        }
+        if (null != this.rmqClientConfig.batchMaxDelayMs) {
+            producer.batchMaxDelayMs(this.rmqClientConfig.batchMaxDelayMs);
+        }
+        if (null != this.rmqClientConfig.totalBatchMaxBytes) {
+            producer.totalBatchMaxBytes(this.rmqClientConfig.totalBatchMaxBytes);
+        }
+        if (null != this.rmqClientConfig.enableBackpressure) {
+            producer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
+        }
+        if (null != this.rmqClientConfig.backpressureConcurrency) {
+            producer.setBackPressureForAsyncSendNum(this.rmqClientConfig.backpressureConcurrency);
+        }
     }
 
     @Override

@@ -77,55 +77,81 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
                 Collections.singletonMap(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
         this.consumerTask =
-                this.executor.submit(() -> {
-                    consumerThread = Thread.currentThread();
-                    while (!closing) {
-                        // Get a fresh Jedis connection from the pool for each iteration
-                        try (Jedis jedis = pool.getResource()) {
-                            // Use block(1000) for 1 second timeout instead of block(0) which blocks
-                            // indefinitely
-                            // This allows the loop to check the closing flag periodically
-                            List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
-                                    jedis.xreadGroupBinary(
-                                            groupName,
-                                            consumerName,
-                                            XReadGroupParams.xReadGroupParams()
-                                                    .count(100) // Read up to 100 messages at a time
-                                                    .block(1000), // 1 second timeout
-                                            streamQuery);
+                this.executor.submit(
+                        () -> consume(pool, groupName, consumerName, streamQuery, consumerCallback));
+    }
 
-                            if (range != null && !range.isEmpty()) {
-                                for (var streamEntries : range) {
-                                    for (StreamEntryBinary entry : streamEntries.getValue()) {
-                                        if (closing) {
-                                            break;
-                                        }
-                                        long timestamp = entry.getID().getTime();
-                                        byte[] payload = readPayload(entry);
-                                        consumerCallback.messageReceived(payload, timestamp);
+    private void consume(
+            JedisPool pool,
+            byte[] groupName,
+            byte[] consumerName,
+            Map<byte[], StreamEntryID> streamQuery,
+            ConsumerCallback consumerCallback) {
+        consumerThread = Thread.currentThread();
+        boolean keepReading = true;
+        while (keepReading && !closing) {
+            keepReading = pollOnce(pool, groupName, consumerName, streamQuery, consumerCallback);
+        }
+        log.info("Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
+    }
 
-                                        // Acknowledge the message
-                                        jedis.xack(topic, subscriptionName, entry.getID());
-                                    }
-                                }
-                            }
-                        } catch (redis.clients.jedis.exceptions.JedisDataException e) {
-                            // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
-                            if (closing && e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
-                                log.debug("Stream or consumer group no longer exists (expected during shutdown)");
-                                break;
-                            } else if (!closing) {
-                                log.error("Failed to read from consumer instance.", e);
-                            }
-                        } catch (Exception e) {
-                            if (!closing) {
-                                log.error("Failed to read from consumer instance.", e);
-                            }
-                        }
-                    }
-                    log.info(
-                            "Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
-                });
+    // Reads and delivers one batch; returns false when the loop should stop.
+    private boolean pollOnce(
+            JedisPool pool,
+            byte[] groupName,
+            byte[] consumerName,
+            Map<byte[], StreamEntryID> streamQuery,
+            ConsumerCallback consumerCallback) {
+        // Get a fresh Jedis connection from the pool for each iteration
+        try (Jedis jedis = pool.getResource()) {
+            // Use block(1000) for 1 second timeout instead of block(0) which blocks
+            // indefinitely
+            // This allows the loop to check the closing flag periodically
+            List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
+                    jedis.xreadGroupBinary(
+                            groupName,
+                            consumerName,
+                            XReadGroupParams.xReadGroupParams()
+                                    .count(100) // Read up to 100 messages at a time
+                                    .block(1000), // 1 second timeout
+                            streamQuery);
+            deliver(jedis, range, consumerCallback);
+        } catch (redis.clients.jedis.exceptions.JedisDataException e) {
+            // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
+            if (closing && e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
+                log.debug("Stream or consumer group no longer exists (expected during shutdown)");
+                return false;
+            } else if (!closing) {
+                log.error("Failed to read from consumer instance.", e);
+            }
+        } catch (Exception e) {
+            if (!closing) {
+                log.error("Failed to read from consumer instance.", e);
+            }
+        }
+        return true;
+    }
+
+    private void deliver(
+            Jedis jedis,
+            List<Map.Entry<byte[], List<StreamEntryBinary>>> range,
+            ConsumerCallback consumerCallback) {
+        if (range == null) {
+            return;
+        }
+        for (var streamEntries : range) {
+            for (StreamEntryBinary entry : streamEntries.getValue()) {
+                if (closing) {
+                    return;
+                }
+                long timestamp = entry.getID().getTime();
+                byte[] payload = readPayload(entry);
+                consumerCallback.messageReceived(payload, timestamp);
+
+                // Acknowledge the message
+                jedis.xack(topic, subscriptionName, entry.getID());
+            }
+        }
     }
 
     private static byte[] readPayload(StreamEntryBinary entry) {
@@ -147,57 +173,65 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         consumerTask.cancel(true);
         executor.shutdownNow();
 
-        boolean interrupted = Thread.interrupted();
-        Exception failure =
-                interrupted ? new InterruptedException("Interrupted before consumer close") : null;
+        CloseFailures failures = new CloseFailures(Thread.interrupted());
+        boolean terminated = awaitTermination(failures);
+        if (terminated && !consumerTask.isCancelled()) {
+            collectTaskFailure(failures);
+        }
+        if (failures.interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (failures.failure != null) {
+            throw failures.failure;
+        }
+        log.info("Redis consumer closed for topic '{}' subscription '{}'", topic, subscriptionName);
+    }
+
+    private boolean awaitTermination(CloseFailures failures) {
         long deadline = System.nanoTime() + closeTimeoutNanos;
-        boolean terminated = false;
-        while (!terminated) {
+        while (true) {
             try {
                 long remaining = deadline - System.nanoTime();
                 if (remaining <= 0 || !executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
-                    Exception timeout = new TimeoutException("Redis consumer thread did not terminate");
-                    if (failure == null) {
-                        failure = timeout;
-                    } else {
-                        failure.addSuppressed(timeout);
-                    }
-                    break;
+                    failures.add(new TimeoutException("Redis consumer thread did not terminate"));
+                    return false;
                 }
-                terminated = true;
+                return true;
             } catch (InterruptedException e) {
-                interrupted = true;
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
-                }
+                failures.interrupted = true;
+                failures.add(e);
             }
         }
-        if (terminated && !consumerTask.isCancelled()) {
-            try {
-                consumerTask.get();
-            } catch (ExecutionException e) {
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
-                }
-            } catch (InterruptedException e) {
-                interrupted = true;
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
-                }
+    }
+
+    private void collectTaskFailure(CloseFailures failures) {
+        try {
+            consumerTask.get();
+        } catch (ExecutionException e) {
+            failures.add(e);
+        } catch (InterruptedException e) {
+            failures.interrupted = true;
+            failures.add(e);
+        }
+    }
+
+    // Collects close failures: the first is primary and later ones are suppressed into it.
+    private static final class CloseFailures {
+        private Exception failure;
+        private boolean interrupted;
+
+        private CloseFailures(boolean interrupted) {
+            this.interrupted = interrupted;
+            this.failure =
+                    interrupted ? new InterruptedException("Interrupted before consumer close") : null;
+        }
+
+        private void add(Exception next) {
+            if (failure == null) {
+                failure = next;
+            } else {
+                failure.addSuppressed(next);
             }
         }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
-        if (failure != null) {
-            throw failure;
-        }
-        log.info("Redis consumer closed for topic '{}' subscription '{}'", topic, subscriptionName);
     }
 }

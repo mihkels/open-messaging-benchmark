@@ -181,14 +181,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                                     Objects.requireNonNull(
                                             subscribeConsumer(client, subscriptions, guardedCallback),
                                             "MQTT subscription future");
-                            future.retain();
-                            try {
-                                subscription.whenComplete(
-                                        (subAck, error) -> completeSubscription(future, subscriptions, subAck, error));
-                            } catch (Throwable registrationFailure) {
-                                future.finished();
-                                throw registrationFailure;
-                            }
+                            awaitSubscription(future, subscriptions, subscription);
                         } catch (Throwable failureDuringConnection) {
                             future.fail(failureDuringConnection);
                         } finally {
@@ -201,6 +194,20 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
 
         return future;
+    }
+
+    private static void awaitSubscription(
+            MqttCreationFuture<BenchmarkConsumer> future,
+            List<Mqtt5Subscription> subscriptions,
+            CompletableFuture<Mqtt5SubAck> subscription) {
+        future.retain();
+        try {
+            subscription.whenComplete(
+                    (subAck, error) -> completeSubscription(future, subscriptions, subAck, error));
+        } catch (Throwable registrationFailure) {
+            future.finished();
+            throw registrationFailure;
+        }
     }
 
     private static void completeSubscription(

@@ -133,23 +133,28 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            if (streamingConnection != null) {
-                try {
-                    streamingConnection.close();
-                } catch (Exception closeFailure) {
-                    if (closeFailure instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                    }
-                    if (closeFailure != e) {
-                        e.addSuppressed(closeFailure);
-                    }
-                }
-            }
+            closeAfterFailure(streamingConnection, e);
             log.warn("nats streaming create consumer exception", e);
             return CompletableFuture.failedFuture(e);
         }
         return CompletableFuture.completedFuture(
                 new NatsStreamingBenchmarkConsumer(streamingConnection));
+    }
+
+    private static void closeAfterFailure(StreamingConnection connection, Exception failure) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.close();
+        } catch (Exception closeFailure) {
+            if (closeFailure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            if (closeFailure != failure) {
+                failure.addSuppressed(closeFailure);
+            }
+        }
     }
 
     @Override

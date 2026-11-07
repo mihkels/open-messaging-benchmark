@@ -94,6 +94,26 @@
         <sonar.projectKey>mihkels_open-messaging-benchmark</sonar.projectKey>
         <!-- Reports written by the jacoco-maven-plugin report execution in every module -->
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/*/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!--
+          Rules suppressed as verified false positives / deliberate design, see issue #146:
+          - S3077: volatile fields only publish immutable or thread-safe objects (Thread, Path, clients)
+          - S1181: Throwable is caught only to aggregate, propagate or rethrow failures during cleanup
+          - S6213: `record` is a contextual keyword, legal as a variable/method name
+          - S106: CLI entry points print usage and argument errors to stderr before logging is set up
+        -->
+        <sonar.issue.ignore.multicriteria>s3077,s1181,s6213,s106a,s106b,s106c</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.s3077.ruleKey>java:S3077</sonar.issue.ignore.multicriteria.s3077.ruleKey>
+        <sonar.issue.ignore.multicriteria.s3077.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s3077.resourceKey>
+        <sonar.issue.ignore.multicriteria.s1181.ruleKey>java:S1181</sonar.issue.ignore.multicriteria.s1181.ruleKey>
+        <sonar.issue.ignore.multicriteria.s1181.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s1181.resourceKey>
+        <sonar.issue.ignore.multicriteria.s6213.ruleKey>java:S6213</sonar.issue.ignore.multicriteria.s6213.ruleKey>
+        <sonar.issue.ignore.multicriteria.s6213.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s6213.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106a.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106a.ruleKey>
+        <sonar.issue.ignore.multicriteria.s106a.resourceKey>**/io/openmessaging/benchmark/Benchmark.java</sonar.issue.ignore.multicriteria.s106a.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106b.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106b.ruleKey>
+        <sonar.issue.ignore.multicriteria.s106b.resourceKey>**/io/openmessaging/benchmark/worker/BenchmarkWorker.java</sonar.issue.ignore.multicriteria.s106b.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106c.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106c.ruleKey>
+        <sonar.issue.ignore.multicriteria.s106c.resourceKey>**/io/openmessaging/benchmark/worker/DriverProcessMain.java</sonar.issue.ignore.multicriteria.s106c.resourceKey>
     </properties>
     <dependencyManagement>
         <dependencies>

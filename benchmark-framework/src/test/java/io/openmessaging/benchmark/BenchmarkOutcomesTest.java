@@ -271,6 +271,41 @@ class BenchmarkOutcomesTest {
     }
 
     @Test
+    void thresholdFailureContinuesOtherWorkloadsAndClosesWorker() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Worker worker = mock(Worker.class);
+        WorkloadRun first = mock(WorkloadRun.class);
+        WorkloadRun second = mock(WorkloadRun.class);
+        TestResult failed = result("first");
+        failed.aggregatedPublishLatency99pct = 11;
+        when(first.run()).thenReturn(failed);
+        when(second.run()).thenReturn(result("second"));
+        Workload firstWorkload = workload("first");
+        firstWorkload.thresholds = new Thresholds();
+        firstWorkload.thresholds.maxPublishLatency99Ms = 10.0;
+        Workload secondWorkload = workload("second");
+        secondWorkload.thresholds = new Thresholds();
+        secondWorkload.thresholds.maxPublishLatency99Ms = 10.0;
+        Map<String, Workload> workloads = new LinkedHashMap<>();
+        workloads.put("first", firstWorkload);
+        workloads.put("second", secondWorkload);
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                workloads,
+                                worker,
+                                (driver, workload, ignored) -> workload.name.equals("first") ? first : second))
+                .isInstanceOf(Benchmark.ThresholdFailureException.class)
+                .hasMessage("One or more workload threshold checks failed");
+        assertThat(Files.readString(Path.of(arguments.output))).contains("second", "PASS");
+        verify(worker, times(2)).initializeDriver(any());
+        verify(first).close();
+        verify(second).close();
+        verify(worker).close();
+    }
+
+    @Test
     void thresholdFailureHasDedicatedProcessExitCodeAndKeepsTheResult() throws Exception {
         Benchmark.Arguments arguments = arguments();
         Path driver = Path.of(arguments.drivers.getFirst());

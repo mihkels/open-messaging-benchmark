@@ -202,7 +202,7 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
-    void propagatesReadinessFailureAndStillStopsWorker() throws Exception {
+    void propagatesReadinessFailureAndStillStopsWorker() {
         Worker worker = worker();
         doThrow(new IllegalStateException("probe rejected")).when(worker).probeProducers();
         try (WorkloadGenerator generator = generator(workload(), worker, Duration.ofSeconds(2))) {
@@ -214,7 +214,7 @@ class WorkloadGeneratorLifecycleTest {
 
     @Test
     @Timeout(5)
-    void backlogControllerFailureWakesTheRunImmediately() throws Exception {
+    void backlogControllerFailureWakesTheRunImmediately() {
         Worker worker = worker();
         doThrow(new IllegalStateException("pause failed")).when(worker).pauseConsumers();
         Workload workload = workload();
@@ -226,7 +226,7 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
-    void sustainableRateControllerFailureIsNotSwallowed() throws Exception {
+    void sustainableRateControllerFailureIsNotSwallowed() {
         Worker worker = worker();
         when(worker.getCountersStats())
                 .thenReturn(new CountersStats())
@@ -415,7 +415,7 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
-    void propagatesProducerFailureFromTheWorkerBoundary() throws Exception {
+    void propagatesProducerFailureFromTheWorkerBoundary() {
         Worker worker = worker();
         when(worker.getPeriodStats()).thenThrow(new IllegalStateException("producer task failed"));
         WorkloadGenerator generator =

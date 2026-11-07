@@ -149,7 +149,11 @@ class KafkaE2eIT extends BaseE2eIT {
                     .allSatisfy(topic -> assertThat(topic.partitions()).hasSize(workload.partitionsPerTopic));
 
             Map<String, Integer> groupsWithDeliveries = new HashMap<>();
-            for (var group : adminClient.listGroups(ListGroupsOptions.forConsumerGroups()).all().get(10, TimeUnit.SECONDS)) {
+            for (var group
+                    : adminClient
+                            .listGroups(ListGroupsOptions.forConsumerGroups())
+                            .all()
+                            .get(10, TimeUnit.SECONDS)) {
                 var offsets =
                         adminClient
                                 .listConsumerGroupOffsets(group.groupId())

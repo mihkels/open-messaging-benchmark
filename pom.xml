@@ -61,7 +61,7 @@
         <jackson.version>3.2.4</jackson.version>
         <jackson.annotations.version>2.22</jackson.annotations.version>
         <!-- Keep at least the version async-http-client is built against -->
-        <netty.version>4.2.19.Final</netty.version>
+        <netty.version>4.2.20.Final</netty.version>
         <log4j.version>2.26.1</log4j.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.16</jacoco.plugin.version>

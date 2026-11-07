@@ -362,17 +362,15 @@ class ResourceCreatorComposeTest {
                                 CompletableFuture.completedFuture(List.of(1)), ignored -> creation, Aggregate::new);
                 CountDownLatch start = new CountDownLatch(1);
                 Future<?> complete =
-                        executor.submit(
-                                () -> {
-                                    await(start);
-                                    creation.complete(resource);
-                                });
+                        executor.submit(() -> {
+                            await(start);
+                            creation.complete(resource);
+                        });
                 Future<Boolean> cancel =
-                        executor.submit(
-                                () -> {
-                                    await(start);
-                                    return result.cancel(false);
-                                });
+                        executor.submit(() -> {
+                            await(start);
+                            return result.cancel(false);
+                        });
                 start.countDown();
                 complete.get(5, TimeUnit.SECONDS);
                 if (!cancel.get(5, TimeUnit.SECONDS)) {

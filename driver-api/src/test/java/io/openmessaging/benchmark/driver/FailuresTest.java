@@ -55,10 +55,9 @@ class FailuresTest {
         IOException failure = new IOException("close failed");
         boolean[] closed = new boolean[1];
 
-        failures.close(
-                () -> {
-                    throw failure;
-                });
+        failures.close(() -> {
+            throw failure;
+        });
         failures.close(null);
         failures.close(() -> closed[0] = true);
 
@@ -85,10 +84,9 @@ class FailuresTest {
     void restoresTheInterruptOfAnInterruptedClose() {
         Failures failures = new Failures();
 
-        failures.close(
-                () -> {
-                    throw new InterruptedException("close interrupted");
-                });
+        failures.close(() -> {
+            throw new InterruptedException("close interrupted");
+        });
         failures.restoreInterrupt();
 
         assertTrue(Thread.currentThread().isInterrupted());

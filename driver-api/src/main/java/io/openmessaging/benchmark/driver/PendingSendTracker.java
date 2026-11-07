@@ -48,12 +48,11 @@ public final class PendingSendTracker {
             }
             pending.add(send);
         }
-        send.whenComplete(
-                (unused, failure) -> {
-                    synchronized (pending) {
-                        pending.remove(send);
-                    }
-                });
+        send.whenComplete((unused, failure) -> {
+            synchronized (pending) {
+                pending.remove(send);
+            }
+        });
         return send;
     }
 

@@ -481,6 +481,53 @@ class JMSBenchmarkTransactionProducerTest {
         assertInterruptedClose(new JMSException("session close failed"));
     }
 
+    @Test
+    void concurrentCloseWaitingForTheFirstCloseCanBeInterrupted() throws Exception {
+        Scenario scenario = new Scenario();
+        scenario.commitEntered = new CountDownLatch(1);
+        scenario.releaseCommit = new CountDownLatch(1);
+        JMSBenchmarkTransactionProducer producer = scenario.producer(true);
+        producer.sendAsync(Optional.empty(), new byte[] {1});
+        scenario.listeners.get(0).onCompletion(null);
+        assertTrue(scenario.commitEntered.await(2, TimeUnit.SECONDS));
+        AtomicReference<Exception> firstFailure = new AtomicReference<>();
+        AtomicReference<Exception> secondFailure = new AtomicReference<>();
+        AtomicReference<Boolean> secondInterrupted = new AtomicReference<>();
+        Thread first = Thread.ofPlatform().start(() -> closeInto(producer, firstFailure));
+        Thread second;
+        try {
+            awaitWaitCount(first, 1);
+            second =
+                    Thread.ofPlatform()
+                            .start(() -> {
+                                closeInto(producer, secondFailure);
+                                secondInterrupted.set(Thread.currentThread().isInterrupted());
+                            });
+            awaitWaitCount(second, 1);
+            second.interrupt();
+            second.join(2000);
+        } finally {
+            scenario.releaseCommit.countDown();
+        }
+        first.join(2000);
+        assertFalse(first.isAlive());
+        assertFalse(second.isAlive());
+        assertNull(firstFailure.get());
+        assertInstanceOf(InterruptedException.class, secondFailure.get());
+        assertTrue(secondInterrupted.get());
+        producer.close();
+        drainCallbacks();
+    }
+
+    private static void closeInto(
+            JMSBenchmarkTransactionProducer producer, AtomicReference<Exception> failure) {
+        try {
+            producer.close();
+        } catch (Exception error) {
+            failure.set(error);
+        }
+    }
+
     private static void assertInterruptedClose(JMSException sessionCloseFailure) throws Exception {
         Scenario scenario = new Scenario();
         scenario.sessionCloseFailure = sessionCloseFailure;

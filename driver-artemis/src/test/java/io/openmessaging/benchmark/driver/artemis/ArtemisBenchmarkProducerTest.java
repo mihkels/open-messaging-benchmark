@@ -228,6 +228,37 @@ class ArtemisBenchmarkProducerTest {
         verify(fixture.session).close();
     }
 
+    @Test
+    void failedCreationClosesOnlyTheResourcesThatExist() throws Exception {
+        Fixture fixture = new Fixture();
+        ActiveMQException cause = new ActiveMQException("producer creation failed");
+        when(fixture.session.createProducer("topic")).thenThrow(cause);
+        doThrow(cause).when(fixture.session).close();
+
+        assertThatThrownBy(fixture::create)
+                .isSameAs(cause)
+                .satisfies(error -> assertThat(error.getSuppressed()).isEmpty());
+        verify(fixture.session).close();
+        verify(fixture.clientProducer, never()).close();
+
+        IllegalStateException sessionFailure = new IllegalStateException("no session");
+        when(fixture.factory.createSession()).thenThrow(sessionFailure);
+        assertThatThrownBy(fixture::create).isSameAs(sessionFailure);
+    }
+
+    @Test
+    void failedCreationClosesResourcesWhoseCloseSucceeds() throws Exception {
+        Fixture fixture = new Fixture();
+        ActiveMQException cause = new ActiveMQException("session start failed");
+        doThrow(cause).when(fixture.session).start();
+
+        assertThatThrownBy(fixture::create)
+                .isSameAs(cause)
+                .satisfies(error -> assertThat(error.getSuppressed()).isEmpty());
+        verify(fixture.clientProducer).close();
+        verify(fixture.session).close();
+    }
+
     private static final class Fixture {
         private final ClientSessionFactory factory = mock(ClientSessionFactory.class);
         private final ClientSession session = mock(ClientSession.class);

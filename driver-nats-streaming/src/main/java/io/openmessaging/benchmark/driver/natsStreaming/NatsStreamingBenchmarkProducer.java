@@ -53,20 +53,7 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
             publishingDepth.set(depth == null ? 1 : depth + 1);
         }
         CompletableFuture<String> expectedGuid = new CompletableFuture<>();
-        AckHandler acb =
-                (s, e) -> {
-                    if (e != null) {
-                        pending.completeFromClient(future, e);
-                        return;
-                    }
-                    expectedGuid.thenAccept(guid -> {
-                        if (guid.equals(s)) {
-                            pending.completeFromClient(future, null);
-                        } else {
-                            pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
-                        }
-                    });
-                };
+        AckHandler acb = ackHandler(future, expectedGuid);
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
         try {
             String guid = natsStreamingPublisher.publish(topic, ownedPayload, acb);
@@ -85,18 +72,39 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
             if (wasInterrupted) {
                 Thread.currentThread().interrupt();
             }
-            int depth = publishingDepth.get() - 1;
-            if (depth == 0) {
-                publishingDepth.remove();
-            } else {
-                publishingDepth.set(depth);
-            }
-            synchronized (lifecycleLock) {
-                activePublications--;
-                lifecycleLock.notifyAll();
-            }
+            endPublication();
         }
         return future;
+    }
+
+    private AckHandler ackHandler(
+            CompletableFuture<Void> future, CompletableFuture<String> expectedGuid) {
+        return (s, e) -> {
+            if (e != null) {
+                pending.completeFromClient(future, e);
+                return;
+            }
+            expectedGuid.thenAccept(guid -> {
+                if (guid.equals(s)) {
+                    pending.completeFromClient(future, null);
+                } else {
+                    pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
+                }
+            });
+        };
+    }
+
+    private void endPublication() {
+        int depth = publishingDepth.get() - 1;
+        if (depth == 0) {
+            publishingDepth.remove();
+        } else {
+            publishingDepth.set(depth);
+        }
+        synchronized (lifecycleLock) {
+            activePublications--;
+            lifecycleLock.notifyAll();
+        }
     }
 
     @Override

@@ -15,17 +15,25 @@ package io.openmessaging.benchmark.driver.artemis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import org.apache.activemq.artemis.api.core.ActiveMQBuffer;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
 import org.apache.activemq.artemis.api.core.client.ClientConsumer;
+import org.apache.activemq.artemis.api.core.client.ClientMessage;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
 import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
+import org.apache.activemq.artemis.api.core.client.MessageHandler;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ArtemisBenchmarkConsumerTest {
 
@@ -58,6 +66,71 @@ class ArtemisBenchmarkConsumerTest {
                 .isSameAs(cause)
                 .satisfies(error ->
                         assertThat(error.getSuppressed()).containsExactly(consumerFailure, sessionFailure));
+        verify(fixture.consumer).close();
+        verify(fixture.session).close();
+    }
+
+    @Test
+    void failedCreationClosesOnlyTheResourcesThatExist() throws Exception {
+        Fixture fixture = new Fixture();
+        ActiveMQException cause = new ActiveMQException("consumer creation failed");
+        when(fixture.session.createConsumer("subscription")).thenThrow(cause);
+        doThrow(cause).when(fixture.session).close();
+
+        assertThatThrownBy(fixture::create)
+                .isSameAs(cause)
+                .satisfies(error -> assertThat(error.getSuppressed()).isEmpty());
+        verify(fixture.session).close();
+        verify(fixture.consumer, never()).close();
+
+        IllegalStateException sessionFailure = new IllegalStateException("no session");
+        when(fixture.factory.createSession()).thenThrow(sessionFailure);
+        assertThatThrownBy(fixture::create).isSameAs(sessionFailure);
+    }
+
+    @Test
+    void failedCreationIgnoresCleanupFailureThatIsTheCause() throws Exception {
+        Fixture fixture = new Fixture();
+        ActiveMQException cause = new ActiveMQException("session start failed");
+        doThrow(cause).when(fixture.session).start();
+        doThrow(cause).when(fixture.consumer).close();
+
+        assertThatThrownBy(fixture::create)
+                .isSameAs(cause)
+                .satisfies(error -> assertThat(error.getSuppressed()).isEmpty());
+    }
+
+    @Test
+    void messageHandlerDeliversPayloadAndToleratesAcknowledgeFailure() throws Exception {
+        Fixture fixture = new Fixture();
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        ArgumentCaptor<MessageHandler> handler = ArgumentCaptor.forClass(MessageHandler.class);
+        ArtemisBenchmarkConsumer.create("topic", "subscription", fixture.factory, callback);
+        verify(fixture.consumer).setMessageHandler(handler.capture());
+
+        ClientMessage message = mock(ClientMessage.class);
+        ActiveMQBuffer buffer = mock(ActiveMQBuffer.class);
+        when(message.getBodyBuffer()).thenReturn(buffer);
+        when(buffer.readableBytes()).thenReturn(3);
+        when(message.getTimestamp()).thenReturn(42L);
+        handler.getValue().onMessage(message);
+        doThrow(new ActiveMQException("ack failed")).when(message).acknowledge();
+        handler.getValue().onMessage(message);
+
+        verify(buffer, times(2)).readBytes(any(byte[].class));
+        verify(callback, times(2)).messageReceived(any(byte[].class), eq(42L));
+        verify(message, times(2)).acknowledge();
+    }
+
+    @Test
+    void failedCreationClosesResourcesWhoseCloseSucceeds() throws Exception {
+        Fixture fixture = new Fixture();
+        ActiveMQException cause = new ActiveMQException("session start failed");
+        doThrow(cause).when(fixture.session).start();
+
+        assertThatThrownBy(fixture::create)
+                .isSameAs(cause)
+                .satisfies(error -> assertThat(error.getSuppressed()).isEmpty());
         verify(fixture.consumer).close();
         verify(fixture.session).close();
     }

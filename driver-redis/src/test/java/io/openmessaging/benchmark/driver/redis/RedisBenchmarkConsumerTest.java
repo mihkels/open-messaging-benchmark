@@ -347,6 +347,95 @@ class RedisBenchmarkConsumerTest {
         }
     }
 
+    @Test
+    void closeDuringDeliveryStopsTheRestOfTheBatch() throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        StreamEntryBinary first =
+                new StreamEntryBinary(
+                        new StreamEntryID(1, 0), Map.of("payload".getBytes(UTF_8), new byte[] {1}));
+        StreamEntryBinary second =
+                new StreamEntryBinary(
+                        new StreamEntryID(2, 0), Map.of("payload".getBytes(UTF_8), new byte[] {2}));
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenReturn(List.of(Map.entry("topic".getBytes(UTF_8), List.of(first, second))));
+        AtomicReference<RedisBenchmarkConsumer> holder = new AtomicReference<>();
+        AtomicReference<Thread> closer = new AtomicReference<>();
+        ConsumerCallback callback = mock();
+        doAnswer(
+                        invocation -> {
+                            RedisBenchmarkConsumer consumer = holder.get();
+                            closer.set(Thread.ofPlatform().start(() -> closeQuietly(consumer)));
+                            awaitClosing(consumer);
+                            return null;
+                        })
+                .when(callback)
+                .messageReceived(any(byte[].class), anyLong());
+        CountDownLatch created = new CountDownLatch(1);
+        when(pool.getResource())
+                .thenAnswer(invocation -> {
+                    created.await(5, TimeUnit.SECONDS);
+                    return jedis;
+                });
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer("consumer", "topic", "subscription", pool, callback);
+        holder.set(consumer);
+        created.countDown();
+
+        verify(callback, org.mockito.Mockito.timeout(5000)).messageReceived(new byte[] {1}, 1L);
+        while (closer.get() == null) {
+            Thread.onSpinWait();
+        }
+        closer.get().join(5000);
+        assertThat(closer.get().isAlive()).isFalse();
+        verify(callback, never()).messageReceived(new byte[] {2}, 2L);
+        verify(jedis).xack("topic", "subscription", new StreamEntryID(1, 0));
+        verify(jedis, never()).xack("topic", "subscription", new StreamEntryID(2, 0));
+    }
+
+    @Test
+    void interruptedWaitForTheFinishedReaderIsReported() throws Exception {
+        RedisBenchmarkConsumer consumer = deadReader();
+        Future<?> task = mock();
+        when(task.get()).thenThrow(new InterruptedException("interrupted while collecting"));
+        Field field = RedisBenchmarkConsumer.class.getDeclaredField("consumerTask");
+        field.setAccessible(true);
+        field.set(consumer, task);
+
+        try {
+            assertThatThrownBy(consumer::close).isInstanceOf(InterruptedException.class);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+
+        RedisBenchmarkConsumer finished = deadReader();
+        field.set(finished, mock(Future.class));
+        finished.close();
+    }
+
+    private static void closeQuietly(RedisBenchmarkConsumer consumer) {
+        try {
+            consumer.close();
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @SuppressWarnings("java:S2925") // polls the closing flag, which exposes no completion hook
+    private static void awaitClosing(RedisBenchmarkConsumer consumer) throws Exception {
+        Field closing = RedisBenchmarkConsumer.class.getDeclaredField("closing");
+        closing.setAccessible(true);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!closing.getBoolean(consumer)) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("consumer did not start closing");
+            }
+            Thread.sleep(1);
+        }
+    }
+
     @SuppressWarnings("java:S2925") // polls thread wait counters, which expose no completion hook
     private static long awaitWaitCount(Thread thread, long expected) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);

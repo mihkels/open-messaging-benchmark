@@ -124,66 +124,74 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                             .sendTimeout(0, TimeUnit.MILLISECONDS)
                             .maxPendingMessages(config.producer.pendingQueueSize);
 
-            try {
-                // Create namespace and set the configuration
-                String tenant = config.client.namespacePrefix.split("/")[0];
-                String cluster = config.client.clusterName;
-                if (!adminClient.tenants().getTenants().contains(tenant)) {
-                    try {
-                        adminClient
-                                .tenants()
-                                .createTenant(
-                                        tenant,
-                                        TenantInfo.builder()
-                                                .adminRoles(Collections.emptySet())
-                                                .allowedClusters(Collections.singleton(cluster))
-                                                .build());
-                    } catch (ConflictException e) {
-                        // Ignore. This can happen when multiple workers are initializing at the same time
-                    } catch (PulsarAdminException e) {
-                        // Some metadata stores report the concurrent creation as a server error instead of
-                        // a conflict, so only fail when the tenant really does not exist
-                        if (!adminClient.tenants().getTenants().contains(tenant)) {
-                            throw e;
-                        }
-                    }
-                }
-                log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);
-
-                this.namespace = config.client.namespacePrefix + "-" + ResourceNames.randomSuffix();
-                adminClient.namespaces().createNamespace(namespace);
-                log.info("Created Pulsar namespace {}", namespace);
-
-                PersistenceConfiguration p = config.client.persistence;
-                adminClient
-                        .namespaces()
-                        .setPersistence(
-                                namespace,
-                                new PersistencePolicies(p.ensembleSize, p.writeQuorum, p.ackQuorum, 1.0));
-
-                adminClient
-                        .namespaces()
-                        .setBacklogQuota(
-                                namespace,
-                                BacklogQuota.builder()
-                                        .limitSize(-1L)
-                                        .limitTime(-1)
-                                        .retentionPolicy(RetentionPolicy.producer_exception)
-                                        .build());
-                adminClient.namespaces().setDeduplicationStatus(namespace, p.deduplicationEnabled);
-                log.info(
-                        "Applied persistence configuration for namespace {}/{}/{}: {}",
-                        tenant,
-                        cluster,
-                        namespace,
-                        writer.writeValueAsString(p));
-
-            } catch (PulsarAdminException e) {
-                throw new IOException(e);
-            }
+            createNamespace();
         } catch (IOException | RuntimeException failure) {
             closeClients(failure);
             throw failure;
+        }
+    }
+
+    private void createNamespace() throws IOException {
+        try {
+            // Create namespace and set the configuration
+            String tenant = config.client.namespacePrefix.split("/")[0];
+            String cluster = config.client.clusterName;
+            ensureTenant(tenant, cluster);
+            log.info("Created Pulsar tenant {} with allowed cluster {}", tenant, cluster);
+
+            this.namespace = config.client.namespacePrefix + "-" + ResourceNames.randomSuffix();
+            adminClient.namespaces().createNamespace(namespace);
+            log.info("Created Pulsar namespace {}", namespace);
+
+            PersistenceConfiguration p = config.client.persistence;
+            adminClient
+                    .namespaces()
+                    .setPersistence(
+                            namespace, new PersistencePolicies(p.ensembleSize, p.writeQuorum, p.ackQuorum, 1.0));
+
+            adminClient
+                    .namespaces()
+                    .setBacklogQuota(
+                            namespace,
+                            BacklogQuota.builder()
+                                    .limitSize(-1L)
+                                    .limitTime(-1)
+                                    .retentionPolicy(RetentionPolicy.producer_exception)
+                                    .build());
+            adminClient.namespaces().setDeduplicationStatus(namespace, p.deduplicationEnabled);
+            log.info(
+                    "Applied persistence configuration for namespace {}/{}/{}: {}",
+                    tenant,
+                    cluster,
+                    namespace,
+                    writer.writeValueAsString(p));
+
+        } catch (PulsarAdminException e) {
+            throw new IOException(e);
+        }
+    }
+
+    private void ensureTenant(String tenant, String cluster) throws PulsarAdminException {
+        if (adminClient.tenants().getTenants().contains(tenant)) {
+            return;
+        }
+        try {
+            adminClient
+                    .tenants()
+                    .createTenant(
+                            tenant,
+                            TenantInfo.builder()
+                                    .adminRoles(Collections.emptySet())
+                                    .allowedClusters(Collections.singleton(cluster))
+                                    .build());
+        } catch (ConflictException e) {
+            // Ignore. This can happen when multiple workers are initializing at the same time
+        } catch (PulsarAdminException e) {
+            // Some metadata stores report the concurrent creation as a server error instead of
+            // a conflict, so only fail when the tenant really does not exist
+            if (!adminClient.tenants().getTenants().contains(tenant)) {
+                throw e;
+            }
         }
     }
 

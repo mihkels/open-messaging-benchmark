@@ -68,21 +68,7 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
         try {
             JedisPool sharedPool = pool();
             try (Jedis jedis = sharedPool.getResource()) {
-                try {
-                    jedis.xgroupCreate(topic, subscriptionName, null, true);
-                    log.info("Created consumer group '{}' for topic '{}'", subscriptionName, topic);
-                } catch (redis.clients.jedis.exceptions.JedisDataException e) {
-                    if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
-                        log.info(
-                                "Consumer group '{}' already exists for topic '{}', reusing it",
-                                subscriptionName,
-                                topic);
-                    } else {
-                        log.error(
-                                "Failed to create consumer group '{}' for topic '{}'", subscriptionName, topic, e);
-                        throw e;
-                    }
-                }
+                createGroup(jedis, topic, subscriptionName);
             }
             return CompletableFuture.completedFuture(
                     new RedisBenchmarkConsumer(
@@ -94,6 +80,24 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
                     subscriptionName,
                     e);
             return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    private static void createGroup(Jedis jedis, String topic, String subscriptionName) {
+        try {
+            jedis.xgroupCreate(topic, subscriptionName, null, true);
+            log.info("Created consumer group '{}' for topic '{}'", subscriptionName, topic);
+        } catch (redis.clients.jedis.exceptions.JedisDataException e) {
+            if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
+                log.info(
+                        "Consumer group '{}' already exists for topic '{}', reusing it",
+                        subscriptionName,
+                        topic);
+            } else {
+                log.error(
+                        "Failed to create consumer group '{}' for topic '{}'", subscriptionName, topic, e);
+                throw e;
+            }
         }
     }
 

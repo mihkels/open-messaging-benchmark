@@ -94,50 +94,12 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         }
 
         if (operations == null) {
-            try {
-                closeComplete.await();
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                throw error;
-            }
-            if (closeFailure != null) {
-                throw closeFailure;
-            }
+            awaitConcurrentClose();
             return;
         }
 
         try {
-            for (SendOperation operation : operations) {
-                operation.finish(new IllegalStateException("JMS transactional producer is closed"), false);
-            }
-
-            Exception failure = null;
-            boolean interrupted = false;
-            for (SendOperation operation : operations) {
-                while (!operation.isSettled()) {
-                    try {
-                        operation.awaitSettlement();
-                    } catch (InterruptedException _) {
-                        interrupted = true;
-                    }
-                }
-                for (Exception cleanupFailure : operation.cleanupFailures()) {
-                    if (failure == null) {
-                        failure = cleanupFailure;
-                    } else if (failure != cleanupFailure) {
-                        failure.addSuppressed(cleanupFailure);
-                    }
-                }
-            }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-                InterruptedException error =
-                        new InterruptedException("Interrupted while closing JMS producer");
-                if (failure != null) {
-                    error.addSuppressed(failure);
-                }
-                failure = error;
-            }
+            Exception failure = settle(operations);
             closeFailure = failure;
             if (failure != null) {
                 throw failure;
@@ -148,6 +110,65 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             }
             closeComplete.countDown();
         }
+    }
+
+    private void awaitConcurrentClose() throws Exception {
+        try {
+            closeComplete.await();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw error;
+        }
+        if (closeFailure != null) {
+            throw closeFailure;
+        }
+    }
+
+    private static Exception settle(List<SendOperation> operations) {
+        for (SendOperation operation : operations) {
+            operation.finish(new IllegalStateException("JMS transactional producer is closed"), false);
+        }
+
+        Exception failure = null;
+        boolean interrupted = false;
+        for (SendOperation operation : operations) {
+            interrupted = awaitSettled(operation) || interrupted;
+            failure = addCleanupFailures(failure, operation);
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+            InterruptedException error =
+                    new InterruptedException("Interrupted while closing JMS producer");
+            if (failure != null) {
+                error.addSuppressed(failure);
+            }
+            failure = error;
+        }
+        return failure;
+    }
+
+    private static boolean awaitSettled(SendOperation operation) {
+        boolean interrupted = false;
+        while (!operation.isSettled()) {
+            try {
+                operation.awaitSettlement();
+            } catch (InterruptedException _) {
+                interrupted = true;
+            }
+        }
+        return interrupted;
+    }
+
+    private static Exception addCleanupFailures(Exception failure, SendOperation operation) {
+        Exception merged = failure;
+        for (Exception cleanupFailure : operation.cleanupFailures()) {
+            if (merged == null) {
+                merged = cleanupFailure;
+            } else if (merged != cleanupFailure) {
+                merged.addSuppressed(cleanupFailure);
+            }
+        }
+        return merged;
     }
 
     @Override
@@ -174,44 +195,13 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             if (!operation.attachProducer(producer)) {
                 return operation.result;
             }
-            BytesMessage bytesMessage = session.createBytesMessage();
-            bytesMessage.writeBytes(payload);
-            if (key.isPresent()) {
-                bytesMessage.setStringProperty("JMSXGroupID", key.get());
-            }
-            for (JMSConfig.AddProperty prop : properties) {
-                bytesMessage.setStringProperty(prop.name, prop.value);
-            }
-            bytesMessage.setLongProperty("E2EStartMillis", System.currentTimeMillis());
+            BytesMessage bytesMessage = createMessage(session, key, payload);
             if (!operation.isActive()) {
                 return operation.result;
             }
 
             if (useAsyncSend) {
-                CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
-                acknowledgement
-                        .whenCompleteAsync((ignored, error) -> operation.finish(error, error == null))
-                        .whenComplete((ignored, error) -> {
-                            if (error != null) {
-                                operation.finish(error, false);
-                            }
-                        });
-                producer.send(
-                        bytesMessage,
-                        new CompletionListener() {
-                            @Override
-                            public void onCompletion(Message message) {
-                                acknowledgement.complete(null);
-                            }
-
-                            @Override
-                            public void onException(Message message, Exception exception) {
-                                acknowledgement.completeExceptionally(
-                                        exception != null
-                                                ? exception
-                                                : new JMSException("JMS provider reported a failure without a cause"));
-                            }
-                        });
+                sendAsynchronously(producer, bytesMessage, operation);
             } else {
                 producer.send(bytesMessage);
                 operation.finish(null, true);
@@ -220,6 +210,49 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             operation.finish(error, false);
         }
         return operation.result;
+    }
+
+    private BytesMessage createMessage(Session session, Optional<String> key, byte[] payload)
+            throws JMSException {
+        BytesMessage bytesMessage = session.createBytesMessage();
+        bytesMessage.writeBytes(payload);
+        if (key.isPresent()) {
+            bytesMessage.setStringProperty("JMSXGroupID", key.get());
+        }
+        for (JMSConfig.AddProperty prop : properties) {
+            bytesMessage.setStringProperty(prop.name, prop.value);
+        }
+        bytesMessage.setLongProperty("E2EStartMillis", System.currentTimeMillis());
+        return bytesMessage;
+    }
+
+    private static void sendAsynchronously(
+            MessageProducer producer, BytesMessage bytesMessage, SendOperation operation)
+            throws JMSException {
+        CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
+        acknowledgement
+                .whenCompleteAsync((ignored, error) -> operation.finish(error, error == null))
+                .whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        operation.finish(error, false);
+                    }
+                });
+        producer.send(
+                bytesMessage,
+                new CompletionListener() {
+                    @Override
+                    public void onCompletion(Message message) {
+                        acknowledgement.complete(null);
+                    }
+
+                    @Override
+                    public void onException(Message message, Exception exception) {
+                        acknowledgement.completeExceptionally(
+                                exception != null
+                                        ? exception
+                                        : new JMSException("JMS provider reported a failure without a cause"));
+                    }
+                });
     }
 
     private final class SendOperation {

@@ -118,6 +118,55 @@ class NatsStreamingBenchmarkDriverTest {
     }
 
     @Test
+    void failedConsumerCreationCleansUpOnlyWhatWasOpened() throws Exception {
+        IOException connectFailure = new IOException("connect failed");
+        NatsStreamingBenchmarkDriver refused =
+                new NatsStreamingBenchmarkDriver((cluster, client, options) -> {
+                    throw connectFailure;
+                });
+        assertThatThrownBy(() -> refused.createConsumer("t", "g", mock(ConsumerCallback.class)).join())
+                .hasCause(connectFailure);
+        assertThat(connectFailure.getSuppressed()).isEmpty();
+
+        IOException sameFailure = new IOException("subscribe and close failed");
+        StreamingConnection reused = failingSubscription(sameFailure);
+        doThrow(sameFailure).when(reused).close();
+        assertThatThrownBy(() -> consumerOn(reused).join()).hasCause(sameFailure);
+        assertThat(sameFailure.getSuppressed()).isEmpty();
+
+        IOException cleanFailure = new IOException("subscribe failed");
+        StreamingConnection clean = failingSubscription(cleanFailure);
+        assertThatThrownBy(() -> consumerOn(clean).join()).hasCause(cleanFailure);
+        assertThat(cleanFailure.getSuppressed()).isEmpty();
+        verify(clean).close();
+
+        IOException interruptedClose = new IOException("subscribe failed before interrupt");
+        InterruptedException closeInterrupt = new InterruptedException("close interrupted");
+        StreamingConnection interrupting = failingSubscription(interruptedClose);
+        doThrow(closeInterrupt).when(interrupting).close();
+        try {
+            assertThatThrownBy(() -> consumerOn(interrupting).join()).hasCause(interruptedClose);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(interruptedClose.getSuppressed()).containsExactly(closeInterrupt);
+    }
+
+    private static StreamingConnection failingSubscription(Exception failure) throws Exception {
+        StreamingConnection connection = mock(StreamingConnection.class);
+        when(connection.subscribe(
+                        anyString(), anyString(), any(MessageHandler.class), any(SubscriptionOptions.class)))
+                .thenThrow(failure);
+        return connection;
+    }
+
+    private static CompletableFuture<BenchmarkConsumer> consumerOn(StreamingConnection connection) {
+        return new NatsStreamingBenchmarkDriver((cluster, client, options) -> connection)
+                .createConsumer("topic", "group", mock(ConsumerCallback.class));
+    }
+
+    @Test
     void producerHandlesShareTheDriverOwnedConnection() throws Exception {
         StreamingConnection connection = mock(StreamingConnection.class);
         AtomicInteger connections = new AtomicInteger();

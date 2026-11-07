@@ -47,6 +47,8 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
     private final Object closeLock = new Object();
     private final DlogFailures failures = new DlogFailures();
     private LogReader reader;
+    // Only touched by the reader thread.
+    private DLSN lastDLSN = DLSN.InitialDLSN;
     private volatile boolean closing;
     private volatile Thread readerThread;
     private boolean closeStarted;
@@ -92,58 +94,11 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
 
     private void read() throws Exception {
         readerThread = Thread.currentThread();
-        DLSN lastDLSN = DLSN.InitialDLSN;
+        lastDLSN = DLSN.InitialDLSN;
         try {
-            while (!closing) {
-                LogReader current = currentReader();
-                if (current == null) {
-                    if (closing) {
-                        break;
-                    }
-                    try {
-                        LogReader opened = Objects.requireNonNull(dlm.openLogReader(lastDLSN), "log reader");
-                        if (!installReader(opened)) {
-                            closeReader(opened);
-                            break;
-                        }
-                        current = opened;
-                        log.info(
-                                "Successfully open log reader for stream {} at {}", dlm.getStreamName(), lastDLSN);
-                    } catch (IOException e) {
-                        if (!closing) {
-                            log.error(
-                                    "Failed to open reader of stream {} at {}", dlm.getStreamName(), lastDLSN, e);
-                            if (backoff(10, TimeUnit.SECONDS)) {
-                                continue;
-                            }
-                        }
-                        break;
-                    }
-                }
-
-                try {
-                    LogRecordWithDLSN record = current.readNext(false);
-                    if (record == null) {
-                        if (!backoff(1, TimeUnit.MILLISECONDS)) {
-                            break;
-                        }
-                        continue;
-                    }
-                    if (closing) {
-                        break;
-                    }
-                    callback.messageReceived(record.getPayload(), record.getTransactionId());
-                    lastDLSN = record.getDlsn();
-                } catch (IOException e) {
-                    if (!closing) {
-                        log.info(
-                                "Encountered error on reading records from reading stream {}, last record = {}",
-                                dlm.getStreamName(),
-                                lastDLSN,
-                                e);
-                    }
-                    closeReader(takeReader(current));
-                }
+            boolean keepReading = true;
+            while (keepReading && !closing) {
+                keepReading = readStep();
             }
         } catch (Exception | Error failure) {
             failures.add(failure);
@@ -155,6 +110,69 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
             closeReader(takeReader(null));
             readerThread = null;
         }
+    }
+
+    // Runs one iteration of the reader loop and returns whether the loop should continue.
+    private boolean readStep() {
+        LogReader current = currentReader();
+        if (current == null) {
+            if (closing) {
+                return false;
+            }
+            OpenedReader opened = openReader();
+            if (opened.reader() == null) {
+                return opened.keepReading();
+            }
+            current = opened.reader();
+        }
+        return readRecord(current);
+    }
+
+    private OpenedReader openReader() {
+        try {
+            LogReader opened = Objects.requireNonNull(dlm.openLogReader(lastDLSN), "log reader");
+            if (!installReader(opened)) {
+                closeReader(opened);
+                return OpenedReader.STOP;
+            }
+            log.info("Successfully open log reader for stream {} at {}", dlm.getStreamName(), lastDLSN);
+            return new OpenedReader(opened, true);
+        } catch (IOException e) {
+            if (!closing) {
+                log.error("Failed to open reader of stream {} at {}", dlm.getStreamName(), lastDLSN, e);
+                return new OpenedReader(null, backoff(10, TimeUnit.SECONDS));
+            }
+            return OpenedReader.STOP;
+        }
+    }
+
+    private boolean readRecord(LogReader current) {
+        try {
+            LogRecordWithDLSN record = current.readNext(false);
+            if (record == null) {
+                return backoff(1, TimeUnit.MILLISECONDS);
+            }
+            if (closing) {
+                return false;
+            }
+            callback.messageReceived(record.getPayload(), record.getTransactionId());
+            lastDLSN = record.getDlsn();
+        } catch (IOException e) {
+            if (!closing) {
+                log.info(
+                        "Encountered error on reading records from reading stream {}, last record = {}",
+                        dlm.getStreamName(),
+                        lastDLSN,
+                        e);
+            }
+            closeReader(takeReader(current));
+        }
+        return true;
+    }
+
+    // Outcome of opening a reader: the installed reader, or whether to retry without one.
+    private record OpenedReader(LogReader reader, boolean keepReading) {
+        private static final OpenedReader STOP = new OpenedReader(null, false);
     }
 
     private static boolean backoff(long delay, TimeUnit unit) {

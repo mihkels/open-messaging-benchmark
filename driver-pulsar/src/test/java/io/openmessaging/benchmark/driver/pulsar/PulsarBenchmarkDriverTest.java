@@ -384,6 +384,15 @@ class PulsarBenchmarkDriverTest {
                 .createTenant(any(), any());
         initialize(temp, racing, false);
 
+        PulsarAdmin conflicting = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(conflicting.tenants().getTenants()).thenReturn(List.of());
+        Tenants conflictingTenants = conflicting.tenants();
+        doThrow(new PulsarAdminException.ConflictException(null, "tenant exists", 409))
+                .when(conflictingTenants)
+                .createTenant(any(), any());
+        initialize(temp, conflicting, false);
+        verify(conflictingTenants, times(1)).getTenants();
+
         PulsarAdmin missing = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         when(missing.tenants().getTenants()).thenReturn(List.of());
         PulsarAdminException failure = new PulsarAdminException("server error");

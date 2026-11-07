@@ -62,25 +62,35 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
             return new ArtemisBenchmarkProducer(tempSession, tempProducer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            if (tempProducer != null) {
-                try {
-                    tempProducer.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
-            if (tempSession != null) {
-                try {
-                    tempSession.close();
-                } catch (ActiveMQException | RuntimeException closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                }
-            }
+            closeAfterFailure(tempProducer, e);
+            closeAfterFailure(tempSession, e);
             throw e;
+        }
+    }
+
+    private static void closeAfterFailure(ClientProducer resource, Exception failure) {
+        if (resource == null) {
+            return;
+        }
+        try {
+            resource.close();
+        } catch (ActiveMQException | RuntimeException closeException) {
+            if (closeException != failure) {
+                failure.addSuppressed(closeException);
+            }
+        }
+    }
+
+    private static void closeAfterFailure(ClientSession resource, Exception failure) {
+        if (resource == null) {
+            return;
+        }
+        try {
+            resource.close();
+        } catch (ActiveMQException | RuntimeException closeException) {
+            if (closeException != failure) {
+                failure.addSuppressed(closeException);
+            }
         }
     }
 

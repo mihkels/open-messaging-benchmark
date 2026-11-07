@@ -120,14 +120,7 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
                                             ArtemisBenchmarkConsumer.create(
                                                     topic, queueName, sessionFactory, consumerCallback);
                                     if (!future.complete(consumer)) {
-                                        try {
-                                            consumer.close();
-                                        } catch (Exception closeFailure) {
-                                            if (closeFailure instanceof InterruptedException) {
-                                                Thread.currentThread().interrupt();
-                                            }
-                                            log.warn("Failed to close an untransferred Artemis consumer", closeFailure);
-                                        }
+                                        closeUntransferred(consumer);
                                     }
                                 } catch (ActiveMQException e) {
                                     throw new CompletionException(e);
@@ -143,6 +136,17 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         }
 
         return future;
+    }
+
+    static void closeUntransferred(BenchmarkConsumer consumer) {
+        try {
+            consumer.close();
+        } catch (Exception closeFailure) {
+            if (closeFailure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            log.warn("Failed to close an untransferred Artemis consumer", closeFailure);
+        }
     }
 
     @Override

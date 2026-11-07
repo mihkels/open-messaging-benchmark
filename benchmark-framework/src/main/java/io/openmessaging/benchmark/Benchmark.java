@@ -27,6 +27,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -412,7 +413,7 @@ public final class Benchmark {
         if (output != null && !output.isEmpty()) {
             return output;
         }
-        String timestamp = LocalDateTime.now().format(RESULT_TIMESTAMP);
+        String timestamp = LocalDateTime.now(ZoneId.systemDefault()).format(RESULT_TIMESTAMP);
         String fileName = String.format("%s-%s-%s.json", workloadFileName, driverName, timestamp);
         if (resultsDirectory == null || resultsDirectory.isEmpty()) {
             return fileName;

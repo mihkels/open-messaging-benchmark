@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -130,6 +131,32 @@ class DlogBenchmarkProducerTest {
         producer.close();
 
         assertThat(send).isCompletedWithValue(null);
+    }
+
+    @Test
+    void interruptedWriterCloseStillClosesTheManagerAndRestoresTheInterrupt() throws Exception {
+        AsyncLogWriter writer = mock(AsyncLogWriter.class);
+        DistributedLogManager manager = mock(DistributedLogManager.class);
+        when(writer.asyncClose()).thenReturn(new CompletableFuture<>());
+        AtomicReference<Boolean> interruptedDuringManagerClose = new AtomicReference<>();
+        doAnswer(
+                        invocation -> {
+                            interruptedDuringManagerClose.set(Thread.currentThread().isInterrupted());
+                            return null;
+                        })
+                .when(manager)
+                .close();
+        DlogBenchmarkProducer producer = new DlogBenchmarkProducer(manager, writer);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(producer::close).isInstanceOf(InterruptedException.class);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(manager).close();
+        assertThat(interruptedDuringManagerClose.get()).isFalse();
     }
 
     @Test

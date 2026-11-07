@@ -72,9 +72,8 @@ class ArtemisBenchmarkDriverTest {
         IllegalStateException cause = new IllegalStateException("consumer session failed");
         when(factory.createSession()).thenThrow(cause);
 
-        assertThatThrownBy(
-                        () ->
-                                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+        assertThatThrownBy(() ->
+                        driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
                 .hasCause(cause);
     }
 
@@ -89,14 +88,13 @@ class ArtemisBenchmarkDriverTest {
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch closed = new CountDownLatch(1);
         when(factory.createSession())
-                .thenAnswer(
-                        invocation -> {
-                            creating.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("consumer creation was not released");
-                            }
-                            return session;
-                        });
+                .thenAnswer(invocation -> {
+                    creating.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("consumer creation was not released");
+                    }
+                    return session;
+                });
         when(session.createConsumer("topic-subscription")).thenReturn(consumer);
         doAnswer(
                         invocation -> {
@@ -137,9 +135,8 @@ class ArtemisBenchmarkDriverTest {
 
         assertThatThrownBy(driver::close)
                 .isSameAs(sessionFailure)
-                .satisfies(
-                        error ->
-                                assertThat(error.getSuppressed()).containsExactly(factoryFailure, locatorFailure));
+                .satisfies(error ->
+                        assertThat(error.getSuppressed()).containsExactly(factoryFailure, locatorFailure));
         driver.close();
         verify(session, times(1)).close();
         verify(factory, times(1)).close();

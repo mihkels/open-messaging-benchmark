@@ -13,8 +13,16 @@
  */
 package io.openmessaging.benchmark.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,17 +36,9 @@ import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.resps.StreamGroupInfo;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
- * End-to-end test for Redis. Testing is done by creating a simple workload and running the benchmark.
+ * End-to-end test for Redis. Testing is done by creating a simple workload and running the
+ * benchmark.
  */
 @Testcontainers
 class RedisE2eIT extends BaseE2eIT {
@@ -48,8 +48,8 @@ class RedisE2eIT extends BaseE2eIT {
     private static final int REDIS_PORT = 6379;
 
     @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
-            .withExposedPorts(REDIS_PORT);
+    static GenericContainer<?> redis =
+            new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE)).withExposedPorts(REDIS_PORT);
 
     private Path driverConfigFile;
 
@@ -63,18 +63,21 @@ class RedisE2eIT extends BaseE2eIT {
 
     @BeforeEach
     void setupDriver() throws Exception {
-        String driverConfig = String.format("""
-                name: Redis
-                driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+        String driverConfig =
+                String.format(
+                        """
+                        name: Redis
+                        driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
 
-                # Redis connection settings
-                redisHost: %s
-                redisPort: %d
+                        # Redis connection settings
+                        redisHost: %s
+                        redisPort: %d
 
-                # Jedis pool configuration
-                jedisPoolMaxTotal: 16
-                jedisPoolMaxIdle: 16
-                """, redis.getHost(), redis.getMappedPort(REDIS_PORT));
+                        # Jedis pool configuration
+                        jedisPoolMaxTotal: 16
+                        jedisPoolMaxIdle: 16
+                        """,
+                        redis.getHost(), redis.getMappedPort(REDIS_PORT));
 
         driverConfigFile = tempDir.resolve("redis-driver.yaml");
         Files.writeString(driverConfigFile, driverConfig);
@@ -133,7 +136,8 @@ class RedisE2eIT extends BaseE2eIT {
             driver.initialize(driverConfigFile, null);
             String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
-            try (var firstConsumer = driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
+            try (var firstConsumer =
+                            driver.createConsumer(topic, "group-a", first).get(10, TimeUnit.SECONDS);
                     var secondConsumer =
                             driver.createConsumer(topic, "group-b", second).get(10, TimeUnit.SECONDS);
                     var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
@@ -167,7 +171,6 @@ class RedisE2eIT extends BaseE2eIT {
         SmokeResult result = runBenchmark(workload);
 
         validateResults(result, workload);
-
     }
 
     @Test
@@ -190,17 +193,20 @@ class RedisE2eIT extends BaseE2eIT {
     @Test
     void testLargePoolConfiguration() throws Exception {
         // Create a custom driver config with larger pool
-        String driverConfig = String.format("""
-                name: Redis
-                driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+        String driverConfig =
+                String.format(
+                        """
+                        name: Redis
+                        driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
 
-                redisHost: %s
-                redisPort: %d
+                        redisHost: %s
+                        redisPort: %d
 
-                # Larger pool for higher concurrency
-                jedisPoolMaxTotal: 32
-                jedisPoolMaxIdle: 16
-                """, redis.getHost(), redis.getMappedPort(REDIS_PORT));
+                        # Larger pool for higher concurrency
+                        jedisPoolMaxTotal: 32
+                        jedisPoolMaxIdle: 16
+                        """,
+                        redis.getHost(), redis.getMappedPort(REDIS_PORT));
 
         Path largePoolConfigFile = tempDir.resolve("redis-driver-large-pool.yaml");
         Files.writeString(largePoolConfigFile, driverConfig);
@@ -227,5 +233,4 @@ class RedisE2eIT extends BaseE2eIT {
     private SmokeResult runBenchmarkWithConfig(Workload workload, Path configFile) throws Exception {
         return runBenchmark("Redis", configFile, workload);
     }
-
 }

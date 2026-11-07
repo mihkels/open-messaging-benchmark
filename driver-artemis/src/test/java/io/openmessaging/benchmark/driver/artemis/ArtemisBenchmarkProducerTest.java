@@ -117,11 +117,10 @@ class ArtemisBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             var firstClose =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
 
             producer.close();
@@ -224,9 +223,8 @@ class ArtemisBenchmarkProducerTest {
 
         assertThatThrownBy(fixture::create)
                 .isSameAs(cause)
-                .satisfies(
-                        error ->
-                                assertThat(error.getSuppressed()).containsExactly(producerFailure, sessionFailure));
+                .satisfies(error ->
+                        assertThat(error.getSuppressed()).containsExactly(producerFailure, sessionFailure));
         verify(fixture.clientProducer).close();
         verify(fixture.session).close();
     }

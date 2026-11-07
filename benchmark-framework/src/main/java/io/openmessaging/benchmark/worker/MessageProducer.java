@@ -49,10 +49,8 @@ public class MessageProducer {
             final long sendTime = nanoClock.getAsLong();
             CompletableFuture<Void> send =
                     Objects.requireNonNull(producer.sendAsync(key, payload), "sendAsync returned null");
-            send.whenComplete(
-                    (ignored, failure) ->
-                            callbacks.completeSend(
-                                    payload.length, intendedSendTime, sendTime, nanoClock, failure));
+            send.whenComplete((ignored, failure) ->
+                    callbacks.completeSend(payload.length, intendedSendTime, sendTime, nanoClock, failure));
         } catch (Throwable t) {
             callbacks.abortSend();
             throw t;

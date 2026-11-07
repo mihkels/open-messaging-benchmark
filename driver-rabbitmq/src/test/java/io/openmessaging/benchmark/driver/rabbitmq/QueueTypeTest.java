@@ -27,10 +27,9 @@ class QueueTypeTest {
     @Test
     public void quorum() {
         assertThat(RabbitMqConfig.QueueType.QUORUM.queueOptions())
-                .satisfies(
-                        o -> {
-                            assertThat(o).containsEntry("x-queue-type", "quorum");
-                            assertThat(o).hasSize(1);
-                        });
+                .satisfies(o -> {
+                    assertThat(o).containsEntry("x-queue-type", "quorum");
+                    assertThat(o).hasSize(1);
+                });
     }
 }

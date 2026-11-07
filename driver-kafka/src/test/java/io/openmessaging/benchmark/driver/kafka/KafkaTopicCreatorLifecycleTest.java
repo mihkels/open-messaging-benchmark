@@ -74,18 +74,17 @@ class KafkaTopicCreatorLifecycleTest {
         when(admin.createTopics(any())).thenReturn(topics);
         when(topics.values()).thenReturn(Map.of("topic", topic));
         when(topic.get())
-                .thenAnswer(
-                        ignored -> {
-                            worker.set(Thread.currentThread());
-                            entered.countDown();
-                            try {
-                                release.await();
-                                return null;
-                            } catch (InterruptedException error) {
-                                interrupted.countDown();
-                                throw error;
-                            }
-                        });
+                .thenAnswer(ignored -> {
+                    worker.set(Thread.currentThread());
+                    entered.countDown();
+                    try {
+                        release.await();
+                        return null;
+                    } catch (InterruptedException error) {
+                        interrupted.countDown();
+                        throw error;
+                    }
+                });
         CompletableFuture<Void> creation =
                 new KafkaTopicCreator(admin, Map.of(), (short) 1, 1)
                         .create(List.of(new TopicInfo("topic", 1)));
@@ -94,10 +93,9 @@ class KafkaTopicCreatorLifecycleTest {
             assertTrue(creation.cancel(true));
             assertTrue(interrupted.await(2, TimeUnit.SECONDS));
             await(() -> !worker.get().isAlive());
-            await(
-                    () ->
-                            Thread.getAllStackTraces().keySet().stream()
-                                    .noneMatch(KafkaTopicCreatorLifecycleTest::isProgressThreadAlive));
+            await(() ->
+                    Thread.getAllStackTraces().keySet().stream()
+                            .noneMatch(KafkaTopicCreatorLifecycleTest::isProgressThreadAlive));
             verify(admin, times(1)).createTopics(any());
             verify(admin, never()).listTopics();
         } finally {

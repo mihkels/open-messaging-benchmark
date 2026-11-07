@@ -199,11 +199,10 @@ public final class HttpWorkerClient implements Worker {
     @Override
     public void close() throws Exception {
         FutureTask<Void> task =
-                new FutureTask<>(
-                        () -> {
-                            httpClient.close();
-                            return null;
-                        });
+                new FutureTask<>(() -> {
+                    httpClient.close();
+                    return null;
+                });
         Thread.ofVirtual().name("worker-http-client-close").start(task);
         try {
             task.get(closeTimeoutNanos, TimeUnit.NANOSECONDS);
@@ -236,11 +235,10 @@ public final class HttpWorkerClient implements Worker {
                         .setBody(body)
                         .execute()
                         .toCompletableFuture()
-                        .thenApply(
-                                response -> {
-                                    checkResponse("post", path, response);
-                                    return null;
-                                }));
+                        .thenApply(response -> {
+                            checkResponse("post", path, response);
+                            return null;
+                        }));
     }
 
     private <T> T get(String path, Class<T> clazz) {
@@ -249,13 +247,12 @@ public final class HttpWorkerClient implements Worker {
                         .prepareGet(host + path)
                         .execute()
                         .toCompletableFuture()
-                        .thenApply(
-                                r -> {
-                                    checkResponse("get", path, r);
-                                    var value = mapper.readValue(r.getResponseBody(), clazz);
-                                    log.debug("Received response: {}", value);
-                                    return value;
-                                }));
+                        .thenApply(r -> {
+                            checkResponse("get", path, r);
+                            var value = mapper.readValue(r.getResponseBody(), clazz);
+                            log.debug("Received response: {}", value);
+                            return value;
+                        }));
     }
 
     private <T> T post(String path, byte[] body, Class<T> clazz) {
@@ -265,11 +262,10 @@ public final class HttpWorkerClient implements Worker {
                         .setBody(body)
                         .execute()
                         .toCompletableFuture()
-                        .thenApply(
-                                response -> {
-                                    checkResponse("post", path, response);
-                                    return mapper.readValue(response.getResponseBody(), clazz);
-                                }));
+                        .thenApply(response -> {
+                            checkResponse("post", path, response);
+                            return mapper.readValue(response.getResponseBody(), clazz);
+                        }));
     }
 
     // Rethrows a request's failure without the CompletionException wrapper, so callers see the HTTP

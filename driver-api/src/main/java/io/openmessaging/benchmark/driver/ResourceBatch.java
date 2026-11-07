@@ -113,14 +113,13 @@ final class ResourceBatch<C extends AutoCloseable> {
         try {
             tracker.follow(attempt);
             observe(attempt);
-            attempt.whenComplete(
-                    (value, error) -> {
-                        try {
-                            callback.accept(value, error);
-                        } finally {
-                            tracker.release();
-                        }
-                    });
+            attempt.whenComplete((value, error) -> {
+                try {
+                    callback.accept(value, error);
+                } finally {
+                    tracker.release();
+                }
+            });
         } catch (Throwable error) {
             tracker.release();
             throw error;

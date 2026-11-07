@@ -220,17 +220,16 @@ class KopPulsarCreationTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger started = new AtomicInteger();
         when(fixture.consumerBuilder.subscribeAsync())
-                .thenAnswer(
-                        invocation -> {
-                            if (started.getAndIncrement() == 0) {
-                                return CompletableFuture.completedFuture(known);
-                            }
-                            starting.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("timed out waiting to release subscription");
-                            }
-                            return lateFuture;
-                        });
+                .thenAnswer(invocation -> {
+                    if (started.getAndIncrement() == 0) {
+                        return CompletableFuture.completedFuture(known);
+                    }
+                    starting.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("timed out waiting to release subscription");
+                    }
+                    return lateFuture;
+                });
         CompletableFuture<BenchmarkConsumer> result = fixture.createConsumer();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {

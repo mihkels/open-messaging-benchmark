@@ -24,10 +24,9 @@ class ArtifactResolverIT extends BaseE2eIT {
     void rejectsACorruptCachedArtifact() throws Exception {
         Path artifact = tempDir.resolve("provider.jar");
         Files.writeString(artifact, "not the pinned artifact");
-        assertThatThrownBy(
-                        () ->
-                                ArtifactResolver.verify(
-                                        artifact, "0000000000000000000000000000000000000000000000000000000000000000"))
+        assertThatThrownBy(() ->
+                        ArtifactResolver.verify(
+                                artifact, "0000000000000000000000000000000000000000000000000000000000000000"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SHA-256 mismatch");
     }

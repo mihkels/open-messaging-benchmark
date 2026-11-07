@@ -257,21 +257,20 @@ public final class WorkloadGenerator implements WorkloadRun {
                 throw new IllegalStateException("Workload generator is closed");
             }
             controllers.add(
-                    executor.submit(
-                            () -> {
-                                try {
-                                    controller.run();
-                                } catch (InterruptedException e) {
-                                    Thread.currentThread().interrupt();
-                                    if (!runCompleted) {
-                                        recordControllerFailure(name, e);
-                                    }
-                                } catch (Throwable t) {
-                                    recordControllerFailure(name, t);
-                                } finally {
-                                    onExit.run();
-                                }
-                            }));
+                    executor.submit(() -> {
+                        try {
+                            controller.run();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            if (!runCompleted) {
+                                recordControllerFailure(name, e);
+                            }
+                        } catch (Throwable t) {
+                            recordControllerFailure(name, t);
+                        } finally {
+                            onExit.run();
+                        }
+                    }));
         }
     }
 

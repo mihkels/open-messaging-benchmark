@@ -32,15 +32,14 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        pending.close(
-                () -> {
-                    Producer<byte[]> producerToClose;
-                    synchronized (lifecycleLock) {
-                        // Wait for a send that started before close to finish using the producer.
-                        producerToClose = producer;
-                    }
-                    producerToClose.close();
-                });
+        pending.close(() -> {
+            Producer<byte[]> producerToClose;
+            synchronized (lifecycleLock) {
+                // Wait for a send that started before close to finish using the producer.
+                producerToClose = producer;
+            }
+            producerToClose.close();
+        });
     }
 
     @Override

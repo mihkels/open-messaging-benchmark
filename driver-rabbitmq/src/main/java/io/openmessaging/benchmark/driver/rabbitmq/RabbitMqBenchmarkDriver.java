@@ -113,27 +113,26 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         CompletableFuture<BenchmarkProducer> future = new CompletableFuture<>();
         try {
             ForkJoinPool.commonPool()
-                    .execute(
-                            () -> {
-                                Channel channel = null;
-                                try {
-                                    String uri = topic.split("\\?")[0];
-                                    Connection connection = getOrCreateConnection(uri);
-                                    channel = Objects.requireNonNull(connection.createChannel(), "channel");
-                                    String exchange = getExchangeName(topic);
-                                    channel.exchangeDeclare(exchange, BuiltinExchangeType.FANOUT, true);
-                                    channel.confirmSelect();
-                                    BenchmarkProducer producer =
-                                            new RabbitMqBenchmarkProducer(channel, exchange, config.messagePersistence);
-                                    channel = null;
-                                    if (!future.complete(producer)) {
-                                        closeDiscarded(producer);
-                                    }
-                                } catch (Throwable error) {
-                                    closeAfterFailure(channel, error);
-                                    future.completeExceptionally(error);
-                                }
-                            });
+                    .execute(() -> {
+                        Channel channel = null;
+                        try {
+                            String uri = topic.split("\\?")[0];
+                            Connection connection = getOrCreateConnection(uri);
+                            channel = Objects.requireNonNull(connection.createChannel(), "channel");
+                            String exchange = getExchangeName(topic);
+                            channel.exchangeDeclare(exchange, BuiltinExchangeType.FANOUT, true);
+                            channel.confirmSelect();
+                            BenchmarkProducer producer =
+                                    new RabbitMqBenchmarkProducer(channel, exchange, config.messagePersistence);
+                            channel = null;
+                            if (!future.complete(producer)) {
+                                closeDiscarded(producer);
+                            }
+                        } catch (Throwable error) {
+                            closeAfterFailure(channel, error);
+                            future.completeExceptionally(error);
+                        }
+                    });
         } catch (Throwable error) {
             future.completeExceptionally(error);
         }
@@ -173,34 +172,32 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
         try {
             ForkJoinPool.commonPool()
-                    .execute(
-                            () -> {
-                                Channel channel = null;
-                                try {
-                                    String uri = topic.split("\\?")[0];
-                                    Connection connection = getOrCreateConnection(uri);
-                                    channel = Objects.requireNonNull(connection.createChannel(), "channel");
-                                    String exchange = getExchangeName(topic);
-                                    String queueName = exchange + "-" + subscriptionName;
-                                    channel.exchangeDeclare(exchange, BuiltinExchangeType.FANOUT, true);
-                                    channel.queueDeclare(
-                                            queueName, true, false, false, config.queueType.queueOptions());
-                                    channel.queueBind(queueName, exchange, "");
-                                    BenchmarkConsumer consumer =
-                                            RabbitMqBenchmarkConsumer.create(
-                                                    channel,
-                                                    queueName,
-                                                    consumerCallback,
-                                                    config.queueType == RabbitMqConfig.QueueType.STREAM);
-                                    channel = null;
-                                    if (!future.complete(consumer)) {
-                                        closeDiscarded(consumer);
-                                    }
-                                } catch (Throwable error) {
-                                    closeAfterFailure(channel, error);
-                                    future.completeExceptionally(error);
-                                }
-                            });
+                    .execute(() -> {
+                        Channel channel = null;
+                        try {
+                            String uri = topic.split("\\?")[0];
+                            Connection connection = getOrCreateConnection(uri);
+                            channel = Objects.requireNonNull(connection.createChannel(), "channel");
+                            String exchange = getExchangeName(topic);
+                            String queueName = exchange + "-" + subscriptionName;
+                            channel.exchangeDeclare(exchange, BuiltinExchangeType.FANOUT, true);
+                            channel.queueDeclare(queueName, true, false, false, config.queueType.queueOptions());
+                            channel.queueBind(queueName, exchange, "");
+                            BenchmarkConsumer consumer =
+                                    RabbitMqBenchmarkConsumer.create(
+                                            channel,
+                                            queueName,
+                                            consumerCallback,
+                                            config.queueType == RabbitMqConfig.QueueType.STREAM);
+                            channel = null;
+                            if (!future.complete(consumer)) {
+                                closeDiscarded(consumer);
+                            }
+                        } catch (Throwable error) {
+                            closeAfterFailure(channel, error);
+                            future.completeExceptionally(error);
+                        }
+                    });
         } catch (Throwable error) {
             future.completeExceptionally(error);
         }

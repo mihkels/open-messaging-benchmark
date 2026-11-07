@@ -120,11 +120,10 @@ class RedisBenchmarkDriverTest {
             List<Future<BenchmarkProducer>> creations = new ArrayList<>();
             for (int i = 0; i < 32; i++) {
                 creations.add(
-                        executor.submit(
-                                () -> {
-                                    start.await();
-                                    return driver.createProducer("topic").join();
-                                }));
+                        executor.submit(() -> {
+                            start.await();
+                            return driver.createProducer("topic").join();
+                        }));
             }
             start.countDown();
             List<BenchmarkProducer> producers = new ArrayList<>();
@@ -156,9 +155,8 @@ class RedisBenchmarkDriverTest {
         JedisDataException failure = new JedisDataException("NOAUTH");
         doThrow(failure).when(jedis).xgroupCreate(eq("topic"), eq("subscription"), isNull(), eq(true));
 
-        assertThatThrownBy(
-                        () ->
-                                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+        assertThatThrownBy(() ->
+                        driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
                 .hasCause(failure);
         verify(jedis).close();
     }
@@ -175,9 +173,8 @@ class RedisBenchmarkDriverTest {
         verify(pool, times(1)).close();
         assertThatThrownBy(() -> driver.createProducer("topic").join())
                 .hasCauseInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(
-                        () ->
-                                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+        assertThatThrownBy(() ->
+                        driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
                 .hasCauseInstanceOf(IllegalStateException.class);
     }
 
@@ -209,9 +206,8 @@ class RedisBenchmarkDriverTest {
         JedisDataException failure = new JedisDataException((String) null);
         doThrow(failure).when(jedis).xgroupCreate(eq("topic"), eq("subscription"), isNull(), eq(true));
 
-        assertThatThrownBy(
-                        () ->
-                                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
+        assertThatThrownBy(() ->
+                        driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join())
                 .hasCause(failure);
     }
 

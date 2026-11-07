@@ -124,24 +124,23 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
         this.executor = Executors.newSingleThreadExecutor();
         try {
             this.consumerTask =
-                    this.executor.submit(
-                            () -> {
-                                consumerThread = Thread.currentThread();
-                                try {
-                                    consume(callback, pollTimeoutMs);
-                                } catch (RuntimeException | Error error) {
-                                    synchronized (lifecycleLock) {
-                                        if (startupState == StartupState.WAITING) {
-                                            startupState = StartupState.FAILED;
-                                            startupFailure = error;
-                                            closing = true;
-                                        }
-                                    }
-                                    throw error;
-                                } finally {
-                                    finishConsumer();
+                    this.executor.submit(() -> {
+                        consumerThread = Thread.currentThread();
+                        try {
+                            consume(callback, pollTimeoutMs);
+                        } catch (RuntimeException | Error error) {
+                            synchronized (lifecycleLock) {
+                                if (startupState == StartupState.WAITING) {
+                                    startupState = StartupState.FAILED;
+                                    startupFailure = error;
+                                    closing = true;
                                 }
-                            });
+                            }
+                            throw error;
+                        } finally {
+                            finishConsumer();
+                        }
+                    });
         } catch (Throwable error) {
             this.executor.shutdownNow();
             throw error;

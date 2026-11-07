@@ -117,38 +117,35 @@ class RocketMQ5BenchmarkProducerTest {
         SendReceipt receipt = mock(SendReceipt.class);
         AtomicInteger calls = new AtomicInteger();
         when(client.sendAsync(any(Message.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                return firstReceipt;
-                            }
-                            if (call == 2) {
-                                firstReceipt.complete(receipt);
-                                return secondReceipt;
-                            }
-                            return nestedReceipt;
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        return firstReceipt;
+                    }
+                    if (call == 2) {
+                        firstReceipt.complete(receipt);
+                        return secondReceipt;
+                    }
+                    return nestedReceipt;
+                });
         RocketMQ5BenchmarkProducer producer = new RocketMQ5BenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
         CompletableFuture<Void> closeAttempt =
-                first.thenRun(
-                        () -> {
-                            nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                            try {
-                                producer.close();
-                            } catch (Exception failure) {
-                                throw new CompletionException(failure);
-                            }
-                        });
+                first.thenRun(() -> {
+                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                    try {
+                        producer.close();
+                    } catch (Exception failure) {
+                        throw new CompletionException(failure);
+                    }
+                });
         ExecutorService sender =
-                Executors.newSingleThreadExecutor(
-                        task -> {
-                            Thread thread = new Thread(task, "rocketmq5-reentrant-test");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "rocketmq5-reentrant-test");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         try {
             Future<CompletableFuture<Void>> second =
                     sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
@@ -177,14 +174,13 @@ class RocketMQ5BenchmarkProducerTest {
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch closing = new CountDownLatch(1);
         when(client.sendAsync(any(Message.class)))
-                .thenAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("publication was not released");
-                            }
-                            return new CompletableFuture<SendReceipt>();
-                        });
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("publication was not released");
+                    }
+                    return new CompletableFuture<SendReceipt>();
+                });
         RocketMQ5BenchmarkProducer producer = new RocketMQ5BenchmarkProducer(client, "topic");
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
@@ -192,15 +188,14 @@ class RocketMQ5BenchmarkProducerTest {
                     workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
             Future<?> close =
-                    workers.submit(
-                            () -> {
-                                closing.countDown();
-                                try {
-                                    producer.close();
-                                } catch (Exception failure) {
-                                    throw new CompletionException(failure);
-                                }
-                            });
+                    workers.submit(() -> {
+                        closing.countDown();
+                        try {
+                            producer.close();
+                        } catch (Exception failure) {
+                            throw new CompletionException(failure);
+                        }
+                    });
             assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -225,32 +220,30 @@ class RocketMQ5BenchmarkProducerTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger calls = new AtomicInteger();
         when(client.sendAsync(any(Message.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                return firstReceipt;
-                            }
-                            if (call == 2) {
-                                publishing.countDown();
-                                if (!release.await(5, TimeUnit.SECONDS)) {
-                                    throw new AssertionError("publication was not released");
-                                }
-                                return secondReceipt;
-                            }
-                            return thirdReceipt;
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        return firstReceipt;
+                    }
+                    if (call == 2) {
+                        publishing.countDown();
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("publication was not released");
+                        }
+                        return secondReceipt;
+                    }
+                    return thirdReceipt;
+                });
         RocketMQ5BenchmarkProducer producer = new RocketMQ5BenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(
-                () -> {
-                    try {
-                        producer.close();
-                    } catch (Exception failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.thenRun(() -> {
+            try {
+                producer.close();
+            } catch (Exception failure) {
+                rejected.set(failure);
+            }
+        });
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<CompletableFuture<Void>> second =
@@ -286,14 +279,13 @@ class RocketMQ5BenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                    } catch (Exception closeFailure) {
-                        rejected.set(closeFailure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+            } catch (Exception closeFailure) {
+                rejected.set(closeFailure);
+            }
+        });
 
         assertThatThrownBy(producer::close).isSameAs(failure);
 
@@ -317,15 +309,14 @@ class RocketMQ5BenchmarkProducerTest {
         RocketMQ5BenchmarkProducer producer = new RocketMQ5BenchmarkProducer(client, "topic");
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected =
-                send.handle(
-                        (unused, error) -> {
-                            try {
-                                producer.close();
-                                return null;
-                            } catch (Exception failure) {
-                                return failure;
-                            }
-                        });
+                send.handle((unused, error) -> {
+                    try {
+                        producer.close();
+                        return null;
+                    } catch (Exception failure) {
+                        return failure;
+                    }
+                });
         RuntimeException failure = new RuntimeException("acknowledgement failed");
         receipt.completeExceptionally(failure);
         assertThat(rejected.join()).isInstanceOf(IllegalStateException.class);
@@ -358,23 +349,21 @@ class RocketMQ5BenchmarkProducerTest {
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<Throwable> first =
-                    workers.submit(
-                            () -> {
-                                try {
-                                    producer.close();
-                                    return null;
-                                } catch (Exception error) {
-                                    return error;
-                                }
-                            });
+                    workers.submit(() -> {
+                        try {
+                            producer.close();
+                            return null;
+                        } catch (Exception error) {
+                            return error;
+                        }
+                    });
             assertThat(closingClient.await(2, TimeUnit.SECONDS)).isTrue();
             Future<?> second =
-                    workers.submit(
-                            () -> {
-                                secondClosing.countDown();
-                                producer.close();
-                                return null;
-                            });
+                    workers.submit(() -> {
+                        secondClosing.countDown();
+                        producer.close();
+                        return null;
+                    });
             assertThat(secondClosing.await(2, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> second.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);

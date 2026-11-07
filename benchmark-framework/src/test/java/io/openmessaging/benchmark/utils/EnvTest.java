@@ -24,36 +24,32 @@ class EnvTest {
     @Test
     void envLong() throws Exception {
         withEnvironmentVariable(ENV_KEY, "2")
-                .execute(
-                        () -> {
-                            assertThat(Env.getLong(ENV_KEY, 1)).isEqualTo(2);
-                        });
+                .execute(() -> {
+                    assertThat(Env.getLong(ENV_KEY, 1)).isEqualTo(2);
+                });
     }
 
     @Test
     void envLongDefault() throws Exception {
         withEnvironmentVariable(ENV_KEY, null)
-                .execute(
-                        () -> {
-                            assertThat(Env.getLong(ENV_KEY, 1)).isEqualTo(1);
-                        });
+                .execute(() -> {
+                    assertThat(Env.getLong(ENV_KEY, 1)).isEqualTo(1);
+                });
     }
 
     @Test
     void envDouble() throws Exception {
         withEnvironmentVariable(ENV_KEY, "2.34")
-                .execute(
-                        () -> {
-                            assertThat(Env.getDouble(ENV_KEY, 1.23)).isEqualTo(2.34);
-                        });
+                .execute(() -> {
+                    assertThat(Env.getDouble(ENV_KEY, 1.23)).isEqualTo(2.34);
+                });
     }
 
     @Test
     void envDoubleDefault() throws Exception {
         withEnvironmentVariable(ENV_KEY, null)
-                .execute(
-                        () -> {
-                            assertThat(Env.getDouble(ENV_KEY, 1.23)).isEqualTo(1.23);
-                        });
+                .execute(() -> {
+                    assertThat(Env.getDouble(ENV_KEY, 1.23)).isEqualTo(1.23);
+                });
     }
 }

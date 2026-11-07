@@ -57,11 +57,10 @@ class RocketMqE2eIT extends BaseE2eIT {
             assertThat(queues).isNotNull();
             assertThat(queues.isArray()).isTrue();
             assertThat(queues.size()).isEqualTo(1);
-            queues.forEach(
-                    queue -> {
-                        assertThat(queue.get("readQueueNums").asInt()).isEqualTo(workload.partitionsPerTopic);
-                        assertThat(queue.get("writeQueueNums").asInt()).isEqualTo(workload.partitionsPerTopic);
-                    });
+            queues.forEach(queue -> {
+                assertThat(queue.get("readQueueNums").asInt()).isEqualTo(workload.partitionsPerTopic);
+                assertThat(queue.get("writeQueueNums").asInt()).isEqualTo(workload.partitionsPerTopic);
+            });
         }
     }
 }

@@ -39,11 +39,10 @@ class CumulativeLatenciesTest {
         CumulativeLatencies two = new CumulativeLatencies();
         CumulativeLatencies result = one.plus(two);
         assertThat(result)
-                .satisfies(
-                        r -> {
-                            assertThat(r.publishLatency).isEqualTo(two.publishLatency);
-                            assertThat(r.publishDelayLatency).isEqualTo(two.publishDelayLatency);
-                            assertThat(r.endToEndLatency).isEqualTo(two.endToEndLatency);
-                        });
+                .satisfies(r -> {
+                    assertThat(r.publishLatency).isEqualTo(two.publishLatency);
+                    assertThat(r.publishDelayLatency).isEqualTo(two.publishDelayLatency);
+                    assertThat(r.endToEndLatency).isEqualTo(two.endToEndLatency);
+                });
     }
 }

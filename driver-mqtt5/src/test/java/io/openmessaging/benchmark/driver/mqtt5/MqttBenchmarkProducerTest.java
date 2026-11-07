@@ -123,39 +123,36 @@ class MqttBenchmarkProducerTest {
         when(accepted.getError()).thenReturn(Optional.empty());
         AtomicInteger calls = new AtomicInteger();
         when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                return firstResult;
-                            }
-                            if (call == 2) {
-                                firstResult.complete(accepted);
-                                return secondResult;
-                            }
-                            return nestedResult;
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        return firstResult;
+                    }
+                    if (call == 2) {
+                        firstResult.complete(accepted);
+                        return secondResult;
+                    }
+                    return nestedResult;
+                });
         MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
         producer.setClient(client);
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
         CompletableFuture<Void> closeAttempt =
-                first.thenRun(
-                        () -> {
-                            nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                            try {
-                                producer.close();
-                            } catch (Exception failure) {
-                                throw new CompletionException(failure);
-                            }
-                        });
+                first.thenRun(() -> {
+                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                    try {
+                        producer.close();
+                    } catch (Exception failure) {
+                        throw new CompletionException(failure);
+                    }
+                });
         ExecutorService sender =
-                Executors.newSingleThreadExecutor(
-                        task -> {
-                            Thread thread = new Thread(task, "mqtt-reentrant-test");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "mqtt-reentrant-test");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         try {
             Future<CompletableFuture<Void>> second =
                     sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
@@ -188,33 +185,31 @@ class MqttBenchmarkProducerTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger calls = new AtomicInteger();
         when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                return firstResult;
-                            }
-                            if (call == 2) {
-                                publishing.countDown();
-                                if (!release.await(5, TimeUnit.SECONDS)) {
-                                    throw new AssertionError("publication was not released");
-                                }
-                                return secondResult;
-                            }
-                            return thirdResult;
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        return firstResult;
+                    }
+                    if (call == 2) {
+                        publishing.countDown();
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("publication was not released");
+                        }
+                        return secondResult;
+                    }
+                    return thirdResult;
+                });
         MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
         producer.setClient(client);
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(
-                () -> {
-                    try {
-                        producer.close();
-                    } catch (Exception failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.thenRun(() -> {
+            try {
+                producer.close();
+            } catch (Exception failure) {
+                rejected.set(failure);
+            }
+        });
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<CompletableFuture<Void>> second =
@@ -252,14 +247,13 @@ class MqttBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                    } catch (Exception closeFailure) {
-                        rejected.set(closeFailure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+            } catch (Exception closeFailure) {
+                rejected.set(closeFailure);
+            }
+        });
 
         assertThatThrownBy(producer::close).isSameAs(failure);
 
@@ -284,15 +278,14 @@ class MqttBenchmarkProducerTest {
         producer.setClient(client);
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected =
-                send.handle(
-                        (unused, error) -> {
-                            try {
-                                producer.close();
-                                return null;
-                            } catch (Exception failure) {
-                                return failure;
-                            }
-                        });
+                send.handle((unused, error) -> {
+                    try {
+                        producer.close();
+                        return null;
+                    } catch (Exception failure) {
+                        return failure;
+                    }
+                });
         RuntimeException failure = new RuntimeException("acknowledgement failed");
         result.completeExceptionally(failure);
         assertThat(rejected.join()).isInstanceOf(IllegalStateException.class);
@@ -308,14 +301,13 @@ class MqttBenchmarkProducerTest {
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch closing = new CountDownLatch(1);
         when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("publication was not released");
-                            }
-                            return new CompletableFuture<Mqtt5PublishResult>();
-                        });
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("publication was not released");
+                    }
+                    return new CompletableFuture<Mqtt5PublishResult>();
+                });
         MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
         producer.setClient(client);
         ExecutorService workers = Executors.newFixedThreadPool(2);
@@ -324,15 +316,14 @@ class MqttBenchmarkProducerTest {
                     workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
             Future<?> close =
-                    workers.submit(
-                            () -> {
-                                closing.countDown();
-                                try {
-                                    producer.close();
-                                } catch (Exception failure) {
-                                    throw new CompletionException(failure);
-                                }
-                            });
+                    workers.submit(() -> {
+                        closing.countDown();
+                        try {
+                            producer.close();
+                        } catch (Exception failure) {
+                            throw new CompletionException(failure);
+                        }
+                    });
             assertThat(closing.await(2, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -369,23 +360,21 @@ class MqttBenchmarkProducerTest {
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<Throwable> first =
-                    workers.submit(
-                            () -> {
-                                try {
-                                    producer.close();
-                                    return null;
-                                } catch (Exception error) {
-                                    return error;
-                                }
-                            });
+                    workers.submit(() -> {
+                        try {
+                            producer.close();
+                            return null;
+                        } catch (Exception error) {
+                            return error;
+                        }
+                    });
             assertThat(disconnecting.await(2, TimeUnit.SECONDS)).isTrue();
             Future<?> second =
-                    workers.submit(
-                            () -> {
-                                secondClosing.countDown();
-                                producer.close();
-                                return null;
-                            });
+                    workers.submit(() -> {
+                        secondClosing.countDown();
+                        producer.close();
+                        return null;
+                    });
             assertThat(secondClosing.await(2, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> second.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);

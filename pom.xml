@@ -74,7 +74,7 @@
         <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
         <flatten.plugin.version>1.8.0</flatten.plugin.version>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
-        <spotless.plugin.version>3.10.4</spotless.plugin.version>
+        <spotless.plugin.version>3.11.0</spotless.plugin.version>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->

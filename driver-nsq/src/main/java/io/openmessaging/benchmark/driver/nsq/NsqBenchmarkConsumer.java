@@ -194,15 +194,13 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                         new SynchronousQueue<>(),
                         daemonFactory("nsq-consumer-connect", connectorThread));
         callbacks = Executors.newCachedThreadPool(daemonFactory("nsq-consumer-callback", null));
-        termination.whenComplete(
-                (ignored, failure) -> {
-                    if (failure != null) {
-                        closeResult.completeExceptionally(failure);
-                    } else {
-                        closedFinished.whenComplete(
-                                (closed, closeFailure) -> complete(closeResult, closeFailure));
-                    }
-                });
+        termination.whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                closeResult.completeExceptionally(failure);
+            } else {
+                closedFinished.whenComplete((closed, closeFailure) -> complete(closeResult, closeFailure));
+            }
+        });
         CompletableFuture.allOf(initializationFinished, resultCallbacksFinished)
                 .thenRun(this::finishCreationQuiescence);
     }
@@ -221,14 +219,13 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 if (!closed) {
                     deadline =
                             scheduler.schedule(this::readinessTimedOut, readinessMillis, TimeUnit.MILLISECONDS);
-                    connector.execute(
-                            () -> {
-                                try {
-                                    initializeAndConnect();
-                                } finally {
-                                    initializationFinished.complete(null);
-                                }
-                            });
+                    connector.execute(() -> {
+                        try {
+                            initializeAndConnect();
+                        } finally {
+                            initializationFinished.complete(null);
+                        }
+                    });
                     submitted = true;
                 }
             }
@@ -382,9 +379,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             return !closed
                     && !discovered.isEmpty()
                     && discovered.stream()
-                            .allMatch(
-                                    address ->
-                                            connections.containsKey(address) && connections.get(address).isConnected());
+                            .allMatch(address ->
+                                    connections.containsKey(address) && connections.get(address).isConnected());
         }
     }
 
@@ -501,18 +497,17 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             return;
         }
         try {
-            connector.execute(
-                    () -> {
-                        try {
-                            refreshConnections(false);
-                        } catch (InterruptedException interrupted) {
-                            Thread.currentThread().interrupt();
-                        } catch (Exception failure) {
-                            log.warn("Unable to refresh NSQ consumer connections", failure);
-                        } finally {
-                            refreshing.set(false);
-                        }
-                    });
+            connector.execute(() -> {
+                try {
+                    refreshConnections(false);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception failure) {
+                    log.warn("Unable to refresh NSQ consumer connections", failure);
+                } finally {
+                    refreshing.set(false);
+                }
+            });
         } catch (RejectedExecutionException ignored) {
             refreshing.set(false);
         }
@@ -549,13 +544,12 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 new CancellationException("NSQ consumer creation was abandoned");
         Thread initiator = Thread.currentThread();
         daemonFactory("nsq-consumer-abandon", null)
-                .newThread(
-                        () -> {
-                            Closing closing = beginClose(true, failure);
-                            if (closing != null) {
-                                startClosing(closing, failure, true, initiator, true);
-                            }
-                        })
+                .newThread(() -> {
+                    Closing closing = beginClose(true, failure);
+                    if (closing != null) {
+                        startClosing(closing, failure, true, initiator, true);
+                    }
+                })
                 .start();
     }
 

@@ -61,14 +61,13 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
                             pending.completeFromClient(future, e);
                             return;
                         }
-                        expectedGuid.thenAccept(
-                                guid -> {
-                                    if (guid.equals(s)) {
-                                        pending.completeFromClient(future, null);
-                                    } else {
-                                        pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
-                                    }
-                                });
+                        expectedGuid.thenAccept(guid -> {
+                            if (guid.equals(s)) {
+                                pending.completeFromClient(future, null);
+                            } else {
+                                pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
+                            }
+                        });
                     }
                 };
         boolean wasInterrupted = Thread.currentThread().isInterrupted();

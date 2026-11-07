@@ -95,21 +95,20 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        return CompletableFuture.runAsync(
-                () -> {
-                    try {
-                        namespace.createLog(topic);
-                        if (partitions > 1) {
-                            for (int i = 0; i < partitions; i++) {
-                                namespace.createLog(getFullyQualifiedPartitionedStreamName(topic, i));
-                            }
-                        }
-                        log.info("Successfully create topic {} with {} partitions", topic, partitions);
-                    } catch (IOException ioe) {
-                        log.error("Failed to create topic {} with {} partitions", topic, partitions, ioe);
-                        throw new RuntimeException(ioe);
+        return CompletableFuture.runAsync(() -> {
+            try {
+                namespace.createLog(topic);
+                if (partitions > 1) {
+                    for (int i = 0; i < partitions; i++) {
+                        namespace.createLog(getFullyQualifiedPartitionedStreamName(topic, i));
                     }
-                });
+                }
+                log.info("Successfully create topic {} with {} partitions", topic, partitions);
+            } catch (IOException ioe) {
+                log.error("Failed to create topic {} with {} partitions", topic, partitions, ioe);
+                throw new RuntimeException(ioe);
+            }
+        });
     }
 
     @Override
@@ -134,15 +133,14 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         CompletableFuture<DistributedLogManager> manager = openLog(topic);
         CompletableFuture<LogReader> initialReader =
-                manager.thenApplyAsync(
-                        dlm -> {
-                            try {
-                                return Objects.requireNonNull(
-                                        dlm.openLogReader(DLSN.InitialDLSN), "initial log reader");
-                            } catch (IOException e) {
-                                throw new CompletionException(e);
-                            }
-                        });
+                manager.thenApplyAsync(dlm -> {
+                    try {
+                        return Objects.requireNonNull(
+                                dlm.openLogReader(DLSN.InitialDLSN), "initial log reader");
+                    } catch (IOException e) {
+                        throw new CompletionException(e);
+                    }
+                });
         CompletableFuture<AutoCloseable> ownedManager = manager.thenApply(dlm -> dlm);
         CompletableFuture<AutoCloseable> ownedReader = initialReader.thenApply(reader -> reader);
         return ResourceCreator.compose(
@@ -156,14 +154,13 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     }
 
     private CompletableFuture<DistributedLogManager> openLog(String topic) {
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    try {
-                        return Objects.requireNonNull(namespace.openLog(topic), "log manager");
-                    } catch (IOException e) {
-                        throw new CompletionException(e);
-                    }
-                });
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return Objects.requireNonNull(namespace.openLog(topic), "log manager");
+            } catch (IOException e) {
+                throw new CompletionException(e);
+            }
+        });
     }
 
     private record OwnedWriter(AsyncLogWriter writer) implements AutoCloseable {

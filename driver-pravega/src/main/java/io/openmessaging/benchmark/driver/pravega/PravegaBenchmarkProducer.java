@@ -75,14 +75,13 @@ public class PravegaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        pending.close(
-                () -> {
-                    EventStreamWriter<ByteBuffer> writerToClose;
-                    synchronized (lifecycleLock) {
-                        // Wait for a publish that started before close to finish using the writer.
-                        writerToClose = writer;
-                    }
-                    writerToClose.close();
-                });
+        pending.close(() -> {
+            EventStreamWriter<ByteBuffer> writerToClose;
+            synchronized (lifecycleLock) {
+                // Wait for a publish that started before close to finish using the writer.
+                writerToClose = writer;
+            }
+            writerToClose.close();
+        });
     }
 }

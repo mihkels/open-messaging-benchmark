@@ -394,10 +394,9 @@ class PluginRegistryTest {
         Files.createDirectories(jar.getParent());
         Files.writeString(jar, "not a jar");
 
-        assertThatThrownBy(
-                        () ->
-                                RuntimeClasspath.compose(
-                                        new HostRuntime(List.of()), discover().resolve(KAFKA, Map.of())))
+        assertThatThrownBy(() ->
+                        RuntimeClasspath.compose(
+                                new HostRuntime(List.of()), discover().resolve(KAFKA, Map.of())))
                 .isInstanceOf(PluginException.class)
                 .hasMessageContaining("broken.jar")
                 .hasMessageContaining("inspect");
@@ -549,14 +548,13 @@ class PluginRegistryTest {
 
     private static List<Path> real(List<Path> paths) {
         return paths.stream()
-                .map(
-                        p -> {
-                            try {
-                                return p.toRealPath();
-                            } catch (IOException e) {
-                                throw new UncheckedIOException(e);
-                            }
-                        })
+                .map(p -> {
+                    try {
+                        return p.toRealPath();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                })
                 .toList();
     }
 

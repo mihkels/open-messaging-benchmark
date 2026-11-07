@@ -391,12 +391,11 @@ class ProcessWorkerTest {
         ProcessWorker worker = newWorker();
         WorkerHandler handler = new WorkerHandler(worker);
         Javalin app =
-                Javalin.create(
-                        config -> {
-                            config.startup.showJavalinBanner = false;
-                            handler.configure(config);
-                            config.routes.get("/metrics", ctx -> ctx.result(worker.scrapeMetrics()));
-                        });
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    handler.configure(config);
+                    config.routes.get("/metrics", ctx -> ctx.result(worker.scrapeMetrics()));
+                });
         try (worker;
                 handler) {
             app.start("127.0.0.1", 0);
@@ -524,14 +523,13 @@ class ProcessWorkerTest {
                     AtomicReference<Exception> failure = new AtomicReference<>();
                     Thread initializer =
                             Thread.ofPlatform()
-                                    .start(
-                                            () -> {
-                                                try {
-                                                    worker.initializeDriver(Path.of(args[1]));
-                                                } catch (Exception e) {
-                                                    failure.set(e);
-                                                }
-                                            });
+                                    .start(() -> {
+                                        try {
+                                            worker.initializeDriver(Path.of(args[1]));
+                                        } catch (Exception e) {
+                                            failure.set(e);
+                                        }
+                                    });
                     Path marker = Path.of(args[2]);
                     while (!Files.exists(marker) && initializer.isAlive()) {
                         Thread.sleep(25);

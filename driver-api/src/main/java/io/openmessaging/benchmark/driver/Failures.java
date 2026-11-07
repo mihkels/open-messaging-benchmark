@@ -120,6 +120,7 @@ public final class Failures {
      *
      * @throws Exception the primary failure
      */
+    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
     public void throwIfAny() throws Exception {
         restoreInterrupt();
         if (failure instanceof Exception exception) {

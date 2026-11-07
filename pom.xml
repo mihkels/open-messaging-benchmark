@@ -100,8 +100,10 @@
           - S1181: Throwable is caught only to aggregate, propagate or rethrow failures during cleanup
           - S6213: `record` is a contextual keyword, legal as a variable/method name
           - S106: CLI entry points print usage and argument errors to stderr before logging is set up
+          - S120: package `natsStreaming` is part of the public `driverClass` YAML contract (#143, #169)
+          - S2143: AMQP BasicProperties.timestamp takes a java.util.Date; Sonar raises it at file level (#169)
         -->
-        <sonar.issue.ignore.multicriteria>s3077,s1181,s6213,s106a,s106b,s106c</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria>s3077,s1181,s6213,s106a,s106b,s106c,s120,s2143</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.s3077.ruleKey>java:S3077</sonar.issue.ignore.multicriteria.s3077.ruleKey>
         <sonar.issue.ignore.multicriteria.s3077.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s3077.resourceKey>
         <sonar.issue.ignore.multicriteria.s1181.ruleKey>java:S1181</sonar.issue.ignore.multicriteria.s1181.ruleKey>
@@ -114,6 +116,10 @@
         <sonar.issue.ignore.multicriteria.s106b.resourceKey>**/io/openmessaging/benchmark/worker/BenchmarkWorker.java</sonar.issue.ignore.multicriteria.s106b.resourceKey>
         <sonar.issue.ignore.multicriteria.s106c.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106c.ruleKey>
         <sonar.issue.ignore.multicriteria.s106c.resourceKey>**/io/openmessaging/benchmark/worker/DriverProcessMain.java</sonar.issue.ignore.multicriteria.s106c.resourceKey>
+        <sonar.issue.ignore.multicriteria.s120.ruleKey>java:S120</sonar.issue.ignore.multicriteria.s120.ruleKey>
+        <sonar.issue.ignore.multicriteria.s120.resourceKey>driver-nats-streaming/**</sonar.issue.ignore.multicriteria.s120.resourceKey>
+        <sonar.issue.ignore.multicriteria.s2143.ruleKey>java:S2143</sonar.issue.ignore.multicriteria.s2143.ruleKey>
+        <sonar.issue.ignore.multicriteria.s2143.resourceKey>**/io/openmessaging/benchmark/driver/rabbitmq/RabbitMqBenchmarkProducer.java</sonar.issue.ignore.multicriteria.s2143.resourceKey>
     </properties>
     <dependencyManagement>
         <dependencies>

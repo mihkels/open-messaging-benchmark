@@ -804,6 +804,8 @@ public final class LocalWorker implements Worker {
 
     @FunctionalInterface
     private interface ResourceAction<T> {
+        // Wraps driver SPI close/transfer calls declared as throws Exception
+        @SuppressWarnings("java:S112")
         void accept(T value) throws Exception;
     }
 

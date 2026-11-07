@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.worker;
 
 import io.openmessaging.benchmark.driver.Failures;
+import io.openmessaging.benchmark.utils.SecureTempFiles;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -94,7 +95,7 @@ final class DriverProcess {
      */
     void start(List<Path> classpath, BooleanSupplier closed)
             throws IOException, InterruptedException {
-        workDir = Files.createTempDirectory("omb-driver-");
+        workDir = SecureTempFiles.createDirectory("omb-driver-");
         Path portFile = workDir.resolve("port");
         Path argFile = workDir.resolve("java.args");
 

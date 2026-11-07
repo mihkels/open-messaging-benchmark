@@ -299,12 +299,11 @@ public final class ScenarioMain {
             worker.createConsumers(assignment);
         }
         List<String> producerTopics = new ArrayList<>();
-        topics.forEach(
-                t -> {
-                    for (int i = 0; i < s.producers(); i++) {
-                        producerTopics.add(t);
-                    }
-                });
+        topics.forEach(t -> {
+            for (int i = 0; i < s.producers(); i++) {
+                producerTopics.add(t);
+            }
+        });
         worker.createProducers(producerTopics);
         worker.probeProducers();
         worker.startLoad(
@@ -516,16 +515,14 @@ public final class ScenarioMain {
             last.clear();
             last.putAll(resources);
             if (measuring) {
-                resources.forEach(
-                        (role, values) ->
-                                values.forEach(
-                                        (name, value) -> {
-                                            if (value != null) {
-                                                peaks
-                                                        .computeIfAbsent(role, k -> new LinkedHashMap<>())
-                                                        .merge(name, value, Math::max);
-                                            }
-                                        }));
+                resources.forEach((role, values) ->
+                        values.forEach((name, value) -> {
+                            if (value != null) {
+                                peaks
+                                        .computeIfAbsent(role, k -> new LinkedHashMap<>())
+                                        .merge(name, value, Math::max);
+                            }
+                        }));
             }
             writer.write(
                     JSON.writeValueAsString(

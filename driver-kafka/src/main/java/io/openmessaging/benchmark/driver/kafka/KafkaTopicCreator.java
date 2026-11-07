@@ -71,19 +71,17 @@ class KafkaTopicCreator {
         }
 
         ExecutorService worker =
-                Executors.newSingleThreadExecutor(
-                        runnable -> {
-                            Thread thread = new Thread(runnable, "kafka-topic-creation");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "kafka-topic-creation");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         ScheduledExecutorService progress =
-                Executors.newSingleThreadScheduledExecutor(
-                        runnable -> {
-                            Thread thread = new Thread(runnable, "kafka-topic-progress");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadScheduledExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "kafka-topic-progress");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         class CreationFuture extends CompletableFuture<Void> {
             private boolean terminal;
             private boolean cancelled;
@@ -122,19 +120,18 @@ class KafkaTopicCreator {
         }
         CreationFuture result = new CreationFuture();
         try {
-            worker.execute(
-                    () -> {
-                        Throwable failure = null;
-                        try {
-                            createWithRetry(topicInfos, progress);
-                        } catch (Throwable error) {
-                            failure = error;
-                        } finally {
-                            progress.shutdownNow();
-                            worker.shutdown();
-                        }
-                        result.finish(failure);
-                    });
+            worker.execute(() -> {
+                Throwable failure = null;
+                try {
+                    createWithRetry(topicInfos, progress);
+                } catch (Throwable error) {
+                    failure = error;
+                } finally {
+                    progress.shutdownNow();
+                    worker.shutdown();
+                }
+                result.finish(failure);
+            });
         } catch (RuntimeException error) {
             worker.shutdownNow();
             progress.shutdownNow();
@@ -233,17 +230,16 @@ class KafkaTopicCreator {
                 int batchSize = queue.drainTo(batch, maxBatchSize);
                 if (batchSize > 0) {
                     executeBatch(batch)
-                            .forEach(
-                                    (topicInfo, success) -> {
-                                        if (Boolean.TRUE.equals(success)) {
-                                            succeeded.incrementAndGet();
-                                        } else {
-                                            log.warn("Topic creation failed for: {}, will retry", topicInfo.topic());
-                                            if (!queue.offer(topicInfo)) {
-                                                log.error("Failed to re-queue topic for retry: {}", topicInfo.topic());
-                                            }
-                                        }
-                                    });
+                            .forEach((topicInfo, success) -> {
+                                if (Boolean.TRUE.equals(success)) {
+                                    succeeded.incrementAndGet();
+                                } else {
+                                    log.warn("Topic creation failed for: {}, will retry", topicInfo.topic());
+                                    if (!queue.offer(topicInfo)) {
+                                        log.error("Failed to re-queue topic for retry: {}", topicInfo.topic());
+                                    }
+                                }
+                            });
                     batch.clear();
                 } else {
                     // Avoid busy-waiting

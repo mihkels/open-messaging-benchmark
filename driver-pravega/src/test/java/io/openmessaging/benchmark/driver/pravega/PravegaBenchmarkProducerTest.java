@@ -54,13 +54,12 @@ class PravegaBenchmarkProducerTest {
         List<ByteBuffer> writes = new ArrayList<>();
         List<CompletableFuture<Void>> acknowledgements = new ArrayList<>();
         when(writer.writeEvent(any(ByteBuffer.class)))
-                .thenAnswer(
-                        invocation -> {
-                            writes.add(invocation.getArgument(0));
-                            CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
-                            acknowledgements.add(acknowledgement);
-                            return acknowledgement;
-                        });
+                .thenAnswer(invocation -> {
+                    writes.add(invocation.getArgument(0));
+                    CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
+                    acknowledgements.add(acknowledgement);
+                    return acknowledgement;
+                });
         PravegaBenchmarkProducer producer = new PravegaBenchmarkProducer("stream", factory, true, true);
 
         long before = System.currentTimeMillis();
@@ -87,11 +86,10 @@ class PravegaBenchmarkProducerTest {
         List<ByteBuffer> writes = new ArrayList<>();
         CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
         when(writer.writeEvent(any(ByteBuffer.class)))
-                .thenAnswer(
-                        invocation -> {
-                            writes.add(invocation.getArgument(0));
-                            return acknowledgement;
-                        });
+                .thenAnswer(invocation -> {
+                    writes.add(invocation.getArgument(0));
+                    return acknowledgement;
+                });
         PravegaBenchmarkProducer producer =
                 new PravegaBenchmarkProducer("stream", factory, false, true);
         byte[] payload = {1, 2, 3};
@@ -144,14 +142,13 @@ class PravegaBenchmarkProducerTest {
         CountDownLatch publishing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(writer.writeEvent(any(ByteBuffer.class)))
-                .thenAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("publish was not released");
-                            }
-                            return new CompletableFuture<Void>();
-                        });
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("publish was not released");
+                    }
+                    return new CompletableFuture<Void>();
+                });
         PravegaBenchmarkProducer producer =
                 new PravegaBenchmarkProducer("stream", factory, false, true);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -159,11 +156,10 @@ class PravegaBenchmarkProducerTest {
             var sending = executor.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
             var closing =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             release.countDown();
             CompletableFuture<Void> result = sending.get(5, TimeUnit.SECONDS);
             closing.get(5, TimeUnit.SECONDS);
@@ -199,11 +195,10 @@ class PravegaBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             var firstClose =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             assertThat(closingWriter.await(5, TimeUnit.SECONDS)).isTrue();
 
             producer.close();
@@ -364,10 +359,9 @@ class PravegaBenchmarkProducerTest {
                 .thenReturn(writer);
         IOException cause = new IOException("controller unavailable");
         when(writer.beginTxn())
-                .thenAnswer(
-                        invocation -> {
-                            throw cause;
-                        });
+                .thenAnswer(invocation -> {
+                    throw cause;
+                });
         PravegaBenchmarkTransactionProducer producer =
                 new PravegaBenchmarkTransactionProducer("stream", factory, false, true, 2);
 

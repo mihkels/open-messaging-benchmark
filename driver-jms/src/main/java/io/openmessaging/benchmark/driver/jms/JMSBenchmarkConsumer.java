@@ -59,16 +59,15 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
             boolean useGetBody)
             throws Exception {
 
-        consumer.setMessageListener(
-                message -> {
-                    try {
-                        byte[] payload = getPayload(message, useGetBody);
-                        callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
-                        message.acknowledge();
-                    } catch (Throwable e) {
-                        log.warn("Failed to acknowledge message", e);
-                    }
-                });
+        consumer.setMessageListener(message -> {
+            try {
+                byte[] payload = getPayload(message, useGetBody);
+                callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
+                message.acknowledge();
+            } catch (Throwable e) {
+                log.warn("Failed to acknowledge message", e);
+            }
+        });
         // Kafka JMS client does not allow you to add a listener after the connection has been started.
         connection.start();
         return new JMSBenchmarkConsumer(connection, session, consumer, useGetBody);

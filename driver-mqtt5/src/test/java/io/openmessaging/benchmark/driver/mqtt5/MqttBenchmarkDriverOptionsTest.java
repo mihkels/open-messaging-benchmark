@@ -227,9 +227,8 @@ class MqttBenchmarkDriverOptionsTest {
         MqttBenchmarkDriver.closeClient(null);
 
         RuntimeException runtime = new RuntimeException("boom");
-        assertThatThrownBy(
-                        () ->
-                                MqttBenchmarkDriver.closeClient(failingClient(runtime, MqttClientState.CONNECTED)))
+        assertThatThrownBy(() ->
+                        MqttBenchmarkDriver.closeClient(failingClient(runtime, MqttClientState.CONNECTED)))
                 .isSameAs(runtime);
 
         MqttClientStateException state = mock(MqttClientStateException.class);

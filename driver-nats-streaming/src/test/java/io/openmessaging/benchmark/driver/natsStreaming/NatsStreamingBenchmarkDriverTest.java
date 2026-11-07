@@ -71,10 +71,9 @@ class NatsStreamingBenchmarkDriverTest {
     void producerConnectionFailureIsAnExceptionalFuture() {
         IOException failure = new IOException("connect failed");
         NatsStreamingBenchmarkDriver driver =
-                new NatsStreamingBenchmarkDriver(
-                        (cluster, client, options) -> {
-                            throw failure;
-                        });
+                new NatsStreamingBenchmarkDriver((cluster, client, options) -> {
+                    throw failure;
+                });
         CompletableFuture<BenchmarkProducer> future = driver.createProducer("topic");
         assertThat(future).isNotNull();
         assertThatThrownBy(future::join).hasCause(failure);
@@ -84,10 +83,9 @@ class NatsStreamingBenchmarkDriverTest {
     void interruptedConnectionPreservesTheInterrupt() {
         InterruptedException failure = new InterruptedException("interrupted");
         NatsStreamingBenchmarkDriver driver =
-                new NatsStreamingBenchmarkDriver(
-                        (cluster, client, options) -> {
-                            throw failure;
-                        });
+                new NatsStreamingBenchmarkDriver((cluster, client, options) -> {
+                    throw failure;
+                });
         try {
             assertThatThrownBy(() -> driver.createProducer("topic").join()).hasCause(failure);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
@@ -123,11 +121,10 @@ class NatsStreamingBenchmarkDriverTest {
         StreamingConnection connection = mock(StreamingConnection.class);
         AtomicInteger connections = new AtomicInteger();
         NatsStreamingBenchmarkDriver driver =
-                new NatsStreamingBenchmarkDriver(
-                        (cluster, client, options) -> {
-                            connections.incrementAndGet();
-                            return connection;
-                        });
+                new NatsStreamingBenchmarkDriver((cluster, client, options) -> {
+                    connections.incrementAndGet();
+                    return connection;
+                });
         BenchmarkProducer first = driver.createProducer("one").join();
         BenchmarkProducer second = driver.createProducer("two").join();
         first.close();

@@ -26,12 +26,11 @@ class CountersStatsTest {
 
         CountersStats result = one.plus(two);
         assertThat(result)
-                .satisfies(
-                        r -> {
-                            assertThat(r.messagesSent()).isEqualTo(3);
-                            assertThat(r.messageSendErrors()).isEqualTo(30);
-                            assertThat(r.messagesReceived()).isEqualTo(300);
-                        });
+                .satisfies(r -> {
+                    assertThat(r.messagesSent()).isEqualTo(3);
+                    assertThat(r.messageSendErrors()).isEqualTo(30);
+                    assertThat(r.messagesReceived()).isEqualTo(300);
+                });
     }
 
     @Test
@@ -41,11 +40,10 @@ class CountersStatsTest {
 
         CountersStats result = zero.plus(two);
         assertThat(result)
-                .satisfies(
-                        r -> {
-                            assertThat(r.messagesSent()).isEqualTo(2);
-                            assertThat(r.messageSendErrors()).isEqualTo(20);
-                            assertThat(r.messagesReceived()).isEqualTo(200);
-                        });
+                .satisfies(r -> {
+                    assertThat(r.messagesSent()).isEqualTo(2);
+                    assertThat(r.messageSendErrors()).isEqualTo(20);
+                    assertThat(r.messagesReceived()).isEqualTo(200);
+                });
     }
 }

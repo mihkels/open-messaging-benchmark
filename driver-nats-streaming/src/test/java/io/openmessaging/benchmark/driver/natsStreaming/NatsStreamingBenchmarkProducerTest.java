@@ -63,12 +63,11 @@ class NatsStreamingBenchmarkProducerTest {
     void synchronousAcknowledgementIsMatchedAfterPublishReturns() throws Exception {
         StreamingConnection connection = mock(StreamingConnection.class);
         when(connection.publish(eq("topic"), any(byte[].class), any(AckHandler.class)))
-                .thenAnswer(
-                        invocation -> {
-                            AckHandler handler = invocation.getArgument(2);
-                            handler.onAck("message-id", null);
-                            return "message-id";
-                        });
+                .thenAnswer(invocation -> {
+                    AckHandler handler = invocation.getArgument(2);
+                    handler.onAck("message-id", null);
+                    return "message-id";
+                });
         NatsStreamingBenchmarkProducer producer =
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         assertThat(producer.sendAsync(Optional.empty(), new byte[] {1}))
@@ -151,12 +150,11 @@ class NatsStreamingBenchmarkProducerTest {
         CountDownLatch publishing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(connection.publish(eq("topic"), any(byte[].class), any(AckHandler.class)))
-                .thenAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            release.await();
-                            return "message-id";
-                        });
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    release.await();
+                    return "message-id";
+                });
         NatsStreamingBenchmarkProducer producer =
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         ExecutorService sender = Executors.newSingleThreadExecutor();
@@ -164,13 +162,12 @@ class NatsStreamingBenchmarkProducerTest {
         CountDownLatch closeFinished = new CountDownLatch(1);
         AtomicBoolean interruptionVisible = new AtomicBoolean();
         Thread closer =
-                new Thread(
-                        () -> {
-                            closeStarted.countDown();
-                            producer.close();
-                            interruptionVisible.set(Thread.currentThread().isInterrupted());
-                            closeFinished.countDown();
-                        });
+                new Thread(() -> {
+                    closeStarted.countDown();
+                    producer.close();
+                    interruptionVisible.set(Thread.currentThread().isInterrupted());
+                    closeFinished.countDown();
+                });
         try {
             Future<CompletableFuture<Void>> send =
                     sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
@@ -219,36 +216,33 @@ class NatsStreamingBenchmarkProducerTest {
         AtomicInteger calls = new AtomicInteger();
         AtomicReference<AckHandler> firstAcknowledgement = new AtomicReference<>();
         when(connection.publish(eq("topic"), any(byte[].class), any(AckHandler.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                firstAcknowledgement.set(invocation.getArgument(2));
-                                return "first";
-                            }
-                            if (call == 2) {
-                                firstAcknowledgement.get().onAck("first", null);
-                                return "second";
-                            }
-                            return "nested";
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        firstAcknowledgement.set(invocation.getArgument(2));
+                        return "first";
+                    }
+                    if (call == 2) {
+                        firstAcknowledgement.get().onAck("first", null);
+                        return "second";
+                    }
+                    return "nested";
+                });
         NatsStreamingBenchmarkProducer producer =
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
         CompletableFuture<Void> closeAttempt =
-                first.thenRun(
-                        () -> {
-                            nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                            producer.close();
-                        });
+                first.thenRun(() -> {
+                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                    producer.close();
+                });
         ExecutorService sender =
-                Executors.newSingleThreadExecutor(
-                        task -> {
-                            Thread thread = new Thread(task, "nats-streaming-reentrant-test");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "nats-streaming-reentrant-test");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         try {
             Future<CompletableFuture<Void>> second =
                     sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
@@ -276,33 +270,31 @@ class NatsStreamingBenchmarkProducerTest {
         CountDownLatch publishing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(connection.publish(eq("topic"), any(byte[].class), any(AckHandler.class)))
-                .thenAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                firstAcknowledgement.set(invocation.getArgument(2));
-                                return "first";
-                            }
-                            if (call == 2) {
-                                publishing.countDown();
-                                if (!release.await(5, TimeUnit.SECONDS)) {
-                                    throw new AssertionError("publication was not released");
-                                }
-                            }
-                            return "other";
-                        });
+                .thenAnswer(invocation -> {
+                    int call = calls.incrementAndGet();
+                    if (call == 1) {
+                        firstAcknowledgement.set(invocation.getArgument(2));
+                        return "first";
+                    }
+                    if (call == 2) {
+                        publishing.countDown();
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("publication was not released");
+                        }
+                    }
+                    return "other";
+                });
         NatsStreamingBenchmarkProducer producer =
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(
-                () -> {
-                    try {
-                        producer.close();
-                    } catch (RuntimeException failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.thenRun(() -> {
+            try {
+                producer.close();
+            } catch (RuntimeException failure) {
+                rejected.set(failure);
+            }
+        });
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<CompletableFuture<Void>> second =
@@ -337,14 +329,13 @@ class NatsStreamingBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                    } catch (RuntimeException failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+            } catch (RuntimeException failure) {
+                rejected.set(failure);
+            }
+        });
 
         producer.close();
 
@@ -365,15 +356,14 @@ class NatsStreamingBenchmarkProducerTest {
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected =
-                send.handle(
-                        (unused, error) -> {
-                            try {
-                                producer.close();
-                                return null;
-                            } catch (RuntimeException failure) {
-                                return failure;
-                            }
-                        });
+                send.handle((unused, error) -> {
+                    try {
+                        producer.close();
+                        return null;
+                    } catch (RuntimeException failure) {
+                        return failure;
+                    }
+                });
         ArgumentCaptor<AckHandler> acknowledgement = ArgumentCaptor.forClass(AckHandler.class);
         verify(connection).publish(eq("topic"), any(byte[].class), acknowledgement.capture());
         IOException failure = new IOException("acknowledgement failed");

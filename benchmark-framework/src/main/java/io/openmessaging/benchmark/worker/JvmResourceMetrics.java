@@ -67,21 +67,19 @@ public final class JvmResourceMetrics {
     }
 
     public void bindTo(MeterRegistry registry, String role) {
-        readings.forEach(
-                (name, reading) ->
-                        Gauge.builder("omb_resource_" + name, reading, DoubleSupplier::getAsDouble)
-                                .tag("role", role)
-                                .strongReference(true)
-                                .register(registry));
+        readings.forEach((name, reading) ->
+                Gauge.builder("omb_resource_" + name, reading, DoubleSupplier::getAsDouble)
+                        .tag("role", role)
+                        .strongReference(true)
+                        .register(registry));
     }
 
     public Map<String, Double> snapshot() {
         Map<String, Double> result = new LinkedHashMap<>();
-        readings.forEach(
-                (name, reading) -> {
-                    double value = reading.getAsDouble();
-                    result.put(name, Double.isFinite(value) ? value : null);
-                });
+        readings.forEach((name, reading) -> {
+            double value = reading.getAsDouble();
+            result.put(name, Double.isFinite(value) ? value : null);
+        });
         return result;
     }
 }

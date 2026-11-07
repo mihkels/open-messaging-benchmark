@@ -29,14 +29,13 @@ class MqttCreationFutureTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger closeCount = new AtomicInteger();
         MqttCreationFuture<AutoCloseable> future =
-                new MqttCreationFuture<>(
-                        () -> {
-                            closeCount.incrementAndGet();
-                            closing.countDown();
-                            if (!release.await(2, TimeUnit.SECONDS)) {
-                                throw new IOException("timed out waiting to release cleanup");
-                            }
-                        });
+                new MqttCreationFuture<>(() -> {
+                    closeCount.incrementAndGet();
+                    closing.countDown();
+                    if (!release.await(2, TimeUnit.SECONDS)) {
+                        throw new IOException("timed out waiting to release cleanup");
+                    }
+                });
 
         assertThat(future.cancel(false)).isTrue();
         assertThat(future.quiescence()).isNotDone();
@@ -69,10 +68,9 @@ class MqttCreationFutureTest {
         IOException cleanupFailure = new IOException("cleanup failed");
         IOException creationFailure = new IOException("connection failed");
         MqttCreationFuture<AutoCloseable> future =
-                new MqttCreationFuture<>(
-                        () -> {
-                            throw cleanupFailure;
-                        });
+                new MqttCreationFuture<>(() -> {
+                    throw cleanupFailure;
+                });
 
         future.fail(creationFailure);
         future.finished();

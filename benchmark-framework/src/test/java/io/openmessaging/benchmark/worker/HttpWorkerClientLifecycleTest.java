@@ -100,15 +100,14 @@ class HttpWorkerClientLifecycleTest {
         AtomicBoolean interrupted = new AtomicBoolean();
         Thread closing =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        worker.close();
-                                    } catch (Throwable t) {
-                                        failure.set(t);
-                                        interrupted.set(Thread.currentThread().isInterrupted());
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                worker.close();
+                            } catch (Throwable t) {
+                                failure.set(t);
+                                interrupted.set(Thread.currentThread().isInterrupted());
+                            }
+                        });
         try {
             assertThat(entered.await(1, TimeUnit.SECONDS)).isTrue();
             closing.interrupt();
@@ -137,26 +136,24 @@ class HttpWorkerClientLifecycleTest {
                 .stopAll();
         try (WorkerHandler handler = new WorkerHandler(worker)) {
             Javalin app =
-                    Javalin.create(
-                            config -> {
-                                config.startup.showJavalinBanner = false;
-                                config.jetty.modifyHttpConfiguration(http -> http.setIdleTimeout(100));
-                                handler.configure(config);
-                            });
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        config.jetty.modifyHttpConfiguration(http -> http.setIdleTimeout(100));
+                        handler.configure(config);
+                    });
             try {
                 app.start("127.0.0.1", 0);
                 try (HttpWorkerClient remote = new HttpWorkerClient("http://127.0.0.1:" + app.port())) {
                     AtomicReference<Throwable> failure = new AtomicReference<>();
                     Thread request =
                             Thread.ofVirtual()
-                                    .start(
-                                            () -> {
-                                                try {
-                                                    remote.stopAll();
-                                                } catch (Throwable t) {
-                                                    failure.set(t);
-                                                }
-                                            });
+                                    .start(() -> {
+                                        try {
+                                            remote.stopAll();
+                                        } catch (Throwable t) {
+                                            failure.set(t);
+                                        }
+                                    });
                     try {
                         assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
                         request.join(250);
@@ -184,11 +181,10 @@ class HttpWorkerClientLifecycleTest {
         doThrow(failure).when(worker).stopAll();
         try (WorkerHandler handler = new WorkerHandler(worker)) {
             Javalin app =
-                    Javalin.create(
-                            config -> {
-                                config.startup.showJavalinBanner = false;
-                                handler.configure(config);
-                            });
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
             try {
                 app.start("127.0.0.1", 0);
                 try (HttpWorkerClient remote = new HttpWorkerClient("http://127.0.0.1:" + app.port())) {

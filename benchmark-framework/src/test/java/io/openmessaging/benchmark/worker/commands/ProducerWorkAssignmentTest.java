@@ -39,10 +39,9 @@ class ProducerWorkAssignmentTest {
 
     @Test
     void requiresOneWeightPerPayload() {
-        assertThatThrownBy(
-                        () ->
-                                new ProducerWorkAssignment(
-                                        List.of(new byte[] {1}), 10, KeyDistributorType.NO_KEY, new int[] {1, 2}))
+        assertThatThrownBy(() ->
+                        new ProducerWorkAssignment(
+                                List.of(new byte[] {1}), 10, KeyDistributorType.NO_KEY, new int[] {1, 2}))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

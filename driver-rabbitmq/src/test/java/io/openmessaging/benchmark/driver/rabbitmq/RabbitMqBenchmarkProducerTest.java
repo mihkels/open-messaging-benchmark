@@ -359,11 +359,10 @@ class RabbitMqBenchmarkProducerTest {
         CompletableFuture<Void> first = send();
         CompletableFuture<Void> second = send();
         CompletableFuture<Void> callback =
-                first.handle(
-                        (ignored, error) -> {
-                            assertThatThrownBy(producer::close).isInstanceOf(IllegalStateException.class);
-                            return null;
-                        });
+                first.handle((ignored, error) -> {
+                    assertThatThrownBy(producer::close).isInstanceOf(IllegalStateException.class);
+                    return null;
+                });
 
         producer.close();
         callback.join();
@@ -395,14 +394,13 @@ class RabbitMqBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             CompletableFuture<CompletableFuture<Void>> callback =
-                    first.handle(
-                            (ignored, error) -> {
-                                try {
-                                    return executor.submit(this::send).get(5, TimeUnit.SECONDS);
-                                } catch (Exception e) {
-                                    throw new CompletionException(e);
-                                }
-                            });
+                    first.handle((ignored, error) -> {
+                        try {
+                            return executor.submit(this::send).get(5, TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    });
             producer.close();
             assertClosed(callback.get(5, TimeUnit.SECONDS));
         } finally {
@@ -763,12 +761,11 @@ class RabbitMqBenchmarkProducerTest {
             for (int i = 0; i < count; i++) {
                 int index = i;
                 calls.add(
-                        executor.submit(
-                                () -> {
-                                    start.await();
-                                    return producer.sendAsync(
-                                            Optional.of(Integer.toString(index)), new byte[] {(byte) index});
-                                }));
+                        executor.submit(() -> {
+                            start.await();
+                            return producer.sendAsync(
+                                    Optional.of(Integer.toString(index)), new byte[] {(byte) index});
+                        }));
             }
             start.countDown();
             List<CompletableFuture<Void>> sends = new ArrayList<>();
@@ -807,19 +804,17 @@ class RabbitMqBenchmarkProducerTest {
             Future<CompletableFuture<Void>> first = executor.submit(this::send);
             assertThat(enteredPublish.await(5, TimeUnit.SECONDS)).isTrue();
             Future<CompletableFuture<Void>> second =
-                    executor.submit(
-                            () -> {
-                                secondStarted.countDown();
-                                return send();
-                            });
+                    executor.submit(() -> {
+                        secondStarted.countDown();
+                        return send();
+                    });
             assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
 
             Future<?> close =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             close.get(5, TimeUnit.SECONDS);
             assertClosed(second.get(5, TimeUnit.SECONDS));
             assertThat(first.isDone()).isFalse();
@@ -873,14 +868,13 @@ class RabbitMqBenchmarkProducerTest {
             Future<CompletableFuture<Void>> first = executor.submit(this::send);
             assertThat(enteredPublish.await(5, TimeUnit.SECONDS)).isTrue();
             Future<InterruptedSend> interrupted =
-                    executor.submit(
-                            () -> {
-                                Thread.currentThread().interrupt();
-                                CompletableFuture<Void> result = send();
-                                boolean interruptRestored = Thread.currentThread().isInterrupted();
-                                Thread.interrupted();
-                                return new InterruptedSend(result, interruptRestored);
-                            });
+                    executor.submit(() -> {
+                        Thread.currentThread().interrupt();
+                        CompletableFuture<Void> result = send();
+                        boolean interruptRestored = Thread.currentThread().isInterrupted();
+                        Thread.interrupted();
+                        return new InterruptedSend(result, interruptRestored);
+                    });
             InterruptedSend result = interrupted.get(5, TimeUnit.SECONDS);
             assertThat(result.interruptRestored()).isTrue();
             assertThatThrownBy(result.future()::join)
@@ -932,14 +926,13 @@ class RabbitMqBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             CompletableFuture<CompletableFuture<Void>> callback =
-                    first.thenApply(
-                            ignored -> {
-                                try {
-                                    return executor.submit(this::send).get(5, TimeUnit.SECONDS);
-                                } catch (Exception e) {
-                                    throw new CompletionException(e);
-                                }
-                            });
+                    first.thenApply(ignored -> {
+                        try {
+                            return executor.submit(this::send).get(5, TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            throw new CompletionException(e);
+                        }
+                    });
             channel.afterPublish =
                     published -> {
                         if (published.sequence() == 2) {
@@ -991,18 +984,16 @@ class RabbitMqBenchmarkProducerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CountDownLatch callbackStarted = new CountDownLatch(1);
         CountDownLatch releaseCallback = new CountDownLatch(1);
-        first.whenComplete(
-                (ignored, error) -> {
-                    callbackStarted.countDown();
-                    awaitUnchecked(releaseCallback);
-                });
+        first.whenComplete((ignored, error) -> {
+            callbackStarted.countDown();
+            awaitUnchecked(releaseCallback);
+        });
         try {
             Future<?> ack =
-                    executor.submit(
-                            () -> {
-                                channel.ack(2, true);
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        channel.ack(2, true);
+                        return null;
+                    });
             assertThat(callbackStarted.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(second.isDone()).isFalse();
             producer.close();
@@ -1023,11 +1014,10 @@ class RabbitMqBenchmarkProducerTest {
         AtomicBoolean insidePublish = new AtomicBoolean();
         AtomicBoolean callbackDuringPublish = new AtomicBoolean();
         CompletableFuture<CompletableFuture<Void>> nested =
-                first.handle(
-                        (ignored, error) -> {
-                            callbackDuringPublish.set(insidePublish.get());
-                            return producer.sendAsync(Optional.empty(), new byte[0]);
-                        });
+                first.handle((ignored, error) -> {
+                    callbackDuringPublish.set(insidePublish.get());
+                    return producer.sendAsync(Optional.empty(), new byte[0]);
+                });
         channel.afterPublish =
                 published -> {
                     insidePublish.set(true);
@@ -1051,11 +1041,10 @@ class RabbitMqBenchmarkProducerTest {
         AtomicBoolean insidePublish = new AtomicBoolean();
         AtomicBoolean callbackDuringPublish = new AtomicBoolean();
         CountDownLatch publishExited = new CountDownLatch(1);
-        first.whenComplete(
-                (ignored, error) -> {
-                    callbackDuringPublish.set(insidePublish.get());
-                    awaitUnchecked(publishExited);
-                });
+        first.whenComplete((ignored, error) -> {
+            callbackDuringPublish.set(insidePublish.get());
+            awaitUnchecked(publishExited);
+        });
         channel.afterPublish =
                 published -> {
                     insidePublish.set(true);
@@ -1097,11 +1086,10 @@ class RabbitMqBenchmarkProducerTest {
             AtomicBoolean insidePublish = new AtomicBoolean();
             AtomicBoolean callbackDuringPublish = new AtomicBoolean();
             CompletableFuture<CompletableFuture<Void>> nested =
-                    first.handle(
-                            (ignored, error) -> {
-                                callbackDuringPublish.set(insidePublish.get());
-                                return recoveringProducer.sendAsync(Optional.empty(), new byte[0]);
-                            });
+                    first.handle((ignored, error) -> {
+                        callbackDuringPublish.set(insidePublish.get());
+                        return recoveringProducer.sendAsync(Optional.empty(), new byte[0]);
+                    });
             recoveringChannel.afterPublish =
                     published -> {
                         if (published.sequence() == 2) {
@@ -1212,39 +1200,36 @@ class RabbitMqBenchmarkProducerTest {
             List<Future<CompletableFuture<Void>>> calls = new ArrayList<>();
             for (int i = 0; i < 80; i++) {
                 calls.add(
-                        senders.submit(
-                                () -> {
-                                    start.await();
-                                    return send();
-                                }));
+                        senders.submit(() -> {
+                            start.await();
+                            return send();
+                        }));
             }
             Future<?> acknowledger =
-                    controls.submit(
-                            () -> {
-                                start.await();
-                                while (closed.getCount() != 0) {
-                                    for (Published message : channel.published) {
-                                        channel.ack(message.sequence(), false);
-                                    }
-                                    Thread.yield();
-                                }
-                                for (Published message : channel.published) {
-                                    channel.ack(message.sequence(), false);
-                                }
-                                return null;
-                            });
+                    controls.submit(() -> {
+                        start.await();
+                        while (closed.getCount() != 0) {
+                            for (Published message : channel.published) {
+                                channel.ack(message.sequence(), false);
+                            }
+                            Thread.yield();
+                        }
+                        for (Published message : channel.published) {
+                            channel.ack(message.sequence(), false);
+                        }
+                        return null;
+                    });
             Future<?> closer =
-                    controls.submit(
-                            () -> {
-                                start.await();
-                                published.await(5, TimeUnit.SECONDS);
-                                try {
-                                    producer.close();
-                                } finally {
-                                    closed.countDown();
-                                }
-                                return null;
-                            });
+                    controls.submit(() -> {
+                        start.await();
+                        published.await(5, TimeUnit.SECONDS);
+                        try {
+                            producer.close();
+                        } finally {
+                            closed.countDown();
+                        }
+                        return null;
+                    });
             start.countDown();
             closer.get(5, TimeUnit.SECONDS);
             acknowledger.get(5, TimeUnit.SECONDS);

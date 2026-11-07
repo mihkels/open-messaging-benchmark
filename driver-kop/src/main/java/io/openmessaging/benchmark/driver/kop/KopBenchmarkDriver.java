@@ -124,14 +124,13 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         admin
                 .createTopics(Collections.singletonList(newTopic))
                 .all()
-                .whenComplete(
-                        (result, throwable) -> {
-                            if (throwable == null) {
-                                future.complete(result);
-                            } else {
-                                future.completeExceptionally(throwable);
-                            }
-                        });
+                .whenComplete((result, throwable) -> {
+                    if (throwable == null) {
+                        future.complete(result);
+                    } else {
+                        future.completeExceptionally(throwable);
+                    }
+                });
         return future;
     }
 
@@ -246,15 +245,14 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                 .messagePayloadProcessor(
                         new KafkaPayloadProcessor()) // support consuming Kafka format messages
                 .poolMessages(true)
-                .messageListener(
-                        (c, msg) -> {
-                            try {
-                                callback.messageReceived(msg.getValue(), msg.getPublishTime());
-                                c.acknowledgeAsync(msg);
-                            } finally {
-                                msg.release();
-                            }
-                        })
+                .messageListener((c, msg) -> {
+                    try {
+                        callback.messageReceived(msg.getValue(), msg.getPublishTime());
+                        c.acknowledgeAsync(msg);
+                    } finally {
+                        msg.release();
+                    }
+                })
                 .subscribeAsync();
     }
 }

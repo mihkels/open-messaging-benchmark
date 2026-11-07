@@ -55,11 +55,10 @@ class DlogBenchmarkDriverTest {
         CountDownLatch openingStarted = new CountDownLatch(1);
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openAsyncLogWriter())
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            return opening;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    return opening;
+                });
         when(writer.asyncClose()).thenReturn(CompletableFuture.completedFuture(null));
         DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
 
@@ -89,12 +88,11 @@ class DlogBenchmarkDriverTest {
         CountDownLatch release = new CountDownLatch(1);
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openLogReader(DLSN.InitialDLSN))
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            await(release);
-                            return reader;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    await(release);
+                    return reader;
+                });
         DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
         CompletableFuture<BenchmarkConsumer> creation =
                 driver.createConsumer(TOPIC, "ignored", mock(ConsumerCallback.class));
@@ -271,10 +269,9 @@ class DlogBenchmarkDriverTest {
                 .hasCause(constructionFailure);
         assertThat(constructionFailure.getSuppressed()).hasSize(2).contains(managerFailure);
         assertThat(constructionFailure.getSuppressed())
-                .anySatisfy(
-                        failure -> {
-                            assertThat(failure).isInstanceOf(ExecutionException.class).hasCause(writerFailure);
-                        });
+                .anySatisfy(failure -> {
+                    assertThat(failure).isInstanceOf(ExecutionException.class).hasCause(writerFailure);
+                });
         verify(manager).close();
         verify(writer).asyncClose();
     }
@@ -332,18 +329,16 @@ class DlogBenchmarkDriverTest {
         CountDownLatch writerOpening = new CountDownLatch(1);
         CompletableFuture<AsyncLogWriter> writerResult = new CompletableFuture<>();
         when(namespace.openLog(TOPIC))
-                .thenAnswer(
-                        invocation -> {
-                            managerOpening.countDown();
-                            await(releaseManager);
-                            return manager;
-                        });
+                .thenAnswer(invocation -> {
+                    managerOpening.countDown();
+                    await(releaseManager);
+                    return manager;
+                });
         when(manager.openAsyncLogWriter())
-                .thenAnswer(
-                        invocation -> {
-                            writerOpening.countDown();
-                            return writerResult;
-                        });
+                .thenAnswer(invocation -> {
+                    writerOpening.countDown();
+                    return writerResult;
+                });
         when(writer.asyncClose()).thenReturn(CompletableFuture.completedFuture(null));
         CompletableFuture<BenchmarkProducer> creation =
                 new DlogBenchmarkDriver(namespace).createProducer(TOPIC);
@@ -376,17 +371,15 @@ class DlogBenchmarkDriverTest {
         CompletableFuture<AsyncLogWriter> opening = new CompletableFuture<>();
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openAsyncLogWriter())
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            return opening;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    return opening;
+                });
         when(writer.asyncClose())
-                .thenAnswer(
-                        invocation -> {
-                            closingThread.set(Thread.currentThread());
-                            return CompletableFuture.completedFuture(null);
-                        });
+                .thenAnswer(invocation -> {
+                    closingThread.set(Thread.currentThread());
+                    return CompletableFuture.completedFuture(null);
+                });
         CompletableFuture<BenchmarkProducer> creation =
                 new DlogBenchmarkDriver(namespace).createProducer(TOPIC);
         try {
@@ -416,12 +409,11 @@ class DlogBenchmarkDriverTest {
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openAsyncLogWriter()).thenReturn(writerOpen);
         when(writer.getLastTxId())
-                .thenAnswer(
-                        invocation -> {
-                            constructing.countDown();
-                            await(release);
-                            return 0L;
-                        });
+                .thenAnswer(invocation -> {
+                    constructing.countDown();
+                    await(release);
+                    return 0L;
+                });
         when(writer.asyncClose()).thenReturn(CompletableFuture.completedFuture(null));
         CompletableFuture<BenchmarkProducer> creation =
                 new DlogBenchmarkDriver(namespace).createProducer(TOPIC);
@@ -452,11 +444,10 @@ class DlogBenchmarkDriverTest {
         CompletableFuture<AsyncLogWriter> opening = new CompletableFuture<>();
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openAsyncLogWriter())
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            return opening;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    return opening;
+                });
         when(writer.asyncClose()).thenReturn(CompletableFuture.failedFuture(cleanupFailure));
         CompletableFuture<BenchmarkProducer> creation =
                 new DlogBenchmarkDriver(namespace).createProducer(TOPIC);
@@ -485,12 +476,11 @@ class DlogBenchmarkDriverTest {
         CountDownLatch release = new CountDownLatch(1);
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openLogReader(DLSN.InitialDLSN))
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            await(release);
-                            return reader;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    await(release);
+                    return reader;
+                });
         CompletableFuture<BenchmarkConsumer> creation =
                 new DlogBenchmarkDriver(namespace).createConsumer(TOPIC, "ignored", callback);
         try {
@@ -518,12 +508,11 @@ class DlogBenchmarkDriverTest {
         CountDownLatch release = new CountDownLatch(1);
         when(namespace.openLog(TOPIC)).thenReturn(manager);
         when(manager.openLogReader(DLSN.InitialDLSN))
-                .thenAnswer(
-                        invocation -> {
-                            openingStarted.countDown();
-                            await(release);
-                            return reader;
-                        });
+                .thenAnswer(invocation -> {
+                    openingStarted.countDown();
+                    await(release);
+                    return reader;
+                });
         doThrow(cleanupFailure).when(reader).close();
         CompletableFuture<BenchmarkConsumer> creation =
                 new DlogBenchmarkDriver(namespace)

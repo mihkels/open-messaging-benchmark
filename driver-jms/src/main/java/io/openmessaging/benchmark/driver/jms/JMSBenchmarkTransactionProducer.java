@@ -191,12 +191,11 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                 CompletableFuture<Void> acknowledgement = new CompletableFuture<>();
                 acknowledgement
                         .whenCompleteAsync((ignored, error) -> operation.finish(error, error == null))
-                        .whenComplete(
-                                (ignored, error) -> {
-                                    if (error != null) {
-                                        operation.finish(error, false);
-                                    }
-                                });
+                        .whenComplete((ignored, error) -> {
+                            if (error != null) {
+                                operation.finish(error, false);
+                            }
+                        });
                 producer.send(
                         bytesMessage,
                         new CompletionListener() {

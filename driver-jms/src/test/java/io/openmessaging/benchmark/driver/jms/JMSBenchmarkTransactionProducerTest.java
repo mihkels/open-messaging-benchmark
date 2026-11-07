@@ -228,29 +228,27 @@ class JMSBenchmarkTransactionProducerTest {
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
         CompletableFuture<Void> closeFromCallback =
-                send.whenComplete(
-                        (ignored, error) -> {
-                            try {
-                                producer.close();
-                            } catch (Exception closeError) {
-                                callbackFailure.set(closeError);
-                            }
-                        });
+                send.whenComplete((ignored, error) -> {
+                    try {
+                        producer.close();
+                    } catch (Exception closeError) {
+                        callbackFailure.set(closeError);
+                    }
+                });
         scenario.listeners.get(0).onCompletion(null);
         assertTrue(scenario.commitEntered.await(2, TimeUnit.SECONDS));
         CountDownLatch closeReturned = new CountDownLatch(1);
         Thread closer =
                 Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    try {
-                                        producer.close();
-                                    } catch (Exception error) {
-                                        throw new AssertionError(error);
-                                    } finally {
-                                        closeReturned.countDown();
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                producer.close();
+                            } catch (Exception error) {
+                                throw new AssertionError(error);
+                            } finally {
+                                closeReturned.countDown();
+                            }
+                        });
         try {
             assertFalse(closeReturned.await(50, TimeUnit.MILLISECONDS));
         } finally {
@@ -277,29 +275,26 @@ class JMSBenchmarkTransactionProducerTest {
             List<Thread> threads = new ArrayList<>();
             threads.add(
                     Thread.ofVirtual()
-                            .start(
-                                    () -> {
-                                        await(start);
-                                        send.cancel(true);
-                                    }));
+                            .start(() -> {
+                                await(start);
+                                send.cancel(true);
+                            }));
             threads.add(
                     Thread.ofVirtual()
-                            .start(
-                                    () -> {
-                                        await(start);
-                                        try {
-                                            producer.close();
-                                        } catch (Exception error) {
-                                            errors.add(error);
-                                        }
-                                    }));
+                            .start(() -> {
+                                await(start);
+                                try {
+                                    producer.close();
+                                } catch (Exception error) {
+                                    errors.add(error);
+                                }
+                            }));
             threads.add(
                     Thread.ofVirtual()
-                            .start(
-                                    () -> {
-                                        await(start);
-                                        scenario.listeners.get(0).onCompletion(null);
-                                    }));
+                            .start(() -> {
+                                await(start);
+                                scenario.listeners.get(0).onCompletion(null);
+                            }));
             start.countDown();
             for (Thread thread : threads) {
                 thread.join(2000);
@@ -409,15 +404,14 @@ class JMSBenchmarkTransactionProducerTest {
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
         AtomicInteger callbacks = new AtomicInteger();
-        send.whenComplete(
-                (ignored, error) -> {
-                    callbacks.incrementAndGet();
-                    try {
-                        producer.close();
-                    } catch (Exception closeError) {
-                        callbackFailure.set(closeError);
-                    }
-                });
+        send.whenComplete((ignored, error) -> {
+            callbacks.incrementAndGet();
+            try {
+                producer.close();
+            } catch (Exception closeError) {
+                callbackFailure.set(closeError);
+            }
+        });
 
         producer.close();
 
@@ -498,16 +492,15 @@ class JMSBenchmarkTransactionProducerTest {
         AtomicReference<Boolean> interruptedAfterClose = new AtomicReference<>();
         Thread closer =
                 Thread.ofPlatform()
-                        .start(
-                                () -> {
-                                    try {
-                                        producer.close();
-                                    } catch (Exception error) {
-                                        closeFailure.set(error);
-                                    } finally {
-                                        interruptedAfterClose.set(Thread.currentThread().isInterrupted());
-                                    }
-                                });
+                        .start(() -> {
+                            try {
+                                producer.close();
+                            } catch (Exception error) {
+                                closeFailure.set(error);
+                            } finally {
+                                interruptedAfterClose.set(Thread.currentThread().isInterrupted());
+                            }
+                        });
         try {
             long firstWait = awaitWaitCount(closer, 1);
             closer.interrupt();

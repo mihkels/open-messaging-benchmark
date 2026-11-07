@@ -131,18 +131,16 @@ class RocketMQBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
         CompletableFuture<Void> closeAttempt =
-                first.thenRun(
-                        () -> {
-                            nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                            producer.close();
-                        });
+                first.thenRun(() -> {
+                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
+                    producer.close();
+                });
         ExecutorService sender =
-                Executors.newSingleThreadExecutor(
-                        task -> {
-                            Thread thread = new Thread(task, "rocketmq-reentrant-test");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
+                Executors.newSingleThreadExecutor(task -> {
+                    Thread thread = new Thread(task, "rocketmq-reentrant-test");
+                    thread.setDaemon(true);
+                    return thread;
+                });
         try {
             Future<CompletableFuture<Void>> second =
                     sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
@@ -186,11 +184,10 @@ class RocketMQBenchmarkProducerTest {
                     workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
             Future<?> close =
-                    workers.submit(
-                            () -> {
-                                closing.countDown();
-                                producer.close();
-                            });
+                    workers.submit(() -> {
+                        closing.countDown();
+                        producer.close();
+                    });
             assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
             assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
@@ -230,14 +227,13 @@ class RocketMQBenchmarkProducerTest {
         RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(
-                () -> {
-                    try {
-                        producer.close();
-                    } catch (RuntimeException failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.thenRun(() -> {
+            try {
+                producer.close();
+            } catch (RuntimeException failure) {
+                rejected.set(failure);
+            }
+        });
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<CompletableFuture<Void>> second =
@@ -269,14 +265,13 @@ class RocketMQBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.whenComplete(
-                (unused, error) -> {
-                    try {
-                        producer.close();
-                    } catch (RuntimeException failure) {
-                        rejected.set(failure);
-                    }
-                });
+        first.whenComplete((unused, error) -> {
+            try {
+                producer.close();
+            } catch (RuntimeException failure) {
+                rejected.set(failure);
+            }
+        });
 
         producer.close();
 
@@ -294,15 +289,14 @@ class RocketMQBenchmarkProducerTest {
         RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected =
-                send.handle(
-                        (unused, error) -> {
-                            try {
-                                producer.close();
-                                return null;
-                            } catch (RuntimeException failure) {
-                                return failure;
-                            }
-                        });
+                send.handle((unused, error) -> {
+                    try {
+                        producer.close();
+                        return null;
+                    } catch (RuntimeException failure) {
+                        return failure;
+                    }
+                });
         ArgumentCaptor<SendCallback> callback = ArgumentCaptor.forClass(SendCallback.class);
         verify(client).send(any(Message.class), callback.capture());
         RuntimeException failure = new RuntimeException("acknowledgement failed");

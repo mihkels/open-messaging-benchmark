@@ -89,7 +89,8 @@ class NatsStreamingE2eIT extends BaseE2eIT {
             String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
             try (var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
-                try (var consumer = driver.createConsumer(topic, "group", first).get(10, TimeUnit.SECONDS)) {
+                try (var consumer =
+                        driver.createConsumer(topic, "group", first).get(10, TimeUnit.SECONDS)) {
                     long before = System.currentTimeMillis();
                     producer.sendAsync(Optional.empty(), firstPayload).get(10, TimeUnit.SECONDS);
                     MessageCapture.Delivery delivery = first.await();

@@ -193,10 +193,8 @@ public final class LocalWorker implements Worker {
 
         List<TopicInfo> topicInfos =
                 IntStream.range(0, topicsInfo.numberOfTopics)
-                        .mapToObj(
-                                i ->
-                                        new TopicInfo(
-                                                generateTopicName(current, i), topicsInfo.numberOfPartitionsPerTopic))
+                        .mapToObj(i ->
+                                new TopicInfo(generateTopicName(current, i), topicsInfo.numberOfPartitionsPerTopic))
                         .toList();
 
         create(
@@ -246,13 +244,11 @@ public final class LocalWorker implements Worker {
                 () ->
                         current.driver.createConsumers(
                                 consumerAssignment.topicsSubscriptions.stream()
-                                        .map(
-                                                c ->
-                                                        new ConsumerInfo(
-                                                                index.getAndIncrement(),
-                                                                c.topic,
-                                                                c.subscription,
-                                                                current.callbacks))
+                                        .map(c -> {
+                                            int consumerIndex = index.getAndIncrement();
+                                            return new ConsumerInfo(
+                                                    consumerIndex, c.topic, c.subscription, current.callbacks);
+                                        })
                                         .toList()),
                 created -> {
                     validateResources(created, "consumer");
@@ -321,15 +317,14 @@ public final class LocalWorker implements Worker {
                                                 Objects.requireNonNull(
                                                         producer.sendAsync(Optional.of("key"), new byte[10]),
                                                         "sendAsync returned null");
-                                        send.whenComplete(
-                                                (ignored, failure) -> {
-                                                    current.callbacks.completeProbe(failure);
-                                                    if (failure != null) {
-                                                        complete.completeExceptionally(unwrap(failure));
-                                                    } else if (remaining.decrementAndGet() == 0) {
-                                                        complete.complete(null);
-                                                    }
-                                                });
+                                        send.whenComplete((ignored, failure) -> {
+                                            current.callbacks.completeProbe(failure);
+                                            if (failure != null) {
+                                                complete.completeExceptionally(unwrap(failure));
+                                            } else if (remaining.decrementAndGet() == 0) {
+                                                complete.complete(null);
+                                            }
+                                        });
                                     } catch (Throwable t) {
                                         current.callbacks.abortSend();
                                         complete.completeExceptionally(t);

@@ -80,17 +80,16 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
         try {
             this.rmqProducer
                     .sendAsync(message)
-                    .whenComplete(
-                            (sendReceipt, throwable) -> {
-                                if (throwable != null) {
-                                    pending.completeFromClient(future, throwable);
-                                } else if (sendReceipt == null) {
-                                    pending.completeFromClient(
-                                            future, new IllegalStateException("Missing RocketMQ 5 send receipt"));
-                                } else {
-                                    pending.completeFromClient(future, null);
-                                }
-                            });
+                    .whenComplete((sendReceipt, throwable) -> {
+                        if (throwable != null) {
+                            pending.completeFromClient(future, throwable);
+                        } else if (sendReceipt == null) {
+                            pending.completeFromClient(
+                                    future, new IllegalStateException("Missing RocketMQ 5 send receipt"));
+                        } else {
+                            pending.completeFromClient(future, null);
+                        }
+                    });
         } catch (Exception failure) {
             future.completeExceptionally(failure);
         } finally {

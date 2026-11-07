@@ -48,11 +48,10 @@ class PulsarBenchmarkProducerTest {
         CompletableFuture<MessageId> acknowledgement = new CompletableFuture<>();
         when(client.newMessage()).thenReturn(builder);
         when(builder.value(any(byte[].class)))
-                .thenAnswer(
-                        invocation -> {
-                            sent.set(invocation.getArgument(0));
-                            return builder;
-                        });
+                .thenAnswer(invocation -> {
+                    sent.set(invocation.getArgument(0));
+                    return builder;
+                });
         when(builder.sendAsync()).thenReturn(acknowledgement);
         PulsarBenchmarkProducer producer = new PulsarBenchmarkProducer(client);
         byte[] payload = {1, 2, 3};
@@ -172,25 +171,23 @@ class PulsarBenchmarkProducerTest {
         when(client.newMessage()).thenReturn(builder);
         when(builder.value(any(byte[].class))).thenReturn(builder);
         when(builder.sendAsync())
-                .thenAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("send was not released");
-                            }
-                            return new CompletableFuture<MessageId>();
-                        });
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("send was not released");
+                    }
+                    return new CompletableFuture<MessageId>();
+                });
         PulsarBenchmarkProducer producer = new PulsarBenchmarkProducer(client);
         var executor = Executors.newFixedThreadPool(2);
         try {
             var sending = executor.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
             var closing =
-                    executor.submit(
-                            () -> {
-                                producer.close();
-                                return null;
-                            });
+                    executor.submit(() -> {
+                        producer.close();
+                        return null;
+                    });
             assertThatThrownBy(() -> closing.get(100, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
             verify(client, never()).close();

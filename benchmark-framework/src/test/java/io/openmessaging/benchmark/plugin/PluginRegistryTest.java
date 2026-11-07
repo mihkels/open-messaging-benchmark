@@ -602,4 +602,11 @@ class PluginRegistryTest {
         Path jar = artifactJar(dir.resolve("host"), groupId, artifactId, version);
         return new HostRuntime.Entry(jar, new ArtifactCoordinates(groupId, artifactId, version));
     }
+
+    @Test
+    void realPathFallsBackToTheNormalizedAbsolutePathWhenThePathIsMissing() {
+        Path missing = dir.resolve("missing").resolve("..").resolve("bundle");
+
+        assertThat(PluginRegistry.realPath(missing)).isEqualTo(dir.resolve("bundle").toAbsolutePath());
+    }
 }

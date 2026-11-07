@@ -369,7 +369,7 @@ public final class PluginRegistry {
         return bundle;
     }
 
-    private static Path realPath(Path path) {
+    static Path realPath(Path path) {
         try {
             return path.toRealPath();
         } catch (IOException _) {

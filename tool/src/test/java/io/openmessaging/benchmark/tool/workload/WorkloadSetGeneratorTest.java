@@ -49,7 +49,7 @@ class WorkloadSetGeneratorTest {
                 .containsExactlyInAnyOrderElementsOf(
                         Stream.concat(
                                         supportedFields.stream(),
-                                        Stream.of("name", "messageSizeDistribution", "backlogDrainRatio"))
+                                        Stream.of("name", "messageSizeDistribution", "backlogDrainRatio", "thresholds"))
                                 .toList());
     }
 
@@ -78,6 +78,7 @@ class WorkloadSetGeneratorTest {
                     assertThat(workload.warmupDurationMinutes).isEqualTo(1);
                     assertThat(workload.messageSizeDistribution).isNull();
                     assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+                    assertThat(workload.thresholds).isNull();
                 });
     }
 

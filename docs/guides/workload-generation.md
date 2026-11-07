@@ -48,8 +48,8 @@ An empty or omitted list defaults to `1` for the topic, partition, subscription,
 consumer counts, `1024` for `messageSize`, and `10000` for `producerRate`.
 
 The other fields are single values copied into every workload. The example produces
-`1 × 1 × 1 × 1 × 3 × 3 × 2 = 18` files. The template does not support `messageSizeDistribution` or
-`backlogDrainRatio`; add them to the generated files by hand if needed. With a fixed
+`1 × 1 × 1 × 1 × 3 × 3 × 2 = 18` files. The template does not support `messageSizeDistribution`,
+`backlogDrainRatio`, or `thresholds`; add them to the generated files by hand if needed. With a fixed
 `payloadFile`, list only one `messageSize`, because the file length must match it.
 
 ## Names

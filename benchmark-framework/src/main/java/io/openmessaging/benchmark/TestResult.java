@@ -39,6 +39,9 @@ public class TestResult {
     public ResultSummary summary = ResultSummary.empty();
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Thresholds.Result thresholds;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public Map<String, String> histograms;
 
     public String workload;
@@ -323,6 +326,11 @@ public class TestResult {
 
     private static double millis(double micros) {
         return micros / 1000.0;
+    }
+
+    // Histogram values are long microseconds; the double result may lose precision above 2^53
+    private static double millis(long micros) {
+        return millis((double) micros);
     }
 
     public int getTopics() {

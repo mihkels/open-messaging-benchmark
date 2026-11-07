@@ -115,11 +115,13 @@ class WorkloadGenerationToolTest {
         assertThat(generatedFile).exists();
 
         String yaml = Files.readString(generatedFile);
-        assertThat(yaml).isNotBlank();
-        assertThat(yaml).contains("name: \"single-workload\"");
-        assertThat(yaml).contains("topics: 3");
-        assertThat(yaml).contains("partitionsPerTopic: 2");
-        assertThat(yaml).contains("messageSize: 1024");
+        assertThat(yaml)
+                .isNotBlank()
+                .contains(
+                        "name: \"single-workload\"",
+                        "topics: 3",
+                        "partitionsPerTopic: 2",
+                        "messageSize: 1024");
 
         Workload workload = YAML_MAPPER.readValue(generatedFile.toFile(), Workload.class);
 
@@ -166,6 +168,8 @@ class WorkloadGenerationToolTest {
                 messageSizeDistribution:
                   "32": 100
                 backlogDrainRatio: 0.25
+                thresholds:
+                  maxPublishLatency99Ms: 25
                 """);
 
         WorkloadGenerationTool.main(
@@ -186,6 +190,7 @@ class WorkloadGenerationToolTest {
         assertThat(workload.producerRate).isEqualTo(10000);
         assertThat(workload.messageSizeDistribution).isNull();
         assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+        assertThat(workload.thresholds).isNull();
     }
 
     @Test

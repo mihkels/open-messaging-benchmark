@@ -103,6 +103,36 @@
       },
       "additionalProperties": false
     },
+    "thresholds": {
+      "type": "object",
+      "required": ["status", "checks"],
+      "properties": {
+        "status": {
+          "enum": ["PASS", "FAIL"]
+        },
+        "checks": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "required": ["limit", "observed", "status"],
+            "properties": {
+              "limit": {
+                "type": "number"
+              },
+              "observed": {
+                "type": "number"
+              },
+              "status": {
+                "enum": ["PASS", "FAIL"]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "histograms": {
       "type": "object",
       "properties": {

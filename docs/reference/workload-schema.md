@@ -40,6 +40,7 @@ for explanations and examples.
 | `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                |
 | `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                              |
 | `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                  |
+| `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                              |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -77,6 +78,21 @@ messageSizeDistribution:
 | `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                      |
 | Invalid distribution range or weight                                                                | An error naming the range or weight                            |
 | `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                |
+| `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`          |
+
+## Thresholds
+
+The optional `thresholds` block fails the run when any configured check is not met:
+
+```yaml
+thresholds:
+  maxPublishLatency99Ms: 25
+  minThroughputRatio: 0.95
+```
+
+`maxPublishLatency99Ms` is compared with the aggregated measured publish p99 latency in milliseconds.
+`minThroughputRatio` is the minimum measured average publish rate divided by the configured
+`producerRate`; it requires a positive `producerRate`. Warm-up statistics are excluded.
 
 ## Example
 

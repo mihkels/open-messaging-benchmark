@@ -54,6 +54,13 @@ The `summary` object contains headline values for the measured window, after war
 | `maxBacklog`        | integer | Maximum sampled backlog during the measured window                  |
 | `targetRate`        | number  | Configured or discovered target publish rate, messages per second   |
 
+## Threshold evaluation
+
+The optional `thresholds` object is present when the workload defines threshold checks. It contains
+the overall `status` (`PASS` or `FAIL`) and one entry per configured check with its `limit`,
+`observed` value and individual `status`. The latency check uses aggregated publish p99 in
+milliseconds; the throughput ratio is measured average publish rate divided by target rate.
+
 ## Optional histograms
 
 `histograms` is omitted unless the coordinator is run with `--include-histograms`. When present, it

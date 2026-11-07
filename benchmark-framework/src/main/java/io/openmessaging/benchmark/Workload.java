@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.Map;
@@ -75,6 +76,9 @@ public class Workload {
 
     public int warmupDurationMinutes = 1;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Thresholds thresholds;
+
     /**
      * The message size used for backlog and result calculations.
      *
@@ -92,6 +96,9 @@ public class Workload {
      * @throws IllegalArgumentException if the workload is invalid
      */
     public void validate() {
+        if (thresholds != null) {
+            thresholds.validate(this);
+        }
         if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
             throw new IllegalArgumentException("Randomized payload pool size must be positive");
         }

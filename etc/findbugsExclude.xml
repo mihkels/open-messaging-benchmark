@@ -163,6 +163,11 @@
     <Class name="io.openmessaging.benchmark.worker.WorkerStats" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
+  <!-- Thresholds fields are populated by Jackson from the workload YAML. -->
+  <Match>
+    <Class name="io.openmessaging.benchmark.Thresholds" />
+    <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
+  </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.driver.ResourceCreator" />
     <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE" />

@@ -25,10 +25,10 @@ import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
 import java.nio.file.Path;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +43,7 @@ import tools.jackson.databind.ObjectWriter;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class Benchmark {
+    static final int THRESHOLD_FAILURE_EXIT_CODE = 2;
 
     static class Arguments {
 
@@ -106,6 +107,29 @@ public final class Benchmark {
     }
 
     static void main(String[] args) throws Exception {
+        final Arguments arguments = parseArguments(args);
+        resolveWorkers(arguments);
+
+        // Dump configuration variables
+        if (log.isInfoEnabled()) {
+            log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
+        }
+
+        Map<String, Workload> workloads = readWorkloads(arguments.workloads);
+        if (log.isInfoEnabled()) {
+            log.info("Workloads: {}", writer.writeValueAsString(workloads));
+        }
+
+        Worker worker = createWorker(arguments);
+        try {
+            runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+        } catch (ThresholdFailureException _) {
+            System.exit(thresholdFailureExitCode());
+        }
+    }
+
+    // Parses and validates the command line; exits for --help, --csv and invalid arguments
+    private static Arguments parseArguments(String[] args) {
         final Arguments arguments = new Arguments();
         var jc = new JCommander(arguments);
         jc.setProgramName("messaging-benchmark");
@@ -113,9 +137,7 @@ public final class Benchmark {
         try {
             jc.parse(args);
         } catch (ParameterException e) {
-            System.err.println(e.getMessage());
-            jc.usage();
-            System.exit(-1);
+            exitWithUsage(jc, e.getMessage());
         }
 
         if (arguments.help) {
@@ -131,21 +153,26 @@ public final class Benchmark {
 
         // Not required by JCommander because --csv needs neither
         if (arguments.workloads == null || arguments.workloads.isEmpty()) {
-            System.err.println("At least one workload file is required");
-            jc.usage();
-            System.exit(-1);
+            exitWithUsage(jc, "At least one workload file is required");
         }
         if (arguments.drivers == null || arguments.drivers.isEmpty()) {
-            System.err.println("At least one driver must be given with --drivers");
-            jc.usage();
-            System.exit(-1);
+            exitWithUsage(jc, "At least one driver must be given with --drivers");
         }
-
         if (arguments.workers != null && arguments.workersFile != null) {
-            System.err.println("Only one between --workers and --workers-file can be specified");
+            log.error("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
         }
+        return arguments;
+    }
 
+    private static void exitWithUsage(JCommander jc, String message) {
+        log.error(message);
+        jc.usage();
+        System.exit(-1);
+    }
+
+    // Fills the worker list from --workers-file, or from workers.yaml when no workers are given
+    private static void resolveWorkers(Arguments arguments) {
         if (arguments.workers == null && arguments.workersFile == null) {
             var defaultFile = new File("workers.yaml");
             if (defaultFile.exists()) {
@@ -159,12 +186,12 @@ public final class Benchmark {
             Workers workers = workersReader.readValue(arguments.workersFile);
             arguments.workers = workers.workers;
         }
+    }
 
-        // Dump configuration variables
-        log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
-
+    // Workloads keyed and ordered by file name without extension
+    private static Map<String, Workload> readWorkloads(List<String> paths) {
         Map<String, Workload> workloads = new TreeMap<>();
-        for (String path : arguments.workloads) {
+        for (String path : paths) {
             File file = new File(path);
             String name = file.getName().substring(0, file.getName().lastIndexOf('.'));
 
@@ -176,32 +203,30 @@ public final class Benchmark {
             }
             workloads.put(name, workload);
         }
+        return workloads;
+    }
 
-        log.info("Workloads: {}", writer.writeValueAsString(workloads));
-
-        Worker worker;
-
+    private static Worker createWorker(Arguments arguments) {
         if (arguments.workers != null && !arguments.workers.isEmpty()) {
             List<Worker> workers =
                     arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
-            worker = new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
             log.info("Using distributed workers ensemble");
             if (arguments.driverLocation != null) {
                 log.warn(
                         "--driver-location is ignored with remote workers; they load drivers from their"
                                 + " own installed plugin bundles");
             }
-        } else {
-            // Run the driver in a child JVM with only its plugin bundle on the classpath
-            worker =
-                    new ProcessWorker(
-                            arguments.driverLocation == null ? null : Path.of(arguments.driverLocation));
-            log.info("Using local driver process worker");
+            return new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
         }
-
-        runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+        // Run the driver in a child JVM with only its plugin bundle on the classpath
+        log.info("Using local driver process worker");
+        return new ProcessWorker(
+                arguments.driverLocation == null ? null : Path.of(arguments.driverLocation));
     }
 
+    // Throwable is caught on purpose here and in the helpers below: a failed workload, including an
+    // Error, is recorded and the worker is still stopped and closed before the failures are rethrown
+    @SuppressWarnings("java:S1181")
     static void runWorkloads(
             Arguments arguments,
             Map<String, Workload> workloads,
@@ -209,15 +234,11 @@ public final class Benchmark {
             GeneratorFactory generatorFactory)
             throws Exception {
         Throwable failures = null;
-        boolean safeToContinue = true;
+        boolean thresholdFailed = false;
         try {
-            try {
-                worker.stopAll();
-            } catch (Throwable e) {
-                failures = append(failures, e);
-                safeToContinue = canContinueAfterFailure(worker, null, e);
-                log.error("Failed to stop a previous workload", e);
-            }
+            Outcome initialStop = stopPreviousWorkload(worker);
+            failures = initialStop.failure();
+            boolean safeToContinue = initialStop.safeToContinue();
 
             for (Combination combination : combinations(workloads, arguments.drivers)) {
                 if (!safeToContinue) {
@@ -232,22 +253,44 @@ public final class Benchmark {
                                 worker,
                                 generatorFactory);
                 failures = append(failures, outcome.failure());
+                thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
             }
         } catch (Throwable e) {
             failures = append(failures, e);
             log.error("Failed to execute benchmark workloads", e);
         } finally {
-            try {
-                worker.close();
-            } catch (Throwable e) {
-                log.error("Failed to close benchmark worker", e);
-                failures = append(failures, e);
-            }
+            failures = closeWorker(worker, failures);
         }
         if (failures != null) {
             throw new IllegalStateException(
                     "One or more workloads or required cleanup operations failed", failures);
+        }
+        if (thresholdFailed) {
+            throw new ThresholdFailureException();
+        }
+    }
+
+    // Stops anything a previous run left on the worker
+    @SuppressWarnings("java:S1181")
+    private static Outcome stopPreviousWorkload(Worker worker) {
+        try {
+            worker.stopAll();
+            return new Outcome(null, true, false);
+        } catch (Throwable e) {
+            log.error("Failed to stop a previous workload", e);
+            return new Outcome(e, canContinueAfterFailure(worker, null, e), false);
+        }
+    }
+
+    @SuppressWarnings("java:S1181")
+    private static Throwable closeWorker(Worker worker, Throwable failures) {
+        try {
+            worker.close();
+            return failures;
+        } catch (Throwable e) {
+            log.error("Failed to close benchmark worker", e);
+            return append(failures, e);
         }
     }
 
@@ -265,8 +308,9 @@ public final class Benchmark {
      *
      * @param failure the run or cleanup failure, or {@code null}
      * @param safeToContinue whether the worker can run the next combination
+     * @param thresholdFailed whether the run completed but failed an SLO threshold
      */
-    private record Outcome(Throwable failure, boolean safeToContinue) {}
+    private record Outcome(Throwable failure, boolean safeToContinue, boolean thresholdFailed) {}
 
     // Workloads in name order, each with every driver in the order given
     private static List<Combination> combinations(
@@ -279,6 +323,7 @@ public final class Benchmark {
     }
 
     // Runs one combination and always stops the worker afterwards, so the next one starts clean
+    @SuppressWarnings("java:S1181")
     private static Outcome runOne(
             Combination combination,
             String output,
@@ -289,6 +334,7 @@ public final class Benchmark {
         WorkloadRun generator = null;
         Throwable failure = null;
         boolean safeToContinue = true;
+        boolean thresholdFailed = false;
         try {
             Map<String, Object> driverConfig =
                     driverConfigReader.readValue(new File(combination.driverConfig()));
@@ -316,6 +362,11 @@ public final class Benchmark {
                             worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                             workload,
                             driverConfig);
+            if (workload.thresholds != null) {
+                result.thresholds = workload.thresholds.evaluate(result);
+                result.thresholds.print();
+                thresholdFailed = !result.thresholds.passed();
+            }
             String fileName =
                     resultFileName(
                             output,
@@ -351,7 +402,7 @@ public final class Benchmark {
                     combination.driverConfig(),
                     failure);
         }
-        return new Outcome(failure, safeToContinue);
+        return new Outcome(failure, safeToContinue, thresholdFailed);
     }
 
     // The explicit output file, or a generated name in the results directory. Without a results
@@ -361,7 +412,7 @@ public final class Benchmark {
         if (output != null && !output.isEmpty()) {
             return output;
         }
-        String timestamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new Date());
+        String timestamp = LocalDateTime.now().format(RESULT_TIMESTAMP);
         String fileName = String.format("%s-%s-%s.json", workloadFileName, driverName, timestamp);
         if (resultsDirectory == null || resultsDirectory.isEmpty()) {
             return fileName;
@@ -374,6 +425,7 @@ public final class Benchmark {
         WorkloadRun create(String driverName, Workload workload, Worker worker);
     }
 
+    @SuppressWarnings("java:S1181")
     private static boolean canContinueAfterFailure(
             Worker worker, WorkloadRun generator, Throwable failure) {
         if (failure instanceof Error) {
@@ -404,6 +456,19 @@ public final class Benchmark {
 
     private static final Logger log = LoggerFactory.getLogger(Benchmark.class);
 
+    private static final DateTimeFormatter RESULT_TIMESTAMP =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
+
     // Directory for result files written without --output, for example in a read-only container
     static final String RESULTS_DIR_ENV = "OMB_RESULTS_DIR";
+
+    static final class ThresholdFailureException extends RuntimeException {
+        ThresholdFailureException() {
+            super("One or more workload threshold checks failed");
+        }
+    }
+
+    static int thresholdFailureExitCode() {
+        return THRESHOLD_FAILURE_EXIT_CODE;
+    }
 }

@@ -13,8 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.rabbitmq;
 
-import static java.util.stream.Collectors.toList;
-
 import com.rabbitmq.client.Address;
 import com.rabbitmq.client.AlreadyClosedException;
 import com.rabbitmq.client.BuiltinExchangeType;
@@ -228,7 +226,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                                     Stream.concat(Stream.of(p), config.amqpUris.stream().filter(s -> !s.equals(p)))
                                             .map(s -> newURI(s))
                                             .map(u -> new Address(u.getHost(), u.getPort()))
-                                            .collect(toList());
+                                            .toList();
                             try {
                                 ConnectionFactory connectionFactory = new ConnectionFactory();
                                 connectionFactory.setAutomaticRecoveryEnabled(true);

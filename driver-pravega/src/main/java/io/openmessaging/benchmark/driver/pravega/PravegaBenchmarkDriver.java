@@ -56,7 +56,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = readConfig(configurationFile);
-        log.info("Pravega driver configuration: {}", objectWriter.writeValueAsString(config));
+        log.atInfo()
+                .setMessage("Pravega driver configuration: {}")
+                .addArgument(() -> objectWriter.writeValueAsString(config))
+                .log();
 
         ClientConfig clientConfig =
                 ClientConfig.builder().controllerURI(URI.create(config.client().controllerURI())).build();
@@ -118,9 +121,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
                     && (config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
                             || config.kbytesPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE)) {
                 scalingPolicy =
-                        config.eventsPerSecond() != PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
-                                ? ScalingPolicy.byEventRate(config.eventsPerSecond(), 2, partitions)
-                                : ScalingPolicy.byDataRate(config.kbytesPerSecond(), 2, partitions);
+                        config.eventsPerSecond() == PravegaConfig.DEFAULT_STREAM_AUTOSCALING_VALUE
+                                ? ScalingPolicy.byDataRate(config.kbytesPerSecond(), 2, partitions)
+                                : ScalingPolicy.byEventRate(config.eventsPerSecond(), 2, partitions);
             } else {
                 scalingPolicy = ScalingPolicy.fixed(partitions);
             }
@@ -254,10 +257,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         if (resource != null) {
             try {
                 resource.close();
+            } catch (InterruptedException closeFailure) {
+                Thread.currentThread().interrupt();
+                return addFailure(failure, closeFailure);
             } catch (Exception closeFailure) {
-                if (closeFailure instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
                 return addFailure(failure, closeFailure);
             }
         }

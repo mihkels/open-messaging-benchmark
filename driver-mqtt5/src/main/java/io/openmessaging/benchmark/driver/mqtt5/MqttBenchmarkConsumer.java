@@ -27,8 +27,6 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
     private final CompletableFuture<Void> closeCompletion = new CompletableFuture<>();
     private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
 
-    public MqttBenchmarkConsumer() {}
-
     @Override
     public void close() throws Exception {
         if (Boolean.TRUE.equals(inCallback.get())) {

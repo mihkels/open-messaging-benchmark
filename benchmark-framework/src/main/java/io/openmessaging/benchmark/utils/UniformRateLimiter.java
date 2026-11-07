@@ -29,9 +29,13 @@ public final class UniformRateLimiter {
             AtomicLongFieldUpdater.newUpdater(UniformRateLimiter.class, "virtualTime");
     private static final AtomicLongFieldUpdater<UniformRateLimiter> START_UPDATER =
             AtomicLongFieldUpdater.newUpdater(UniformRateLimiter.class, "start");
-    private static final double ONE_SEC_IN_NS = SECONDS.toNanos(1);
+    private static final double ONE_SEC_IN_NS = (double) SECONDS.toNanos(1);
     private volatile long start = Long.MIN_VALUE;
+
+    // Updated only through V_TIME_UPDATER
+    @SuppressWarnings("java:S1068")
     private volatile long virtualTime;
+
     private final double opsPerSec;
     private final long intervalNs;
     private final Supplier<Long> nanoClock;
@@ -62,15 +66,15 @@ public final class UniformRateLimiter {
 
     public long acquire() {
         final long currOpIndex = V_TIME_UPDATER.getAndIncrement(this);
-        long start = this.start;
-        if (start == Long.MIN_VALUE) {
-            start = nanoClock.get();
-            if (!START_UPDATER.compareAndSet(this, Long.MIN_VALUE, start)) {
-                start = this.start;
-                assert start != Long.MIN_VALUE;
+        long startNs = this.start;
+        if (startNs == Long.MIN_VALUE) {
+            startNs = nanoClock.get();
+            if (!START_UPDATER.compareAndSet(this, Long.MIN_VALUE, startNs)) {
+                startNs = this.start;
+                assert startNs != Long.MIN_VALUE;
             }
         }
-        return start + currOpIndex * intervalNs;
+        return startNs + currOpIndex * intervalNs;
     }
 
     public static void interruptibleSleepNs(final long intendedTime) throws InterruptedException {

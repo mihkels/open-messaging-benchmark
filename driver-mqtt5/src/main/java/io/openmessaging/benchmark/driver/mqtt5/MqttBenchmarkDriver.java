@@ -50,7 +50,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -79,7 +79,10 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
-        log.info("MqttBenchmarkDriver configuration: {}", writer.writeValueAsString(config));
+        log.atInfo()
+                .setMessage("MqttBenchmarkDriver configuration: {}")
+                .addArgument(() -> writer.writeValueAsString(config))
+                .log();
     }
 
     @Override
@@ -222,7 +225,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+    Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
         return getClientBuilder(clientId, closed).buildAsync();
     }
 
@@ -231,7 +234,9 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                 .connectWith()
                 .cleanStart(config.consumer.cleanSession)
                 .sessionExpiryInterval(
-                        config.consumer.cleanSession ? 0 : config.consumer.sessionExpiryInterval)
+                        Boolean.TRUE.equals(config.consumer.cleanSession)
+                                ? 0
+                                : config.consumer.sessionExpiryInterval)
                 .restrictions()
                 .receiveMaximum(config.consumer.receiveMaximum)
                 .applyRestrictions()
@@ -287,7 +292,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return null;
     }
 
-    private Mqtt5ClientBuilder getClientBuilder(String clientId, Supplier<Boolean> closed) {
+    private Mqtt5ClientBuilder getClientBuilder(String clientId, BooleanSupplier closed) {
         HostAndPort hostAndPort = parseServerUri(this.config.client.serverUri);
         Mqtt5ClientBuilder clientBuilder =
                 Mqtt5Client.builder()
@@ -334,7 +339,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                                     context.getClientConfig().getServerAddress(),
                                     context.getSource().name(),
                                     context.getCause());
-                            if (closed.get()) {
+                            if (closed.getAsBoolean()) {
                                 log.warn(
                                         "Client[{}] stops reconnecting to MQTT broker since the client"
                                                 + " wasn't created successfully or has been stopped already",

@@ -20,7 +20,7 @@ public record PravegaWriterConfig(boolean enableConnectionPooling) {
     @JsonCreator
     public PravegaWriterConfig(
             @JsonProperty("enableConnectionPooling") Boolean enableConnectionPooling) {
-        this(enableConnectionPooling != null ? enableConnectionPooling : true);
+        this(enableConnectionPooling == null || enableConnectionPooling);
     }
 
     public PravegaWriterConfig() {

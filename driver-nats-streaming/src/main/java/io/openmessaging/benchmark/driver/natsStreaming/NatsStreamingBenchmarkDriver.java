@@ -14,8 +14,6 @@
 package io.openmessaging.benchmark.driver.natsStreaming;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.nats.streaming.Message;
-import io.nats.streaming.MessageHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
 import io.nats.streaming.StreamingConnection;
@@ -33,13 +31,12 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.LoggerFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
-    private static final String defaultClusterId = "test-cluster";
+    private static final String DEFAULT_CLUSTER_ID = "test-cluster";
     private final ConnectionFactory connectionFactory;
     private String clusterId;
-    private NatsStreamingClientConfig config;
     private StreamingConnection natsStreamingPublisher;
-    private SubscriptionOptions.Builder subBuilder = new SubscriptionOptions.Builder();
-    private Options.Builder optsBuilder = new Options.Builder();
+    private final SubscriptionOptions.Builder subBuilder = new SubscriptionOptions.Builder();
+    private final Options.Builder optsBuilder = new Options.Builder();
     private volatile boolean closed;
 
     public NatsStreamingBenchmarkDriver() {
@@ -58,12 +55,13 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
-        config = DriverConfigs.read(configurationFile, NatsStreamingClientConfig.class);
-        log.info("read config file," + config.toString());
+        NatsStreamingClientConfig config =
+                DriverConfigs.read(configurationFile, NatsStreamingClientConfig.class);
+        log.info("read config file, {}", config);
         if (config.clusterId != null) {
             clusterId = config.clusterId;
         } else {
-            clusterId = defaultClusterId;
+            clusterId = DEFAULT_CLUSTER_ID;
         }
         if (config.natsHostUrl != null) {
             optsBuilder.natsUrl(config.natsHostUrl);
@@ -81,7 +79,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        log.info("nats streaming create a topic" + topic);
+        log.info("nats streaming create a topic {}", topic);
         log.info("ignore partitions");
         CompletableFuture<Void> future = new CompletableFuture<>();
         future.complete(null);
@@ -126,14 +124,10 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
             streamingConnection.subscribe(
                     topic,
                     subscriptionName,
-                    new MessageHandler() {
-                        @Override
-                        public void onMessage(Message message) {
-                            // NATS Streaming timestamps are nanoseconds since the epoch
+                    // NATS Streaming timestamps are nanoseconds since the epoch
+                    message ->
                             consumerCallback.messageReceived(
-                                    message.getData(), TimeUnit.NANOSECONDS.toMillis(message.getTimestamp()));
-                        }
-                    },
+                                    message.getData(), TimeUnit.NANOSECONDS.toMillis(message.getTimestamp())),
                     subBuilder.build());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {

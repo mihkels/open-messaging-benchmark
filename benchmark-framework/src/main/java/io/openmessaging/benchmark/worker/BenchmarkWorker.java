@@ -88,7 +88,10 @@ public final class BenchmarkWorker {
         new JvmResourceMetrics().bindTo(prometheusRegistry, "supervisor");
 
         // Dump configuration variables
-        log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
+        log.atInfo()
+                .setMessage("Starting benchmark with config: {}")
+                .addArgument(() -> writer.writeValueAsString(arguments))
+                .log();
 
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();

@@ -106,7 +106,7 @@ public class WorkerStats {
         totalMessagesReceived.increment();
         messagesReceivedCounter.increment();
         bytesReceived.add(payloadLength);
-        bytesReceivedCounter.increment(payloadLength);
+        bytesReceivedCounter.increment((double) payloadLength);
         endToEndLatency.record(endToEndLatencyMicros);
     }
 
@@ -171,7 +171,7 @@ public class WorkerStats {
         totalMessagesSent.increment();
         messagesSentCounter.increment();
         bytesSent.add(payloadLength);
-        bytesSentCounter.increment(payloadLength);
+        bytesSentCounter.increment((double) payloadLength);
         publishLatency.record(TimeUnit.NANOSECONDS.toMicros(nowNs - sendTimeNs));
         publishDelayLatency.record(TimeUnit.NANOSECONDS.toMicros(sendTimeNs - intendedSendTimeNs));
         publishScheduleLatency.record(TimeUnit.NANOSECONDS.toMicros(nowNs - intendedSendTimeNs));

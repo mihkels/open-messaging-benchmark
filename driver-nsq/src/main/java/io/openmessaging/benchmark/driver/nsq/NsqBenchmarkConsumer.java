@@ -198,7 +198,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             if (failure != null) {
                 closeResult.completeExceptionally(failure);
             } else {
-                closedFinished.whenComplete((closed, closeFailure) -> complete(closeResult, closeFailure));
+                closedFinished.whenComplete((_, closeFailure) -> complete(closeResult, closeFailure));
             }
         });
         CompletableFuture.allOf(initializationFinished, resultCallbacksFinished)
@@ -552,23 +552,6 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             startClosing(closing, failure, true, Thread.currentThread(), false);
             creation.completeExceptionally(failure);
         }
-    }
-
-    private void abandonStartup() {
-        if (!abandonmentRequested.compareAndSet(false, true)) {
-            return;
-        }
-        CancellationException failure =
-                new CancellationException("NSQ consumer creation was abandoned");
-        Thread initiator = Thread.currentThread();
-        daemonFactory("nsq-consumer-abandon", null)
-                .newThread(() -> {
-                    Closing closing = beginClose(true, failure);
-                    if (closing != null) {
-                        startClosing(closing, failure, true, initiator, true);
-                    }
-                })
-                .start();
     }
 
     private Closing beginClose(boolean onlyStarting, Throwable failure) {
@@ -981,7 +964,20 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
 
         @Override
         public void abandonCreation() {
-            abandonStartup();
+            if (!abandonmentRequested.compareAndSet(false, true)) {
+                return;
+            }
+            CancellationException failure =
+                    new CancellationException("NSQ consumer creation was abandoned");
+            Thread initiator = Thread.currentThread();
+            daemonFactory("nsq-consumer-abandon", null)
+                    .newThread(() -> {
+                        Closing closing = beginClose(true, failure);
+                        if (closing != null) {
+                            startClosing(closing, failure, true, initiator, true);
+                        }
+                    })
+                    .start();
         }
 
         @Override

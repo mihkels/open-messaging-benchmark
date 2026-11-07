@@ -50,7 +50,7 @@ public final class JvmResourceMetrics {
                                 .filter(b -> "direct".equals(b.getName()))
                                 .mapToLong(BufferPoolMXBean::getMemoryUsed)
                                 .sum());
-        readings.put("platform_threads", () -> threads.getThreadCount());
+        readings.put("platform_threads", threads::getThreadCount);
         readings.put(
                 "gc_count",
                 () ->

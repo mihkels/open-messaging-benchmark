@@ -223,8 +223,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      *
      * @param currentRate
      */
-    private void findMaximumSustainableRate(double currentRate)
-            throws IOException, InterruptedException {
+    private void findMaximumSustainableRate(double currentRate) throws InterruptedException {
         long lastControlTimestamp = System.nanoTime();
 
         RateController rateController = new RateController();
@@ -365,7 +364,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         return quiescentAfterClose;
     }
 
-    private void createConsumers(List<String> topics) throws IOException {
+    private void createConsumers(List<String> topics) {
         ConsumerAssignment consumerAssignment = new ConsumerAssignment();
 
         for (String topic : topics) {
@@ -390,7 +389,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                 timer.elapsedMillis());
     }
 
-    private void createProducers(List<String> topics) throws IOException {
+    private void createProducers(List<String> topics) {
         List<String> fullListOfTopics = new ArrayList<>();
 
         // Add the topic multiple times, one for each producer
@@ -406,8 +405,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         log.info("Created {} producers in {} ms", fullListOfTopics.size(), timer.elapsedMillis());
     }
 
-    private void buildAndDrainBacklog(int testDurationMinutes)
-            throws IOException, InterruptedException {
+    private void buildAndDrainBacklog(int testDurationMinutes) throws InterruptedException {
         Timer timer = new Timer();
         log.info("Stopping all consumers to build backlog");
         worker.pauseConsumers();

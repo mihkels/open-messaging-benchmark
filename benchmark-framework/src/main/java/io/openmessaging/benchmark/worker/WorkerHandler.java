@@ -148,7 +148,10 @@ public class WorkerHandler implements AutoCloseable {
 
     private void handleCreateTopics(Context ctx) {
         TopicsInfo topicsInfo = mapper.readValue(ctx.body(), TopicsInfo.class);
-        log.info("Received create topics request for topics: {}", ctx.body());
+        log.atInfo()
+                .setMessage("Received create topics request for topics: {}")
+                .addArgument(() -> ctx.body())
+                .log();
         List<String> topics = worker.createTopics(topicsInfo);
         ctx.result(writer.writeValueAsString(topics));
     }

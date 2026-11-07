@@ -26,6 +26,8 @@ import org.slf4j.LoggerFactory;
 
 /** Prepares the payloads a workload's producers send. */
 final class PayloadFactory {
+    // Logged under the generator's name, which log configurations and users already know
+    @SuppressWarnings("java:S3416")
     private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
 
     /**

@@ -190,8 +190,7 @@ public final class PluginRegistry {
 
     public static Path home() {
         String home = System.getProperty(HOME_PROPERTY, System.getenv(HOME_ENV));
-        Path path = home == null || home.isBlank() ? Path.of("") : Path.of(home);
-        return path.toAbsolutePath().normalize();
+        return Path.of(home == null || home.isBlank() ? "" : home).toAbsolutePath().normalize();
     }
 
     public List<PluginBundle> bundles() {

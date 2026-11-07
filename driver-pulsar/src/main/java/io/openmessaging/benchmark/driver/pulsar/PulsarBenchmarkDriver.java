@@ -62,6 +62,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     private volatile ProducerBuilder<byte[]> producerBuilder;
 
     @Override
+    // The configuration is logged once per run, so eager formatting costs nothing measurable
+    @SuppressWarnings("java:S2629")
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         this.config = readConfig(configurationFile);
         log.info("Pulsar driver configuration: {}", writer.writeValueAsString(config));
@@ -300,5 +302,5 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
-    private static final Logger log = LoggerFactory.getLogger(PulsarBenchmarkProducer.class);
+    private static final Logger log = LoggerFactory.getLogger(PulsarBenchmarkDriver.class);
 }

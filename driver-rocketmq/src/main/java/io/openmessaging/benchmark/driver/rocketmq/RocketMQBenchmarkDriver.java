@@ -112,19 +112,20 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                     RemotingTimeoutException,
                     MQBrokerException,
                     InterruptedException {
-        Set<String> brokerList = cachedBrokerAddr.get(clusterName);
-        if (brokerList == null) {
-            brokerList =
-                    CommandUtil.fetchMasterAndSlaveAddrByClusterName(
-                            adminExt, this.rmqClientConfig.clusterName);
-            cachedBrokerAddr.put(clusterName, brokerList);
-            if (brokerList.isEmpty()) {
-                throw new RuntimeException("get brokerAddr return null, clusterName: " + clusterName);
-            }
-        }
         if (fetchCnt++ % 100 == 0) {
-            log.info("fetch brokerAddr count: " + fetchCnt);
+            log.info("fetch brokerAddr count: {}", fetchCnt);
         }
+        Set<String> cached = cachedBrokerAddr.get(clusterName);
+        if (cached != null) {
+            return cached;
+        }
+        Set<String> brokerList =
+                CommandUtil.fetchMasterAndSlaveAddrByClusterName(
+                        adminExt, this.rmqClientConfig.clusterName);
+        if (brokerList.isEmpty()) {
+            throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
+        }
+        cachedBrokerAddr.put(clusterName, brokerList);
         return brokerList;
     }
 

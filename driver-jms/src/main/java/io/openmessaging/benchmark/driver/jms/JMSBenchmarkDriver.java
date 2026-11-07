@@ -99,7 +99,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         try {
             Constructor<ConnectionFactory> constructor = clazz.getConstructor(String.class);
             return constructor.newInstance(config.connectionFactoryConfigurationParam);
-        } catch (NoSuchMethodException ignore) {
+        } catch (NoSuchMethodException _) {
         }
 
         // constructor with Properties (like Confluent Kafka)
@@ -111,7 +111,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                     mapper.readValue(new StringReader(config.connectionFactoryConfigurationParam), Map.class);
             props.putAll(map);
             return constructor.newInstance(props);
-        } catch (NoSuchMethodException ignore) {
+        } catch (NoSuchMethodException _) {
         }
 
         throw new RuntimeException("Cannot find a suitable constructor for " + clazz);

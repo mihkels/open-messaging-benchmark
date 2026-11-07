@@ -66,7 +66,7 @@ class RedisBenchmarkConsumerTest {
                         try {
                             release.await();
                             break;
-                        } catch (InterruptedException e) {
+                        } catch (InterruptedException _) {
                             interrupted = true;
                         }
                     }
@@ -246,7 +246,7 @@ class RedisBenchmarkConsumerTest {
                     blocked.countDown();
                     try {
                         new CountDownLatch(1).await();
-                    } catch (InterruptedException interrupted) {
+                    } catch (InterruptedException _) {
                         throw failure;
                     }
                     return List.of();
@@ -378,7 +378,7 @@ class RedisBenchmarkConsumerTest {
                         try {
                             release.await();
                             return List.of();
-                        } catch (InterruptedException ignored) {
+                        } catch (InterruptedException _) {
                             // Simulate a client call that ignores interruption.
                         }
                     }

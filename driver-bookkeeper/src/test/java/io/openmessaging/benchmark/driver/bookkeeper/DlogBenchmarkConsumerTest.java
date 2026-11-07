@@ -430,7 +430,7 @@ class DlogBenchmarkConsumerTest {
                         throw new AssertionError("timed out waiting for test coordination");
                     }
                     return;
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     interrupted = true;
                 }
             }

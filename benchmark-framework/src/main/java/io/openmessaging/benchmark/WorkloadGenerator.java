@@ -295,7 +295,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         try {
             controllerFailureSignal.get(reportIntervalNanos, TimeUnit.NANOSECONDS);
             checkControllerFailure();
-        } catch (TimeoutException ignored) {
+        } catch (TimeoutException _) {
             checkControllerFailure();
         } catch (ExecutionException e) {
             throw new IOException("Could not monitor workload controllers", e.getCause());

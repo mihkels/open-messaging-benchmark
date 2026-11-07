@@ -44,7 +44,7 @@ class HttpWorkerClientLifecycleTest {
                                     try {
                                         release.await();
                                         break;
-                                    } catch (InterruptedException ignoredInterrupt) {
+                                    } catch (InterruptedException _) {
                                         // Simulate a client that does not respond to cancellation.
                                     }
                                 }
@@ -86,7 +86,7 @@ class HttpWorkerClientLifecycleTest {
                             entered.countDown();
                             try {
                                 release.await();
-                            } catch (InterruptedException ignoredInterrupt) {
+                            } catch (InterruptedException _) {
                                 // Simulate an interruptible client close.
                             } finally {
                                 exited.countDown();

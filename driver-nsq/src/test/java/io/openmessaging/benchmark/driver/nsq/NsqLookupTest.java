@@ -102,7 +102,7 @@ class NsqLookupTest {
                     try {
                         release.await();
                         respond(exchange, "{\"producers\":[]}");
-                    } catch (InterruptedException interrupted) {
+                    } catch (InterruptedException _) {
                         Thread.currentThread().interrupt();
                     } finally {
                         exchange.close();

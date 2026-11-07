@@ -185,7 +185,7 @@ class NsqBenchmarkProducerTest {
                             entered.countDown();
                             try {
                                 new CountDownLatch(1).await();
-                            } catch (InterruptedException ignored) {
+                            } catch (InterruptedException _) {
                                 // The NSQ client can swallow interruption and return normally.
                             }
                             return null;
@@ -229,7 +229,7 @@ class NsqBenchmarkProducerTest {
                                 try {
                                     release.await();
                                     break;
-                                } catch (InterruptedException e) {
+                                } catch (InterruptedException _) {
                                     interrupted = true;
                                 }
                             }
@@ -349,7 +349,7 @@ class NsqBenchmarkProducerTest {
             occupied.countDown();
             try {
                 releaseWorker.await();
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         });

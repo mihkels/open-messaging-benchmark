@@ -276,9 +276,9 @@ class MqttBenchmarkDriverTest {
                             try (Socket first = broker.accept()) {
                                 acknowledgeConnection(first, 0x87);
                             }
-                            try (Socket second = broker.accept()) {
+                            try (Socket _ = broker.accept()) {
                                 return 2;
-                            } catch (SocketTimeoutException expected) {
+                            } catch (SocketTimeoutException _) {
                                 return 1;
                             }
                         });
@@ -325,9 +325,9 @@ class MqttBenchmarkDriverTest {
                                 acknowledgeConnection(first, 0);
                                 assertThat(first.getInputStream().read()).isEqualTo(0xe0);
                             }
-                            try (Socket second = broker.accept()) {
+                            try (Socket _ = broker.accept()) {
                                 return 2;
-                            } catch (SocketTimeoutException expected) {
+                            } catch (SocketTimeoutException _) {
                                 return 1;
                             }
                         });
@@ -387,7 +387,7 @@ class MqttBenchmarkDriverTest {
                         };
                 CompletableFuture<BenchmarkProducer> creation = driver.createProducer("topic");
                 try {
-                    try (BenchmarkProducer producer = creation.get(5, TimeUnit.SECONDS)) {
+                    try (BenchmarkProducer _ = creation.get(5, TimeUnit.SECONDS)) {
                         dropConnection.countDown();
                         assertThat(reconnected.await(5, TimeUnit.SECONDS)).isTrue();
                         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);

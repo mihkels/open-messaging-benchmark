@@ -89,8 +89,7 @@ class NatsStreamingE2eIT extends BaseE2eIT {
             String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(10, TimeUnit.SECONDS);
             try (var producer = driver.createProducer(topic).get(10, TimeUnit.SECONDS)) {
-                try (var consumer =
-                        driver.createConsumer(topic, "group", first).get(10, TimeUnit.SECONDS)) {
+                try (var _ = driver.createConsumer(topic, "group", first).get(10, TimeUnit.SECONDS)) {
                     long before = System.currentTimeMillis();
                     producer.sendAsync(Optional.empty(), firstPayload).get(10, TimeUnit.SECONDS);
                     MessageCapture.Delivery delivery = first.await();
@@ -98,8 +97,7 @@ class NatsStreamingE2eIT extends BaseE2eIT {
                     assertThat(delivery.timestamp()).isBetween(before, System.currentTimeMillis());
                 }
                 producer.sendAsync(Optional.empty(), offlinePayload).get(10, TimeUnit.SECONDS);
-                try (var consumer =
-                        driver.createConsumer(topic, "group", reconnected).get(10, TimeUnit.SECONDS)) {
+                try (var _ = driver.createConsumer(topic, "group", reconnected).get(10, TimeUnit.SECONDS)) {
                     producer.sendAsync(Optional.empty(), lastPayload).get(10, TimeUnit.SECONDS);
                     assertThat(reconnected.await().payload()).isEqualTo(lastPayload);
                 }

@@ -25,6 +25,7 @@ copyright: >
 strict: true
 
 exclude_docs: |
+  requirements.in
   requirements.txt
   demo/
 

@@ -67,7 +67,7 @@ Preview the documentation site, and build it strictly before opening a pull requ
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r docs/requirements.txt
+.venv/bin/pip install --require-hashes --only-binary :all: -r docs/requirements.txt
 .venv/bin/mkdocs serve
 ```
 

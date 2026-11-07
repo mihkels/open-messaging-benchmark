@@ -106,11 +106,10 @@ class KafkaBenchmarkDriverConfigTest {
                 commonConfig: [unterminated
                 """);
         KafkaBenchmarkDriver driver = new KafkaBenchmarkDriver();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
         try (MockedStatic<AdminClient> clients = mockStatic(AdminClient.class)) {
-            assertThrows(
-                    MismatchedInputException.class,
-                    () -> driver.initialize(configuration, new SimpleMeterRegistry()));
+            assertThrows(MismatchedInputException.class, () -> driver.initialize(configuration, registry));
             clients.verifyNoInteractions();
         }
     }

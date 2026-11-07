@@ -93,8 +93,7 @@ class ArtemisBenchmarkProducerTest {
 
         producer.close();
 
-        assertThat(send).isCompleted();
-        assertThat(send).isNotCompletedExceptionally();
+        assertThat(send).isCompleted().isNotCompletedExceptionally();
     }
 
     @Test

@@ -17,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -33,6 +32,7 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -46,7 +46,11 @@ import org.mockito.MockedConstruction;
 
 class KafkaBenchmarkDriverOwnershipTest {
     @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({
+        "rawtypes",
+        "unchecked",
+        "java:S2925"
+    }) // stubbed poll simulates a blocking broker call
     void driverClosesOnlySharedAdminAndCallerClosesHandedOffHandles() throws Exception {
         KafkaBenchmarkDriver driver = new KafkaBenchmarkDriver();
         AdminClient admin = mock(AdminClient.class);
@@ -73,7 +77,7 @@ class KafkaBenchmarkDriverOwnershipTest {
                                                 Thread.sleep(2);
                                                 return ConsumerRecords.empty();
                                             });
-                                    when(consumer.partitionsFor(eq("topic"), eq(Duration.ZERO)))
+                                    when(consumer.partitionsFor("topic", Duration.ZERO))
                                             .thenReturn(List.of(partition));
                                 })) {
             BenchmarkProducer producer = driver.createProducer("topic").join();
@@ -108,12 +112,8 @@ class KafkaBenchmarkDriverOwnershipTest {
                                 doThrow(cause)
                                         .when(consumer)
                                         .subscribe(anyCollection(), any(ConsumerRebalanceListener.class)))) {
-            assertSame(
-                    cause,
-                    assertThrows(
-                                    CompletionException.class,
-                                    () -> driver.createConsumer("topic", "group", null).join())
-                            .getCause());
+            CompletableFuture<BenchmarkConsumer> creation = driver.createConsumer("topic", "group", null);
+            assertSame(cause, assertThrows(CompletionException.class, creation::join).getCause());
             verify(consumers.constructed().get(0), times(1)).close();
         }
         driver.close();

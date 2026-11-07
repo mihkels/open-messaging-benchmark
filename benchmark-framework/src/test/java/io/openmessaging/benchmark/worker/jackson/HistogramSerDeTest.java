@@ -70,7 +70,7 @@ class HistogramSerDeTest {
                 ("\"" + Base64.getEncoder().encodeToString(oversizedEncoding) + "\"")
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
-        assertThat(oversizedEncoding.length).isGreaterThan(8 * 1024 * 1024);
+        assertThat(oversizedEncoding).hasSizeGreaterThan(8 * 1024 * 1024);
         assertThat(mapper.readValue(json, Histogram.class)).isEqualTo(histogram);
     }
 
@@ -120,7 +120,7 @@ class HistogramSerDeTest {
     }
 
     @Test
-    public void testHistogram() throws Exception {
+    void testHistogram() throws Exception {
 
         // in the worker it's 8 MB but it takes a while to make a histogram that big
         final int bufSize = 1002;
@@ -130,7 +130,6 @@ class HistogramSerDeTest {
         // we do an exponential search to fit the crossover point where we need to grow the buffer
         while (true) {
             byte[] serialBytes = serializeRandomHisto(samples, bufSize);
-            // System.out.println("Samples: " + samples + ", histogram size: " + serialBytes.length);
             if (serialBytes.length >= bufSize) {
                 break;
             }
@@ -142,7 +141,6 @@ class HistogramSerDeTest {
         while (true) {
             samples--;
             byte[] serialBytes = serializeRandomHisto(samples, bufSize);
-            // System.out.println("Samples: " + samples + ", histogram size: " + serialBytes.length);
             if (serialBytes.length < bufSize - 10) {
                 break;
             }

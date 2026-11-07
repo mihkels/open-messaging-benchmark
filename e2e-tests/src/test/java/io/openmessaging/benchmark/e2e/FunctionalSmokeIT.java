@@ -56,8 +56,9 @@ class FunctionalSmokeIT extends BaseE2eIT {
     @Test
     void failsAndStopsOnPublishErrors() {
         FakeWorker worker = new FakeWorker(new CountersStats(1, 1, 0));
-        assertThatThrownBy(
-                        () -> FunctionalSmoke.run(worker, createSimpleWorkload(), Duration.ofSeconds(1)))
+        Workload workload = createSimpleWorkload();
+        Duration timeout = Duration.ofSeconds(1);
+        assertThatThrownBy(() -> FunctionalSmoke.run(worker, workload, timeout))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("publish errors");
         assertThat(worker.stopped).isTrue();
@@ -66,8 +67,9 @@ class FunctionalSmokeIT extends BaseE2eIT {
     @Test
     void failsAndStopsWhenDeliveryDoesNotProgress() {
         FakeWorker worker = new FakeWorker(new CountersStats());
-        assertThatThrownBy(
-                        () -> FunctionalSmoke.run(worker, createSimpleWorkload(), Duration.ofMillis(20)))
+        Workload workload = createSimpleWorkload();
+        Duration timeout = Duration.ofMillis(20);
+        assertThatThrownBy(() -> FunctionalSmoke.run(worker, workload, timeout))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Timed out waiting");
         assertThat(worker.stopped).isTrue();
@@ -153,7 +155,9 @@ class FunctionalSmokeIT extends BaseE2eIT {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+            // no-op: fake worker holds no resources
+        }
 
         @Override
         public void probeProducers() {
@@ -181,7 +185,9 @@ class FunctionalSmokeIT extends BaseE2eIT {
         }
 
         @Override
-        public void resetStats() {}
+        public void resetStats() {
+            // no-op: fake worker keeps fixed counters
+        }
 
         @Override
         public String id() {

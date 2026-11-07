@@ -155,7 +155,9 @@ class NsqBenchmarkDriverTest {
                     }
 
                     @Override
-                    public void addLookupAddress(String address, int port) {}
+                    public void addLookupAddress(String address, int port) {
+                        // no-op: test stub
+                    }
                 };
         Path inModule = Path.of("nsq.yaml");
         Path config = Files.exists(inModule) ? inModule : Path.of("driver-nsq", "nsq.yaml");
@@ -202,7 +204,9 @@ class NsqBenchmarkDriverTest {
                     }
 
                     @Override
-                    public void addLookupAddress(String address, int port) {}
+                    public void addLookupAddress(String address, int port) {
+                        // no-op: test stub
+                    }
                 };
         Path inModule = Path.of("nsq.yaml");
         Path config = Files.exists(inModule) ? inModule : Path.of("driver-nsq", "nsq.yaml");
@@ -295,7 +299,9 @@ class NsqBenchmarkDriverTest {
                     }
 
                     @Override
-                    public void addLookupAddress(String address, int port) {}
+                    public void addLookupAddress(String address, int port) {
+                        // no-op: test stub
+                    }
                 };
         Path inModule = Path.of("nsq.yaml");
         Path config = Files.exists(inModule) ? inModule : Path.of("driver-nsq", "nsq.yaml");

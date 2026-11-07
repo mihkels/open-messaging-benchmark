@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.bookkeeper.stats;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,8 +103,7 @@ class StatsLoggerAdaptorTest {
         adaptor.unregisterGauge("depth", gauge);
         adaptor.unregisterGauge("missing", gauge);
         verify(delegate).unregisterGauge("depth", adaptedGauge.getValue());
-        verify(delegate, org.mockito.Mockito.never())
-                .unregisterGauge(eq("missing"), org.mockito.ArgumentMatchers.any());
+        verify(delegate, never()).unregisterGauge(eq("missing"), org.mockito.ArgumentMatchers.any());
 
         var adaptedScope = adaptor.scope("worker");
         adaptor.removeScope("worker", adaptedScope);

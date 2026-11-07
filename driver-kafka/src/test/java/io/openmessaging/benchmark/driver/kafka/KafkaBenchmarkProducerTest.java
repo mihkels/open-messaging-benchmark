@@ -222,7 +222,7 @@ class KafkaBenchmarkProducerTest {
     void cancellationReleasesCallerPayloadAndLateCallbackCannotResettleTheSend() throws Exception {
         Producer<String, byte[]> client = mock(Producer.class);
         KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
-        byte[] payload = new byte[] {1, 2};
+        byte[] payload = {1, 2};
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), payload);
         ArgumentCaptor<ProducerRecord> record = ArgumentCaptor.forClass(ProducerRecord.class);
         ArgumentCaptor<Callback> callback = ArgumentCaptor.forClass(Callback.class);

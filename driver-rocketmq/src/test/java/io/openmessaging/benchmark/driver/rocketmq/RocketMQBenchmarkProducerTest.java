@@ -259,7 +259,7 @@ class RocketMQBenchmarkProducerTest {
     }
 
     @Test
-    void closeInducedSendFailuresRejectReentrantCloseAndSettleAllSends() throws Exception {
+    void closeInducedSendFailuresRejectReentrantCloseAndSettleAllSends() {
         MQProducer client = mock(MQProducer.class);
         RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});

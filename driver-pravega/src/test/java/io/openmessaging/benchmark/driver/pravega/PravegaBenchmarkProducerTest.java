@@ -250,7 +250,7 @@ class PravegaBenchmarkProducerTest {
     }
 
     @Test
-    void undeclaredInterruptedWriterCloseStillSettlesSends() throws Exception {
+    void undeclaredInterruptedWriterCloseStillSettlesSends() {
         EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
         EventStreamWriter<ByteBuffer> writer = mock();
         when(factory.<ByteBuffer>createEventWriter(eq("stream"), any(), any())).thenReturn(writer);
@@ -396,7 +396,7 @@ class PravegaBenchmarkProducerTest {
     }
 
     @Test
-    void transactionalCloseClosesWriterWhenAbortFails() throws Exception {
+    void transactionalCloseClosesWriterWhenAbortFails() {
         EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
         TransactionalEventStreamWriter<ByteBuffer> writer = mock();
         Transaction<ByteBuffer> transaction = mock();

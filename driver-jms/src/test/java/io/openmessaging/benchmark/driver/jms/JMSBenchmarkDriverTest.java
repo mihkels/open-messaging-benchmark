@@ -131,8 +131,8 @@ public class JMSBenchmarkDriverTest {
         set(driver, "config", new JMSConfig());
         set(driver, "connection", connection);
 
-        CompletionException failure =
-                assertThrows(CompletionException.class, () -> driver.createProducer("topic").join());
+        CompletableFuture<BenchmarkProducer> producer = driver.createProducer("topic");
+        CompletionException failure = assertThrows(CompletionException.class, producer::join);
         assertSame(cause, failure.getCause());
         assertSame(closeFailure, cause.getSuppressed()[0]);
         assertEquals(1, sessionCloses.get());
@@ -193,10 +193,9 @@ public class JMSBenchmarkDriverTest {
         set(driver, "config", new JMSConfig());
         set(driver, "connectionFactory", factory);
 
-        CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () -> driver.createConsumer("topic", "subscription", null).join());
+        CompletableFuture<BenchmarkConsumer> creation =
+                driver.createConsumer("topic", "subscription", null);
+        CompletionException failure = assertThrows(CompletionException.class, creation::join);
         assertSame(cause, failure.getCause());
         assertEquals(1, consumerCloses.get());
         assertEquals(1, sessionCloses.get());
@@ -299,7 +298,7 @@ public class JMSBenchmarkDriverTest {
     }
 
     @Test
-    void initializationCleanupFailureIsSuppressedIntoTheCause() throws Exception {
+    void initializationCleanupFailureIsSuppressedIntoTheCause() {
         JMSException cause = new JMSException("start");
         JMSException closeFailure = new JMSException("close");
         TestFactory.nextConnection =
@@ -324,7 +323,7 @@ public class JMSBenchmarkDriverTest {
     }
 
     @Test
-    void initializationCleanupRethrowingTheCauseIsNotSuppressedIntoItself() throws Exception {
+    void initializationCleanupRethrowingTheCauseIsNotSuppressedIntoItself() {
         JMSException cause = new JMSException("broken connection");
         TestFactory.nextConnection =
                 proxy(
@@ -347,7 +346,7 @@ public class JMSBenchmarkDriverTest {
     }
 
     @Test
-    void interruptedAdminDelegateInitializationIsRethrown() throws Exception {
+    void interruptedAdminDelegateInitializationIsRethrown() {
         InterruptedException interruption = new InterruptedException("delegate");
         TestDelegate.initFailure = interruption;
         JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
@@ -577,7 +576,9 @@ public class JMSBenchmarkDriverTest {
         private static volatile InterruptedException initFailure;
         private CloseAction onClose = closes::incrementAndGet;
 
-        public TestDelegate() {}
+        public TestDelegate() {
+            // no-op: instantiated reflectively by the driver
+        }
 
         @Override
         public void initialize(Path configurationFile, MeterRegistry statsLogger)

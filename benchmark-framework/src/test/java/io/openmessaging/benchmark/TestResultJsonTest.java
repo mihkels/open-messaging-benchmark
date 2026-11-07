@@ -146,9 +146,11 @@ class TestResultJsonTest {
                 .containsEntry("password", "[REDACTED]")
                 .containsEntry("authToken", "[REDACTED]")
                 .containsEntry("saslJaasConfig", "[REDACTED]");
-        Map<?, ?> nested = (Map<?, ?>) redacted.get("nested");
-        assertThat(nested.get("clientSecret")).isEqualTo("[REDACTED]");
-        assertThat(nested.get("username")).isEqualTo("user");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) redacted.get("nested");
+        assertThat(nested)
+                .containsEntry("clientSecret", "[REDACTED]")
+                .containsEntry("username", "user");
     }
 
     private static void removeScheduleFields(ObjectNode json) {

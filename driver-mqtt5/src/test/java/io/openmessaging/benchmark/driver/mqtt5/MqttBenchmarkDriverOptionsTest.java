@@ -264,7 +264,8 @@ class MqttBenchmarkDriverOptionsTest {
 
     private static Mqtt5AsyncClient failingClient(Throwable failure, MqttClientState state) {
         Mqtt5AsyncClient client = mock(Mqtt5AsyncClient.class);
-        when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+        Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+        when(client.getConfig()).thenReturn(clientConfig);
         when(client.getState()).thenReturn(state);
         when(client.disconnect()).thenReturn(CompletableFuture.failedFuture(failure));
         return client;
@@ -291,7 +292,8 @@ class MqttBenchmarkDriverOptionsTest {
 
         StubDriver() {
             super(new MqttConfig());
-            when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+            Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+            when(client.getConfig()).thenReturn(clientConfig);
             when(client.disconnect()).thenReturn(CompletableFuture.completedFuture(null));
         }
 

@@ -98,7 +98,7 @@ class KafkaBenchmarkConsumerPollingTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void closeRethrowsClientCloseFailureAndIgnoresWakeupFailure() throws Exception {
+    void closeRethrowsClientCloseFailureAndIgnoresWakeupFailure() {
         KafkaConsumer<String, byte[]> client = mock(KafkaConsumer.class);
         when(client.poll(any(Duration.class))).thenReturn(ConsumerRecords.empty());
         IllegalStateException closeFailure = new IllegalStateException("close");

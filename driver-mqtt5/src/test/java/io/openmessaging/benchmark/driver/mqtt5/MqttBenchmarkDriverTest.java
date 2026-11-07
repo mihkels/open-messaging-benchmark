@@ -93,7 +93,8 @@ class MqttBenchmarkDriverTest {
         when(start.addSubscriptions(anyList())).thenReturn(complete);
         when(complete.callback(any())).thenReturn(callback);
         when(callback.send()).thenReturn(subscription);
-        when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+        Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+        when(client.getConfig()).thenReturn(clientConfig);
         when(client.disconnect()).thenReturn(CompletableFuture.completedFuture(null));
         clearInvocations(client);
         MqttBenchmarkDriver driver =
@@ -351,6 +352,7 @@ class MqttBenchmarkDriverTest {
     }
 
     @Test
+    @SuppressWarnings("java:S2925") // polls client state; HiveMQ exposes no state-change latch
     void createdRealClientStillReconnectsAfterConnectionLoss() throws Exception {
         try (ServerSocket broker = new ServerSocket(0, 5, InetAddress.getByName("127.0.0.1"))) {
             broker.setSoTimeout(5000);
@@ -540,7 +542,8 @@ class MqttBenchmarkDriverTest {
     @Test
     void consumerCloseWaitsForDisconnectAndReportsItsFailure() throws Exception {
         Mqtt5AsyncClient client = mock();
-        when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+        Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+        when(client.getConfig()).thenReturn(clientConfig);
         CompletableFuture<Void> disconnect = new CompletableFuture<>();
         CountDownLatch disconnectStarted = new CountDownLatch(1);
         when(client.disconnect())
@@ -574,7 +577,8 @@ class MqttBenchmarkDriverTest {
     @Test
     void alreadyDisconnectedIsSafeButPendingReconnectIsNot() throws Exception {
         Mqtt5AsyncClient client = mock();
-        when(client.getConfig()).thenReturn(mock(Mqtt5ClientConfig.class));
+        Mqtt5ClientConfig clientConfig = mock(Mqtt5ClientConfig.class);
+        when(client.getConfig()).thenReturn(clientConfig);
         MqttClientStateException failure = new MqttClientStateException("not connected");
         when(client.disconnect()).thenReturn(CompletableFuture.failedFuture(failure));
         when(client.getState())

@@ -38,7 +38,7 @@ class ResultFileNameTest {
     void generatedNameIsPlacedInResultsDirectory() {
         Path file = Path.of(Benchmark.resultFileName(null, "workload", "Kafka", "/results"));
 
-        assertThat(file.getParent()).isEqualTo(Path.of("/results"));
+        assertThat(file).hasParentRaw(Path.of("/results"));
         assertThat(file.getFileName().toString()).startsWith("workload-Kafka-").endsWith(".json");
     }
 }

@@ -31,6 +31,9 @@ import org.junit.jupiter.api.Test;
 
 class HttpWorkerClientLifecycleTest {
     @Test
+    // The finally releases the stalled close and checks the client thread exited; closing the
+    // worker again through try-with-resources would change what the test checks
+    @SuppressWarnings("java:S2093")
     void boundsAStalledClientClose() throws Exception {
         AsyncHttpClient client = mock(AsyncHttpClient.class);
         CountDownLatch entered = new CountDownLatch(1);

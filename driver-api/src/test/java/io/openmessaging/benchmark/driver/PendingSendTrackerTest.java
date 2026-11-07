@@ -36,7 +36,8 @@ class PendingSendTrackerTest {
 
         acknowledged.join();
         assertThrows(CompletionException.class, unresolved::join);
-        assertThrows(CompletionException.class, () -> tracker.register().join());
+        CompletableFuture<Void> afterClose = tracker.register();
+        assertThrows(CompletionException.class, afterClose::join);
         assertFalse(tracker.beginClose());
     }
 

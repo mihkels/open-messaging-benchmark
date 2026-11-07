@@ -90,6 +90,22 @@ class WorkloadGeneratorLifecycleTest {
         verify(snapshot, times(1)).publishLatency();
         verify(snapshot, times(1)).publishDelayLatency();
         verify(snapshot, times(1)).endToEndLatency();
+        assertCollectedResult(result);
+
+        Path driverConfig = directory.resolve("driver.yaml");
+        Files.writeString(driverConfig, "name: driver\ndriverClass: fixture.Driver\n");
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        arguments.drivers = List.of(driverConfig.toString());
+        arguments.output = directory.resolve("result.json").toString();
+        WorkloadGenerator completed = mock(WorkloadGenerator.class);
+        when(completed.run()).thenReturn(result);
+        Benchmark.runWorkloads(
+                arguments, Map.of("snapshot", workload), worker, (d, w, ignored) -> completed);
+
+        assertSerializedResult(Path.of(arguments.output));
+    }
+
+    private static void assertCollectedResult(TestResult result) {
         assertThat(result.backlog).containsExactly(12L);
         assertThat(result.publishLatencyAvg).containsExactly(2.0);
         assertThat(result.publishLatency50pct).containsExactly(1.0);
@@ -122,18 +138,10 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(result.summary.totalErrors()).isEqualTo(2);
         assertThat(result.summary.maxBacklog()).isEqualTo(12);
         assertThat(result.histograms).containsOnlyKeys("publish", "publishDelay", "endToEnd");
+    }
 
-        Path driverConfig = directory.resolve("driver.yaml");
-        Files.writeString(driverConfig, "name: driver\ndriverClass: fixture.Driver\n");
-        Benchmark.Arguments arguments = new Benchmark.Arguments();
-        arguments.drivers = List.of(driverConfig.toString());
-        arguments.output = directory.resolve("result.json").toString();
-        WorkloadGenerator completed = mock(WorkloadGenerator.class);
-        when(completed.run()).thenReturn(result);
-        Benchmark.runWorkloads(
-                arguments, Map.of("snapshot", workload), worker, (d, w, ignored) -> completed);
-
-        JsonNode json = new ObjectMapper().readTree(Files.readString(Path.of(arguments.output)));
+    private static void assertSerializedResult(Path output) throws Exception {
+        JsonNode json = new ObjectMapper().readTree(Files.readString(output));
         assertThat(json.get("workload").stringValue()).isEqualTo("test");
         assertThat(json.get("driver").stringValue()).isEqualTo("driver");
         List<String> arrayFields =
@@ -433,17 +441,18 @@ class WorkloadGeneratorLifecycleTest {
                         new Duration[] {Duration.ZERO, ok, ok},
                         new Duration[] {ok, Duration.ofNanos(1), ok},
                         new Duration[] {ok, ok, Duration.ZERO});
+        Workload workload = workload();
         for (Duration[] durations : invalid) {
             assertThatThrownBy(() ->
                             new WorkloadGenerator(
-                                    "driver", workload(), worker, durations[0], durations[1], durations[2]))
+                                    "driver", workload, worker, durations[0], durations[1], durations[2]))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("must be positive");
         }
     }
 
     @Test
-    void cannotRunAClosedGenerator() throws Exception {
+    void cannotRunAClosedGenerator() {
         Worker worker = mock(Worker.class);
         WorkloadGenerator generator = generator(workload(), worker, Duration.ofSeconds(2));
         generator.close();
@@ -502,7 +511,7 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(runFailure.get()).isNotNull();
     }
 
-    private static Worker worker() throws Exception {
+    private static Worker worker() {
         Worker worker = mock(Worker.class);
         when(worker.createTopics(any())).thenReturn(List.of("topic"));
         when(worker.getCountersStats()).thenReturn(new CountersStats());

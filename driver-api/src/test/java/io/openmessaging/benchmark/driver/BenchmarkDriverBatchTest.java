@@ -214,7 +214,9 @@ class BenchmarkDriverBatchTest {
         }
 
         @Override
-        public void initialize(Path configurationFile, MeterRegistry statsLogger) {}
+        public void initialize(Path configurationFile, MeterRegistry statsLogger) {
+            // no-op: test stub
+        }
 
         @Override
         public String getTopicNamePrefix() {
@@ -238,6 +240,8 @@ class BenchmarkDriverBatchTest {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+            // no-op: test stub
+        }
     }
 }

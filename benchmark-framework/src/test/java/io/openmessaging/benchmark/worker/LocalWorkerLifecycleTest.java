@@ -89,7 +89,7 @@ class LocalWorkerLifecycleTest {
             assertThat(sent.await(1, TimeUnit.SECONDS)).isTrue();
 
             AtomicReference<Throwable> failure = new AtomicReference<>();
-            Thread stopper = thread(() -> worker.stopAll(), failure);
+            Thread stopper = thread(worker::stopAll, failure);
             assertThat(closed.await(1, TimeUnit.SECONDS)).isTrue();
             stopper.join(100);
             assertThat(stopper.isAlive()).isTrue();
@@ -949,12 +949,11 @@ class LocalWorkerLifecycleTest {
         Path empty = Files.writeString(directory.resolve("empty.yaml"), "driverClass: ''\n");
         Path unknown =
                 Files.writeString(directory.resolve("unknown.yaml"), "driverClass: no.such.Driver\n");
-        LocalWorker worker =
+        try (LocalWorker worker =
                 new LocalWorker(
                         new PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
                         Duration.ofSeconds(2),
-                        Duration.ofSeconds(2));
-        try {
+                        Duration.ofSeconds(2))) {
             assertThatThrownBy(() -> worker.initializeDriver(missing))
                     .hasMessageContaining("Driver configuration must specify a driverClass");
             worker.stopAll();
@@ -965,22 +964,22 @@ class LocalWorkerLifecycleTest {
                     .hasMessageContaining("no.such.Driver is not on the classpath");
             worker.stopAll();
             assertThat(worker.canReuseAfterFailure()).isTrue();
-        } finally {
-            worker.close();
         }
     }
 
     @Test
     void rejectsInitializationWhileADriverIsActiveOrAfterClose() throws Exception {
         LocalWorker worker = worker(new Scenario(List.of()), Duration.ofSeconds(2));
+        Scenario second = new Scenario(List.of());
         assertThat(worker.canReuseAfterFailure()).isFalse();
-        assertThatThrownBy(() -> initialize(worker, new Scenario(List.of())))
+        assertThatThrownBy(() -> initialize(worker, second))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Stop the previous driver");
         worker.close();
 
         assertThat(worker.canReuseAfterFailure()).isFalse();
-        assertThatThrownBy(() -> initialize(worker, new Scenario(List.of())))
+        Scenario afterClose = new Scenario(List.of());
+        assertThatThrownBy(() -> initialize(worker, afterClose))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
     }
@@ -1021,6 +1020,7 @@ class LocalWorkerLifecycleTest {
                 });
     }
 
+    @SuppressWarnings("java:S2925") // bounded polling helper; Awaitility is not available
     private static void waitUntil(Check condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         while (!condition.get()) {

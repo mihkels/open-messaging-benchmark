@@ -122,10 +122,8 @@ class JMSBenchmarkTransactionProducerTest {
         scenario.sessionCloseFailure = new JMSException("session close failed");
         JMSBenchmarkTransactionProducer producer = scenario.producer(false);
 
-        CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () -> producer.sendAsync(Optional.empty(), new byte[] {1}).join());
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+        CompletionException failure = assertThrows(CompletionException.class, send::join);
         assertSame(scenario.sendFailure, failure.getCause());
         assertSame(scenario.producerCloseFailure, failure.getCause().getSuppressed()[0]);
         assertSame(scenario.sessionCloseFailure, failure.getCause().getSuppressed()[1]);
@@ -135,7 +133,7 @@ class JMSBenchmarkTransactionProducerTest {
     }
 
     @Test
-    void closeAttemptsBothResourcesAndReportsTheirFailures() throws Exception {
+    void closeAttemptsBothResourcesAndReportsTheirFailures() {
         Scenario scenario = new Scenario();
         scenario.producerCloseFailure = new JMSException("producer close failed");
         scenario.sessionCloseFailure = new JMSException("session close failed");
@@ -185,9 +183,10 @@ class JMSBenchmarkTransactionProducerTest {
         }
         sender.join(2000);
         assertFalse(sender.isAlive());
+        CompletableFuture<Void> abandoned = result.get();
         assertInstanceOf(
                 IllegalStateException.class,
-                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+                assertThrows(CompletionException.class, abandoned::join).getCause());
         assertEquals(1, scenario.sessionCloses.get());
         assertEquals(0, scenario.producerCloses.get());
         assertEquals(0, scenario.topicsCreated.get());
@@ -211,9 +210,10 @@ class JMSBenchmarkTransactionProducerTest {
         }
         sender.join(2000);
         assertFalse(sender.isAlive());
+        CompletableFuture<Void> abandoned = result.get();
         assertInstanceOf(
                 IllegalStateException.class,
-                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+                assertThrows(CompletionException.class, abandoned::join).getCause());
         assertEquals(1, scenario.sessionCloses.get());
         assertEquals(1, scenario.producerCloses.get());
         assertEquals(0, scenario.listeners.size());
@@ -383,7 +383,7 @@ class JMSBenchmarkTransactionProducerTest {
     }
 
     @Test
-    void repeatedCloseRethrowsTheFirstCloseFailure() throws Exception {
+    void repeatedCloseRethrowsTheFirstCloseFailure() {
         Scenario scenario = new Scenario();
         JMSException failure = new JMSException("close failed");
         scenario.producerCloseFailure = failure;
@@ -440,9 +440,10 @@ class JMSBenchmarkTransactionProducerTest {
         }
         sender.join(2000);
         assertFalse(sender.isAlive());
+        CompletableFuture<Void> abandoned = result.get();
         assertInstanceOf(
                 IllegalStateException.class,
-                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+                assertThrows(CompletionException.class, abandoned::join).getCause());
         assertEquals(1, scenario.sessionCloses.get());
         assertEquals(0, scenario.producerCloses.get());
     }
@@ -465,9 +466,10 @@ class JMSBenchmarkTransactionProducerTest {
         }
         sender.join(2000);
         assertFalse(sender.isAlive());
+        CompletableFuture<Void> abandoned = result.get();
         assertInstanceOf(
                 IllegalStateException.class,
-                assertThrows(CompletionException.class, () -> result.get().join()).getCause());
+                assertThrows(CompletionException.class, abandoned::join).getCause());
         assertEquals(1, scenario.sessionCloses.get());
         assertEquals(1, scenario.producerCloses.get());
         assertTrue(scenario.listeners.isEmpty());
@@ -520,6 +522,7 @@ class JMSBenchmarkTransactionProducerTest {
         drainCallbacks();
     }
 
+    @SuppressWarnings("java:S2925") // polls ThreadMXBean wait counts; no completion signal exists
     private static long awaitWaitCount(Thread thread, long expected) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         while (System.nanoTime() < deadline) {

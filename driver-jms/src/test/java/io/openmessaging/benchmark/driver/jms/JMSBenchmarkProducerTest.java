@@ -96,10 +96,8 @@ class JMSBenchmarkProducerTest {
         fixture.sendFailure = new IllegalStateException("send failed");
         JMSBenchmarkProducer producer = fixture.producer();
 
-        CompletionException failure =
-                assertThrows(
-                        CompletionException.class,
-                        () -> producer.sendAsync(Optional.empty(), new byte[] {1}).join());
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+        CompletionException failure = assertThrows(CompletionException.class, send::join);
 
         assertSame(fixture.sendFailure, failure.getCause());
         producer.close();

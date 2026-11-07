@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -41,6 +40,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
@@ -58,6 +58,7 @@ import org.mockito.MockedConstruction;
 
 class KopBenchmarkDriverOwnershipTest {
     @Test
+    @SuppressWarnings("java:S2925") // stubbed poll simulates a blocking broker call
     void kafkaHandlesBelongToTheirCaller() throws Exception {
         KopBenchmarkDriver driver = kafkaDriver();
         PartitionInfo partition = new PartitionInfo("topic", 0, null, new Node[0], new Node[0]);
@@ -79,8 +80,7 @@ class KopBenchmarkDriverOwnershipTest {
                                                 Thread.sleep(1);
                                                 return ConsumerRecords.empty();
                                             });
-                                    when(mock.partitionsFor(eq("topic"), eq(Duration.ZERO)))
-                                            .thenReturn(List.of(partition));
+                                    when(mock.partitionsFor("topic", Duration.ZERO)).thenReturn(List.of(partition));
                                 })) {
             BenchmarkProducer producer = driver.createProducer("topic").join();
             BenchmarkConsumer consumer =
@@ -112,13 +112,10 @@ class KopBenchmarkDriverOwnershipTest {
                                     .subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
                             doThrow(cleanup).when(mock).close();
                         })) {
-            CompletionException result =
-                    assertThrows(
-                            CompletionException.class,
-                            () ->
-                                    driver
-                                            .createConsumer("topic", "subscription", mock(ConsumerCallback.class))
-                                            .join());
+            ConsumerCallback callback = mock(ConsumerCallback.class);
+            CompletableFuture<BenchmarkConsumer> creation =
+                    driver.createConsumer("topic", "subscription", callback);
+            CompletionException result = assertThrows(CompletionException.class, creation::join);
             assertSame(failure, result.getCause());
             assertArrayEquals(new Throwable[] {cleanup}, failure.getSuppressed());
             verify(consumers.constructed().get(0), times(1)).close();
@@ -178,10 +175,8 @@ class KopBenchmarkDriverOwnershipTest {
         setField(driver, "admin", admin);
 
         assertNull(driver.createTopic("topic", 2).join());
-        assertSame(
-                cause,
-                assertThrows(CompletionException.class, () -> driver.createTopic("topic", 2).join())
-                        .getCause());
+        CompletableFuture<Void> rejection = driver.createTopic("topic", 2);
+        assertSame(cause, assertThrows(CompletionException.class, rejection::join).getCause());
     }
 
     @Test

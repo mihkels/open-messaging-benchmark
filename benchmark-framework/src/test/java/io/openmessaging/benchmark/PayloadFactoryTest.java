@@ -81,11 +81,13 @@ class PayloadFactoryTest {
         PayloadFactory.Payloads same =
                 new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), new int[] {5});
 
-        assertThat(payloads).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo("other");
         assertThat(payloads)
+                .isEqualTo(same)
+                .hasSameHashCodeAs(same)
+                .isNotEqualTo("other")
                 .isNotEqualTo(
                         new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 3}), new int[] {5}))
-                .isNotEqualTo(new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), null));
-        assertThat(payloads).hasToString("Payloads[data=1 templates, sizes [2], weights=[5]]");
+                .isNotEqualTo(new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), null))
+                .hasToString("Payloads[data=1 templates, sizes [2], weights=[5]]");
     }
 }

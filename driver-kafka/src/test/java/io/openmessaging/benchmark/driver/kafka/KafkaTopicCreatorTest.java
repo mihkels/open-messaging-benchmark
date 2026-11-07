@@ -57,7 +57,7 @@ class KafkaTopicCreatorTest {
         int maxBatchSize = 1;
         topicCreator = new KafkaTopicCreator(admin, topicConfigs, replicationFactor, maxBatchSize);
 
-        when(admin.createTopics(any())).thenAnswer(__ -> createTopicsResult);
+        when(admin.createTopics(any())).thenAnswer(ignored -> createTopicsResult);
     }
 
     @Test

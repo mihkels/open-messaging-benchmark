@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.Workload;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,8 @@ class NetworkBenchmarkIT extends BaseE2eIT {
         try (Network network = Network.newNetwork();
                 NetworkBenchmark runner = new NetworkBenchmark(network, tempDir)) {
             runner.start();
-            assertThatThrownBy(() -> runner.run(invalidDriver, createSimpleWorkload()))
+            Workload workload = createSimpleWorkload();
+            assertThatThrownBy(() -> runner.run(invalidDriver, workload))
                     .isInstanceOf(AssertionError.class)
                     .hasMessageContaining("NonexistentDriver");
             try (var runs = Files.list(tempDir)) {
@@ -57,8 +59,8 @@ class NetworkBenchmarkIT extends BaseE2eIT {
         try (Network network = Network.newNetwork();
                 NetworkBenchmark runner = new NetworkBenchmark(network, artifacts)) {
             runner.start();
-            assertThatThrownBy(
-                            () -> runner.run("name: fake\n", createSimpleWorkload(), FailingSmoke.class))
+            Workload workload = createSimpleWorkload();
+            assertThatThrownBy(() -> runner.run("name: fake\n", workload, FailingSmoke.class))
                     .isInstanceOf(AssertionError.class)
                     .hasMessageContaining("Failed to run the workload");
             try (var runs = Files.list(artifacts)) {

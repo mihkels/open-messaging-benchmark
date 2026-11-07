@@ -49,8 +49,8 @@ class ResourceCreatorTest {
                                                 ? original
                                                 : new IllegalStateException("later failure")));
 
-        CompletionException failure =
-                assertThrows(CompletionException.class, () -> creator.create(List.of("a")).join());
+        CompletableFuture<List<TestResource>> result = creator.create(List.of("a"));
+        CompletionException failure = assertThrows(CompletionException.class, result::join);
         assertEquals(11, attempts.get());
         assertSame(original, failure.getCause());
     }
@@ -69,10 +69,8 @@ class ResourceCreatorTest {
                             attempts.incrementAndGet();
                             return CompletableFuture.failedFuture(cause);
                         });
-        assertSame(
-                cause,
-                assertThrows(CompletionException.class, () -> noRetry.create(List.of("a")).join())
-                        .getCause());
+        CompletableFuture<List<TestResource>> noRetryResult = noRetry.create(List.of("a"));
+        assertSame(cause, assertThrows(CompletionException.class, noRetryResult::join).getCause());
         assertEquals(1, attempts.get());
 
         attempts.set(0);
@@ -137,10 +135,8 @@ class ResourceCreatorTest {
                             attempts.incrementAndGet();
                             return CompletableFuture.failedFuture(new CompletionException(interrupted));
                         });
-        assertSame(
-                interrupted,
-                assertThrows(CompletionException.class, () -> creator.create(List.of("a")).join())
-                        .getCause());
+        CompletableFuture<List<TestResource>> result = creator.create(List.of("a"));
+        assertSame(interrupted, assertThrows(CompletionException.class, result::join).getCause());
         assertEquals(1, attempts.get());
     }
 
@@ -290,10 +286,10 @@ class ResourceCreatorTest {
         ResourceCreator<String, TestResource> creator =
                 new ResourceCreator<>("test", 1, 0, 0, ignored -> CompletableFuture.completedFuture(null));
 
+        CompletableFuture<List<TestResource>> result = creator.create(List.of("a"));
         assertInstanceOf(
                 NullPointerException.class,
-                assertThrows(CompletionException.class, () -> creator.create(List.of("a")).join())
-                        .getCause());
+                assertThrows(CompletionException.class, result::join).getCause());
     }
 
     @Test
@@ -312,7 +308,8 @@ class ResourceCreatorTest {
                             return cancelled;
                         });
 
-        assertThrows(CancellationException.class, () -> creator.create(List.of("a")).join());
+        CompletableFuture<List<TestResource>> result = creator.create(List.of("a"));
+        assertThrows(CancellationException.class, result::join);
         assertEquals(1, attempts.get());
     }
 
@@ -342,12 +339,15 @@ class ResourceCreatorTest {
         result.set(creator.create(List.of("a", "b")));
         published.countDown();
 
-        assertThrows(CancellationException.class, () -> result.get().join());
-        ((ResourceCreationCompletion) result.get()).quiescence().join();
+        CompletableFuture<List<TestResource>> created = result.get();
+        assertThrows(CancellationException.class, created::join);
+        ((ResourceCreationCompletion) created).quiescence().join();
         assertEquals(List.of("a"), started);
         assertEquals(1, late.closes.get());
     }
 
+    @SuppressWarnings(
+            "java:S2925") // generic polling helper for conditions without a completion signal
     private static void await(BooleanSupplier condition) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {

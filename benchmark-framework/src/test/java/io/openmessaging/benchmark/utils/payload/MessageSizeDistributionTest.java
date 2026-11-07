@@ -270,14 +270,16 @@ class MessageSizeDistributionTest {
         assertThatThrownBy(() -> new MessageSizeDistribution(nullRange))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Range cannot be null or empty");
-        assertThatThrownBy(() -> new MessageSizeDistribution(Map.of("", 1)))
+        Map<String, Integer> emptyRange = Map.of("", 1);
+        assertThatThrownBy(() -> new MessageSizeDistribution(emptyRange))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Range cannot be null or empty");
     }
 
     @Test
     void rejectsNegativeMinimumSize() {
-        assertThatThrownBy(() -> new MessageSizeDistribution(Map.of("-5-10", 1)))
+        Map<String, Integer> negativeMinimum = Map.of("-5-10", 1);
+        assertThatThrownBy(() -> new MessageSizeDistribution(negativeMinimum))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Min size cannot be negative");
     }

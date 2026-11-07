@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -495,7 +497,7 @@ class JMSBenchmarkTransactionProducerTest {
         AtomicReference<Exception> closeFailure = new AtomicReference<>();
         AtomicReference<Boolean> interruptedAfterClose = new AtomicReference<>();
         Thread closer =
-                Thread.ofVirtual()
+                Thread.ofPlatform()
                         .start(
                                 () -> {
                                     try {
@@ -507,9 +509,9 @@ class JMSBenchmarkTransactionProducerTest {
                                     }
                                 });
         try {
-            awaitWaiting(closer);
+            long firstWait = awaitWaitCount(closer, 1);
             closer.interrupt();
-            awaitWaiting(closer);
+            awaitWaitCount(closer, firstWait + 1);
         } finally {
             scenario.releaseCommit.countDown();
         }
@@ -525,12 +527,19 @@ class JMSBenchmarkTransactionProducerTest {
         drainCallbacks();
     }
 
-    private static void awaitWaiting(Thread thread) throws InterruptedException {
+    private static long awaitWaitCount(Thread thread, long expected) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        while (thread.getState() != Thread.State.WAITING || thread.isInterrupted()) {
-            assertTrue(System.nanoTime() < deadline, "thread did not block");
-            Thread.sleep(5);
+        while (System.nanoTime() < deadline) {
+            ThreadInfo info = ManagementFactory.getThreadMXBean().getThreadInfo(thread.threadId());
+            if (info == null) {
+                break;
+            }
+            if (info.getWaitedCount() >= expected) {
+                return info.getWaitedCount();
+            }
+            Thread.sleep(1);
         }
+        throw new AssertionError("Thread did not enter the expected wait");
     }
 
     private static void drainCallbacks() {

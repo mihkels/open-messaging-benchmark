@@ -307,30 +307,7 @@ public final class LocalWorker implements Worker {
                         submit(
                                 current,
                                 "producer readiness probe",
-                                () -> {
-                                    if (!current.callbacks.beginSend()) {
-                                        complete.completeExceptionally(new CancellationException("Worker is stopping"));
-                                        return null;
-                                    }
-                                    try {
-                                        CompletableFuture<Void> send =
-                                                Objects.requireNonNull(
-                                                        producer.sendAsync(Optional.of("key"), new byte[10]),
-                                                        "sendAsync returned null");
-                                        send.whenComplete((ignored, failure) -> {
-                                            current.callbacks.completeProbe(failure);
-                                            if (failure != null) {
-                                                complete.completeExceptionally(unwrap(failure));
-                                            } else if (remaining.decrementAndGet() == 0) {
-                                                complete.complete(null);
-                                            }
-                                        });
-                                    } catch (Throwable t) {
-                                        current.callbacks.abortSend();
-                                        complete.completeExceptionally(t);
-                                    }
-                                    return null;
-                                }));
+                                () -> probe(current, producer, complete, remaining)));
             }
             long waitNanos = deadline - System.nanoTime();
             if (waitNanos <= 0) {
@@ -348,6 +325,35 @@ public final class LocalWorker implements Worker {
                 probes.forEach(probe -> probe.cancel(true));
             }
         }
+    }
+
+    // Sends one readiness probe; the last successful probe completes {@code complete}.
+    private static Void probe(
+            Run current,
+            BenchmarkProducer producer,
+            CompletableFuture<Void> complete,
+            AtomicInteger remaining) {
+        if (!current.callbacks.beginSend()) {
+            complete.completeExceptionally(new CancellationException("Worker is stopping"));
+            return null;
+        }
+        try {
+            CompletableFuture<Void> send =
+                    Objects.requireNonNull(
+                            producer.sendAsync(Optional.of("key"), new byte[10]), "sendAsync returned null");
+            send.whenComplete((ignored, failure) -> {
+                current.callbacks.completeProbe(failure);
+                if (failure != null) {
+                    complete.completeExceptionally(unwrap(failure));
+                } else if (remaining.decrementAndGet() == 0) {
+                    complete.complete(null);
+                }
+            });
+        } catch (Throwable t) {
+            current.callbacks.abortSend();
+            complete.completeExceptionally(t);
+        }
+        return null;
     }
 
     // Sends messages from one producer on its own task until the worker stops.

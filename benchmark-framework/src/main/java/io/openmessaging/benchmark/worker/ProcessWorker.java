@@ -112,18 +112,8 @@ public class ProcessWorker implements Worker {
         }
         terminate();
 
-        Map<String, Object> config;
-        try {
-            config = YAML.readValue(driverConfigFile.toFile(), new TypeReference<>() {});
-        } catch (RuntimeException e) {
-            throw new IllegalArgumentException(
-                    "Cannot read driver configuration " + driverConfigFile + ": " + e.getMessage(), e);
-        }
-        Object driverClass = config == null ? null : config.get("driverClass");
-        if (driverClass == null || driverClass.toString().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Driver configuration " + driverConfigFile + " must specify a driverClass");
-        }
+        Map<String, Object> config = readDriverConfig(driverConfigFile);
+        Object driverClass = config.get("driverClass");
 
         PluginRegistry plugins = registry.get();
         plugins.errors().forEach(error -> log.warn("Invalid driver plugin: {}", error));
@@ -154,18 +144,7 @@ public class ProcessWorker implements Worker {
             starting.client().initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
             String failure = starting.describeFailure(e);
-            if (starting.isRunning() && !closed) {
-                try {
-                    starting.client().stopAll();
-                } catch (Throwable cleanup) {
-                    e.addSuppressed(cleanup);
-                }
-            }
-            try {
-                terminate();
-            } catch (Throwable cleanup) {
-                e.addSuppressed(cleanup);
-            }
+            cleanUpFailedStart(starting, e);
             if (e instanceof InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 throw interrupted;
@@ -174,6 +153,38 @@ public class ProcessWorker implements Worker {
                     "Failed to initialize driver " + description + ": " + failure, e);
         } finally {
             initializing = false;
+        }
+    }
+
+    private static Map<String, Object> readDriverConfig(Path driverConfigFile) {
+        Map<String, Object> config;
+        try {
+            config = YAML.readValue(driverConfigFile.toFile(), new TypeReference<>() {});
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException(
+                    "Cannot read driver configuration " + driverConfigFile + ": " + e.getMessage(), e);
+        }
+        Object driverClass = config == null ? null : config.get("driverClass");
+        if (driverClass == null || driverClass.toString().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Driver configuration " + driverConfigFile + " must specify a driverClass");
+        }
+        return config;
+    }
+
+    // Stops and terminates a driver process that failed to start, recording cleanup failures on it.
+    private void cleanUpFailedStart(DriverProcess starting, Exception failure) {
+        if (starting.isRunning() && !closed) {
+            try {
+                starting.client().stopAll();
+            } catch (Throwable cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+        }
+        try {
+            terminate();
+        } catch (Throwable cleanup) {
+            failure.addSuppressed(cleanup);
         }
     }
 

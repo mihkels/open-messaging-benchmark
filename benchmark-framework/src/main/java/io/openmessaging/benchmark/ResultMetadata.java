@@ -54,6 +54,7 @@ public record ResultMetadata(
                             + "private.?key|sasl.?jaas|authorization|auth.?config",
                     Pattern.CASE_INSENSITIVE);
     private static final String REDACTED = "[REDACTED]";
+    private static final String UNKNOWN = "unknown";
     private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
     private static final List<Path> GIT_LOCATIONS =
             List.of(
@@ -70,7 +71,7 @@ public record ResultMetadata(
                 System.getProperty(
                         "omb.version",
                         Benchmark.class.getPackage().getImplementationVersion() == null
-                                ? "unknown"
+                                ? UNKNOWN
                                 : Benchmark.class.getPackage().getImplementationVersion());
         String jvmOptions =
                 String.join(
@@ -144,7 +145,7 @@ public record ResultMetadata(
     static String gitRevision(List<Path> candidates) {
         Optional<Path> git = findExecutable(candidates);
         if (git.isEmpty()) {
-            return "unknown";
+            return UNKNOWN;
         }
         try {
             Process process =
@@ -153,16 +154,16 @@ public record ResultMetadata(
                             .start();
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
-                return "unknown";
+                return UNKNOWN;
             }
             String revision =
                     new String(process.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).trim();
-            return process.exitValue() == 0 ? revision : "unknown";
+            return process.exitValue() == 0 ? revision : UNKNOWN;
         } catch (IOException e) {
-            return "unknown";
+            return UNKNOWN;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "unknown";
+            return UNKNOWN;
         }
     }
 

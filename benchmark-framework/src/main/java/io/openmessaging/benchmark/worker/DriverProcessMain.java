@@ -41,9 +41,13 @@ public final class DriverProcessMain {
 
     public static void main(String[] args) throws Exception {
         Path portFile = null;
-        for (int i = 0; i < args.length; i++) {
+        int i = 0;
+        while (i < args.length) {
             if ("--port-file".equals(args[i]) && i + 1 < args.length) {
-                portFile = Path.of(args[++i]);
+                portFile = Path.of(args[i + 1]);
+                i += 2;
+            } else {
+                i++;
             }
         }
         if (portFile == null) {

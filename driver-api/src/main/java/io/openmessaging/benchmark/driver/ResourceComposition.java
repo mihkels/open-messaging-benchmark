@@ -78,60 +78,68 @@ final class ResourceComposition {
             try {
                 if (error != null) {
                     result.completeExceptionally(Failures.unwrap(error));
-                    return;
+                } else if (!result.isDone()) {
+                    createAll(resources, create, aggregate, result, tracker, active);
                 }
-                if (result.isDone()) {
-                    return;
-                }
-                final List<R> inputs;
-                try {
-                    inputs = List.copyOf(resources);
-                } catch (RuntimeException failure) {
-                    result.completeExceptionally(failure);
-                    return;
-                }
-
-                if (inputs.isEmpty()) {
-                    completeAggregate(List.of(), aggregate, result, tracker);
-                    return;
-                }
-                ResourceBatch<C> batch = new ResourceBatch<>(inputs.size(), () -> {});
-                tracker.retain();
-                batch
-                        .quiescence()
-                        .whenComplete((ignored, failure) -> {
-                            try {
-                                if (failure != null) {
-                                    tracker.record(Failures.unwrap(failure));
-                                }
-                            } finally {
-                                tracker.release();
-                            }
-                        });
-                tracker.retain();
-                batch
-                        .future()
-                        .whenComplete((created, failure) -> {
-                            try {
-                                if (failure != null) {
-                                    result.completeExceptionally(Failures.unwrap(failure));
-                                } else {
-                                    completeAggregate(created, aggregate, result, tracker);
-                                }
-                            } finally {
-                                tracker.release();
-                            }
-                        });
-                active.set(batch);
-                if (result.isDone()) {
-                    batch.future().cancel(false);
-                }
-                batch.start(inputs, create);
             } finally {
                 tracker.release();
             }
         });
         return result;
+    }
+
+    // Creates one resource per request and aggregates them into the result.
+    private static <R, C extends AutoCloseable, T extends AutoCloseable> void createAll(
+            List<R> resources,
+            Function<R, CompletableFuture<C>> create,
+            Function<List<C>, T> aggregate,
+            ComposedFuture<T> result,
+            CreationTracker tracker,
+            AtomicReference<ResourceBatch<C>> active) {
+        final List<R> inputs;
+        try {
+            inputs = List.copyOf(resources);
+        } catch (RuntimeException failure) {
+            result.completeExceptionally(failure);
+            return;
+        }
+
+        if (inputs.isEmpty()) {
+            completeAggregate(List.of(), aggregate, result, tracker);
+            return;
+        }
+        ResourceBatch<C> batch = new ResourceBatch<>(inputs.size(), () -> {});
+        tracker.retain();
+        batch
+                .quiescence()
+                .whenComplete((ignored, failure) -> {
+                    try {
+                        if (failure != null) {
+                            tracker.record(Failures.unwrap(failure));
+                        }
+                    } finally {
+                        tracker.release();
+                    }
+                });
+        tracker.retain();
+        batch
+                .future()
+                .whenComplete((created, failure) -> {
+                    try {
+                        if (failure != null) {
+                            result.completeExceptionally(Failures.unwrap(failure));
+                        } else {
+                            completeAggregate(created, aggregate, result, tracker);
+                        }
+                    } finally {
+                        tracker.release();
+                    }
+                });
+        active.set(batch);
+        if (result.isDone()) {
+            batch.future().cancel(false);
+        }
+        batch.start(inputs, create);
     }
 
     private static <C extends AutoCloseable, T extends AutoCloseable> void completeAggregate(

@@ -185,19 +185,24 @@ public final class HostRuntime {
             }
             URI base = jar.toUri();
             for (String ref : classPath.trim().split("\\s+")) {
-                try {
-                    URI uri = base.resolve(ref);
-                    if ("file".equals(uri.getScheme())) {
-                        result.add(Path.of(uri).normalize());
-                    }
-                } catch (IllegalArgumentException e) {
-                    // ignore malformed references
-                }
+                fileReference(base, ref).ifPresent(result::add);
             }
         } catch (IOException _) {
             // not a readable jar
         }
         return result;
+    }
+
+    private static Optional<Path> fileReference(URI base, String ref) {
+        try {
+            URI uri = base.resolve(ref);
+            return "file".equals(uri.getScheme())
+                    ? Optional.of(Path.of(uri).normalize())
+                    : Optional.empty();
+        } catch (IllegalArgumentException _) {
+            // ignore malformed references
+            return Optional.empty();
+        }
     }
 
     private static Path codeSource(Class<?> type) {

@@ -59,24 +59,40 @@ final class JvmOptions {
      * @throws IllegalArgumentException if a quote is not terminated
      */
     static List<String> parse(String options) {
-        List<String> result = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        char quote = 0;
-        boolean started = false;
-        for (int i = 0; i < options.length(); i++) {
+        return new Tokenizer(options).tokens();
+    }
+
+    /** Splits the options string one character, or one escape sequence, at a time. */
+    private static final class Tokenizer {
+        private final String options;
+        private final List<String> result = new ArrayList<>();
+        private final StringBuilder current = new StringBuilder();
+        private char quote = 0;
+        private boolean started = false;
+
+        Tokenizer(String options) {
+            this.options = options;
+        }
+
+        List<String> tokens() {
+            int i = 0;
+            while (i < options.length()) {
+                i = consume(i);
+            }
+            if (quote != 0) {
+                throw new IllegalArgumentException("Unterminated quote in driver JVM options");
+            }
+            endToken();
+            return List.copyOf(result);
+        }
+
+        // Consumes the character at i and returns the index of the next one.
+        private int consume(int i) {
             char c = options.charAt(i);
-            if (c == '\\' && quote != '\'' && i + 1 < options.length()) {
-                char next = options.charAt(i + 1);
-                boolean escaped =
-                        quote == '"'
-                                ? next == '"' || next == '\\'
-                                : Character.isWhitespace(next) || next == '"' || next == '\'';
-                if (escaped) {
-                    current.append(next);
-                    started = true;
-                    i++;
-                    continue;
-                }
+            if (isEscape(c, i)) {
+                current.append(options.charAt(i + 1));
+                started = true;
+                return i + 2;
             }
             if (quote != 0) {
                 if (c == quote) {
@@ -88,23 +104,32 @@ final class JvmOptions {
                 quote = c;
                 started = true;
             } else if (Character.isWhitespace(c)) {
-                if (started) {
-                    result.add(current.toString());
-                    current.setLength(0);
-                    started = false;
-                }
+                endToken();
             } else {
                 current.append(c);
                 started = true;
             }
+            return i + 1;
         }
-        if (quote != 0) {
-            throw new IllegalArgumentException("Unterminated quote in driver JVM options");
+
+        private boolean isEscape(char c, int i) {
+            if (c != '\\' || quote == '\'' || i + 1 >= options.length()) {
+                return false;
+            }
+            char next = options.charAt(i + 1);
+            if (quote == '"') {
+                return next == '"' || next == '\\';
+            }
+            return Character.isWhitespace(next) || next == '"' || next == '\'';
         }
-        if (started) {
-            result.add(current.toString());
+
+        private void endToken() {
+            if (started) {
+                result.add(current.toString());
+                current.setLength(0);
+                started = false;
+            }
         }
-        return List.copyOf(result);
     }
 
     /**

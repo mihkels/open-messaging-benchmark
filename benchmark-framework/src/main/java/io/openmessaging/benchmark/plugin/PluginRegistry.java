@@ -106,81 +106,110 @@ public final class PluginRegistry {
      * @return the discovered bundles
      */
     public static PluginRegistry discover(List<Path> locations) {
+        Discovery discovery = new Discovery();
+        for (Path dir : bundleDirectories(locations)) {
+            discovery.add(dir);
+        }
+        return new PluginRegistry(
+                discovery.bundles,
+                discovery.byDriverClass,
+                discovery.errors,
+                discovery.errorsByDriverClass,
+                locations);
+    }
+
+    private static Set<Path> bundleDirectories(List<Path> locations) {
         Set<Path> bundleDirs = new LinkedHashSet<>();
         for (Path location : locations) {
             if (Files.isRegularFile(location.resolve(PluginBundle.DESCRIPTOR_FILE))) {
                 bundleDirs.add(realPath(location));
             } else if (Files.isDirectory(location)) {
-                List<Path> children = new ArrayList<>();
-                try (DirectoryStream<Path> stream = Files.newDirectoryStream(location)) {
-                    for (Path child : stream) {
-                        if (Files.isRegularFile(child.resolve(PluginBundle.DESCRIPTOR_FILE))) {
-                            children.add(realPath(child));
-                        }
-                    }
-                } catch (IOException e) {
-                    throw new PluginException("Cannot list plugin location " + location, e);
-                }
-                children.sort(null);
-                bundleDirs.addAll(children);
+                bundleDirs.addAll(childBundleDirectories(location));
             }
         }
+        return bundleDirs;
+    }
 
-        List<String> errors = new ArrayList<>();
-        List<PluginBundle> bundles = new ArrayList<>();
-        Map<String, PluginBundle> byId = new LinkedHashMap<>();
-        Map<String, PluginBundle> byDriverClass = new LinkedHashMap<>();
-        Map<String, List<String>> errorsByDriverClass = new LinkedHashMap<>();
-        for (Path dir : bundleDirs) {
+    private static List<Path> childBundleDirectories(Path location) {
+        List<Path> children = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(location)) {
+            for (Path child : stream) {
+                if (Files.isRegularFile(child.resolve(PluginBundle.DESCRIPTOR_FILE))) {
+                    children.add(realPath(child));
+                }
+            }
+        } catch (IOException e) {
+            throw new PluginException("Cannot list plugin location " + location, e);
+        }
+        children.sort(null);
+        return children;
+    }
+
+    /** Bundles loaded so far, with the conflicts found between them. */
+    private static final class Discovery {
+        private final List<String> errors = new ArrayList<>();
+        private final List<PluginBundle> bundles = new ArrayList<>();
+        private final Map<String, PluginBundle> byId = new LinkedHashMap<>();
+        private final Map<String, PluginBundle> byDriverClass = new LinkedHashMap<>();
+        private final Map<String, List<String>> errorsByDriverClass = new LinkedHashMap<>();
+
+        void add(Path dir) {
             PluginBundle bundle;
             try {
                 bundle = PluginBundle.load(dir);
             } catch (PluginException e) {
                 errors.add(e.getMessage());
-                continue;
+                return;
             }
             PluginBundle sameId = byId.putIfAbsent(bundle.id(), bundle);
             if (sameId != null) {
-                String error =
-                        "Duplicate plugin id '"
-                                + bundle.id()
-                                + "' in "
-                                + sameId.directory()
-                                + " and "
-                                + bundle.directory();
-                errors.add(error);
-                sameId
-                        .descriptor()
-                        .drivers()
-                        .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
-                bundle
-                        .descriptor()
-                        .drivers()
-                        .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
-                continue;
+                rejectDuplicateId(sameId, bundle);
+                return;
             }
             for (String driver : bundle.descriptor().drivers()) {
                 PluginBundle other = byDriverClass.putIfAbsent(driver, bundle);
                 if (other != null) {
-                    String error =
-                            "Driver class "
-                                    + driver
-                                    + " is provided by both '"
-                                    + other.id()
-                                    + "' ("
-                                    + other.directory()
-                                    + ") and '"
-                                    + bundle.id()
-                                    + "' ("
-                                    + bundle.directory()
-                                    + ")";
-                    errors.add(error);
-                    addDriverError(errorsByDriverClass, driver, error);
+                    rejectDuplicateDriver(driver, other, bundle);
                 }
             }
             bundles.add(bundle);
         }
-        return new PluginRegistry(bundles, byDriverClass, errors, errorsByDriverClass, locations);
+
+        private void rejectDuplicateId(PluginBundle sameId, PluginBundle bundle) {
+            String error =
+                    "Duplicate plugin id '"
+                            + bundle.id()
+                            + "' in "
+                            + sameId.directory()
+                            + " and "
+                            + bundle.directory();
+            errors.add(error);
+            sameId
+                    .descriptor()
+                    .drivers()
+                    .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
+            bundle
+                    .descriptor()
+                    .drivers()
+                    .forEach(driver -> addDriverError(errorsByDriverClass, driver, error));
+        }
+
+        private void rejectDuplicateDriver(String driver, PluginBundle other, PluginBundle bundle) {
+            String error =
+                    "Driver class "
+                            + driver
+                            + " is provided by both '"
+                            + other.id()
+                            + "' ("
+                            + other.directory()
+                            + ") and '"
+                            + bundle.id()
+                            + "' ("
+                            + bundle.directory()
+                            + ")";
+            errors.add(error);
+            addDriverError(errorsByDriverClass, driver, error);
+        }
     }
 
     private static void addDriverError(
@@ -253,28 +282,31 @@ public final class PluginRegistry {
         for (int i = 0; i < result.size(); i++) {
             for (String property : result.get(i).descriptor().classReferenceProperties()) {
                 Object value = config == null ? null : config.get(property);
-                if (value == null || value.toString().isBlank()) {
-                    continue;
-                }
-                String referencedClass = value.toString().trim();
-                failOnDriverErrors(referencedClass);
-                PluginBundle referenced = byDriverClass.get(referencedClass);
-                if (referenced == null) {
-                    throw new PluginException(
-                            "Driver property '"
-                                    + property
-                                    + "' references "
-                                    + referencedClass
-                                    + " but no driver plugin bundle provides it. Known driver classes: "
-                                    + new TreeSet<>(byDriverClass.keySet())
-                                    + invalidBundleDetails());
-                }
-                if (!result.contains(referenced)) {
-                    result.add(referenced);
+                if (value != null && !value.toString().isBlank()) {
+                    PluginBundle referenced = referencedBundle(property, value.toString().trim());
+                    if (!result.contains(referenced)) {
+                        result.add(referenced);
+                    }
                 }
             }
         }
         return result;
+    }
+
+    private PluginBundle referencedBundle(String property, String referencedClass) {
+        failOnDriverErrors(referencedClass);
+        PluginBundle referenced = byDriverClass.get(referencedClass);
+        if (referenced == null) {
+            throw new PluginException(
+                    "Driver property '"
+                            + property
+                            + "' references "
+                            + referencedClass
+                            + " but no driver plugin bundle provides it. Known driver classes: "
+                            + new TreeSet<>(byDriverClass.keySet())
+                            + invalidBundleDetails());
+        }
+        return referenced;
     }
 
     private void failOnDriverErrors(String driverClass) {

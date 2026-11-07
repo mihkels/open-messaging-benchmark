@@ -31,3 +31,14 @@ updates:
           - '*'
     commit-message:
       prefix: deps
+
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+    groups:
+      docs-tooling:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: docs

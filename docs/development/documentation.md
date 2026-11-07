@@ -21,15 +21,19 @@ root. This page explains how to preview it, the conventions pages follow, and ho
 
 ## Local preview
 
-The Python dependencies are pinned in
+The Python dependencies are listed in
+[`docs/requirements.in`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/requirements.in)
+and locked, with every transitive package pinned and hashed, in
 [`docs/requirements.txt`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/requirements.txt).
+Install with `--require-hashes --only-binary :all:` so pip rejects unhashed packages and never runs a
+source distribution's build script. Dependabot keeps both files up to date.
 `mise install` provides Python (see [Building the project](building-the-project.md#tools)). CI builds
 the site with Python 3.13 (`docs.yml`); any Python 3 that installs `docs/requirements.txt` works
 locally. From the repository root:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r docs/requirements.txt
+.venv/bin/pip install --require-hashes --only-binary :all: -r docs/requirements.txt
 .venv/bin/mkdocs serve
 ```
 
@@ -43,6 +47,13 @@ Before opening a pull request, build the site the way CI does:
 
 `mkdocs.yml` also sets `strict: true`, so any warning fails the build: a missing page, a broken relative
 link, or a page in `docs/` that is not in the navigation. The output goes to `site/`.
+
+To add or bump a docs dependency, edit `docs/requirements.in`, then regenerate the lock file with
+Python 3.13 (the version CI uses) and commit both files:
+
+```bash
+cd docs && uvx --python 3.13 --from pip-tools pip-compile --generate-hashes --allow-unsafe --strip-extras requirements.in
+```
 
 ## Navigation
 

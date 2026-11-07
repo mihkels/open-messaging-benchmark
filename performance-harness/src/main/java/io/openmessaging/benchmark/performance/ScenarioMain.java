@@ -49,9 +49,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.yaml.YAMLMapper;
@@ -60,9 +62,10 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 public final class ScenarioMain {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern RESOURCE =
-            Pattern.compile("omb_resource_(\\w+)\\{[^}]*role=\"([^\"]+)\"[^}]*}\\s+(\\S+).*");
+            Pattern.compile("omb_resource_(\\w++)\\{([^}]*+)}\\s++(\\S++).*");
+    private static final Pattern ROLE_LABEL = Pattern.compile("role=\"([^\"]++)\"");
     private static final Pattern RECEIVE_ERRORS =
-            Pattern.compile("synthetic_receive_errors_total(?:\\{[^}]*})?\\s+(\\S+).*");
+            Pattern.compile("synthetic_receive_errors_total(?:\\{[^}]*+})?+\\s++(\\S++).*");
 
     private ScenarioMain() {}
 
@@ -447,6 +450,51 @@ public final class ScenarioMain {
         }
     }
 
+    /**
+     * One {@code omb_resource_*} Prometheus sample.
+     *
+     * @param name metric name after the {@code omb_resource_} prefix
+     * @param role value of the {@code role} label
+     * @param value sample value
+     */
+    record ResourceSample(String name, String role, double value) {}
+
+    /**
+     * Parses an {@code omb_resource_<name>{...role="<role>"...} <value>} line.
+     *
+     * @param line one line of a Prometheus scrape
+     * @return the sample, or {@code null} if the line is not a resource gauge with a {@code role}
+     *     label
+     */
+    static ResourceSample parseResource(String line) {
+        Matcher matcher = RESOURCE.matcher(line);
+        if (!matcher.matches()) {
+            return null;
+        }
+        // The last role label wins, as with the former single greedy pattern.
+        Matcher role = ROLE_LABEL.matcher(matcher.group(2));
+        String value = null;
+        while (role.find()) {
+            value = role.group(1);
+        }
+        return value == null
+                ? null
+                : new ResourceSample(matcher.group(1), value, Double.parseDouble(matcher.group(3)));
+    }
+
+    /**
+     * Parses a {@code synthetic_receive_errors_total[{...}] <value>} line.
+     *
+     * @param line one line of a Prometheus scrape
+     * @return the counter value, or empty if the line is not that counter
+     */
+    static OptionalDouble parseReceiveErrors(String line) {
+        Matcher matcher = RECEIVE_ERRORS.matcher(line);
+        return matcher.matches()
+                ? OptionalDouble.of(Double.parseDouble(matcher.group(1)))
+                : OptionalDouble.empty();
+    }
+
     private static double secondsSince(long start) {
         return (System.nanoTime() - start) / 1e9;
     }
@@ -498,16 +546,15 @@ public final class ScenarioMain {
             int index = 0;
             for (Supplier<String> scrape : scrapes) {
                 for (String line : scrape.get().split("\n")) {
-                    var matcher = RESOURCE.matcher(line);
-                    if (matcher.matches()) {
-                        double value = Double.parseDouble(matcher.group(3));
+                    ResourceSample sample = parseResource(line);
+                    if (sample != null) {
                         resources
-                                .computeIfAbsent(matcher.group(2) + "-" + index, k -> new LinkedHashMap<>())
-                                .put(matcher.group(1), Double.isFinite(value) ? value : null);
+                                .computeIfAbsent(sample.role() + "-" + index, k -> new LinkedHashMap<>())
+                                .put(sample.name(), Double.isFinite(sample.value()) ? sample.value() : null);
                     }
-                    var errorMatcher = RECEIVE_ERRORS.matcher(line);
-                    if (errorMatcher.matches()) {
-                        fixtureErrors.put(index, Double.parseDouble(errorMatcher.group(1)));
+                    OptionalDouble errors = parseReceiveErrors(line);
+                    if (errors.isPresent()) {
+                        fixtureErrors.put(index, errors.getAsDouble());
                     }
                 }
                 index++;

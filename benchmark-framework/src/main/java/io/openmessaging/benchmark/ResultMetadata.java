@@ -50,8 +50,8 @@ public record ResultMetadata(
 
     private static final Pattern SECRET_KEY =
             Pattern.compile(
-                    ".*(password|passwd|passphrase|token|secret|credential|api.?key|access.?key|"
-                            + "private.?key|sasl.?jaas|authorization|auth.?config).*",
+                    "password|passwd|passphrase|token|secret|credential|api.?key|access.?key|"
+                            + "private.?key|sasl.?jaas|authorization|auth.?config",
                     Pattern.CASE_INSENSITIVE);
     private static final String REDACTED = "[REDACTED]";
     private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
@@ -97,9 +97,17 @@ public record ResultMetadata(
 
     private static Map<String, Object> redactMap(Map<String, ?> values) {
         Map<String, Object> redacted = new LinkedHashMap<>();
-        values.forEach((key, value) ->
-                redacted.put(key, SECRET_KEY.matcher(key).matches() ? REDACTED : redactValue(value)));
+        values.forEach(
+                (key, value) -> redacted.put(key, isSecretKey(key) ? REDACTED : redactValue(value)));
         return redacted;
+    }
+
+    /**
+     * Whether a configuration key names a credential; searches for a secret-like fragment anywhere in
+     * it.
+     */
+    static boolean isSecretKey(String key) {
+        return SECRET_KEY.matcher(key).find();
     }
 
     private static Object redactValue(Object value) {
@@ -171,9 +179,9 @@ public record ResultMetadata(
                 .findFirst();
     }
 
-    private static String redactJvmOption(String option) {
+    static String redactJvmOption(String option) {
         Matcher matcher = JVM_OPTION.matcher(option);
-        if (!matcher.matches() || !SECRET_KEY.matcher(matcher.group(2)).matches()) {
+        if (!matcher.matches() || !isSecretKey(matcher.group(2))) {
             return option;
         }
         return matcher.group(1) + matcher.group(2) + "=[REDACTED]";

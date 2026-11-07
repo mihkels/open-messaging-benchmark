@@ -86,16 +86,26 @@ class ProcessWorkerTest {
                 "hung",
                 "fixture.hung.HungDriver",
                 "\"hung\"",
-                "java.nio.file.Files.writeString(java.nio.file.Path.of(System.getProperty(\"fixture.marker\")),"
+                "java.nio.file.Files.writeString(java.nio.file.Path.of("
+                        + "System.getProperty(\"fixture.marker\") + \".tmp\"),"
                         + " Long.toString(ProcessHandle.current().pid()));"
+                        + " java.nio.file.Files.move(java.nio.file.Path.of("
+                        + "System.getProperty(\"fixture.marker\") + \".tmp\"),"
+                        + " java.nio.file.Path.of(System.getProperty(\"fixture.marker\")),"
+                        + " java.nio.file.StandardCopyOption.ATOMIC_MOVE);"
                         + " while (true) { java.util.concurrent.locks.LockSupport.parkNanos(1000000000L); }",
                 lib1);
         bundle(
                 "hung-close",
                 "fixture.hungclose.HungCloseDriver",
                 "\"hung-close\"",
-                "java.nio.file.Files.writeString(java.nio.file.Path.of(System.getProperty(\"fixture.marker\")),"
-                        + " Long.toString(ProcessHandle.current().pid()));",
+                "java.nio.file.Files.writeString(java.nio.file.Path.of("
+                        + "System.getProperty(\"fixture.marker\") + \".tmp\"),"
+                        + " Long.toString(ProcessHandle.current().pid()));"
+                        + " java.nio.file.Files.move(java.nio.file.Path.of("
+                        + "System.getProperty(\"fixture.marker\") + \".tmp\"),"
+                        + " java.nio.file.Path.of(System.getProperty(\"fixture.marker\")),"
+                        + " java.nio.file.StandardCopyOption.ATOMIC_MOVE);",
                 "while (true) { java.util.concurrent.locks.LockSupport.parkNanos(1000000000L); }",
                 lib1);
         bundle(
@@ -469,12 +479,10 @@ class ProcessWorkerTest {
         long driverPid = -1;
         try {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-            while ((!Files.exists(marker) || Files.size(marker) == 0)
-                    && supervisor.isAlive()
-                    && System.nanoTime() < deadline) {
+            while (!Files.exists(marker) && supervisor.isAlive() && System.nanoTime() < deadline) {
                 Thread.sleep(50);
             }
-            assertThat(Files.exists(marker) && Files.size(marker) > 0)
+            assertThat(Files.exists(marker))
                     .as("Supervisor output: %s", Files.readString(output))
                     .isTrue();
             driverPid = Long.parseLong(Files.readString(marker));

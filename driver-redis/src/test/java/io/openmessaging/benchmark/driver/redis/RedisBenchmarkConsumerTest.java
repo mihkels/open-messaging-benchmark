@@ -26,6 +26,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -339,16 +341,9 @@ class RedisBenchmarkConsumerTest {
                                     }
                                 });
         try {
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (closer.getState() != Thread.State.TIMED_WAITING) {
-                assertThat(System.nanoTime()).isLessThan(deadline);
-                Thread.sleep(5);
-            }
+            long firstWait = awaitWaitCount(closer, 1);
             closer.interrupt();
-            while (closer.getState() != Thread.State.TIMED_WAITING && closer.isAlive()) {
-                assertThat(System.nanoTime()).isLessThan(deadline);
-                Thread.sleep(5);
-            }
+            awaitWaitCount(closer, firstWait + 1);
         } finally {
             release.countDown();
         }
@@ -361,6 +356,21 @@ class RedisBenchmarkConsumerTest {
                     .singleElement()
                     .isInstanceOf(InterruptedException.class);
         }
+    }
+
+    private static long awaitWaitCount(Thread thread, long expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            ThreadInfo info = ManagementFactory.getThreadMXBean().getThreadInfo(thread.threadId());
+            if (info == null) {
+                break;
+            }
+            if (info.getWaitedCount() >= expected) {
+                return info.getWaitedCount();
+            }
+            Thread.sleep(1);
+        }
+        throw new AssertionError("Thread did not enter the expected wait");
     }
 
     private static RedisBenchmarkConsumer stubbornReader(CountDownLatch release, Duration timeout)

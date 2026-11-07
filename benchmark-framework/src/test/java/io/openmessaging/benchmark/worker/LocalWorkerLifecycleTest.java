@@ -53,6 +53,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 class LocalWorkerLifecycleTest {
@@ -633,6 +634,7 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    @Timeout(5)
     void readinessFailsPromptlyEvenIfAnotherProbeNeverCompletes() throws Exception {
         BenchmarkProducer waiting = mock(BenchmarkProducer.class);
         BenchmarkProducer failing = mock(BenchmarkProducer.class);
@@ -650,13 +652,13 @@ class LocalWorkerLifecycleTest {
         try (LocalWorker worker =
                 worker(new Scenario(List.of(waiting, failing)), Duration.ofSeconds(2))) {
             worker.createProducers(List.of("first", "second"));
-            long start = System.nanoTime();
             assertThatThrownBy(worker::probeProducers).hasRootCauseMessage("probe rejected");
-            assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(1));
+            assertThat(pending).isNotDone();
         }
     }
 
     @Test
+    @Timeout(5)
     void failedProbeIsNotBlockedByAnotherProducersSendCall() throws Exception {
         BenchmarkProducer failing = mock(BenchmarkProducer.class);
         BenchmarkProducer waiting = mock(BenchmarkProducer.class);
@@ -678,9 +680,8 @@ class LocalWorkerLifecycleTest {
         LocalWorker worker = worker(new Scenario(List.of(failing, waiting)), Duration.ofSeconds(2));
         try {
             worker.createProducers(List.of("first", "second"));
-            long start = System.nanoTime();
             assertThatThrownBy(worker::probeProducers).hasRootCauseMessage("probe rejected");
-            assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(1));
+            assertThat(release.getCount()).isEqualTo(1);
         } finally {
             release.countDown();
             worker.close();
@@ -898,6 +899,7 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    @Timeout(5)
     void timesOutAStalledStatisticsResetAndRejectsReuse() throws Exception {
         WorkerStats stats = mock(WorkerStats.class);
         when(stats.getMeterRegistry())
@@ -922,10 +924,8 @@ class LocalWorkerLifecycleTest {
                         stats, Duration.ofMillis(500), Duration.ofSeconds(2), Duration.ofMillis(500));
         initialize(worker, new Scenario(List.of()));
         try {
-            long start = System.nanoTime();
             assertThatThrownBy(worker::stopAll).hasRootCauseMessage("Statistics reset timed out");
             assertThat(entered.getCount()).isZero();
-            assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(3));
             assertThat(worker.canReuseAfterFailure()).isFalse();
         } finally {
             release.countDown();

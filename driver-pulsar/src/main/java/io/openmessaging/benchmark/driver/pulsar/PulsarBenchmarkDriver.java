@@ -136,7 +136,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                                                 .adminRoles(Collections.emptySet())
                                                 .allowedClusters(Collections.singleton(cluster))
                                                 .build());
-                    } catch (ConflictException _) {
+                    } catch (ConflictException e) {
                         // Ignore. This can happen when multiple workers are initializing at the same time
                     } catch (PulsarAdminException e) {
                         // Some metadata stores report the concurrent creation as a server error instead of

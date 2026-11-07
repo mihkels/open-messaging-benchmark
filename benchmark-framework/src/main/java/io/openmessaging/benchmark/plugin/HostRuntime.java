@@ -143,7 +143,7 @@ public final class HostRuntime {
                     JarURLConnection connection = (JarURLConnection) url.openConnection();
                     connection.setUseCaches(false);
                     return Optional.of(Path.of(connection.getJarFileURL().toURI()));
-                } catch (IOException | URISyntaxException | IllegalArgumentException _) {
+                } catch (IOException | URISyntaxException | IllegalArgumentException e) {
                     // fall through
                 }
             }
@@ -190,7 +190,7 @@ public final class HostRuntime {
                     if ("file".equals(uri.getScheme())) {
                         result.add(Path.of(uri).normalize());
                     }
-                } catch (IllegalArgumentException _) {
+                } catch (IllegalArgumentException e) {
                     // ignore malformed references
                 }
             }

@@ -518,7 +518,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             connector.execute(() -> {
                 try {
                     refreshConnections(false);
-                } catch (InterruptedException _) {
+                } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 } catch (Exception failure) {
                     log.warn("Unable to refresh NSQ consumer connections", failure);
@@ -526,7 +526,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                     refreshing.set(false);
                 }
             });
-        } catch (RejectedExecutionException _) {
+        } catch (RejectedExecutionException ignored) {
             refreshing.set(false);
         }
     }
@@ -649,7 +649,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             while (!terminated) {
                 try {
                     terminated = executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-                } catch (InterruptedException _) {
+                } catch (InterruptedException ignored) {
                     interrupted = true;
                 }
             }
@@ -658,7 +658,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             try {
                 eventLoopGroup.pendingCloses().get();
                 break;
-            } catch (InterruptedException _) {
+            } catch (InterruptedException ignored) {
                 interrupted = true;
             } catch (ExecutionException failure) {
                 recordCleanupFailure(failure.getCause(), startupFailure);

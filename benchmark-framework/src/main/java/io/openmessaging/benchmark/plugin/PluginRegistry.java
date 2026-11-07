@@ -348,7 +348,7 @@ public final class PluginRegistry {
     private static Path realPath(Path path) {
         try {
             return path.toRealPath();
-        } catch (IOException _) {
+        } catch (IOException e) {
             return path.toAbsolutePath().normalize();
         }
     }

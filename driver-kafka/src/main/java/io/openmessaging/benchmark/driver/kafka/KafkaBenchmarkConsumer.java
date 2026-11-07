@@ -235,7 +235,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             for (TopicPartition partition : assignment) {
                 consumer.position(partition, Duration.ZERO);
             }
-        } catch (TimeoutException _) {
+        } catch (TimeoutException notReady) {
             return;
         }
 

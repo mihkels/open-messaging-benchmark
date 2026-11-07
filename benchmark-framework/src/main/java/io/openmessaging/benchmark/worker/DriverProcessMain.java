@@ -112,7 +112,7 @@ public final class DriverProcessMain {
                 .start(() -> {
                     try {
                         Thread.sleep(SHUTDOWN_TIMEOUT);
-                    } catch (InterruptedException _) {
+                    } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return;
                     }

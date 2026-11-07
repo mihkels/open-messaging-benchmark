@@ -196,7 +196,7 @@ final class DriverProcess {
         Process current = process;
         try {
             return current.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException _) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return !current.isAlive();
         }
@@ -336,7 +336,7 @@ final class DriverProcess {
                     log.error("Driver process {} did not exit after being killed", current.pid());
                 }
             }
-        } catch (InterruptedException _) {
+        } catch (InterruptedException e) {
             current.destroyForcibly();
             Thread.currentThread().interrupt();
         }

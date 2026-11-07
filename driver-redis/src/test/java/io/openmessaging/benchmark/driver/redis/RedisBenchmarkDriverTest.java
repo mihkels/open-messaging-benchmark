@@ -68,7 +68,7 @@ class RedisBenchmarkDriverTest {
             driver.initialize(config, mock(MeterRegistry.class));
             try {
                 driver.createProducer("topic").join();
-                try (Jedis _ = driver.jedisPool.getResource()) {
+                try (var _ = driver.jedisPool.getResource()) {
                     assertThat(auth.get(5, TimeUnit.SECONDS)).containsExactly("AUTH", "benchmark", "secret");
                 }
             } finally {

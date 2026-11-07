@@ -137,6 +137,45 @@ class NsqLookupTest {
     }
 
     @Test
+    void interruptionWhileReadingPublisherIdentityReportsNotPresentAndStaysVisible()
+            throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/info",
+                exchange -> {
+                    try {
+                        release.await();
+                    } catch (InterruptedException _) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        exchange.close();
+                    }
+                });
+        server.start();
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            NsqLookup lookup =
+                    new NsqLookup(http, Duration.ofSeconds(5), "127.0.0.1", server.getAddress().getPort());
+            Set<ServerAddress> discovered = Set.of(new ServerAddress("publisher", 4150));
+            Future<Boolean[]> result =
+                    worker.submit(() -> {
+                        Thread.currentThread().interrupt();
+                        boolean present = lookup.includesPublishingNode(discovered);
+                        return new Boolean[] {present, Thread.currentThread().isInterrupted()};
+                    });
+            try {
+                assertThat(result.get(5, TimeUnit.SECONDS)).containsExactly(false, true);
+            } finally {
+                release.countDown();
+            }
+        } finally {
+            worker.shutdownNow();
+            server.stop(0);
+        }
+    }
+
+    @Test
     void rejectedOrMalformedLookupResponsesYieldNoProducers() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext(

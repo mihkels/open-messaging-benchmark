@@ -447,6 +447,8 @@ class DlogBenchmarkConsumerTest {
         verifyNoInteractions(callback);
     }
 
+    @SuppressWarnings(
+            "java:S2925") // polls the reader thread state; a sleeping thread exposes no hook
     private static void awaitReaderSleeping() throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {

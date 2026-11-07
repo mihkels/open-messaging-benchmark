@@ -74,8 +74,8 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             return new ArtemisBenchmarkConsumer(tempSession, tempConsumer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            closeAfterFailure(tempConsumer, e);
-            closeAfterFailure(tempSession, e);
+            ArtemisResources.closeAfterFailure(tempConsumer, e);
+            ArtemisResources.closeAfterFailure(tempSession, e);
             throw e;
         }
     }
@@ -88,32 +88,6 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             message.acknowledge();
         } catch (ActiveMQException e) {
             log.warn("Failed to acknowledge message", e);
-        }
-    }
-
-    private static void closeAfterFailure(ClientConsumer resource, Exception failure) {
-        if (resource == null) {
-            return;
-        }
-        try {
-            resource.close();
-        } catch (ActiveMQException | RuntimeException closeException) {
-            if (closeException != failure) {
-                failure.addSuppressed(closeException);
-            }
-        }
-    }
-
-    private static void closeAfterFailure(ClientSession resource, Exception failure) {
-        if (resource == null) {
-            return;
-        }
-        try {
-            resource.close();
-        } catch (ActiveMQException | RuntimeException closeException) {
-            if (closeException != failure) {
-                failure.addSuppressed(closeException);
-            }
         }
     }
 

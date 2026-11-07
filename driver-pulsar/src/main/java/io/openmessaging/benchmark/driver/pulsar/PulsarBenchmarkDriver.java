@@ -131,6 +131,9 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
+    // The persistence configuration is logged once per run, so eager formatting costs nothing
+    // measurable
+    @SuppressWarnings("java:S2629")
     private void createNamespace() throws IOException {
         try {
             // Create namespace and set the configuration

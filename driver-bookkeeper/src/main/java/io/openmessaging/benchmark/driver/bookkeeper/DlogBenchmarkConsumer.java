@@ -92,7 +92,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void read() throws Exception {
+    private void read() {
         readerThread = Thread.currentThread();
         lastDLSN = DLSN.InitialDLSN;
         try {

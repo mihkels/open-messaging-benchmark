@@ -94,7 +94,10 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         }
 
         if (operations == null) {
-            awaitConcurrentClose();
+            Exception concurrentFailure = awaitConcurrentClose();
+            if (concurrentFailure != null) {
+                throw concurrentFailure;
+            }
             return;
         }
 
@@ -112,16 +115,15 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         }
     }
 
-    private void awaitConcurrentClose() throws Exception {
+    // Waits for the owning close to finish and returns the failure the caller should rethrow.
+    private Exception awaitConcurrentClose() {
         try {
             closeComplete.await();
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw error;
+            return error;
         }
-        if (closeFailure != null) {
-            throw closeFailure;
-        }
+        return closeFailure;
     }
 
     private static Exception settle(List<SendOperation> operations) {

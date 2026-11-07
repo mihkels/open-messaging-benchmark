@@ -88,11 +88,11 @@ in a child JVM.
 bin/benchmark-worker [options]
 ```
 
-|        Option         | Default |                     Description                     |
-|-----------------------|---------|-----------------------------------------------------|
-| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics`   |
-| `-sp`, `--stats-port` | 8081    | Deprecated and unused. It must differ from `--port` |
-| `-h`, `--help`        |         | Print usage and exit                                |
+|        Option         | Default |                    Description                    |
+|-----------------------|---------|---------------------------------------------------|
+| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics` |
+| `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed  |
+| `-h`, `--help`        |         | Print usage and exit                              |
 
 The worker keeps running until it is stopped. Initializing a different driver stops the previous
 driver process. Stopping the worker stops its driver process.

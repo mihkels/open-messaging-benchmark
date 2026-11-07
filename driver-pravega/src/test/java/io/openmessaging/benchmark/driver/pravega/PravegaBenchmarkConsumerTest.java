@@ -19,9 +19,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +33,7 @@ import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
+import io.pravega.client.stream.ReinitializationRequiredException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -138,6 +141,28 @@ class PravegaBenchmarkConsumerTest {
         try {
             assertThat(delivered.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(rejected.get()).isInstanceOf(IllegalStateException.class);
+        } finally {
+            consumer.close();
+        }
+        verify(reader).close();
+    }
+
+    @Test
+    void reinitializationStopsTheReaderWithoutDelivering() throws Exception {
+        EventStreamClientFactory factory = mock();
+        ReaderGroupManager groups = mock();
+        EventStreamReader<ByteBuffer> reader = mock();
+        ConsumerCallback callback = mock();
+        when(factory.<ByteBuffer>createReader(anyString(), eq("subscription"), any(), any()))
+                .thenReturn(reader);
+        when(reader.readNextEvent(anyLong()))
+                .thenThrow(new ReinitializationRequiredException("reader group reset"));
+        PravegaBenchmarkConsumer consumer =
+                PravegaBenchmarkConsumer.create(
+                        "stream", "scope", "subscription", callback, factory, groups, true);
+        try {
+            verify(reader, after(300).times(1)).readNextEvent(anyLong());
+            verify(callback, never()).messageReceived(any(ByteBuffer.class), anyLong());
         } finally {
             consumer.close();
         }

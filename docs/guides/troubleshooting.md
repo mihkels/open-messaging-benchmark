@@ -80,11 +80,6 @@ The payload file size differs from `messageSize`. See [Payloads and keys](payloa
 Distributed mode needs two or more workers. For a single machine, omit `--workers` and run in local
 mode.
 
-**`Stats port must be different from HTTP port`**
-
-`bin/benchmark-worker --port 8081` collides with the default value of the deprecated
-`--stats-port`. Pass `--stats-port` with any other port.
-
 ## The run completes but the results look wrong
 
 |                        Symptom                        |                                        Likely cause                                         |

@@ -15,7 +15,9 @@ package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.utils.payload.FilePayloadReader;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -29,13 +31,35 @@ final class PayloadFactory {
     /**
      * The payloads to send.
      *
-     * <p>Not intended for value comparisons: the generated {@code equals}, {@code hashCode}, and
-     * {@code toString} methods use array identity, not array contents.
+     * <p>{@code equals} and {@code hashCode} compare array contents; {@code toString} prints the
+     * template sizes and weights rather than the payload bytes.
      *
      * @param data the payload templates
      * @param weights the weight of each template, or {@code null} to pick them uniformly
      */
-    record Payloads(List<byte[]> data, int[] weights) {}
+    record Payloads(List<byte[]> data, int[] weights) {
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Payloads that
+                    && PayloadTemplates.equals(data, that.data)
+                    && Arrays.equals(weights, that.weights);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * PayloadTemplates.hashCode(data) + Arrays.hashCode(weights);
+        }
+
+        @Override
+        public String toString() {
+            return "Payloads[data="
+                    + PayloadTemplates.describe(data)
+                    + ", weights="
+                    + Arrays.toString(weights)
+                    + "]";
+        }
+    }
 
     private PayloadFactory() {}
 

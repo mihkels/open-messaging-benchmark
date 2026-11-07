@@ -73,4 +73,19 @@ class PayloadFactoryTest {
 
         assertThat(PayloadFactory.create(workload).data()).containsExactly(expected);
     }
+
+    @Test
+    void payloadsCompareByContentAndPrintSizes() {
+        PayloadFactory.Payloads payloads =
+                new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), new int[] {5});
+        PayloadFactory.Payloads same =
+                new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), new int[] {5});
+
+        assertThat(payloads).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo("other");
+        assertThat(payloads)
+                .isNotEqualTo(
+                        new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 3}), new int[] {5}))
+                .isNotEqualTo(new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), null));
+        assertThat(payloads).hasToString("Payloads[data=1 templates, sizes [2], weights=[5]]");
+    }
 }

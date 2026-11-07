@@ -205,15 +205,24 @@ class MqttBenchmarkDriverOptionsTest {
         nullCodes.connection.complete(success());
         nullCodes.subscription.complete(mock(Mqtt5SubAck.class));
         assertThatThrownBy(third::join).hasMessageContaining("Invalid SUBACK");
+    }
 
-        StubDriver noTopics = new StubDriver();
-        CompletableFuture<BenchmarkConsumer> fourth =
+    @Test
+    void topicWithoutFiltersFailsBeforeConnecting() {
+        StubDriver noTopics =
+                new StubDriver() {
+                    @Override
+                    Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+                        throw new AssertionError("no client should be created without topic filters");
+                    }
+                };
+        CompletableFuture<BenchmarkConsumer> creation =
                 noTopics.createConsumer(" , ", "g", mock(ConsumerCallback.class));
-        noTopics.connection.complete(success());
-        Mqtt5SubAck empty = mock(Mqtt5SubAck.class);
-        when(empty.getReasonCodes()).thenReturn(List.of());
-        noTopics.subscription.complete(empty);
-        assertThatThrownBy(fourth::join).hasMessageContaining("Invalid SUBACK");
+
+        assertThatThrownBy(creation::join)
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No MQTT topic filters in topic ' , '");
+        assertThat(noTopics.subscriptions).isNull();
     }
 
     @Test
@@ -274,7 +283,7 @@ class MqttBenchmarkDriverOptionsTest {
         return ack;
     }
 
-    private static final class StubDriver extends MqttBenchmarkDriver {
+    private static class StubDriver extends MqttBenchmarkDriver {
         final Mqtt5AsyncClient client = mock(Mqtt5AsyncClient.class);
         final CompletableFuture<Mqtt5ConnAck> connection = new CompletableFuture<>();
         final CompletableFuture<Mqtt5SubAck> subscription = new CompletableFuture<>();

@@ -75,8 +75,7 @@ The image is multi-architecture and runs natively on amd64 and arm64. Wait until
 `curl -fsS http://localhost:8080/admin/v2/brokers/health` succeeds before you start a benchmark.
 
 > **Note:** Pulsar's admin port 8080 is also the default port of `bin/benchmark-worker`. If you run a
-> worker on the same host, start the worker on another port (for example `bin/benchmark-worker -p 8082`;
-> 8081 is the default `--stats-port`)
+> worker on the same host, start the worker on another port (for example `bin/benchmark-worker -p 8082`)
 > or publish the Pulsar admin API on a different host port.
 
 ## Minimal configuration and benchmark command

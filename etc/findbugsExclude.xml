@@ -110,6 +110,14 @@
     <Class name="io.openmessaging.benchmark.driver.redis.RedisBenchmarkProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
+  <!--
+    ResultMetadata runs git from fixed absolute locations on purpose: a PATH lookup lets a
+    writable PATH entry substitute another binary (SonarCloud java:S4036).
+  -->
+  <Match>
+    <Class name="io.openmessaging.benchmark.ResultMetadata" />
+    <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME" />
+  </Match>
   <Match>
     <Class name="io.openmessaging.benchmark.ResultsToCsv" />
     <Bug pattern="DM_DEFAULT_ENCODING" />

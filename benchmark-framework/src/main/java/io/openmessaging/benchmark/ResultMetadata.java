@@ -16,11 +16,14 @@ package io.openmessaging.benchmark;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,6 +55,9 @@ public record ResultMetadata(
                     Pattern.CASE_INSENSITIVE);
     private static final String REDACTED = "[REDACTED]";
     private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
+    private static final List<Path> GIT_LOCATIONS =
+            List.of(
+                    Path.of("/usr/bin/git"), Path.of("/usr/local/bin/git"), Path.of("/opt/homebrew/bin/git"));
 
     static ResultMetadata create(
             String runId,
@@ -119,9 +125,15 @@ public record ResultMetadata(
         if (!configured.isBlank()) {
             return configured;
         }
+        Optional<Path> git = findExecutable(GIT_LOCATIONS);
+        if (git.isEmpty()) {
+            return "unknown";
+        }
         try {
             Process process =
-                    new ProcessBuilder("git", "rev-parse", "HEAD").redirectErrorStream(true).start();
+                    new ProcessBuilder(git.get().toString(), "rev-parse", "HEAD")
+                            .redirectErrorStream(true)
+                            .start();
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 return "unknown";
@@ -135,6 +147,19 @@ public record ResultMetadata(
             Thread.currentThread().interrupt();
             return "unknown";
         }
+    }
+
+    /**
+     * Returns the first of the given absolute paths that is an executable regular file. Using fixed
+     * locations instead of a {@code PATH} lookup keeps a writable {@code PATH} entry from
+     * substituting another binary.
+     */
+    static Optional<Path> findExecutable(List<Path> candidates) {
+        return candidates.stream()
+                .filter(Path::isAbsolute)
+                .filter(Files::isRegularFile)
+                .filter(Files::isExecutable)
+                .findFirst();
     }
 
     private static String redactJvmOption(String option) {

@@ -17,6 +17,7 @@ import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.openmessaging.benchmark.utils.SecureTempFiles;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
@@ -132,7 +133,7 @@ public class WorkerHandler implements AutoCloseable {
 
     private void handleInitializeDriver(Context ctx) throws Exception {
         // Save config to the temp file
-        var tempFile = Files.createTempFile("driver-configuration", ".yaml");
+        var tempFile = SecureTempFiles.createFile("driver-configuration", ".yaml");
         try {
             Files.write(tempFile, ctx.bodyAsBytes());
             worker.initializeDriver(tempFile);

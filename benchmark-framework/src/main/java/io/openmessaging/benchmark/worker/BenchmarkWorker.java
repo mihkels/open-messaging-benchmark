@@ -48,9 +48,9 @@ public final class BenchmarkWorker {
 
         @Parameter(
                 names = {"-sp", "--stats-port"},
-                description = "Stats port to listen on")
-        @Deprecated(since = "0.0.3", forRemoval = true)
-        private int statsPort = 8081;
+                description = "Deprecated and ignored; accepted so existing launch scripts keep working")
+        // Deprecated since 0.0.3. Kept so existing launch scripts still parse; only read to warn.
+        private Integer statsPort;
 
         public boolean isHelp() {
             return help;
@@ -58,10 +58,6 @@ public final class BenchmarkWorker {
 
         public int getHttpPort() {
             return httpPort;
-        }
-
-        public int getStatsPort() {
-            return statsPort;
         }
     }
 
@@ -83,10 +79,8 @@ public final class BenchmarkWorker {
             System.exit(0);
         }
 
-        if (arguments.statsPort == arguments.httpPort) {
-            System.err.println("Stats port must be different from HTTP port");
-            jc.usage();
-            System.exit(-1);
+        if (arguments.statsPort != null) {
+            log.warn("--stats-port is deprecated and ignored; metrics are served on --port");
         }
 
         PrometheusMeterRegistry prometheusRegistry =

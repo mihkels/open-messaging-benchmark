@@ -114,8 +114,10 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                             consumerCallback.messageReceived(event, eventTimestamp);
                         }
                     } catch (ReinitializationRequiredException e) {
-                        log.error("Exception during read", e);
-                        throw e;
+                        // The reader group was reset, so this reader can never read again. Nothing
+                        // inspects the task's future, so stop here rather than rethrowing into it.
+                        log.error("Reader group requires reinitialization; stopping this reader", e);
+                        return;
                     } catch (RuntimeException e) {
                         // The task's future is never inspected, so an escaping exception would stop
                         // this reader silently and strand its segments for the rest of the run.

@@ -266,7 +266,8 @@ class KafkaBenchmarkConsumerReadinessTest {
                                     partition,
                                     List.of(
                                             new org.apache.kafka.clients.consumer.ConsumerRecord<>(
-                                                    "topic", 0, 1, "key", new byte[] {1})))));
+                                                    "topic", 0, 1, "key", new byte[] {1}))),
+                            java.util.Map.of()));
             assertTrue(callbackStarted.await(5, TimeUnit.SECONDS));
             Future<?> close =
                     executor.submit(() -> {

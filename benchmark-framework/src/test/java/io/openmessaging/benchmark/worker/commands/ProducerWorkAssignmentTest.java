@@ -44,4 +44,54 @@ class ProducerWorkAssignmentTest {
                                 List.of(new byte[] {1}), 10, KeyDistributorType.NO_KEY, new int[] {1, 2}))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void equalityAndHashCodeUsePayloadAndWeightContents() {
+        ProducerWorkAssignment assignment =
+                new ProducerWorkAssignment(
+                        List.of(new byte[] {1}, new byte[] {2}),
+                        10,
+                        KeyDistributorType.NO_KEY,
+                        new int[] {1, 3});
+        ProducerWorkAssignment same =
+                new ProducerWorkAssignment(
+                        List.of(new byte[] {1}, new byte[] {2}),
+                        10,
+                        KeyDistributorType.NO_KEY,
+                        new int[] {1, 3});
+
+        assertThat(assignment).isEqualTo(same).hasSameHashCodeAs(same).isNotEqualTo("other");
+        assertThat(assignment)
+                .isNotEqualTo(
+                        new ProducerWorkAssignment(
+                                List.of(new byte[] {1}, new byte[] {9}),
+                                10,
+                                KeyDistributorType.NO_KEY,
+                                new int[] {1, 3}))
+                .isNotEqualTo(
+                        new ProducerWorkAssignment(
+                                List.of(new byte[] {1}, new byte[] {2}),
+                                10,
+                                KeyDistributorType.NO_KEY,
+                                new int[] {3, 1}))
+                .isNotEqualTo(assignment.withPublishRate(20))
+                .isNotEqualTo(
+                        new ProducerWorkAssignment(
+                                List.of(new byte[] {1}, new byte[] {2}),
+                                10,
+                                KeyDistributorType.RANDOM_NANO,
+                                new int[] {1, 3}));
+    }
+
+    @Test
+    void toStringDescribesPayloadSizesInsteadOfArrayIdentities() {
+        ProducerWorkAssignment assignment =
+                new ProducerWorkAssignment(
+                        List.of(new byte[] {1, 2, 3}), 10, KeyDistributorType.NO_KEY, new int[] {7});
+
+        assertThat(assignment)
+                .hasToString(
+                        "ProducerWorkAssignment[payloadData=1 templates, sizes [3], publishRate=10.0, "
+                                + "keyDistributorType=NO_KEY, payloadWeights=[7]]");
+    }
 }

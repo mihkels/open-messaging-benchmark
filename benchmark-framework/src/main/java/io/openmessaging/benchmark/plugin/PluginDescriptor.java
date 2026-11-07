@@ -66,6 +66,14 @@ public record PluginDescriptor(
                 classReferenceProperties == null ? List.of() : List.copyOf(classReferenceProperties);
     }
 
+    private static String driverApiVersionHint(Integer declared) {
+        if (declared != null && declared > DriverApiVersion.CURRENT) {
+            return "; upgrade the benchmark to a release that supports it";
+        }
+        return "; rebuild the bundle against the current driver-api and declare driverApiVersion: "
+                + DriverApiVersion.CURRENT;
+    }
+
     /** Returns every problem with this descriptor; an empty list means the descriptor is valid. */
     public List<String> validate() {
         List<String> errors = new ArrayList<>();
@@ -84,7 +92,8 @@ public record PluginDescriptor(
                     "bundle targets driverApiVersion "
                             + driverApiVersion
                             + " but this benchmark implements driverApiVersion "
-                            + DriverApiVersion.CURRENT);
+                            + DriverApiVersion.CURRENT
+                            + driverApiVersionHint(driverApiVersion));
         }
         int runtimeJava = Runtime.version().feature();
         if (javaVersion != null && javaVersion > runtimeJava) {

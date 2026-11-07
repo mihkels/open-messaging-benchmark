@@ -21,12 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.DriverApiVersion;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -66,7 +64,7 @@ class PluginRegistryTest {
     }
 
     @Test
-    void versionOneDescriptorStillAcceptsBinaryIncompatibleOlderDriver() throws Exception {
+    void rejectsStaleVersionOneBundleBuiltAgainstPrometheusRegistrySpi() throws Exception {
         String oldDriver = "fixture.legacy.LegacyDriver";
         String oldApi =
                 "package io.openmessaging.benchmark.driver;\n"
@@ -81,6 +79,10 @@ class PluginRegistryTest {
                                 "io.micrometer.core.instrument.MeterRegistry registry",
                                 "io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry");
         Path legacyBundle = descriptor(dir.resolve("drivers/legacy"), "legacy", List.of(oldDriver), "");
+        Path legacyDescriptor = legacyBundle.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                legacyDescriptor,
+                Files.readString(legacyDescriptor).replace("driverApiVersion: 2", "driverApiVersion: 1"));
         Path jar = legacyBundle.resolve("legacy.jar");
         URL prometheusClasspath =
                 PrometheusMeterRegistry.class.getProtectionDomain().getCodeSource().getLocation();
@@ -99,16 +101,19 @@ class PluginRegistryTest {
         }
         PluginFixtures.writeJar(jar, Map.of(entry, legacyClass));
 
-        assertThat(DriverApiVersion.CURRENT).isEqualTo(1);
-        assertThat(discover().resolve(oldDriver, Map.of()).primary().id()).isEqualTo("legacy");
-        try (URLClassLoader loader =
-                new URLClassLoader(
-                        new URL[] {jar.toUri().toURL()}, BenchmarkDriver.class.getClassLoader())) {
-            BenchmarkDriver legacy =
-                    (BenchmarkDriver) loader.loadClass(oldDriver).getDeclaredConstructor().newInstance();
-            assertThatThrownBy(() -> legacy.initialize(Path.of("unused"), null))
-                    .isInstanceOf(AbstractMethodError.class);
-        }
+        PluginRegistry registry = discover();
+
+        assertThat(DriverApiVersion.CURRENT).isEqualTo(2);
+        assertThat(registry.errors())
+                .anySatisfy(error ->
+                        assertThat(error)
+                                .contains("legacy")
+                                .contains("bundle targets driverApiVersion 1")
+                                .contains("implements driverApiVersion 2")
+                                .contains("rebuild the bundle"));
+        assertThatThrownBy(() -> registry.resolve(oldDriver, Map.of()))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("driverApiVersion 1");
     }
 
     @Test
@@ -175,7 +180,7 @@ class PluginRegistryTest {
                 badVersion.resolve(PluginBundle.DESCRIPTOR_FILE),
                 Files.readString(badVersion.resolve(PluginBundle.DESCRIPTOR_FILE))
                         .replace("descriptorVersion: 1", "descriptorVersion: 2")
-                        .replace("driverApiVersion: 1", "driverApiVersion: 99"));
+                        .replace("driverApiVersion: 2", "driverApiVersion: 99"));
         bundle("escape", List.of("b.B"), "classpath:\n  - \"../kafka/kafka.jar\"\n");
         bundle("missing", List.of("c.C"), "classpath:\n  - absent.jar\n");
         bundle("unknown-field", List.of("d.D"), "surprise: true\n");
@@ -212,7 +217,7 @@ class PluginRegistryTest {
         Path descriptor = invalid.resolve(PluginBundle.DESCRIPTOR_FILE);
         Files.writeString(
                 descriptor,
-                Files.readString(descriptor).replace("driverApiVersion: 1", "driverApiVersion: 99"));
+                Files.readString(descriptor).replace("driverApiVersion: 2", "driverApiVersion: 99"));
         PluginRegistry registry = discover();
 
         assertThat(registry.errors())

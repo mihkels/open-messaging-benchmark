@@ -22,15 +22,19 @@ package io.openmessaging.benchmark.driver;
  * declaring the contract it implements. Incompatible SPI changes normally increment the value,
  * independently of the project version.
  *
- * <p>As a one-time exception, the change from {@code PrometheusMeterRegistry} to {@code
- * MeterRegistry} in {@link BenchmarkDriver#initialize} keeps version {@code 1}. Older version-1
- * bundles are binary-incompatible even though their descriptor still matches, so this check cannot
- * detect them. Rebuild the host and all plugin bundles together against the changed driver API.
+ * <p>Version history:
+ *
+ * <ul>
+ *   <li>{@code 2}: {@link BenchmarkDriver#initialize} takes a Micrometer {@code MeterRegistry}.
+ *   <li>{@code 1}: {@link BenchmarkDriver#initialize} took a {@code PrometheusMeterRegistry}. The
+ *       registry change shipped under version {@code 1} in 0.1.0 through 0.2.0, so version-1
+ *       bundles are rejected and must be rebuilt.
+ * </ul>
  */
 public final class DriverApiVersion {
 
     /** The driver SPI contract implemented by this version of driver-api. */
-    public static final int CURRENT = 1;
+    public static final int CURRENT = 2;
 
     private DriverApiVersion() {}
 }

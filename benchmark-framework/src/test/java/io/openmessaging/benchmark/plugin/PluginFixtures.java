@@ -152,7 +152,7 @@ public final class PluginFixtures {
                         + id
                         + "\n"
                         + "version: 1.0\n"
-                        + "driverApiVersion: 1\n"
+                        + "driverApiVersion: 2\n"
                         + "drivers:\n"
                         + drivers.stream().map(d -> "  - " + d + "\n").collect(Collectors.joining())
                         + extraYaml;

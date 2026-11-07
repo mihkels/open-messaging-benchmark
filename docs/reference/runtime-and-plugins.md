@@ -90,7 +90,7 @@ drivers/driver-jms/
 | `descriptorVersion`        | yes      | Must be `1`                                                                                                           |
 | `id`                       | yes      | Bundle ID; letters, digits, `.`, `_` and `-`                                                                          |
 | `version`                  | no       | Bundle version                                                                                                        |
-| `driverApiVersion`         | yes      | Must match the framework's driver API version, currently `1`                                                          |
+| `driverApiVersion`         | yes      | Must match the framework's driver API version, currently `2`                                                          |
 | `javaVersion`              | no       | Minimum Java feature version; the bundle is rejected on an older runtime                                              |
 | `drivers`                  | yes      | Fully qualified driver classes the bundle provides                                                                    |
 | `classpath`                | yes      | Jar paths or globs relative to the bundle directory                                                                   |
@@ -101,11 +101,10 @@ drivers/driver-jms/
 Invalid bundles are reported with every problem found. See
 [Packaging a plugin](../development/packaging-a-plugin.md) for building one.
 
-**Version-1 rebuild required:** `BenchmarkDriver.initialize` changed its registry parameter from
-`PrometheusMeterRegistry` to `MeterRegistry` without changing `driverApiVersion`. Older version-1
-bundles are binary-incompatible, but their descriptors still match and cannot identify them as stale.
-Rebuild the host and all plugin bundles together against the changed `driver-api`, and deploy the
-rebuilt bundles to every worker. Matching descriptor or artifact versions alone are not sufficient.
+**Version-1 bundles are rejected:** bundles declaring `driverApiVersion: 1` fail discovery with an
+error that asks for a rebuild. Rebuild them against the current `driver-api` and declare
+`driverApiVersion: 2`; see
+[Upgrading a plugin to driver API version 2](../development/packaging-a-plugin.md#upgrading-a-plugin-to-driver-api-version-2).
 
 ### Adding provider jars
 

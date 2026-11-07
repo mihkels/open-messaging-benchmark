@@ -43,7 +43,7 @@ To package and install a driver, see [Packaging a plugin](packaging-a-plugin.md)
 | `Failures`                   | helper class                                             | Collects failures of a multi-step cleanup so every step runs and none is lost                  |
 | `AbandonableCreation`        | interface                                                | Optional cooperative stop signal for a resource-creation future                                |
 | `ResourceCreationCompletion` | interface                                                | Optional completion barrier for a resource-creation future, including cleanup                  |
-| `DriverApiVersion`           | constant `CURRENT = 1`                                   | SPI version that plugin bundles declare                                                        |
+| `DriverApiVersion`           | constant `CURRENT = 2`                                   | SPI version that plugin bundles declare                                                        |
 
 The records are nested in `BenchmarkDriver`. The full `BenchmarkDriver` interface is:
 
@@ -72,11 +72,9 @@ public interface BenchmarkDriver extends AutoCloseable {
 The default batch methods call the corresponding single-resource method for each entry.
 Producer and consumer batches succeed after every entry succeeds, or fail as soon as creation fails.
 
-The `initialize` parameter changed from `PrometheusMeterRegistry` to `MeterRegistry` without changing
-`driverApiVersion: 1`. Older version-1 bundles are binary-incompatible even though their descriptors
-still match. Rebuild the host and all plugin bundles together against the changed `driver-api`; the
-descriptor check cannot detect an old bundle. See
-[Compatibility rules](packaging-a-plugin.md#compatibility-rules).
+`initialize` takes a Micrometer `MeterRegistry` since `driverApiVersion: 2`. Bundles that declare
+version `1` are rejected at discovery; rebuild them against the current `driver-api` and declare
+`driverApiVersion: 2`. See [Compatibility rules](packaging-a-plugin.md#compatibility-rules).
 
 The requirements below define the SPI contract. Individual drivers must also meet the stated
 failure, cleanup, readiness and payload-ownership requirements.

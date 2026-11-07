@@ -29,7 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
-    private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkProducer.class);
+    private static final Logger log =
+            LoggerFactory.getLogger(PravegaBenchmarkTransactionProducer.class);
 
     private final TransactionalEventStreamWriter<ByteBuffer> transactionWriter;
 

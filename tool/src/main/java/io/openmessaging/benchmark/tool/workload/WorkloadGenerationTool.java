@@ -57,7 +57,10 @@ public class WorkloadGenerationTool {
         }
 
         // Dump configuration variables
-        log.info("Starting benchmark with config: {}", mapper.writeValueAsString(arguments));
+        log.atInfo()
+                .setMessage("Starting benchmark with config: {}")
+                .addArgument(() -> mapper.writeValueAsString(arguments))
+                .log();
 
         WorkloadSetTemplate template = templateReader.readValue(arguments.templateFile);
         List<Workload> workloads = new WorkloadSetGenerator(template).generate();

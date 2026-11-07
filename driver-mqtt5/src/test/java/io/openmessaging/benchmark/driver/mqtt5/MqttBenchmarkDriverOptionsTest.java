@@ -47,8 +47,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -212,7 +212,7 @@ class MqttBenchmarkDriverOptionsTest {
         StubDriver noTopics =
                 new StubDriver() {
                     @Override
-                    Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+                    Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
                         throw new AssertionError("no client should be created without topic filters");
                     }
                 };
@@ -296,7 +296,7 @@ class MqttBenchmarkDriverOptionsTest {
         }
 
         @Override
-        Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+        Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
             return client;
         }
 

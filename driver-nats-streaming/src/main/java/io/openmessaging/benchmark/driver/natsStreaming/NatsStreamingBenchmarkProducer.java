@@ -54,21 +54,18 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
         }
         CompletableFuture<String> expectedGuid = new CompletableFuture<>();
         AckHandler acb =
-                new AckHandler() {
-                    @Override
-                    public void onAck(String s, Exception e) {
-                        if (e != null) {
-                            pending.completeFromClient(future, e);
-                            return;
-                        }
-                        expectedGuid.thenAccept(guid -> {
-                            if (guid.equals(s)) {
-                                pending.completeFromClient(future, null);
-                            } else {
-                                pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
-                            }
-                        });
+                (s, e) -> {
+                    if (e != null) {
+                        pending.completeFromClient(future, e);
+                        return;
                     }
+                    expectedGuid.thenAccept(guid -> {
+                        if (guid.equals(s)) {
+                            pending.completeFromClient(future, null);
+                        } else {
+                            pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
+                        }
+                    });
                 };
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
         try {

@@ -38,19 +38,15 @@ public record Config(
                 producerType != null ? producerType : ClientType.KAFKA,
                 consumerType != null ? consumerType : ClientType.KAFKA,
                 pulsarConfig != null ? pulsarConfig : new PulsarConfig(),
-                pollTimeoutMs != null ? pollTimeoutMs : getDefaultPollTimeout(),
+                pollTimeoutMs != null ? pollTimeoutMs : DEFAULT_POLL_TIMEOUT_MS,
                 kafkaConfig != null ? kafkaConfig : "");
     }
 
-    private static long getDefaultPollTimeout() {
-        // This method will determine the appropriate default based on context
-        // For now, let's use 100 as that's what the test expects
-        return 100L;
-    }
+    private static final long DEFAULT_POLL_TIMEOUT_MS = 100L;
 
     // Default constructor
     public Config() {
-        this(ClientType.KAFKA, ClientType.KAFKA, new PulsarConfig(), 100L, "");
+        this(ClientType.KAFKA, ClientType.KAFKA, new PulsarConfig(), DEFAULT_POLL_TIMEOUT_MS, "");
     }
 
     public Properties getKafkaProperties() {

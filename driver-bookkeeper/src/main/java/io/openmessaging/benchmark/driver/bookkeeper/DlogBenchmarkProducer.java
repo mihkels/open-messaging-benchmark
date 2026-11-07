@@ -80,7 +80,7 @@ public final class DlogBenchmarkProducer implements BenchmarkProducer {
                 LogRecord record = new LogRecord(sequencer.nextId(), payload.clone());
                 writer
                         .write(record)
-                        .thenApply(dlsn -> (Void) null)
+                        .thenApply(dlsn -> null)
                         .whenComplete((unused, failure) -> pending.completeFromClient(send, failure));
             } catch (Exception e) {
                 send.completeExceptionally(e);

@@ -125,6 +125,7 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
     }
 
     @Override
+    @SuppressWarnings("java:S2143") // AMQP BasicProperties takes the timestamp as a java.util.Date
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
         BasicProperties.Builder builder = defaultProperties.builder().timestamp(new Date());
         if (messagePersistence) {

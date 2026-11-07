@@ -25,7 +25,7 @@ import tools.jackson.databind.ser.std.StdSerializer;
 public class HistogramSerializer extends StdSerializer<Histogram> {
     private static final Logger log = LoggerFactory.getLogger(HistogramSerializer.class);
     private static final int INITIAL_BUFFER_SIZE = 8 * 1024 * 1024;
-    private final transient ThreadLocal<ByteBuffer> threadBuffer =
+    private final ThreadLocal<ByteBuffer> threadBuffer =
             ThreadLocal.withInitial(() -> ByteBuffer.allocate(INITIAL_BUFFER_SIZE));
 
     public HistogramSerializer() {

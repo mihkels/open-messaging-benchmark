@@ -70,7 +70,7 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
             if (send.outcomeSelected) {
                 complete(send);
             } else {
-                acknowledgement.thenApply(ack -> (Void) null).whenComplete(send);
+                acknowledgement.<Void>thenApply(ack -> null).whenComplete(send);
             }
         } catch (RuntimeException failure) {
             settle(send, failure);

@@ -58,7 +58,7 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
             messageBuilder.setBody(payload.clone());
             messageBuilder.setTopic(this.rmqTopic);
             key.ifPresent(messageBuilder::setKeys);
-            if (this.sendDelayMsg) {
+            if (Boolean.TRUE.equals(this.sendDelayMsg)) {
                 long delayTime = System.currentTimeMillis() + this.delayTimeInSec * 1000;
                 messageBuilder.setDeliveryTimestamp(delayTime);
             }

@@ -19,6 +19,7 @@ import static io.openmessaging.benchmark.plugin.PluginFixtures.descriptor;
 import static io.openmessaging.benchmark.plugin.PluginFixtures.driverSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.DriverApiVersion;
@@ -493,6 +494,18 @@ class PluginRegistryTest {
 
             System.setProperty(PluginRegistry.HOME_PROPERTY, dir.toString());
             assertThat(PluginRegistry.home()).isEqualTo(dir.toAbsolutePath().normalize());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+        }
+    }
+
+    @Test
+    void homeFallsBackToTheWorkingDirectoryWhenUnset() {
+        assumeTrue(System.getenv(PluginRegistry.HOME_ENV) == null);
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        try {
+            System.clearProperty(PluginRegistry.HOME_PROPERTY);
+            assertThat(PluginRegistry.home()).isEqualTo(Path.of("").toAbsolutePath().normalize());
         } finally {
             restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
         }

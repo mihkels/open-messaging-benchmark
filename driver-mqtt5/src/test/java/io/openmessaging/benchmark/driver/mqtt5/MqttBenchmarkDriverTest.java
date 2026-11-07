@@ -63,7 +63,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
 
 class MqttBenchmarkDriverTest {
@@ -99,7 +99,7 @@ class MqttBenchmarkDriverTest {
         MqttBenchmarkDriver driver =
                 new MqttBenchmarkDriver(new MqttConfig()) {
                     @Override
-                    Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+                    Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
                         return client;
                     }
                 };
@@ -379,7 +379,7 @@ class MqttBenchmarkDriverTest {
                 MqttBenchmarkDriver driver =
                         new MqttBenchmarkDriver(config) {
                             @Override
-                            Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+                            Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
                                 Mqtt5AsyncClient result = super.createClient(clientId, closed);
                                 client.set(result);
                                 return result;
@@ -661,7 +661,7 @@ class MqttBenchmarkDriverTest {
         CompletableFuture<Mqtt5SubAck> subscription = new CompletableFuture<>();
         List<Mqtt5Subscription> subscriptions;
         ConsumerCallback callback;
-        Supplier<Boolean> closed;
+        BooleanSupplier closed;
         boolean closedAtDisconnect;
         RuntimeException subscribeStartFailure;
 
@@ -671,13 +671,13 @@ class MqttBenchmarkDriverTest {
             when(client.getConfig()).thenReturn(config);
             when(client.disconnect())
                     .thenAnswer(invocation -> {
-                        closedAtDisconnect = closed.get();
+                        closedAtDisconnect = closed.getAsBoolean();
                         return CompletableFuture.completedFuture(null);
                     });
         }
 
         @Override
-        Mqtt5AsyncClient createClient(String clientId, Supplier<Boolean> closed) {
+        Mqtt5AsyncClient createClient(String clientId, BooleanSupplier closed) {
             this.closed = closed;
             return client;
         }

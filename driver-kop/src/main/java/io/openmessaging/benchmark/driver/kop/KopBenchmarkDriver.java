@@ -62,7 +62,11 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
     private Properties producerProperties;
     private Properties consumerProperties;
     private PulsarClient client = null;
+
+    // Built once in initialize() and cloned for every Pulsar producer
+    @SuppressWarnings("java:S1450")
     private ProducerBuilder<byte[]> producerBuilder = null;
+
     private ConsumerBuilder<ByteBuffer> consumerBuilder = null;
 
     public static Config loadConfig(Path file) throws IOException {

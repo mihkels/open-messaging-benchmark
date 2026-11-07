@@ -221,7 +221,7 @@ class KafkaTopicCreator {
             while (succeeded.get() < topicInfos.size()) {
                 // Check timeout for this attempt
                 if (System.currentTimeMillis() - startTime > ATTEMPT_TIMEOUT_MS) {
-                    throw new RuntimeException(
+                    throw new IllegalStateException(
                             String.format(
                                     "Topic creation attempt timed out after %d ms. Created %d/%d topics",
                                     ATTEMPT_TIMEOUT_MS, succeeded.get(), topicInfos.size()));

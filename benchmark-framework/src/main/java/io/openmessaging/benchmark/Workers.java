@@ -17,5 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Workers {
+    // The field name is the "workers" key of the --workers-file YAML document
+    @SuppressWarnings("java:S1700")
     public List<String> workers = new ArrayList<>();
 }

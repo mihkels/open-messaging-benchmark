@@ -55,7 +55,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         if (config.nsqdHttpPort < 1 || config.nsqdHttpPort > 65535) {
             throw new IllegalArgumentException("nsqdHttpPort must be between 1 and 65535");
         }
-        log.info("read config file," + config.toString());
+        log.info("read config file, {}", config);
     }
 
     @Override

@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.artemis;
 
-// import tools.jackson.databind.DeserializationFeature;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -37,16 +36,16 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
-    private ArtemisConfig config;
-
     private ServerLocator serverLocator;
     private ClientSessionFactory sessionFactory;
     private ClientSession session;
 
     @Override
+    // The configuration is logged once per run, so eager formatting costs nothing measurable
+    @SuppressWarnings("java:S2629")
     public synchronized void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException {
-        this.config = readConfig(configurationFile);
+        ArtemisConfig config = readConfig(configurationFile);
         log.info("ActiveMQ Artemis driver configuration: {}", writer.writeValueAsString(config));
         try {
             serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);

@@ -19,24 +19,17 @@ import javax.jms.BytesMessage;
 import javax.jms.Connection;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
-import javax.jms.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
 
+    // Closing the connection also closes the session and consumer created from it
     private final Connection connection;
-    private final Session session;
-    private final MessageConsumer consumer;
-    private final boolean useGetBody;
 
     // Private constructor - cannot throw exceptions
-    private JMSBenchmarkConsumer(
-            Connection connection, Session session, MessageConsumer consumer, boolean useGetBody) {
+    private JMSBenchmarkConsumer(Connection connection) {
         this.connection = connection;
-        this.consumer = consumer;
-        this.session = session;
-        this.useGetBody = useGetBody;
     }
 
     /**
@@ -44,7 +37,6 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
      * this method succeeds and must close them if initialization fails.
      *
      * @param connection the JMS connection
-     * @param session the JMS session
      * @param consumer the message consumer
      * @param callback the callback to handle received messages
      * @param useGetBody whether to use getBody method for message extraction
@@ -53,7 +45,6 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
      */
     public static JMSBenchmarkConsumer create(
             Connection connection,
-            Session session,
             MessageConsumer consumer,
             ConsumerCallback callback,
             boolean useGetBody)
@@ -70,7 +61,7 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
         });
         // Kafka JMS client does not allow you to add a listener after the connection has been started.
         connection.start();
-        return new JMSBenchmarkConsumer(connection, session, consumer, useGetBody);
+        return new JMSBenchmarkConsumer(connection);
     }
 
     @Override

@@ -183,10 +183,6 @@ final class ResourceBatch<C extends AutoCloseable> {
         failOrCancel(Failures.unwrap(error), false);
     }
 
-    private boolean cancel() {
-        return failOrCancel(new CancellationException("Resource creation was cancelled"), true);
-    }
-
     private boolean failOrCancel(Throwable cause, boolean cancellation) {
         List<C> toClose = new ArrayList<>();
         List<AbandonableCreation> toAbandon = new ArrayList<>();
@@ -275,7 +271,7 @@ final class ResourceBatch<C extends AutoCloseable> {
 
         @Override
         public boolean cancel(boolean mayInterruptIfRunning) {
-            return ResourceBatch.this.cancel();
+            return failOrCancel(new CancellationException("Resource creation was cancelled"), true);
         }
 
         private void succeed(List<C> resources) {

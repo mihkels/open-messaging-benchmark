@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 public final class JMSBenchmarkProducer implements BenchmarkProducer {
 
     private final Session session;
-    private final Destination destination;
     private final MessageProducer producer;
     private final boolean useAsyncSend;
     private final List<JMSConfig.AddProperty> properties;
@@ -43,12 +42,10 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
     // Private constructor - cannot throw exceptions
     private JMSBenchmarkProducer(
             Session session,
-            Destination destination,
             MessageProducer producer,
             boolean useAsyncSend,
             List<JMSConfig.AddProperty> properties) {
         this.session = session;
-        this.destination = destination;
         this.producer = producer;
         this.useAsyncSend = useAsyncSend;
         this.properties = properties != null ? properties : Collections.emptyList();
@@ -78,7 +75,7 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
             tempProducer = session.createProducer(destination);
 
             // Create the producer instance only after all operations succeed
-            return new JMSBenchmarkProducer(session, destination, tempProducer, useAsyncSend, properties);
+            return new JMSBenchmarkProducer(session, tempProducer, useAsyncSend, properties);
 
         } catch (Exception e) {
             // Clean up resources if initialization fails

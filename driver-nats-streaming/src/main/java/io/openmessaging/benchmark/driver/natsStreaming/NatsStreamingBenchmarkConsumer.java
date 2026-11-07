@@ -17,7 +17,7 @@ import io.nats.streaming.StreamingConnection;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 
 public class NatsStreamingBenchmarkConsumer implements BenchmarkConsumer {
-    private StreamingConnection streamingConnection;
+    private final StreamingConnection streamingConnection;
     private boolean unsubscribe;
 
     public NatsStreamingBenchmarkConsumer(StreamingConnection streamingConnection) {

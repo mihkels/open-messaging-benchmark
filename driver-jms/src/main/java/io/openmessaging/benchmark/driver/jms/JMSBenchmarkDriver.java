@@ -49,7 +49,10 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
-        log.info("JMS driver configuration: {}", writer.writeValueAsString(config));
+        log.atInfo()
+                .setMessage("JMS driver configuration: {}")
+                .addArgument(() -> writer.writeValueAsString(config))
+                .log();
 
         try {
             if (config.delegateForAdminOperationsClassName != null
@@ -100,6 +103,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             Constructor<ConnectionFactory> constructor = clazz.getConstructor(String.class);
             return constructor.newInstance(config.connectionFactoryConfigurationParam);
         } catch (NoSuchMethodException _) {
+            // No String constructor: try the Properties one
         }
 
         // constructor with Properties (like Confluent Kafka)
@@ -112,9 +116,13 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             props.putAll(map);
             return constructor.newInstance(props);
         } catch (NoSuchMethodException _) {
+            // No Properties constructor either: reported below
         }
 
-        throw new RuntimeException("Cannot find a suitable constructor for " + clazz);
+        throw new IllegalArgumentException(
+                "Connection factory "
+                        + clazz.getName()
+                        + " has neither a String nor a Properties constructor");
     }
 
     @Override
@@ -177,7 +185,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
             }
             return CompletableFuture.completedFuture(
                     JMSBenchmarkConsumer.create(
-                            consumerConnection, session, durableConsumer, consumerCallback, config.use20api));
+                            consumerConnection, durableConsumer, consumerCallback, config.use20api));
         } catch (Exception err) {
             closeAfterFailure(durableConsumer, err);
             closeAfterFailure(session, err);

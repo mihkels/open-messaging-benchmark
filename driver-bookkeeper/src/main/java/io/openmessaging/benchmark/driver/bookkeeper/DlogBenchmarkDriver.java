@@ -46,9 +46,8 @@ import org.slf4j.LoggerFactory;
 /** Benchmark driver testing distributedlog. */
 public class DlogBenchmarkDriver implements BenchmarkDriver {
 
-    private static final Logger log = LoggerFactory.getLogger(DlogBenchmarkProducer.class);
+    private static final Logger log = LoggerFactory.getLogger(DlogBenchmarkDriver.class);
 
-    private Config config;
     private Namespace namespace;
 
     public DlogBenchmarkDriver() {}
@@ -59,7 +58,7 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry meterRegistry) throws IOException {
-        config = DriverConfigs.read(configurationFile, Config.class);
+        Config config = DriverConfigs.read(configurationFile, Config.class);
 
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         try {

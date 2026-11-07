@@ -62,12 +62,14 @@ public final class DistributedWorkersEnsemble implements Worker {
         this.producerWorkers = partitions.get(1);
         this.consumerWorkers = partitions.get(0);
 
-        log.info(
-                "Workers list - producers: [{}]",
-                producerWorkers.stream().map(Worker::id).collect(joining(",")));
-        log.info(
-                "Workers list - consumers: {}",
-                consumerWorkers.stream().map(Worker::id).collect(joining(",")));
+        log.atInfo()
+                .setMessage("Workers list - producers: [{}]")
+                .addArgument(() -> producerWorkers.stream().map(Worker::id).collect(joining(",")))
+                .log();
+        log.atInfo()
+                .setMessage("Workers list - consumers: {}")
+                .addArgument(() -> consumerWorkers.stream().map(Worker::id).collect(joining(",")))
+                .log();
 
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }

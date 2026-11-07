@@ -39,8 +39,8 @@ public final class DriverProcessMain {
 
     private DriverProcessMain() {}
 
-    @SuppressWarnings(
-            "java:S2095") // WorkerHandler lives for the whole process; closed by the shutdown hook
+    // WorkerHandler lives for the whole process; closed by the shutdown hook
+    @SuppressWarnings("java:S2095")
     public static void main(String[] args) throws Exception {
         Path portFile = null;
         int i = 0;

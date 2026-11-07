@@ -63,8 +63,8 @@ public final class SecureTempFiles {
         return Files.createTempDirectory(prefix, ownerOnly(FileSystems.getDefault(), true));
     }
 
-    @SuppressWarnings(
-            "java:S1452") // Returns either a POSIX or an ACL attribute; the wildcard is inherent
+    // Returns either a POSIX or an ACL attribute; the wildcard is inherent
+    @SuppressWarnings("java:S1452")
     static FileAttribute<?> ownerOnly(FileSystem fileSystem, boolean directory) throws IOException {
         Set<String> views = fileSystem.supportedFileAttributeViews();
         if (views.contains("posix")) {

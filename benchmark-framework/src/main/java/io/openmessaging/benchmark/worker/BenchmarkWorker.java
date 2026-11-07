@@ -61,6 +61,8 @@ public final class BenchmarkWorker {
         }
     }
 
+    @SuppressWarnings(
+            "java:S2095") // WorkerHandler lives for the whole process; closed by the shutdown hook
     static void main(String[] args) throws Exception {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
@@ -95,7 +97,6 @@ public final class BenchmarkWorker {
 
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();
-        @SuppressWarnings("java:S2095") // Lives for the whole process; closed by the shutdown path
         WorkerHandler handler = new WorkerHandler(worker);
         Javalin app =
                 Javalin.create(

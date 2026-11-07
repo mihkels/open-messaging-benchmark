@@ -39,6 +39,8 @@ public final class DriverProcessMain {
 
     private DriverProcessMain() {}
 
+    @SuppressWarnings(
+            "java:S2095") // WorkerHandler lives for the whole process; closed by the shutdown hook
     public static void main(String[] args) throws Exception {
         Path portFile = null;
         int i = 0;
@@ -64,7 +66,6 @@ public final class DriverProcessMain {
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         new JvmResourceMetrics().bindTo(registry, "driver");
         LocalWorker worker = new LocalWorker(registry);
-        @SuppressWarnings("java:S2095") // Lives for the whole process; closed by the shutdown path
         WorkerHandler handler = new WorkerHandler(worker);
         Javalin app =
                 Javalin.create(config -> {

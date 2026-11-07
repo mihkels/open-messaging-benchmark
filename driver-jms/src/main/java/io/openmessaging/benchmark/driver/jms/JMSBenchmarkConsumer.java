@@ -42,14 +42,14 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
      * @param callback the callback to handle received messages
      * @param useGetBody whether to use getBody method for message extraction
      * @return a new JMSBenchmarkConsumer instance
-     * @throws Exception if initialization fails
+     * @throws JMSException if initialization fails
      */
     public static JMSBenchmarkConsumer create(
             Connection connection,
             MessageConsumer consumer,
             ConsumerCallback callback,
             boolean useGetBody)
-            throws Exception {
+            throws JMSException {
 
         consumer.setMessageListener(message -> {
             try {

@@ -51,6 +51,24 @@ jobs:
       - name: Build and Verify
         run: mvn --no-transfer-progress --batch-mode verify
 
+      # Fork pull requests get no secrets, so SonarCloud is skipped there (and until SONAR_TOKEN is set)
+      - name: Check SonarCloud token
+        id: sonar-token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then present=true; else present=false; fi
+          echo "present=$present" >> "$GITHUB_OUTPUT"
+
+      # Analyses the build above, reusing its classes and JaCoCo XML reports
+      - name: SonarCloud analysis
+        if: steps.sonar-token.outputs.present == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >-
+          mvn --no-transfer-progress --batch-mode
+          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+
       - name: Save Maven repository
         if: >-
           github.event_name == 'push' && github.ref == 'refs/heads/main'

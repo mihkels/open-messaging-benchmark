@@ -4,6 +4,8 @@
 [![Docs](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/docs.yml/badge.svg)](https://mihkels.github.io/open-messaging-benchmark/)
 [![Coverage](https://raw.githubusercontent.com/mihkels/open-messaging-benchmark/badges/jacoco.svg)](docs/development/building-the-project.md#coverage-thresholds)
 [![Branches](https://raw.githubusercontent.com/mihkels/open-messaging-benchmark/badges/branches.svg)](docs/development/building-the-project.md#coverage-thresholds)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=mihkels_open-messaging-benchmark&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mihkels_open-messaging-benchmark)
+[![SonarCloud Coverage](https://sonarcloud.io/api/project_badges/measure?project=mihkels_open-messaging-benchmark&metric=coverage)](https://sonarcloud.io/summary/new_code?id=mihkels_open-messaging-benchmark)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 A maintained fork of the [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)

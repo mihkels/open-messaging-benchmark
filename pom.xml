@@ -75,6 +75,7 @@
         <flatten.plugin.version>1.8.0</flatten.plugin.version>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
         <spotless.plugin.version>3.10.4</spotless.plugin.version>
+        <sonar.plugin.version>5.8.0.7211</sonar.plugin.version>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
@@ -87,6 +88,12 @@
         <jacoco.min.method>0.00</jacoco.min.method>
         <jacoco.min.line>0.00</jacoco.min.line>
         <jacoco.min.branch>0.00</jacoco.min.branch>
+        <!-- SonarCloud analysis; CI runs the scanner after mvn verify, see .github/workflows/pr-build-and-test.yml -->
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.organization>mihkels</sonar.organization>
+        <sonar.projectKey>mihkels_open-messaging-benchmark</sonar.projectKey>
+        <!-- Reports written by the jacoco-maven-plugin report execution in every module -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/*/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -226,6 +233,15 @@
     </dependencyManagement>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <!-- Check formats of various source files -->

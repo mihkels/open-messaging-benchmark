@@ -247,6 +247,30 @@ artifact, and on `main` the `coverage-badge` job turns them into the README badg
 the Surefire reports are uploaded as the `test-results` artifact. CI does not run the
 Testcontainers or Compose end-to-end suites. See [Testing a driver](testing-a-driver.md).
 
+### SonarCloud
+
+After `verify`, the same job runs the SonarCloud scanner, which reuses the compiled classes and the
+modules' `target/site/jacoco/jacoco.xml` reports:
+
+```bash
+mvn --no-transfer-progress --batch-mode org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+```
+
+The organization, project key, host and coverage report paths are properties in the root `pom.xml`,
+and the scanner version is pinned in its `pluginManagement`. The step needs the `SONAR_TOKEN`
+repository secret and is skipped when it is missing, which includes pull requests from forks.
+Analyses of `main` are the baseline that pull requests are compared against. Results, the quality
+gate and coverage on new code are at
+[sonarcloud.io](https://sonarcloud.io/summary/new_code?id=mihkels_open-messaging-benchmark).
+
+To run a scan locally, pass a token from your SonarCloud account. From a `git worktree`, also skip
+the license check and SCM blame, which cannot read the worktree's Git metadata:
+
+```bash
+SONAR_TOKEN=... mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+  -Dlicense.skip=true -Dsonar.scm.disabled=true
+```
+
 The same workflow runs a `framework-performance-smoke` job, which builds `performance-harness` with
 `-Pperformance` and runs its smoke checks (see [Framework resource efficiency](framework-performance.md)).
 `framework-performance.yml` runs only when started manually. `docs.yml` builds the documentation site

@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -393,17 +394,19 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         } catch (InterruptedException interrupted) {
             throw interrupted;
         } catch (Exception failure) {
-            reportConnectFailure(address, initial, failure);
+            if (reportConnectFailure(address, initial, failure)) {
+                throw failure;
+            }
         }
     }
 
-    private void reportConnectFailure(ServerAddress address, boolean initial, Exception failure)
-            throws Exception {
+    // Returns true when the failure must abort startup instead of being retried.
+    private boolean reportConnectFailure(ServerAddress address, boolean initial, Exception failure) {
         if (closed) {
-            return;
+            return false;
         }
         if (initial && cleanupOutcome() != null) {
-            throw failure;
+            return true;
         }
         if (initial) {
             lastConnectionFailure = failure;
@@ -411,6 +414,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         } else {
             log.warn("Unable to connect NSQ consumer to {}", address, failure);
         }
+        return false;
     }
 
     private boolean allConnected(Set<ServerAddress> discovered) {
@@ -676,7 +680,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 }
             }
         }
-        interrupted |= awaitPendingCloses();
+        awaitPendingCloses();
         io.netty.util.concurrent.Future<?> channels = eventLoopGroup.terminationFuture();
         channels.awaitUninterruptibly();
         if (!channels.isSuccess()) {
@@ -687,22 +691,14 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    // Waits for pending channel closes, recording a close failure; returns true if interrupted.
-    private boolean awaitPendingCloses() {
-        boolean interrupted = false;
-        boolean finished = false;
-        while (!finished) {
-            try {
-                eventLoopGroup.pendingCloses().get();
-                finished = true;
-            } catch (InterruptedException _) {
-                interrupted = true;
-            } catch (ExecutionException failure) {
-                recordCleanupFailure(failure.getCause(), startupFailure);
-                finished = true;
-            }
+    // Waits for pending channel closes without being interruptible, recording a close failure.
+    // join() leaves the thread's interrupt status untouched, so a pending interrupt is preserved.
+    private void awaitPendingCloses() {
+        try {
+            eventLoopGroup.pendingCloses().join();
+        } catch (CompletionException failure) {
+            recordCleanupFailure(failure.getCause(), startupFailure);
         }
-        return interrupted;
     }
 
     private void finishCreationQuiescence() {

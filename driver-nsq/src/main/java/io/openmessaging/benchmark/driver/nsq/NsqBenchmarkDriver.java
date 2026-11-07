@@ -43,6 +43,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class NsqBenchmarkDriver implements BenchmarkDriver {
+    private static final String CLOSED_MESSAGE = "NSQ driver is closed";
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations = new HashSet<>();
     private NsqConfig config;
@@ -134,7 +136,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
             boolean cancel;
             synchronized (this) {
                 if (closed) {
-                    return consumer.failBeforeStart(new IllegalStateException("NSQ driver is closed"));
+                    return consumer.failBeforeStart(new IllegalStateException(CLOSED_MESSAGE));
                 }
                 creation = Objects.requireNonNull(consumer.startAsync(), "NSQ consumer creation future");
                 cancel = closed;
@@ -143,25 +145,13 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
                 }
             }
             if (cancel) {
-                if (!creation.cancel(true) && !creation.isCompletedExceptionally()) {
-                    IllegalStateException failure = new IllegalStateException("NSQ driver is closed");
-                    BenchmarkConsumer handle = creation.getNow(null);
-                    if (handle != null) {
-                        closeAfterFailure(handle, failure);
-                    }
-                    if (handle != consumer) {
-                        closeAfterFailure(consumer, failure);
-                    }
-                    shutdownAfterFailure(scope::closeChannels, failure);
-                    return CompletableFuture.failedFuture(failure);
-                }
-            } else {
-                creation.whenComplete((handle, failure) -> {
-                    synchronized (this) {
-                        consumerCreations.remove(creation);
-                    }
-                });
+                return cancelAfterClose(creation, consumer, scope);
             }
+            creation.whenComplete((handle, failure) -> {
+                synchronized (this) {
+                    consumerCreations.remove(creation);
+                }
+            });
             return creation;
         } catch (Exception failure) {
             if (consumer != null) {
@@ -172,6 +162,27 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
             }
             return CompletableFuture.failedFuture(failure);
         }
+    }
+
+    // The driver closed while this creation was being registered. A creation that can no longer be
+    // cancelled has already completed, so close whatever it produced and fail the request.
+    private static CompletableFuture<BenchmarkConsumer> cancelAfterClose(
+            CompletableFuture<BenchmarkConsumer> creation,
+            NsqBenchmarkConsumer consumer,
+            NsqEventLoopGroup scope) {
+        if (creation.cancel(true) || creation.isCompletedExceptionally()) {
+            return creation;
+        }
+        IllegalStateException failure = new IllegalStateException(CLOSED_MESSAGE);
+        BenchmarkConsumer handle = creation.getNow(null);
+        if (handle != null) {
+            closeAfterFailure(handle, failure);
+        }
+        if (handle != consumer) {
+            closeAfterFailure(consumer, failure);
+        }
+        shutdownAfterFailure(scope::closeChannels, failure);
+        return CompletableFuture.failedFuture(failure);
     }
 
     NsqBenchmarkConsumer newConsumer(
@@ -186,7 +197,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
 
     private synchronized EventLoopGroup consumerEventLoops() {
         if (closed) {
-            throw new IllegalStateException("NSQ driver is closed");
+            throw new IllegalStateException(CLOSED_MESSAGE);
         }
         if (consumerEventLoops == null) {
             consumerEventLoops =

@@ -12,56 +12,29 @@
  * limitations under the License.
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&display=swap");
-
 /*
- * Layout concept: an instrument panel. A dark header band carries the run itself (terminal,
- * then the charts it produced); the rest of the page is a plain grid of reference cards.
- * Amber is the signal colour (publish path), cyan the second trace (end-to-end path).
+ * Layout concept: an instrument panel. A dark band carries the run itself (terminal), the rest of
+ * the page is a grid of readout cards. Amber is the signal colour (publish path), cyan the second
+ * trace (end-to-end path).
+ *
+ * Colour: the only literal colour values are the Material palette hooks below. Everything else is
+ * derived from Material's --md-* variables, so both schemes follow from them.
+ *
+ * Spacing: one px scale (--omb-space-*). Material changes the root font size at wide viewports, so
+ * spacing is in px to keep the rhythm fixed; type stays in rem so it follows the reader's settings.
  */
 
-:root {
-  --omb-font-display: "Archivo", "IBM Plex Sans", system-ui, sans-serif;
+/* ---------- Palette (Material hooks) ---------- */
 
-  /* Light scheme values (Material "default") */
-  --omb-bg: #f5f6f8;
-  --omb-surface: #ffffff;
-  --omb-line: #d9dee5;
-  --omb-fg: #131820;
-  --omb-muted: #566173;
-  --omb-amber: #9a6200;
-  --omb-cyan: #12707f;
-  --omb-band: #10141a;
-  --omb-band-fg: #e7eaef;
-  --omb-band-muted: #98a2b1;
-  --omb-band-line: #283040;
-  --omb-band-amber: #f0b13a;
-  --omb-band-cyan: #5cc3d4;
-}
-
-[data-md-color-scheme="slate"] {
-  --omb-bg: #0f1217;
-  --omb-surface: #161b23;
-  --omb-line: #283040;
-  --omb-fg: #e7eaef;
-  --omb-muted: #98a2b1;
-  --omb-amber: #f0b13a;
-  --omb-cyan: #5cc3d4;
-  --omb-band: #0a0d11;
-
-  --md-hue: 218;
-  --md-default-bg-color: var(--omb-bg);
-  --md-code-bg-color: #161b23;
-  --md-typeset-a-color: #f0b13a;
-}
-
-/* Material palette hooks: the header stays dark in both schemes, links use the amber trace. */
 [data-md-color-primary="custom"] {
   --md-primary-fg-color: #10141a;
   --md-primary-fg-color--light: #1b212b;
   --md-primary-fg-color--dark: #0a0d11;
   --md-primary-bg-color: #e7eaef;
-  --md-primary-bg-color--light: #98a2b1;
+  --md-primary-bg-color--light: #a3acba;
+
+  /* Second trace on the dark band (terminal success lines). */
+  --omb-band-trace-2: #5cc3d4;
 }
 
 [data-md-color-accent="custom"] {
@@ -72,11 +45,79 @@
 
 [data-md-color-scheme="default"] {
   --md-typeset-a-color: #8a5800;
+  --omb-trace-2: #12707f;
 }
 
-.md-header,
-.md-tabs {
-  background-color: var(--omb-band);
+[data-md-color-scheme="slate"] {
+  --md-hue: 218;
+  --md-default-bg-color: #0f1217;
+  --md-code-bg-color: #161b23;
+  --md-typeset-a-color: #f0b13a;
+  --omb-trace-2: #5cc3d4;
+}
+
+/* ---------- Tokens ---------- */
+
+:root {
+  --omb-space-1: 4px;
+  --omb-space-2: 8px;
+  --omb-space-3: 12px;
+  --omb-space-4: 16px;
+  --omb-space-5: 24px;
+  --omb-space-6: 32px;
+  --omb-space-7: 48px;
+  --omb-space-8: 64px;
+  --omb-space-9: 96px;
+
+  /* Rhythm, set once and reused by every section and grid. The gutter matches Material's header
+     padding so the page edge lines up with the logo and tabs. */
+  --omb-section-y: var(--omb-space-8);
+  --omb-gutter: var(--omb-space-4);
+  --omb-gap: var(--omb-space-4);
+  --omb-card-pad: var(--omb-space-4);
+  --omb-content-gap: var(--omb-space-6);
+  --omb-radius: var(--omb-space-2);
+  --omb-max: 61rem;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --omb-card-pad: var(--omb-space-5);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --omb-section-y: var(--omb-space-9);
+  }
+}
+
+.omb-home {
+  --omb-bg: var(--md-default-bg-color);
+  --omb-fg: var(--md-default-fg-color);
+  --omb-muted: color-mix(in srgb, var(--md-default-fg-color) 78%, var(--md-default-bg-color));
+  --omb-line: var(--md-default-fg-color--lightest);
+  --omb-surface: color-mix(in srgb, var(--md-default-fg-color) 3%, var(--md-default-bg-color));
+  --omb-accent: var(--md-typeset-a-color);
+  --omb-trace-1: var(--md-typeset-a-color);
+
+  --omb-band: var(--md-primary-fg-color);
+  --omb-band-fg: var(--md-primary-bg-color);
+  --omb-band-muted: var(--md-primary-bg-color--light);
+  --omb-band-line: color-mix(in srgb, var(--md-primary-bg-color) 16%, var(--md-primary-fg-color));
+  --omb-band-accent: var(--md-accent-fg-color);
+  --omb-term-bg: var(--md-primary-fg-color--dark);
+}
+
+[data-md-color-scheme="slate"] .omb-home {
+  --omb-band: var(--md-primary-fg-color--dark);
+}
+
+/* ---------- Site-wide ---------- */
+
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: var(--md-primary-fg-color--dark);
 }
 
 .omb-site-name,
@@ -86,29 +127,18 @@
   text-decoration: none;
 }
 
-.md-header__topic:first-child,
 .md-typeset h1,
 .md-typeset h2 {
-  font-family: var(--omb-font-display);
   letter-spacing: -0.01em;
-}
-
-.md-typeset h1,
-.md-typeset h2 {
   text-wrap: balance;
   color: var(--md-default-fg-color);
 }
 
 .md-typeset h1 {
-  font-weight: 750;
-  font-stretch: 108%;
-  letter-spacing: -0.02em;
+  font-weight: 600;
 }
 
-.md-typeset h2 {
-  font-weight: 650;
-}
-
+.md-typeset h2,
 .md-typeset h3 {
   font-weight: 600;
 }
@@ -133,22 +163,68 @@
   background: var(--omb-bg);
 }
 
+.omb-home h1,
+.omb-home h2,
+.omb-home h3 {
+  font-family: var(--md-text-font-family);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
 .omb-home a:focus-visible,
-.omb-home button:focus-visible {
-  outline: 2px solid var(--omb-band-amber);
-  outline-offset: 3px;
-  border-radius: 4px;
+.omb-home button:focus-visible,
+.omb-home pre:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+  border-radius: var(--omb-space-1);
+}
+
+/* Inline links in body copy: accent, underlined, so they read as links in both schemes. */
+.omb-home p a:not([class]) {
+  color: var(--omb-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.omb-home p a:not([class]):hover {
+  text-decoration-thickness: 2px;
 }
 
 .omb-wrap {
   /* Same width as Material's .md-grid, so the landing lines up with the header. */
-  max-width: 61rem;
+  max-width: var(--omb-max);
   margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-left: max(var(--omb-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--omb-gutter), env(safe-area-inset-right, 0px));
 }
 
-/* Hero band: always dark, it is the "screen" the run is shown on. */
+/* Shared card surface for every grid on the page. */
+.omb-metrics li,
+.omb-chart,
+.omb-driver,
+.omb-why li,
+.omb-paths a {
+  background: var(--omb-surface);
+  border: 1px solid var(--omb-line);
+  border-radius: var(--omb-radius);
+  min-width: 0;
+}
+
+.omb-metrics,
+.omb-drivers,
+.omb-why,
+.omb-paths,
+.omb-facts {
+  display: grid;
+  gap: var(--omb-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- Hero ---------- */
+
 .omb-hero {
   background: var(--omb-band);
   color: var(--omb-band-fg);
@@ -157,60 +233,59 @@
 
 .omb-hero .omb-wrap {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 3rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--omb-space-7);
   align-items: center;
-  padding-block: 4rem 3.5rem;
+  padding-block: var(--omb-section-y);
 }
 
 .omb-eyebrow {
   font-family: var(--md-code-font-family);
-  font-size: 0.75rem;
+  font-size: 0.6rem;
+  line-height: 1.6;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--omb-band-muted);
-  margin: 0 0 1rem;
+  margin: 0 0 var(--omb-space-4);
 }
 
 .omb-hero h1 {
-  font-family: var(--omb-font-display);
-  font-weight: 800;
-  font-stretch: 112%;
-  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
-  line-height: 1.02;
-  letter-spacing: -0.025em;
-  margin: 0 0 1.25rem;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--omb-space-5);
   color: var(--omb-band-fg);
-  text-wrap: balance;
 }
 
 .omb-hero h1 em {
   font-style: normal;
-  color: var(--omb-band-amber);
+  color: var(--omb-band-accent);
 }
 
 .omb-lede {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1.6;
   color: var(--omb-band-muted);
   max-width: 34rem;
-  margin: 0 0 2rem;
+  margin: 0 0 var(--omb-space-6);
 }
 
 .omb-ctas {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: var(--omb-space-3);
 }
 
 .omb-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.15rem;
-  border-radius: 6px;
+  justify-content: center;
+  gap: var(--omb-space-2);
+  padding: var(--omb-space-3) var(--omb-space-5);
+  border-radius: var(--omb-space-1);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
   text-decoration: none;
   border: 1px solid var(--omb-band-line);
   color: var(--omb-band-fg);
@@ -223,75 +298,96 @@
 }
 
 .omb-btn--primary {
-  background: var(--omb-band-amber);
-  border-color: var(--omb-band-amber);
-  color: #10141a;
+  background: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-bg-color);
 }
 
 .omb-btn--primary:hover {
-  background: #f6c565;
-  border-color: #f6c565;
-  color: #10141a;
+  background: color-mix(in srgb, var(--md-accent-fg-color) 80%, var(--md-primary-bg-color));
+  border-color: color-mix(in srgb, var(--md-accent-fg-color) 80%, var(--md-primary-bg-color));
+  color: var(--md-accent-bg-color);
 }
 
+/* Stats row: three readouts, value over label. */
 .omb-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin: 2rem 0 0;
-  padding: 0;
-  list-style: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--omb-space-6);
   font-family: var(--md-code-font-family);
-  font-size: 0.78rem;
+  font-size: 0.6rem;
+  line-height: 1.5;
   color: var(--omb-band-muted);
 }
 
-.omb-facts b {
-  color: var(--omb-band-fg);
-  font-weight: 600;
+.omb-facts li {
+  display: grid;
+  gap: var(--omb-space-1);
+  align-content: start;
+  padding-top: var(--omb-space-3);
+  border-top: 1px solid var(--omb-band-line);
+  min-width: 0;
 }
 
-/* Terminal */
+.omb-facts b {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--omb-band-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Terminal ---------- */
+
 .omb-term {
   min-width: 0;
   border: 1px solid var(--omb-band-line);
-  border-radius: 8px;
-  background: #06080b;
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  border-radius: var(--omb-radius);
+  background: var(--omb-term-bg);
   overflow: hidden;
 }
 
 .omb-term__bar {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.9rem;
+  gap: var(--omb-space-3);
+  padding: var(--omb-space-2) var(--omb-space-4);
   border-bottom: 1px solid var(--omb-band-line);
   font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
+  font-size: 0.6rem;
+  line-height: 1.6;
   color: var(--omb-band-muted);
+}
+
+.omb-term__bar > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .omb-term__dots {
   display: flex;
-  gap: 6px;
+  flex: none;
+  gap: var(--omb-space-1);
 }
 
 .omb-term__dots i {
-  width: 9px;
-  height: 9px;
+  width: var(--omb-space-2);
+  height: var(--omb-space-2);
   border-radius: 50%;
   background: var(--omb-band-line);
 }
 
 .omb-term__replay {
+  flex: none;
   margin-left: auto;
   font: inherit;
   color: var(--omb-band-muted);
   background: none;
   border: 1px solid var(--omb-band-line);
-  border-radius: 4px;
-  padding: 0.15rem 0.5rem;
+  border-radius: var(--omb-space-1);
+  padding: 0 var(--omb-space-2);
   cursor: pointer;
 }
 
@@ -299,20 +395,22 @@
   color: var(--omb-band-fg);
 }
 
+/* Height is capped and the transcript scrolls inside it. */
 .omb-term__body {
   margin: 0;
-  padding: 1rem 1.1rem 1.2rem;
-  height: 22rem;
+  padding: var(--omb-space-4);
+  height: 320px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: #283040 transparent;
+  scrollbar-color: var(--omb-band-line) transparent;
   font-family: var(--md-code-font-family);
-  font-size: 0.68rem;
-  line-height: 1.55;
-  color: #c9d1dc;
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: var(--omb-band-fg);
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   font-variant-numeric: tabular-nums;
 }
 
@@ -324,12 +422,12 @@
 }
 
 .omb-term__body .l + .l:not(.cont):not(.ok) {
-  margin-top: 0.15rem;
+  margin-top: var(--omb-space-1);
 }
 
 .omb-term__body .cmd::before {
   content: "$ ";
-  color: var(--omb-band-amber);
+  color: var(--omb-band-accent);
 }
 
 .omb-term__body .cmd.cont::before {
@@ -341,15 +439,15 @@
 }
 
 .omb-term__body .dim {
-  color: #6c7686;
+  color: var(--omb-band-muted);
 }
 
 .omb-term__body .ok {
-  color: var(--omb-band-cyan);
+  color: var(--omb-band-trace-2);
 }
 
 .omb-term__body .hl {
-  color: var(--omb-band-amber);
+  color: var(--omb-band-accent);
 }
 
 .omb-term__body .caret {
@@ -357,7 +455,7 @@
   width: 0.55em;
   height: 1.1em;
   vertical-align: text-bottom;
-  background: var(--omb-band-amber);
+  background: var(--omb-band-accent);
   animation: omb-blink 1s steps(2, start) infinite;
 }
 
@@ -369,43 +467,50 @@
 
 .omb-term__note {
   margin: 0;
-  padding: 0.6rem 1.1rem;
+  padding: var(--omb-space-3) var(--omb-space-4);
   border-top: 1px solid var(--omb-band-line);
-  font-size: 0.72rem;
+  font-size: 0.6rem;
+  line-height: 1.6;
   color: var(--omb-band-muted);
 }
 
-/* Sections */
+/* ---------- Sections ---------- */
+
 .omb-section {
-  padding-block: 4rem;
+  padding-block: var(--omb-section-y);
   border-bottom: 1px solid var(--omb-line);
 }
 
+.omb-kicker {
+  font-family: var(--md-code-font-family);
+  font-size: 0.6rem;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--omb-accent);
+  margin: 0 0 var(--omb-space-2);
+}
+
 .omb-section h2 {
-  font-family: var(--omb-font-display);
-  font-weight: 750;
-  font-stretch: 108%;
-  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-size: 1.2rem;
   letter-spacing: -0.015em;
-  line-height: 1.15;
-  margin: 0 0 0.75rem;
+  line-height: 1.2;
+  margin: 0 0 var(--omb-content-gap);
   color: var(--omb-fg);
-  text-wrap: balance;
+}
+
+.omb-section h2:has(+ .omb-section__intro) {
+  margin-bottom: var(--omb-space-3);
 }
 
 .omb-section__intro {
-  max-width: 42rem;
+  max-width: 40rem;
   color: var(--omb-muted);
-  line-height: 1.6;
-  margin: 0 0 2.5rem;
+  margin: 0 0 var(--omb-content-gap);
 }
 
 .omb-section__intro a,
 .omb-caption a {
-  color: var(--omb-amber);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
   white-space: nowrap;
 }
 
@@ -413,23 +518,29 @@
   content: " \2192";
 }
 
-.omb-kicker {
-  font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--omb-amber);
-  margin: 0 0 0.75rem;
+/* Card typography shared by metrics, "why" items and path links. */
+.omb-metrics h3,
+.omb-why h3,
+.omb-chart h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--omb-fg);
 }
 
-/* What it measures */
-.omb-metrics {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.75rem;
+.omb-metrics p,
+.omb-why p,
+.omb-chart__sub {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: var(--omb-muted);
+}
+
+/* ---------- What a run records ---------- */
+
+.omb-metrics {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .omb-metrics li {
@@ -437,93 +548,64 @@
   display: grid;
   grid-row: span 3;
   grid-template-rows: subgrid;
-  row-gap: 0.4rem;
+  row-gap: var(--omb-space-2);
   align-content: start;
-  background: var(--omb-surface);
-  border: 1px solid var(--omb-line);
-  border-radius: 8px;
-  padding: 1.1rem 1.1rem 1.25rem;
-  min-width: 0;
+  padding: var(--omb-card-pad);
 }
 
 .omb-metrics .unit {
   font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
-  color: var(--omb-amber);
-}
-
-.omb-metrics h3 {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.3;
-  font-weight: 650;
-  color: var(--omb-fg);
-}
-
-.omb-metrics p {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--omb-muted);
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: var(--omb-accent);
 }
 
 /* Charts */
 .omb-charts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.5rem;
-  margin-top: 2.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--omb-gap);
+  margin-top: var(--omb-content-gap);
 }
 
 .omb-chart {
-  min-width: 0;
+  container-type: inline-size;
   margin: 0;
-  padding: 1.25rem 1.25rem 1rem;
-  background: var(--omb-surface);
-  border: 1px solid var(--omb-line);
-  border-radius: 8px;
-}
-
-.omb-chart h3 {
-  margin: 0 0 0.25rem;
-  font-size: 0.95rem;
-  font-weight: 650;
-  color: var(--omb-fg);
+  padding: var(--omb-card-pad);
 }
 
 .omb-chart__sub {
-  margin: 0 0 0.75rem;
-  font-size: 0.78rem;
-  color: var(--omb-muted);
+  margin-top: var(--omb-space-1);
 }
 
 .omb-chart__legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  margin: 0 0 0.5rem;
+  gap: var(--omb-space-1) var(--omb-space-4);
+  margin: var(--omb-space-3) 0 var(--omb-space-2);
   padding: 0;
   list-style: none;
-  font-size: 0.75rem;
+  font-size: 0.6rem;
+  line-height: 1.6;
   color: var(--omb-muted);
 }
 
 .omb-chart__legend li::before {
   content: "";
   display: inline-block;
-  width: 10px;
+  width: var(--omb-space-3);
   height: 2px;
-  margin-right: 0.4rem;
+  margin-right: var(--omb-space-2);
   vertical-align: middle;
   background: currentColor;
 }
 
 .omb-chart__legend .s1::before {
-  background: var(--omb-amber);
+  background: var(--omb-trace-1);
 }
 
 .omb-chart__legend .s2::before {
-  background: var(--omb-cyan);
+  background: var(--omb-trace-2);
 }
 
 .omb-chart svg {
@@ -531,6 +613,22 @@
   width: 100%;
   height: auto;
   overflow: visible;
+  /* SVG text is in viewBox units (400 wide) and scales with the card. The steps below keep the
+     rendered label size near 10-12px from a 375px phone to a wide desktop. Percentile ticks are 49
+     units apart, so 13px is the largest size at which "p99.9" and "p99.99" stay apart. */
+  --omb-chart-text: 13px;
+}
+
+@container (min-width: 380px) {
+  .omb-chart svg {
+    --omb-chart-text: 12px;
+  }
+}
+
+@container (min-width: 520px) {
+  .omb-chart svg {
+    --omb-chart-text: 9px;
+  }
 }
 
 .omb-chart .grid line {
@@ -541,23 +639,21 @@
 .omb-chart .axis text {
   fill: var(--omb-muted);
   font-family: var(--md-code-font-family);
-  font-size: 10px;
+  font-size: var(--omb-chart-text);
   font-variant-numeric: tabular-nums;
 }
 
 .omb-chart .axis .title {
-  fill: var(--omb-muted);
   font-family: var(--md-text-font-family);
-  font-size: 10px;
 }
 
 .omb-chart .s1 {
-  stroke: var(--omb-amber);
+  stroke: var(--omb-trace-1);
   fill: none;
 }
 
 .omb-chart .s2 {
-  stroke: var(--omb-cyan);
+  stroke: var(--omb-trace-2);
   fill: none;
 }
 
@@ -573,18 +669,23 @@
 }
 
 .omb-chart .pt.s1 {
-  fill: var(--omb-amber);
+  fill: var(--omb-trace-1);
 }
 
 .omb-chart .pt.s2 {
-  fill: var(--omb-cyan);
+  fill: var(--omb-trace-2);
 }
 
+/* Direct labels get a halo in the card colour so a crossing line never runs through them. */
 .omb-chart .lbl {
   font-family: var(--md-code-font-family);
-  font-size: 10px;
+  font-size: var(--omb-chart-text);
   fill: var(--omb-fg);
   font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--omb-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .omb-chart .hit {
@@ -592,14 +693,13 @@
   stroke: none;
 }
 
-.omb-chart .hit:hover + .pt,
 .omb-chart .hit:hover {
   cursor: crosshair;
 }
 
 .omb-chart details {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
+  margin-top: var(--omb-space-3);
+  font-size: 0.6rem;
   color: var(--omb-muted);
 }
 
@@ -608,7 +708,7 @@
 }
 
 .omb-chart table {
-  margin-top: 0.5rem;
+  margin-top: var(--omb-space-2);
   border-collapse: collapse;
   font-family: var(--md-code-font-family);
   font-variant-numeric: tabular-nums;
@@ -616,7 +716,7 @@
 
 .omb-chart th,
 .omb-chart td {
-  padding: 0.15rem 0.75rem 0.15rem 0;
+  padding: var(--omb-space-1) var(--omb-space-3) var(--omb-space-1) 0;
   text-align: right;
   border-bottom: 1px solid var(--omb-line);
 }
@@ -627,30 +727,38 @@
 }
 
 .omb-caption {
-  margin: 1rem 0 0;
-  font-size: 0.78rem;
+  max-width: 40rem;
+  margin: var(--omb-space-4) 0 0;
+  font-size: 0.7rem;
+  line-height: 1.6;
   color: var(--omb-muted);
 }
 
-/* Architecture */
+/* ---------- How a run works ---------- */
+
 .omb-arch {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: 3rem;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--omb-content-gap);
+  align-items: start;
 }
 
+/* On one column the heading comes first, then the diagram. */
 .omb-arch figure {
+  order: 2;
   margin: 0;
   min-width: 0;
-  overflow-x: auto;
 }
 
 .omb-arch svg {
   display: block;
   width: 100%;
-  min-width: 30rem;
+  max-width: 640px;
   height: auto;
+}
+
+.omb-arch__wide {
+  display: none !important;
 }
 
 .omb-arch .box {
@@ -660,12 +768,12 @@
 }
 
 .omb-arch .box--hot {
-  stroke: var(--omb-amber);
+  stroke: var(--omb-trace-1);
 }
 
 .omb-arch .box--plugin {
   fill: var(--omb-bg);
-  stroke: var(--omb-cyan);
+  stroke: var(--omb-trace-2);
   stroke-dasharray: 4 3;
 }
 
@@ -682,6 +790,10 @@
   font-size: 10.5px;
 }
 
+.omb-arch .t-mid {
+  text-anchor: middle;
+}
+
 .omb-arch .wire {
   stroke: var(--omb-muted);
   stroke-width: 1.5;
@@ -689,7 +801,7 @@
 }
 
 .omb-arch .wire--data {
-  stroke: var(--omb-amber);
+  stroke: var(--omb-trace-1);
   stroke-width: 2;
 }
 
@@ -698,16 +810,15 @@
 }
 
 .omb-arch .arrow--data {
-  fill: var(--omb-amber);
+  fill: var(--omb-trace-1);
 }
 
 .omb-arch ol {
   margin: 0;
-  padding-left: 1.2rem;
+  padding-left: var(--omb-space-5);
   display: grid;
-  gap: 1rem;
+  gap: var(--omb-space-4);
   color: var(--omb-muted);
-  line-height: 1.55;
 }
 
 .omb-arch ol b {
@@ -719,14 +830,14 @@
   color: var(--omb-fg);
 }
 
-/* Drivers */
+.omb-arch .omb-caption {
+  margin-top: var(--omb-space-5);
+}
+
+/* ---------- Drivers ---------- */
+
 .omb-drivers {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .omb-drivers li {
@@ -737,20 +848,16 @@
 .omb-driver {
   flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.85rem 0.9rem;
-  min-width: 0;
-  border: 1px solid var(--omb-line);
-  border-radius: 8px;
-  background: var(--omb-surface);
+  align-items: center;
+  gap: var(--omb-space-3);
+  padding: var(--omb-space-3);
   color: var(--omb-fg);
   text-decoration: none;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s;
 }
 
 .omb-driver:hover {
-  border-color: var(--omb-amber);
+  border-color: var(--omb-accent);
   color: var(--omb-fg);
 }
 
@@ -758,22 +865,22 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 6px;
+  width: var(--omb-space-6);
+  height: var(--omb-space-6);
+  border-radius: var(--omb-space-1);
   background: var(--omb-bg);
   color: var(--omb-fg);
 }
 
 .omb-driver__mark svg {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 20px;
+  height: 20px;
   fill: currentColor;
 }
 
 .omb-driver__mark--mono {
   font-family: var(--md-code-font-family);
-  font-size: 0.72rem;
+  font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--omb-muted);
@@ -787,8 +894,9 @@
 
 .omb-driver__name {
   font-weight: 600;
-  font-size: 0.82rem;
-  line-height: 1.25;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .omb-driver__id {
@@ -796,162 +904,172 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--md-code-font-family);
-  font-size: 0.7rem;
+  font-size: 0.6rem;
+  line-height: 1.6;
   color: var(--omb-muted);
 }
 
 .omb-tm {
-  margin: 1.25rem 0 0;
-  font-size: 0.72rem;
-  color: var(--omb-muted);
-}
-
-/* Why this fork */
-.omb-why {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 2rem 2.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.omb-why li {
-  min-width: 0;
-  border-top: 2px solid var(--omb-fg);
-  padding-top: 1rem;
-}
-
-.omb-why h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 650;
-  color: var(--omb-fg);
-}
-
-.omb-why p {
-  margin: 0;
-  font-size: 0.8rem;
+  margin: var(--omb-space-4) 0 0;
+  font-size: 0.6rem;
   line-height: 1.6;
   color: var(--omb-muted);
 }
 
-/* Where to start */
-.omb-paths {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  column-gap: 2rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* ---------- Why this fork ---------- */
+
+.omb-why {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.omb-paths a {
+.omb-why li {
+  display: grid;
+  align-content: start;
+  gap: var(--omb-space-2);
+  padding: var(--omb-card-pad);
+  border-top: 2px solid var(--omb-accent);
+}
+
+.omb-why p a {
+  white-space: nowrap;
+}
+
+/* ---------- Where to start ---------- */
+
+.omb-paths {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.omb-paths li {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  height: 100%;
-  padding: 1rem 0.25rem;
-  border-top: 1px solid var(--omb-line);
-  color: var(--omb-fg);
-  text-decoration: none;
   min-width: 0;
 }
 
-.omb-paths a:hover .omb-paths__go {
-  color: var(--omb-amber);
-  transform: translateX(3px);
+.omb-paths a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--omb-space-3);
+  padding: var(--omb-card-pad);
+  color: var(--omb-fg);
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.omb-paths a:hover {
+  border-color: var(--omb-accent);
+  color: var(--omb-fg);
 }
 
 .omb-paths__want {
-  font-size: 0.92rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .omb-paths__go {
-  flex: none;
   font-family: var(--md-code-font-family);
-  font-size: 0.75rem;
-  color: var(--omb-muted);
-  transition: transform 0.15s, color 0.15s;
+  font-size: 0.6rem;
+  line-height: 1.6;
+  color: var(--omb-accent);
 }
 
+/* ---------- Policy note ---------- */
+
 .omb-policy {
-  padding-block: 2.5rem 3rem;
+  padding-block: var(--omb-space-7);
   color: var(--omb-muted);
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   line-height: 1.6;
 }
 
 .omb-policy p {
-  max-width: 48rem;
+  max-width: 40rem;
   margin: 0;
 }
 
-/* Responsive */
-@media (max-width: 960px) {
-  .omb-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* ---------- Breakpoints ---------- */
+
+@media (min-width: 600px) {
+  .omb-ctas {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
-  .omb-metrics li:last-child {
-    grid-column: 1 / -1;
+  /* Throughput pair on the first row, the three latencies on the second. */
+  .omb-metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .omb-metrics li {
+    grid-column: span 2;
+  }
+
+  .omb-metrics li:nth-child(-n + 2) {
+    grid-column: span 3;
   }
 
   .omb-drivers {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .omb-hero .omb-wrap,
-  .omb-arch,
-  .omb-charts {
-    grid-template-columns: minmax(0, 1fr);
+  .omb-why,
+  .omb-paths {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .omb-hero .omb-wrap {
-    gap: 2.5rem;
-    padding-block: 3rem;
+  .omb-arch__narrow {
+    display: none !important;
+  }
+
+  .omb-arch__wide {
+    display: block !important;
   }
 }
 
-@media (max-width: 480px) {
-  .omb-metrics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .omb-drivers {
+@media (min-width: 768px) {
+  .omb-charts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
-  }
-
-  .omb-drivers li:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .omb-driver {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .omb-term__bar > span:nth-child(2) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .omb-driver {
-    padding: 0.7rem;
-    gap: 0.6rem;
   }
 
   .omb-term__body {
-    height: 18rem;
-    font-size: 0.66rem;
+    height: 400px;
   }
 
-  .omb-section {
-    padding-block: 3rem;
+  .omb-section h2 {
+    font-size: 1.5rem;
+  }
+
+  .omb-hero h1 {
+    font-size: 2rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .omb-hero .omb-wrap {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  .omb-hero h1 {
+    font-size: 2.2rem;
+  }
+
+  .omb-arch {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--omb-space-7);
+  }
+
+  .omb-arch figure {
+    order: 0;
+  }
+
+  .omb-drivers {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .omb-why,
+  .omb-paths {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -961,7 +1079,7 @@
   }
 
   .omb-driver,
-  .omb-paths__go,
+  .omb-paths a,
   .omb-btn {
     transition: none;
   }

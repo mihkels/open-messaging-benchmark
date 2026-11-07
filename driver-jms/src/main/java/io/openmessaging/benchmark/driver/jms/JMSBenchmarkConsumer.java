@@ -17,6 +17,7 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import javax.jms.BytesMessage;
 import javax.jms.Connection;
+import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
 import org.slf4j.Logger;
@@ -77,7 +78,7 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(JMSBenchmarkConsumer.class);
 
-    private static byte[] getPayload(Message message, boolean useGetBody) throws Exception {
+    private static byte[] getPayload(Message message, boolean useGetBody) throws JMSException {
         if (useGetBody) {
             return message.getBody(byte[].class);
         } else {

@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 interface WorkloadRun extends AutoCloseable {
+    @SuppressWarnings("java:S112") // A run surfaces whatever the driver SPI throws
     TestResult run() throws Exception;
 
     default void includeHistograms(boolean include) {}

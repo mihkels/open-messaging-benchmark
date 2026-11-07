@@ -27,7 +27,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -118,7 +120,8 @@ final class NsqLookup implements NSQLookup {
         return discovered.contains(expected);
     }
 
-    private HttpResponse<String> request(URI uri) throws Exception {
+    private HttpResponse<String> request(URI uri)
+            throws InterruptedException, ExecutionException, TimeoutException {
         CompletableFuture<HttpResponse<String>> pending =
                 httpClient.sendAsync(
                         HttpRequest.newBuilder(uri).timeout(timeout).GET().build(),

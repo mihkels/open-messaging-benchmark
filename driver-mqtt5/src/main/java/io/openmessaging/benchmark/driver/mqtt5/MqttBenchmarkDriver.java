@@ -435,6 +435,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return qos;
     }
 
+    @SuppressWarnings("java:S112") // Unwraps and rethrows the disconnect future's own failure
     public static void closeClient(Mqtt5AsyncClient client) throws Exception {
         if (client != null) {
             String clientId = String.valueOf(client.getConfig().getClientIdentifier());

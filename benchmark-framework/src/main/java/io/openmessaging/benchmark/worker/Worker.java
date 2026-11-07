@@ -33,6 +33,7 @@ public interface Worker extends AutoCloseable {
      * @param driverConfigFile the driver configuration file
      * @throws Exception if the driver cannot be initialized
      */
+    @SuppressWarnings("java:S112") // Driver SPI initialize() is declared as throws Exception
     void initializeDriver(Path driverConfigFile) throws Exception;
 
     List<String> createTopics(TopicsInfo topicsInfo);

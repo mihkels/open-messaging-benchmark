@@ -276,6 +276,7 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @FunctionalInterface
     private interface Call<T, R> {
+        @SuppressWarnings("java:S112") // Wraps arbitrary Worker calls, which may throw Exception
         R call(T target) throws Exception;
     }
 

@@ -39,6 +39,7 @@ final class DlogFailures {
         return first;
     }
 
+    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
     void throwIfAny() throws Exception {
         Throwable failure;
         boolean restoreInterrupt;

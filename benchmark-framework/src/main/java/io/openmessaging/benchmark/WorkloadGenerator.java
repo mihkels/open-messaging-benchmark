@@ -130,7 +130,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         includeHistograms = include;
     }
 
-    private TestResult runWorkload() throws Exception {
+    private TestResult runWorkload() throws IOException, InterruptedException {
         workload.validate();
 
         var timer = new Timer();
@@ -303,7 +303,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
     @FunctionalInterface
     private interface Controller {
-        void run() throws Exception;
+        void run() throws InterruptedException;
     }
 
     @Override

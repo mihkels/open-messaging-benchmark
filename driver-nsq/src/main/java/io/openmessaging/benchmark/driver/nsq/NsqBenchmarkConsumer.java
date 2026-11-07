@@ -72,6 +72,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
 
     @FunctionalInterface
     interface ConnectionFactory {
+        @SuppressWarnings("java:S112") // Test seam over the NSQ client connect, which throws Exception
         Connection connect(ServerAddress address, NSQConfig config) throws Exception;
     }
 
@@ -310,7 +311,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void awaitStartupCleanup() throws Exception {
+    private void awaitStartupCleanup() throws IOException, InterruptedException, ExecutionException {
         eventLoopGroup.pendingCloses().get();
         recordScopeFailure();
         Throwable failure = cleanupOutcome();
@@ -469,7 +470,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     private void subscribe(ServerAddress address, Connection connection, NSQConsumer consumer)
-            throws Exception {
+            throws IOException, InterruptedException, TimeoutException, SubscriptionRejected {
         if (!connection.isConnected()) {
             throw new IOException("NSQ connection is not active: " + address);
         }
@@ -958,6 +959,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
+    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
     private static void throwFailure(Throwable failure) throws Exception {
         if (failure instanceof Exception exception) {
             throw exception;

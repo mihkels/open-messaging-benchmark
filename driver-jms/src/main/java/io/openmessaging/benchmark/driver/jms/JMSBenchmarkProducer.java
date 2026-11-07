@@ -60,14 +60,14 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
      * @param useAsyncSend whether to use asynchronous sending
      * @param properties additional properties to set on messages
      * @return a new JMSBenchmarkProducer instance
-     * @throws Exception if initialization fails
+     * @throws JMSException if initialization fails
      */
     public static JMSBenchmarkProducer create(
             Session session,
             Destination destination,
             boolean useAsyncSend,
             List<JMSConfig.AddProperty> properties)
-            throws Exception {
+            throws JMSException {
 
         MessageProducer tempProducer = null;
 

@@ -198,18 +198,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         ReaderGroupManager readerManagerToClose;
         StreamManager streamManagerToClose;
         List<String> topics;
-        InterruptedException interrupted = null;
+        InterruptedException interrupted;
         synchronized (this) {
             closing = true;
-            while (activeTopicCreations > 0) {
-                try {
-                    wait();
-                } catch (InterruptedException failure) {
-                    if (interrupted == null) {
-                        interrupted = failure;
-                    }
-                }
-            }
+            interrupted = awaitActiveTopicCreations();
             factoryToClose = clientFactory;
             readerManagerToClose = readerGroupManager;
             streamManagerToClose = streamManager;
@@ -222,20 +214,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         Exception failure = closeResource(factoryToClose, interrupted);
         failure = closeResource(readerManagerToClose, failure);
         if (streamManagerToClose != null) {
-            for (String topic : topics) {
-                try {
-                    log.info("deleteTopics: topic={}", topic);
-                    streamManagerToClose.sealStream(scopeName, topic);
-                    if (config.deleteStreams()) {
-                        streamManagerToClose.deleteStream(scopeName, topic);
-                    }
-                } catch (Exception topicFailure) {
-                    if (topicFailure instanceof InterruptedException) {
-                        Thread.currentThread().interrupt();
-                    }
-                    failure = addFailure(failure, topicFailure);
-                }
-            }
+            failure = sealAndDeleteTopics(streamManagerToClose, topics, failure);
         }
         failure = closeResource(streamManagerToClose, failure);
         if (interrupted != null) {
@@ -244,6 +223,41 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         if (failure != null) {
             throw failure;
         }
+    }
+
+    // Waits until no topic creation is in flight. Interruptions do not stop the wait, since cleanup
+    // must see every created topic; the first one is returned so the caller can restore it.
+    private synchronized InterruptedException awaitActiveTopicCreations() {
+        InterruptedException interrupted = null;
+        while (activeTopicCreations > 0) {
+            try {
+                wait();
+            } catch (InterruptedException failure) {
+                if (interrupted == null) {
+                    interrupted = failure;
+                }
+            }
+        }
+        return interrupted;
+    }
+
+    private Exception sealAndDeleteTopics(
+            StreamManager streamManagerToClose, List<String> topics, Exception failure) {
+        for (String topic : topics) {
+            try {
+                log.info("deleteTopics: topic={}", topic);
+                streamManagerToClose.sealStream(scopeName, topic);
+                if (config.deleteStreams()) {
+                    streamManagerToClose.deleteStream(scopeName, topic);
+                }
+            } catch (Exception topicFailure) {
+                if (topicFailure instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                failure = addFailure(failure, topicFailure);
+            }
+        }
+        return failure;
     }
 
     private static <T> CompletableFuture<T> failedCreation(Exception failure) {

@@ -83,9 +83,8 @@ public class Thresholds {
         void print() {
             log.info("Thresholds: {}", status);
             log.info("| Check | Limit | Observed | Status |");
-            checks.forEach(
-                    (name, check) ->
-                            log.info("| {} | {} | {} | {} |", name, check.limit, check.observed, check.status));
+            checks.forEach((name, check) ->
+                    log.info("| {} | {} | {} | {} |", name, check.limit, check.observed, check.status));
         }
     }
 

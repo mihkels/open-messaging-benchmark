@@ -58,6 +58,15 @@ class ResultMetadataGitLookupTest {
         assertThat(ResultMetadata.gitRevision(List.of(git))).isEqualTo("unknown");
     }
 
+    @Test
+    void gitRevisionIsUnknownWhenGitCannotStart() throws IOException {
+        Path git = directory.resolve("unstartable-git");
+        Files.writeString(git, "#!" + directory.resolve("missing-interpreter") + "\n");
+        assumeTrue(git.toFile().setExecutable(true, true));
+
+        assertThat(ResultMetadata.gitRevision(List.of(git))).isEqualTo("unknown");
+    }
+
     private Path fakeGit(String body, String name) throws IOException {
         Path shell = Path.of("/bin/sh");
         assumeTrue(Files.isExecutable(shell));

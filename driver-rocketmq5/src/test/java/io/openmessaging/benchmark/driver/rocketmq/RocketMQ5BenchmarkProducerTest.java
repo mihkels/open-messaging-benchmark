@@ -211,6 +211,46 @@ class RocketMQ5BenchmarkProducerTest {
     }
 
     @Test
+    void interruptedCloseStillWaitsForTheActivePublicationAndRestoresTheInterrupt() throws Exception {
+        Producer client = mock(Producer.class);
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch closing = new CountDownLatch(1);
+        when(client.sendAsync(any(Message.class)))
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("publication was not released");
+                    }
+                    return new CompletableFuture<SendReceipt>();
+                });
+        RocketMQ5BenchmarkProducer producer = new RocketMQ5BenchmarkProducer(client, "topic");
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            Future<CompletableFuture<Void>> send =
+                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
+            assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> close =
+                    workers.submit(() -> {
+                        Thread.currentThread().interrupt();
+                        closing.countDown();
+                        producer.close();
+                        return Thread.interrupted();
+                    });
+            assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            release.countDown();
+            send.get(5, TimeUnit.SECONDS);
+            assertThat(close.get(5, TimeUnit.SECONDS)).isTrue();
+            verify(client, times(1)).close();
+        } finally {
+            release.countDown();
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
     void asynchronousAcknowledgementCannotCloseWhileAnotherPublicationIsActive() throws Exception {
         Producer client = mock(Producer.class);
         CompletableFuture<SendReceipt> firstReceipt = new CompletableFuture<>();

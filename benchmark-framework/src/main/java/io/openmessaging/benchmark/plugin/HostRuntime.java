@@ -143,7 +143,7 @@ public final class HostRuntime {
                     JarURLConnection connection = (JarURLConnection) url.openConnection();
                     connection.setUseCaches(false);
                     return Optional.of(Path.of(connection.getJarFileURL().toURI()));
-                } catch (IOException | URISyntaxException | IllegalArgumentException e) {
+                } catch (IOException | URISyntaxException | IllegalArgumentException _) {
                     // fall through
                 }
             }

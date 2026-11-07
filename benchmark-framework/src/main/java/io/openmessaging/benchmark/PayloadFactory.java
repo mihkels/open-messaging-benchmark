@@ -43,9 +43,9 @@ final class PayloadFactory {
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof Payloads that
-                    && PayloadTemplates.equals(data, that.data)
-                    && Arrays.equals(weights, that.weights);
+            return other instanceof Payloads(List<byte[]> otherData, int[] otherWeights)
+                    && PayloadTemplates.equals(data, otherData)
+                    && Arrays.equals(weights, otherWeights);
         }
 
         @Override

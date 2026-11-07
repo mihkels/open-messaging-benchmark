@@ -111,7 +111,7 @@ public class RocketMQBenchmarkProducer implements BenchmarkProducer {
             while (closeOwner ? activePublications != 0 : !closeComplete) {
                 try {
                     lifecycleLock.wait();
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     interrupted = true;
                 }
             }

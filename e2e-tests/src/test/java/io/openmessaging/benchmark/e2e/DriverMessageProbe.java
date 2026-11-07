@@ -62,7 +62,7 @@ public final class DriverMessageProbe implements ConsumerCallback {
             driver.initialize(Path.of(args[1]), null);
             String topic = driver.getTopicNamePrefix() + "-probe-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(30, TimeUnit.SECONDS);
-            try (var consumer = driver.createConsumer(topic, "probe", probe).get(30, TimeUnit.SECONDS);
+            try (var _ = driver.createConsumer(topic, "probe", probe).get(30, TimeUnit.SECONDS);
                     var producer = driver.createProducer(topic).get(30, TimeUnit.SECONDS)) {
                 long sendStarted = System.currentTimeMillis();
                 for (int i = 0; i < 10; i++) {
@@ -99,7 +99,7 @@ public final class DriverMessageProbe implements ConsumerCallback {
             unmatchedDriver.initialize(unmatchedConfig, null);
             String topic = matchedDriver.getTopicNamePrefix() + "-selector-" + UUID.randomUUID();
             matchedDriver.createTopic(topic, 1).get(30, TimeUnit.SECONDS);
-            try (var consumer =
+            try (var _ =
                             matchedDriver.createConsumer(topic, "selector", probe).get(30, TimeUnit.SECONDS);
                     var matchedProducer = matchedDriver.createProducer(topic).get(30, TimeUnit.SECONDS);
                     var unmatchedProducer = unmatchedDriver.createProducer(topic).get(30, TimeUnit.SECONDS)) {

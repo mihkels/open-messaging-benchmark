@@ -148,7 +148,7 @@ final class RunCallbacks implements ConsumerCallback {
             } finally {
                 progress.unlock();
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } finally {
             receives.decrementAndGet();

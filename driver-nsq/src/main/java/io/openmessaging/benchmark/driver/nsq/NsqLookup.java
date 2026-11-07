@@ -83,7 +83,7 @@ final class NsqLookup implements NSQLookup {
                     endpointProducers.add(serverAddress(node));
                 }
                 producers.addAll(endpointProducers);
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 return producers;
             } catch (Exception failure) {
@@ -107,7 +107,7 @@ final class NsqLookup implements NSQLookup {
                 if (discovered.contains(expected)) {
                     publishingNode = expected;
                 }
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 return false;
             } catch (Exception failure) {

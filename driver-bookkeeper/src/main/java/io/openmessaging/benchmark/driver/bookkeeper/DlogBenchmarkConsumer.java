@@ -161,7 +161,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         try {
             unit.sleep(delay);
             return true;
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return false;
         }

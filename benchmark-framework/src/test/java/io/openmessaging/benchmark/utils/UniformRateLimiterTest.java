@@ -68,7 +68,7 @@ class UniformRateLimiterTest {
                             started.countDown();
                             try {
                                 UniformRateLimiter.interruptibleSleepNs(System.nanoTime() + SECONDS.toNanos(30));
-                            } catch (InterruptedException e) {
+                            } catch (InterruptedException _) {
                                 interrupted.set(true);
                             }
                         });

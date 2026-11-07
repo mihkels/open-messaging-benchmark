@@ -240,7 +240,7 @@ class ResourceCreatorTest {
                             entered.countDown();
                             try {
                                 release.await();
-                            } catch (InterruptedException ignored) {
+                            } catch (InterruptedException _) {
                                 interrupted.countDown();
                                 try {
                                     release.await();
@@ -332,7 +332,7 @@ class ResourceCreatorTest {
                             started.add(request);
                             try {
                                 published.await(5, TimeUnit.SECONDS);
-                            } catch (InterruptedException error) {
+                            } catch (InterruptedException _) {
                                 Thread.currentThread().interrupt();
                             }
                             result.get().cancel(false);

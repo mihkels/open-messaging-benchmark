@@ -407,7 +407,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
             if (USER_PROPERTY_KEY_PUBLISH_TIMESTAMP.equals(property.getName())) {
                 try {
                     return Long.parseLong(property.getValue().toString());
-                } catch (NumberFormatException ignore) {
+                } catch (NumberFormatException _) {
                     return System.currentTimeMillis();
                 }
             }

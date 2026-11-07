@@ -194,7 +194,7 @@ public final class HostRuntime {
                     // ignore malformed references
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException _) {
             // not a readable jar
         }
         return result;

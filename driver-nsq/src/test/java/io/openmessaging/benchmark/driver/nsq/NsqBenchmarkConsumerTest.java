@@ -692,7 +692,7 @@ class NsqBenchmarkConsumerTest {
                                     try {
                                         release.await();
                                         break;
-                                    } catch (InterruptedException ignored) {
+                                    } catch (InterruptedException _) {
                                         interrupted = true;
                                     }
                                 }
@@ -733,7 +733,7 @@ class NsqBenchmarkConsumerTest {
                                     try {
                                         release.await();
                                         break;
-                                    } catch (InterruptedException ignored) {
+                                    } catch (InterruptedException _) {
                                         // Model the client's uninterruptible connection constructor.
                                     }
                                 }
@@ -1121,7 +1121,7 @@ class NsqBenchmarkConsumerTest {
                                 entered.countDown();
                                 try {
                                     release.await();
-                                } catch (InterruptedException interrupted) {
+                                } catch (InterruptedException _) {
                                     Thread.currentThread().interrupt();
                                 }
                             });
@@ -1369,7 +1369,7 @@ class NsqBenchmarkConsumerTest {
             try {
                 latch.await();
                 break;
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException _) {
                 interrupted = true;
             }
         }
@@ -1524,7 +1524,7 @@ class NsqBenchmarkConsumerTest {
                     connection.setDaemon(true);
                     connection.start();
                 }
-            } catch (IOException ignored) {
+            } catch (IOException _) {
                 // Closing the server wakes accept.
             }
         }
@@ -1566,9 +1566,9 @@ class NsqBenchmarkConsumerTest {
                         sendFrame(0, "CLOSE_WAIT".getBytes(StandardCharsets.UTF_8));
                     }
                 }
-            } catch (IOException ignored) {
+            } catch (IOException _) {
                 // Cancellation and cleanup close the socket while a response is pending.
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             } finally {
                 disconnected.countDown();
@@ -1598,7 +1598,7 @@ class NsqBenchmarkConsumerTest {
                     }
                     line.write(next);
                 }
-            } catch (EOFException end) {
+            } catch (EOFException _) {
                 return null;
             }
         }

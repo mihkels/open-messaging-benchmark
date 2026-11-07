@@ -117,7 +117,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                 while (!operation.isSettled()) {
                     try {
                         operation.awaitSettlement();
-                    } catch (InterruptedException error) {
+                    } catch (InterruptedException _) {
                         interrupted = true;
                     }
                 }
@@ -352,7 +352,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             resourcesReleased.await();
             try {
                 result.join();
-            } catch (CompletionException | CancellationException ignored) {
+            } catch (CompletionException | CancellationException _) {
                 // The exceptional result is already available to the sender.
             }
         }

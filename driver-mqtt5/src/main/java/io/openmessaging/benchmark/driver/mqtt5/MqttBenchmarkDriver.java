@@ -152,6 +152,9 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                                             .build());
                         }
                     });
+            if (subscriptions.isEmpty()) {
+                throw new IllegalArgumentException("No MQTT topic filters in topic '" + topic + "'");
+            }
 
             Mqtt5AsyncClient client =
                     createClient(
@@ -269,8 +272,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
         if (subAck == null
                 || subAck.getReasonCodes() == null
-                || subAck.getReasonCodes().size() != subscriptions.size()
-                || subscriptions.isEmpty()) {
+                || subAck.getReasonCodes().size() != subscriptions.size()) {
             return new IllegalStateException("Invalid SUBACK for subscriptions: " + subscriptions);
         }
         for (int i = 0; i < subscriptions.size(); i++) {

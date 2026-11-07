@@ -416,65 +416,83 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             cleanup(() -> eventLoopGroup.closeAttempt(attemptChannels), null);
             return;
         }
-        Throwable failure = null;
         try {
-            if (!connection.isConnected()) {
-                throw new IOException("NSQ connection is not active: " + address);
-            }
-            connection.setConsumer(consumer);
-            NSQFrame response = connection.commandAndWait(NSQCommand.subscribe(topic, channel));
-            if (response == null) {
-                Thread.currentThread().interrupt();
-                throw new InterruptedException("NSQ subscription interrupted");
-            }
-            if (response instanceof ErrorFrame error) {
-                throw new SubscriptionRejected(NSQException.of(error));
-            }
-            if (!(response instanceof ResponseFrame ack) || !"OK".equals(ack.getMessage())) {
-                throw new SubscriptionRejected(
-                        new NSQException("Unexpected NSQ SUB response from " + address + ": " + response));
-            }
-            ChannelFuture readyWrite;
-            synchronized (lock) {
-                if (closed) {
-                    return;
-                }
-                readyWrite = connection.command(NSQCommand.ready(MESSAGES_PER_BATCH));
-            }
-            if (!readyWrite.await(15, TimeUnit.SECONDS)) {
-                throw new TimeoutException("NSQ RDY command timed out: " + address);
-            }
-            if (!readyWrite.isSuccess()) {
-                throw new IOException("NSQ RDY command failed: " + address, readyWrite.cause());
-            }
-            if (!connection.isConnected()) {
-                throw new IOException("NSQ connection closed after SUB: " + address);
-            }
-            synchronized (lock) {
-                if (!closed && connecting.remove(connection)) {
-                    connections.put(address, connection);
-                }
-            }
+            subscribe(address, connection, consumer);
         } catch (Exception | Error cause) {
-            failure = cause;
+            releaseAttempt(connection, attemptChannels, cause);
             throw cause;
-        } finally {
-            boolean stillOwned;
-            synchronized (lock) {
-                stillOwned = connecting.remove(connection);
+        }
+        releaseAttempt(connection, attemptChannels, null);
+    }
+
+    private void subscribe(ServerAddress address, Connection connection, NSQConsumer consumer)
+            throws Exception {
+        if (!connection.isConnected()) {
+            throw new IOException("NSQ connection is not active: " + address);
+        }
+        connection.setConsumer(consumer);
+        NSQFrame response = connection.commandAndWait(NSQCommand.subscribe(topic, channel));
+        if (response == null) {
+            Thread.currentThread().interrupt();
+            throw new InterruptedException("NSQ subscription interrupted");
+        }
+        if (response instanceof ErrorFrame error) {
+            throw new SubscriptionRejected(NSQException.of(error));
+        }
+        if (!(response instanceof ResponseFrame ack) || !"OK".equals(ack.getMessage())) {
+            throw new SubscriptionRejected(
+                    new NSQException("Unexpected NSQ SUB response from " + address + ": " + response));
+        }
+        ChannelFuture readyWrite;
+        synchronized (lock) {
+            if (closed) {
+                return;
             }
-            if (stillOwned) {
-                try {
-                    connection.close();
-                } catch (RuntimeException | Error closeFailure) {
-                    recordCleanupFailure(closeFailure, failure);
-                    if (failure == null) {
-                        throw closeFailure;
-                    }
-                } finally {
-                    cleanup(() -> eventLoopGroup.closeAttempt(attemptChannels), failure);
-                }
+            readyWrite = connection.command(NSQCommand.ready(MESSAGES_PER_BATCH));
+        }
+        if (!readyWrite.await(15, TimeUnit.SECONDS)) {
+            throw new TimeoutException("NSQ RDY command timed out: " + address);
+        }
+        if (!readyWrite.isSuccess()) {
+            throw new IOException("NSQ RDY command failed: " + address, readyWrite.cause());
+        }
+        if (!connection.isConnected()) {
+            throw new IOException("NSQ connection closed after SUB: " + address);
+        }
+        synchronized (lock) {
+            if (!closed && connecting.remove(connection)) {
+                connections.put(address, connection);
             }
+        }
+    }
+
+    // Closes a connection that subscribe(...) did not hand over to connections, then releases the
+    // attempt's channels. A close failure is rethrown only when there is no primary failure to
+    // attach it to, and never before the channels are released.
+    private void releaseAttempt(
+            Connection connection, List<Channel> attemptChannels, Throwable failure) {
+        boolean stillOwned;
+        synchronized (lock) {
+            stillOwned = connecting.remove(connection);
+        }
+        if (!stillOwned) {
+            return;
+        }
+        Throwable unreported = null;
+        try {
+            connection.close();
+        } catch (RuntimeException | Error closeFailure) {
+            recordCleanupFailure(closeFailure, failure);
+            if (failure == null) {
+                unreported = closeFailure;
+            }
+        }
+        cleanup(() -> eventLoopGroup.closeAttempt(attemptChannels), failure);
+        if (unreported instanceof Error error) {
+            throw error;
+        }
+        if (unreported instanceof RuntimeException runtime) {
+            throw runtime;
         }
     }
 

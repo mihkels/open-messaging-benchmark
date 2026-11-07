@@ -14,14 +14,17 @@
 package io.openmessaging.benchmark.worker.commands;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * A producer load command, not intended for value comparisons.
+ * A producer load command.
  *
- * <p>The generated {@code equals}, {@code hashCode}, and {@code toString} methods use array
- * identity, not array contents.
+ * <p>{@code equals} and {@code hashCode} compare array contents; {@code toString} prints the
+ * template sizes and weights rather than the payload bytes.
  *
  * @param payloadData the payload templates
  * @param publishRate the assigned publish rate
@@ -72,5 +75,35 @@ public record ProducerWorkAssignment(
     public ProducerWorkAssignment withPublishRate(double publishRate) {
         return new ProducerWorkAssignment(
                 this.payloadData, publishRate, this.keyDistributorType, this.payloadWeights);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof ProducerWorkAssignment that
+                && Double.compare(publishRate, that.publishRate) == 0
+                && keyDistributorType == that.keyDistributorType
+                && PayloadTemplates.equals(payloadData, that.payloadData)
+                && Arrays.equals(payloadWeights, that.payloadWeights);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = PayloadTemplates.hashCode(payloadData);
+        hash = 31 * hash + Double.hashCode(publishRate);
+        hash = 31 * hash + Objects.hashCode(keyDistributorType);
+        return 31 * hash + Arrays.hashCode(payloadWeights);
+    }
+
+    @Override
+    public String toString() {
+        return "ProducerWorkAssignment[payloadData="
+                + PayloadTemplates.describe(payloadData)
+                + ", publishRate="
+                + publishRate
+                + ", keyDistributorType="
+                + keyDistributorType
+                + ", payloadWeights="
+                + Arrays.toString(payloadWeights)
+                + "]";
     }
 }

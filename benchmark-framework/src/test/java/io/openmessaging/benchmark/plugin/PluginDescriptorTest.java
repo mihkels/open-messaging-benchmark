@@ -90,7 +90,11 @@ class PluginDescriptorTest {
                                         List.of("driver.jar"),
                                         List.of(),
                                         List.of()),
-                                "driverApiVersion " + (DriverApiVersion.CURRENT + 1)),
+                                "driverApiVersion "
+                                        + (DriverApiVersion.CURRENT + 1)
+                                        + " but this benchmark implements driverApiVersion "
+                                        + DriverApiVersion.CURRENT
+                                        + "; upgrade the benchmark"),
                         new InvalidDescriptor(
                                 descriptor(
                                         1,
@@ -177,7 +181,23 @@ class PluginDescriptorTest {
         assertThat(descriptor.validate())
                 .anySatisfy(error ->
                         assertThat(error)
-                                .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1)));
+                                .contains("bundle targets driverApiVersion " + (DriverApiVersion.CURRENT - 1))
+                                .contains("rebuild the bundle against the current driver-api")
+                                .endsWith("declare driverApiVersion: " + DriverApiVersion.CURRENT));
+    }
+
+    @Test
+    void rejectsVersionOneBundlesBuiltAgainstThePrometheusRegistrySpi() {
+        PluginDescriptor descriptor =
+                descriptor(
+                        1, "plugin", 1, List.of("test.Driver"), List.of("driver.jar"), List.of(), List.of());
+
+        assertThat(DriverApiVersion.CURRENT).isEqualTo(2);
+        assertThat(descriptor.validate())
+                .containsExactly(
+                        "bundle targets driverApiVersion 1 but this benchmark implements"
+                                + " driverApiVersion 2; rebuild the bundle against the current driver-api"
+                                + " and declare driverApiVersion: 2");
     }
 
     @Test

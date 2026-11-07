@@ -16,7 +16,7 @@
 descriptorVersion: 1
 id: rocketmq
 version: ${project.version}
-driverApiVersion: 1
+driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
   - io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver

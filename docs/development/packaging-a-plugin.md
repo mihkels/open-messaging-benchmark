@@ -42,7 +42,7 @@ before Maven resource filtering:
 descriptorVersion: 1
 id: loopback
 version: ${project.version}
-driverApiVersion: 1
+driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 description: In-memory loopback driver delivering every message straight to its consumers
 drivers:
@@ -60,7 +60,7 @@ The fields, as defined by
 | `descriptorVersion`        | yes      | Must be `1`                                                                                                   |
 | `id`                       | yes      | Letters, digits, `.`, `_` and `-` only. Must be unique among installed bundles                                |
 | `version`                  | no       | Informational, shown in logs and error messages                                                               |
-| `driverApiVersion`         | yes      | Must equal the benchmark's driver API version, currently `1`                                                  |
+| `driverApiVersion`         | yes      | Must equal the benchmark's driver API version, currently `2`                                                  |
 | `javaVersion`              | no       | Minimum Java feature release. The bundle is rejected on an older runtime                                      |
 | `drivers`                  | yes      | At least one fully qualified `BenchmarkDriver` class name. A driver class must be provided by only one bundle |
 | `classpath`                | yes      | At least one entry. Entries without wildcards must exist; wildcard entries may match nothing                  |
@@ -156,12 +156,25 @@ driverClass: com.example.omb.loopback.LoopbackBenchmarkDriver
 
 ## Compatibility rules
 
-The switch from `PrometheusMeterRegistry` to `MeterRegistry` in `BenchmarkDriver.initialize` is a
-one-time binary-incompatible change that retains `driverApiVersion: 1`. An older version-1 bundle's
-descriptor still matches, so discovery cannot detect that the bundle is stale. Rebuild the host and
-every plugin bundle, including delegates and the loopback example, together against the changed
-`driver-api`, then install the rebuilt bundles on every worker. Matching descriptor or artifact
-versions alone are not sufficient.
+A bundle must declare the `driverApiVersion` the benchmark implements. Discovery rejects any other
+value and names the bundle, the declared version and the expected one, so a stale bundle fails up
+front instead of with a linkage error inside the driver JVM.
+
+| `driverApiVersion` |         Benchmark releases         |                             SPI change                             |
+|--------------------|------------------------------------|--------------------------------------------------------------------|
+| `2`                | after 0.2.0                        | `initialize` takes `MeterRegistry`; stale bundles fail discovery   |
+| `1`                | 0.1.0 to 0.2.0, and earlier builds | `initialize` took `PrometheusMeterRegistry`, later `MeterRegistry` |
+
+### Upgrading a plugin to driver API version 2
+
+Version `1` covered two incompatible `BenchmarkDriver.initialize` signatures, so the benchmark rejects
+every version-1 bundle. To upgrade an external plugin:
+
+1. Depend on the current `driver-api` and make `initialize` accept
+   `io.micrometer.core.instrument.MeterRegistry`.
+2. Set `driverApiVersion: 2` in `plugin.yaml`.
+3. Rebuild the bundle, including any delegate bundles it references, and install it on every
+   worker.
 
 All bundles run on top of the benchmark core in the driver JVM.
 [`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)

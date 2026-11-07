@@ -250,10 +250,9 @@ error that names both bundles. A bundle that declares `classReferenceProperties`
 bundles of the classes named by those driver YAML properties, and they are all loaded into the same
 driver process.
 
-The SPI's `initialize` now accepts Micrometer `MeterRegistry` rather than
-`PrometheusMeterRegistry`. This one-time binary-incompatible change retains `driverApiVersion: 1`:
-an older version-1 bundle still passes the descriptor check. Rebuild the host and every plugin bundle
-together; the version check alone cannot identify stale bundles.
+Discovery rejects a bundle whose `driverApiVersion` differs from `DriverApiVersion.CURRENT` (now
+`2`, after the SPI's `initialize` switched to Micrometer `MeterRegistry`), so a stale bundle fails
+before its driver JVM starts.
 
 [`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
 puts the benchmark core first, followed by the bundle jars. The core is the artifact list recorded at

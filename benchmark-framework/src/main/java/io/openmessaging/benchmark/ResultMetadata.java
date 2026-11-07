@@ -125,7 +125,16 @@ public record ResultMetadata(
         if (!configured.isBlank()) {
             return configured;
         }
-        Optional<Path> git = findExecutable(GIT_LOCATIONS);
+        return gitRevision(GIT_LOCATIONS);
+    }
+
+    /**
+     * Runs {@code git rev-parse HEAD} with the first executable of the given candidates.
+     *
+     * @return the revision, or {@code "unknown"} if no candidate exists or git fails
+     */
+    static String gitRevision(List<Path> candidates) {
+        Optional<Path> git = findExecutable(candidates);
         if (git.isEmpty()) {
             return "unknown";
         }

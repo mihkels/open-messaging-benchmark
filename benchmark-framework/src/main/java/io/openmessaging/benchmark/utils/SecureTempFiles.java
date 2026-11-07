@@ -13,71 +13,92 @@
  */
 package io.openmessaging.benchmark.utils;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Creates temporary files and directories that only the current user can access.
  *
- * <p>On POSIX file systems the owner-only permissions are applied atomically at creation. Elsewhere
- * the entry is created first and then restricted to its owner.
+ * <p>The owner-only permissions are applied atomically at creation: as POSIX permissions where the
+ * default file system supports them, otherwise as an ACL granting access to the owner alone (e.g.
+ * on Windows).
  */
 public final class SecureTempFiles {
-    private static final boolean POSIX =
-            FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
-
     private SecureTempFiles() {}
 
     /**
-     * Creates a temporary file readable and writable only by its owner ({@code rw-------}).
+     * Creates a temporary file readable and writable only by its owner.
      *
      * @param prefix the file name prefix
      * @param suffix the file name suffix
      * @return the created file
-     * @throws IOException if the file cannot be created or restricted
+     * @throws IOException if the file cannot be created, or the file system supports neither POSIX
+     *     permissions nor ACLs
      */
     public static Path createFile(String prefix, String suffix) throws IOException {
-        if (POSIX) {
-            return Files.createTempFile(
-                    prefix,
-                    suffix,
-                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
-        }
-        File file = File.createTempFile(prefix, suffix);
-        restrictToOwner(file, false);
-        return file.toPath();
+        return Files.createTempFile(prefix, suffix, ownerOnly(FileSystems.getDefault(), false));
     }
 
     /**
-     * Creates a temporary directory accessible only by its owner ({@code rwx------}).
+     * Creates a temporary directory accessible only by its owner.
      *
      * @param prefix the directory name prefix
      * @return the created directory
-     * @throws IOException if the directory cannot be created or restricted
+     * @throws IOException if the directory cannot be created, or the file system supports neither
+     *     POSIX permissions nor ACLs
      */
     public static Path createDirectory(String prefix) throws IOException {
-        if (POSIX) {
-            return Files.createTempDirectory(
-                    prefix,
-                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
-        }
-        File directory = Files.createTempDirectory(prefix).toFile();
-        restrictToOwner(directory, true);
-        return directory.toPath();
+        return Files.createTempDirectory(prefix, ownerOnly(FileSystems.getDefault(), true));
     }
 
-    private static void restrictToOwner(File file, boolean executable) throws IOException {
-        boolean restricted =
-                file.setReadable(true, true)
-                        && file.setWritable(true, true)
-                        && file.setExecutable(executable, true);
-        if (!restricted) {
-            Files.deleteIfExists(file.toPath());
-            throw new IOException("Cannot restrict permissions of " + file);
+    static FileAttribute<?> ownerOnly(FileSystem fileSystem, boolean directory) throws IOException {
+        Set<String> views = fileSystem.supportedFileAttributeViews();
+        if (views.contains("posix")) {
+            return PosixFilePermissions.asFileAttribute(
+                    PosixFilePermissions.fromString(directory ? "rwx------" : "rw-------"));
         }
+        if (views.contains("acl")) {
+            UserPrincipal owner =
+                    fileSystem
+                            .getUserPrincipalLookupService()
+                            .lookupPrincipalByName(System.getProperty("user.name"));
+            return ownerOnlyAcl(owner);
+        }
+        throw new IOException(
+                "Cannot create owner-only temporary files: the file system supports neither POSIX"
+                        + " permissions nor ACLs");
+    }
+
+    static FileAttribute<List<AclEntry>> ownerOnlyAcl(UserPrincipal owner) {
+        List<AclEntry> acl =
+                List.of(
+                        AclEntry.newBuilder()
+                                .setType(AclEntryType.ALLOW)
+                                .setPrincipal(owner)
+                                .setPermissions(EnumSet.allOf(AclEntryPermission.class))
+                                .build());
+        return new FileAttribute<>() {
+            @Override
+            public String name() {
+                return "acl:acl";
+            }
+
+            @Override
+            public List<AclEntry> value() {
+                return acl;
+            }
+        };
     }
 }

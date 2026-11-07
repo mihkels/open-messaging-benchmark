@@ -39,6 +39,35 @@ class ResultMetadataGitLookupTest {
     }
 
     @Test
+    void gitRevisionIsUnknownWithoutCandidates() {
+        assertThat(ResultMetadata.gitRevision(List.of(directory.resolve("missing"))))
+                .isEqualTo("unknown");
+    }
+
+    @Test
+    void gitRevisionReadsCandidateOutput() throws IOException {
+        Path git = fakeGit("echo abc123", "fake-git");
+
+        assertThat(ResultMetadata.gitRevision(List.of(git))).isEqualTo("abc123");
+    }
+
+    @Test
+    void gitRevisionIsUnknownWhenGitFails() throws IOException {
+        Path git = fakeGit("echo 'not a git repository'; exit 128", "failing-git");
+
+        assertThat(ResultMetadata.gitRevision(List.of(git))).isEqualTo("unknown");
+    }
+
+    private Path fakeGit(String body, String name) throws IOException {
+        Path shell = Path.of("/bin/sh");
+        assumeTrue(Files.isExecutable(shell));
+        Path git = directory.resolve(name);
+        Files.writeString(git, "#!/bin/sh\n" + body + "\n");
+        assumeTrue(git.toFile().setExecutable(true, true));
+        return git;
+    }
+
+    @Test
     void ignoresDirectoriesAndRelativePaths() {
         assertThat(ResultMetadata.findExecutable(List.of(directory, Path.of("git")))).isEmpty();
     }

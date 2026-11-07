@@ -258,6 +258,10 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         failStartup(timeout);
     }
 
+    // An NSQConsumer holds no connections or threads until start(), and its close() would shut down
+    // the scheduler shared with this consumer, so an instance dropped on the early return is not
+    // closed
+    @SuppressWarnings("java:S2095")
     private void initializeAndConnect() {
         try {
             NSQConfig config = new NSQConfig();

@@ -48,11 +48,14 @@ public record ResultMetadata(
         return redactDriverConfig(driverConfig);
     }
 
-    private static final Pattern SECRET_KEY =
+    // Two patterns keep each regex under Sonar's complexity limit (java:S5843)
+    private static final Pattern SECRET_WORD =
             Pattern.compile(
-                    "password|passwd|passphrase|token|secret|credential|api.?key|access.?key|"
-                            + "private.?key|sasl.?jaas|authorization|auth.?config",
+                    "password|passwd|passphrase|token|secret|credential|authorization",
                     Pattern.CASE_INSENSITIVE);
+    private static final Pattern SECRET_COMPOUND =
+            Pattern.compile(
+                    "api.?key|access.?key|private.?key|sasl.?jaas|auth.?config", Pattern.CASE_INSENSITIVE);
     private static final String REDACTED = "[REDACTED]";
     private static final String UNKNOWN = "unknown";
     private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
@@ -108,7 +111,7 @@ public record ResultMetadata(
      * it.
      */
     static boolean isSecretKey(String key) {
-        return SECRET_KEY.matcher(key).find();
+        return SECRET_WORD.matcher(key).find() || SECRET_COMPOUND.matcher(key).find();
     }
 
     private static Object redactValue(Object value) {

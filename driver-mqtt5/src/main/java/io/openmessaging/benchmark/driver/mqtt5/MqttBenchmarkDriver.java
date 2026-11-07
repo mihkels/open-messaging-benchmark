@@ -282,9 +282,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         if (ex != null) {
             return ex;
         }
-        if (subAck == null
-                || subAck.getReasonCodes() == null
-                || subAck.getReasonCodes().size() != subscriptions.size()) {
+        if (subAck == null || subAck.getReasonCodes().size() != subscriptions.size()) {
             return new IllegalStateException("Invalid SUBACK for subscriptions: " + subscriptions);
         }
         for (int i = 0; i < subscriptions.size(); i++) {

@@ -328,6 +328,11 @@ public class TestResult {
         return micros / 1000.0;
     }
 
+    // Histogram values are long microseconds; the double result may lose precision above 2^53
+    private static double millis(long micros) {
+        return millis((double) micros);
+    }
+
     public int getTopics() {
         return topics;
     }

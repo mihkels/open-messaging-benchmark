@@ -64,7 +64,7 @@ public class Thresholds {
     }
 
     public static final class Result {
-        private static final Logger log = LoggerFactory.getLogger(Thresholds.class);
+        private static final Logger log = LoggerFactory.getLogger(Result.class);
 
         public String status;
         public Map<String, Check> checks;

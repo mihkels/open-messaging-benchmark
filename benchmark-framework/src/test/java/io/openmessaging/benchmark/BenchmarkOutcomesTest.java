@@ -476,9 +476,11 @@ class BenchmarkOutcomesTest {
                                     }
 
                                     @Override
-                                    public void close() {}
+                                    public void close() {
+                                        // The fixture run holds no resources
+                                    }
                                 });
-            } catch (Benchmark.ThresholdFailureException e) {
+            } catch (Benchmark.ThresholdFailureException _) {
                 System.exit(Benchmark.thresholdFailureExitCode());
             }
         }

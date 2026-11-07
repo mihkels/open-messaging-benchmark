@@ -115,11 +115,13 @@ class WorkloadGenerationToolTest {
         assertThat(generatedFile).exists();
 
         String yaml = Files.readString(generatedFile);
-        assertThat(yaml).isNotBlank();
-        assertThat(yaml).contains("name: \"single-workload\"");
-        assertThat(yaml).contains("topics: 3");
-        assertThat(yaml).contains("partitionsPerTopic: 2");
-        assertThat(yaml).contains("messageSize: 1024");
+        assertThat(yaml)
+                .isNotBlank()
+                .contains(
+                        "name: \"single-workload\"",
+                        "topics: 3",
+                        "partitionsPerTopic: 2",
+                        "messageSize: 1024");
 
         Workload workload = YAML_MAPPER.readValue(generatedFile.toFile(), Workload.class);
 

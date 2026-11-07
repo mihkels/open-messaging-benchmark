@@ -98,6 +98,11 @@ python3 -m venv .venv
   [Testcontainers end-to-end tests](https://mihkels.github.io/open-messaging-benchmark/development/testing-a-driver/#testcontainers-end-to-end-tests)
   and
   [Adding a stack and a case](https://mihkels.github.io/open-messaging-benchmark/development/testing-a-driver/#adding-a-stack-and-a-case).
+- **Static analysis.** SonarCloud analyses every pull request. A few rules are suppressed in the root
+  `pom.xml` (`sonar.issue.ignore.multicriteria`) because the code follows them by design: catch
+  `Throwable` only to aggregate, propagate or rethrow a failure, and restore the interrupt flag when
+  the failure is an `InterruptedException`; mark a field `volatile` only to publish an immutable or
+  thread-safe object. Fix any other new finding, or mark it in SonarCloud with a justification.
 - **Docs.** Update the documentation in the same pull request. A new page must be added to the `nav`
   in `mkdocs.yml`.
 - **Images.** Container images and Helm charts are published only to Docker Hub

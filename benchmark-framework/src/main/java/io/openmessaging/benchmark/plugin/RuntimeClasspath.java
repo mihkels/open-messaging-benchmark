@@ -85,96 +85,124 @@ public final class RuntimeClasspath {
     }
 
     public static RuntimeClasspath compose(HostRuntime host, ResolvedDriver driver) {
-        Set<Path> result = new LinkedHashSet<>();
-        Map<String, ArtifactCoordinates> hostArtifacts = new HashMap<>();
+        Composition composition = new Composition();
         for (HostRuntime.Entry entry : host.entries()) {
-            result.add(entry.path());
-            hostArtifacts.put(entry.coordinates().variantKey(), entry.coordinates());
+            composition.addHost(entry);
         }
-
-        List<String> warnings = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        Map<String, ArtifactCoordinates> bundleArtifacts = new HashMap<>();
-        Map<String, String> bundleOwners = new HashMap<>();
-        Map<String, Path> bundlePaths = new HashMap<>();
         for (PluginBundle bundle : driver.bundles()) {
             for (Path path : bundle.classpath()) {
-                Optional<ArtifactCoordinates> detected = ArtifactCoordinates.detect(path);
-                if (detected.isEmpty()) {
-                    result.add(path);
-                    continue;
-                }
-                ArtifactCoordinates c = detected.get();
-                ArtifactCoordinates hostCopy = hostArtifacts.get(c.variantKey());
-                if (hostCopy != null) {
-                    if (!hostCopy.version().equals(c.version())) {
-                        String message =
-                                "Plugin '"
-                                        + bundle.id()
-                                        + "' bundles "
-                                        + c
-                                        + " but the benchmark core provides version "
-                                        + hostCopy.version();
-                        if (BOUNDARY_ARTIFACTS.contains(c.key())) {
-                            errors.add(
-                                    message
-                                            + "; this artifact is part of the driver API and must be "
-                                            + "provided by the benchmark (declare it with provided scope)");
-                        } else {
-                            warnings.add(message + "; using the core version");
-                        }
-                    }
-                    continue;
-                }
-                ArtifactCoordinates other = bundleArtifacts.putIfAbsent(c.variantKey(), c);
-                if (other != null) {
-                    if (!other.version().equals(c.version()) && ANNOTATION_ARTIFACTS.contains(c.key())) {
-                        boolean newer = compareVersions(c.version(), other.version()) > 0;
-                        ArtifactCoordinates chosen = newer ? c : other;
-                        warnings.add(
-                                "Plugins '"
-                                        + bundleOwners.get(c.variantKey())
-                                        + "' and '"
-                                        + bundle.id()
-                                        + "' bundle "
-                                        + other
-                                        + " and "
-                                        + c
-                                        + "; using annotation artifact "
-                                        + chosen);
-                        if (newer) {
-                            result.remove(bundlePaths.get(c.variantKey()));
-                            result.add(path);
-                            bundleArtifacts.put(c.variantKey(), c);
-                            bundlePaths.put(c.variantKey(), path);
-                            bundleOwners.put(c.variantKey(), bundle.id());
-                        }
-                    } else if (!other.version().equals(c.version())) {
-                        errors.add(
-                                "Plugins '"
-                                        + bundleOwners.get(c.variantKey())
-                                        + "' and '"
-                                        + bundle.id()
-                                        + "' run in the same process but bundle "
-                                        + other
-                                        + " and "
-                                        + c);
-                    }
-                    continue;
-                }
-                bundleOwners.put(c.variantKey(), bundle.id());
-                bundlePaths.put(c.variantKey(), path);
-                result.add(path);
+                composition.addBundleJar(bundle, path);
             }
         }
-        if (!errors.isEmpty()) {
+        if (!composition.errors.isEmpty()) {
             throw new PluginException(
                     "Cannot build the classpath for "
                             + driver.driverClass()
                             + ":\n  - "
-                            + String.join("\n  - ", errors));
+                            + String.join("\n  - ", composition.errors));
         }
-        return new RuntimeClasspath(new ArrayList<>(result), warnings);
+        return new RuntimeClasspath(new ArrayList<>(composition.result), composition.warnings);
+    }
+
+    /** The classpath being composed and what is known about the artifacts already on it. */
+    private static final class Composition {
+        private final Set<Path> result = new LinkedHashSet<>();
+        private final Map<String, ArtifactCoordinates> hostArtifacts = new HashMap<>();
+        private final List<String> warnings = new ArrayList<>();
+        private final List<String> errors = new ArrayList<>();
+        private final Map<String, ArtifactCoordinates> bundleArtifacts = new HashMap<>();
+        private final Map<String, String> bundleOwners = new HashMap<>();
+        private final Map<String, Path> bundlePaths = new HashMap<>();
+
+        void addHost(HostRuntime.Entry entry) {
+            result.add(entry.path());
+            hostArtifacts.put(entry.coordinates().variantKey(), entry.coordinates());
+        }
+
+        void addBundleJar(PluginBundle bundle, Path path) {
+            Optional<ArtifactCoordinates> detected = ArtifactCoordinates.detect(path);
+            if (detected.isEmpty()) {
+                result.add(path);
+                return;
+            }
+            ArtifactCoordinates c = detected.get();
+            ArtifactCoordinates hostCopy = hostArtifacts.get(c.variantKey());
+            if (hostCopy != null) {
+                reconcileWithHost(bundle, c, hostCopy);
+                return;
+            }
+            ArtifactCoordinates other = bundleArtifacts.putIfAbsent(c.variantKey(), c);
+            if (other != null) {
+                reconcileWithBundle(bundle, path, c, other);
+                return;
+            }
+            bundleOwners.put(c.variantKey(), bundle.id());
+            bundlePaths.put(c.variantKey(), path);
+            result.add(path);
+        }
+
+        // The core's copy always wins; a version mismatch is an error for driver API artifacts.
+        private void reconcileWithHost(
+                PluginBundle bundle, ArtifactCoordinates c, ArtifactCoordinates hostCopy) {
+            if (hostCopy.version().equals(c.version())) {
+                return;
+            }
+            String message =
+                    "Plugin '"
+                            + bundle.id()
+                            + "' bundles "
+                            + c
+                            + " but the benchmark core provides version "
+                            + hostCopy.version();
+            if (BOUNDARY_ARTIFACTS.contains(c.key())) {
+                errors.add(
+                        message
+                                + "; this artifact is part of the driver API and must be "
+                                + "provided by the benchmark (declare it with provided scope)");
+            } else {
+                warnings.add(message + "; using the core version");
+            }
+        }
+
+        // Annotation artifacts resolve to the newer version; other mismatches are errors.
+        private void reconcileWithBundle(
+                PluginBundle bundle, Path path, ArtifactCoordinates c, ArtifactCoordinates other) {
+            if (other.version().equals(c.version())) {
+                return;
+            }
+            if (!ANNOTATION_ARTIFACTS.contains(c.key())) {
+                errors.add(
+                        "Plugins '"
+                                + bundleOwners.get(c.variantKey())
+                                + "' and '"
+                                + bundle.id()
+                                + "' run in the same process but bundle "
+                                + other
+                                + " and "
+                                + c);
+                return;
+            }
+            boolean newer = compareVersions(c.version(), other.version()) > 0;
+            ArtifactCoordinates chosen = newer ? c : other;
+            warnings.add(
+                    "Plugins '"
+                            + bundleOwners.get(c.variantKey())
+                            + "' and '"
+                            + bundle.id()
+                            + "' bundle "
+                            + other
+                            + " and "
+                            + c
+                            + "; using annotation artifact "
+                            + chosen);
+            if (newer) {
+                result.remove(bundlePaths.get(c.variantKey()));
+                result.add(path);
+                bundleArtifacts.put(c.variantKey(), c);
+                bundlePaths.put(c.variantKey(), path);
+                bundleOwners.put(c.variantKey(), bundle.id());
+            }
+        }
     }
 
     static int compareVersions(String left, String right) {

@@ -77,6 +77,22 @@ public record PluginDescriptor(
     /** Returns every problem with this descriptor; an empty list means the descriptor is valid. */
     public List<String> validate() {
         List<String> errors = new ArrayList<>();
+        validateVersions(errors);
+        validateDrivers(errors);
+        if (classpath.isEmpty()) {
+            errors.add("classpath must list at least one entry");
+        }
+        validateEntries("classpath", classpath, errors);
+        validateEntries("optionalClasspath", optionalClasspath, errors);
+        for (String property : classReferenceProperties) {
+            if (property == null || property.isBlank()) {
+                errors.add("classReferenceProperties must not contain blank names");
+            }
+        }
+        return errors;
+    }
+
+    private void validateVersions(List<String> errors) {
         if (descriptorVersion == null || descriptorVersion != CURRENT_DESCRIPTOR_VERSION) {
             errors.add(
                     "unsupported descriptorVersion "
@@ -99,6 +115,9 @@ public record PluginDescriptor(
         if (javaVersion != null && javaVersion > runtimeJava) {
             errors.add("bundle requires Java " + javaVersion + " but runs on Java " + runtimeJava);
         }
+    }
+
+    private void validateDrivers(List<String> errors) {
         if (drivers.isEmpty()) {
             errors.add("drivers must list at least one driver class");
         }
@@ -107,44 +126,38 @@ public record PluginDescriptor(
                 errors.add("invalid driver class name '" + driver + "'");
             }
         }
-        if (classpath.isEmpty()) {
-            errors.add("classpath must list at least one entry");
-        }
-        validateEntries("classpath", classpath, errors);
-        validateEntries("optionalClasspath", optionalClasspath, errors);
-        for (String property : classReferenceProperties) {
-            if (property == null || property.isBlank()) {
-                errors.add("classReferenceProperties must not contain blank names");
-            }
-        }
-        return errors;
     }
 
     private static void validateEntries(String field, List<String> entries, List<String> errors) {
         for (String entry : entries) {
-            if (entry == null || entry.isBlank()) {
-                errors.add(field + " must not contain blank entries");
-                continue;
-            }
-            Path path;
-            try {
-                path = Path.of(entry.replace('\\', '/'));
-            } catch (InvalidPathException e) {
-                errors.add(field + " entry '" + entry + "' is invalid: " + e.getReason());
-                continue;
-            }
-            if (path.isAbsolute() || entry.startsWith("/") || entry.startsWith("\\")) {
-                errors.add(field + " entry '" + entry + "' must be relative to the bundle directory");
-                continue;
-            }
-            Path normalized = path.normalize();
-            if (normalized.toString().isEmpty() || normalized.startsWith("..")) {
-                errors.add(field + " entry '" + entry + "' escapes the bundle directory");
-            }
-            Path parent = normalized.getParent();
-            if (parent != null && (parent.toString().contains("*") || parent.toString().contains("?"))) {
-                errors.add(field + " entry '" + entry + "' may only use wildcards in the file name");
-            }
+            validateEntry(field, entry, errors);
+        }
+    }
+
+    private static void validateEntry(String field, String entry, List<String> errors) {
+        if (entry == null || entry.isBlank()) {
+            errors.add(field + " must not contain blank entries");
+            return;
+        }
+        String prefix = field + " entry '" + entry + "'";
+        Path path;
+        try {
+            path = Path.of(entry.replace('\\', '/'));
+        } catch (InvalidPathException e) {
+            errors.add(prefix + " is invalid: " + e.getReason());
+            return;
+        }
+        if (path.isAbsolute() || entry.startsWith("/") || entry.startsWith("\\")) {
+            errors.add(prefix + " must be relative to the bundle directory");
+            return;
+        }
+        Path normalized = path.normalize();
+        if (normalized.toString().isEmpty() || normalized.startsWith("..")) {
+            errors.add(prefix + " escapes the bundle directory");
+        }
+        Path parent = normalized.getParent();
+        if (parent != null && (parent.toString().contains("*") || parent.toString().contains("?"))) {
+            errors.add(prefix + " may only use wildcards in the file name");
         }
     }
 }

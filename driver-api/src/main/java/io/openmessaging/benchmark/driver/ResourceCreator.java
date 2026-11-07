@@ -201,10 +201,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
         }
 
         private void completed(Attempt attempt, C resource, Throwable error) {
-            Throwable cause =
-                    error == null && resource == null
-                            ? new NullPointerException("creation completed with a null resource")
-                            : error == null ? null : Failures.unwrap(error);
+            Throwable cause = failureCause(resource, error);
             if (cause == null) {
                 succeeded.incrementAndGet();
                 batch.succeed(attempt.index, resource);
@@ -218,24 +215,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
                     return;
                 }
                 if (cause != null) {
-                    if (attempt.firstFailure == null) {
-                        attempt.firstFailure = cause;
-                    }
-                    boolean interrupted = isInterruption(cause);
-                    if (interrupted || cause instanceof CancellationException) {
-                        if (interrupted && Thread.currentThread() == workerThread) {
-                            Thread.currentThread().interrupt();
-                        }
-                        stopping = true;
-                        terminalFailure = cause;
-                    } else if (attempt.retries < maxRetries) {
-                        attempt.retries++;
-                        pending.add(attempt);
-                        log.debug("Retrying {} creation after failure", name, cause);
-                    } else {
-                        stopping = true;
-                        terminalFailure = attempt.firstFailure;
-                    }
+                    terminalFailure = retryOrStop(attempt, cause);
                 }
                 schedule = terminalFailure == null && inFlight == 0;
             }
@@ -243,11 +223,53 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             if (terminalFailure != null) {
                 batch.fail(terminalFailure);
             } else if (schedule) {
-                try {
-                    scheduleNextBatch();
-                } catch (Throwable scheduleFailure) {
-                    batch.fail(scheduleFailure);
+                scheduleNextBatchOrFail();
+            }
+        }
+
+        private static Throwable failureCause(Object resource, Throwable error) {
+            if (error != null) {
+                return Failures.unwrap(error);
+            }
+            return resource == null
+                    ? new NullPointerException("creation completed with a null resource")
+                    : null;
+        }
+
+        /**
+         * Queues the attempt for a retry, or stops the batch.
+         *
+         * @param attempt the attempt that failed
+         * @param cause why it failed
+         * @return the failure that ends the batch, or {@code null} if the attempt is retried
+         */
+        private synchronized Throwable retryOrStop(Attempt attempt, Throwable cause) {
+            if (attempt.firstFailure == null) {
+                attempt.firstFailure = cause;
+            }
+            boolean interrupted = isInterruption(cause);
+            if (interrupted || cause instanceof CancellationException) {
+                if (interrupted && Thread.currentThread() == workerThread) {
+                    Thread.currentThread().interrupt();
                 }
+                stopping = true;
+                return cause;
+            }
+            if (attempt.retries < maxRetries) {
+                attempt.retries++;
+                pending.add(attempt);
+                log.debug("Retrying {} creation after failure", name, cause);
+                return null;
+            }
+            stopping = true;
+            return attempt.firstFailure;
+        }
+
+        private void scheduleNextBatchOrFail() {
+            try {
+                scheduleNextBatch();
+            } catch (Throwable scheduleFailure) {
+                batch.fail(scheduleFailure);
             }
         }
 

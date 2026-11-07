@@ -44,6 +44,7 @@ final class DriverProcess {
     private static final List<String> FORWARDED_PROPERTIES =
             List.of("log4j.configurationFile", "log4j2.configurationFile", "zone.id");
     private static final String LOG_NAME_PROPERTY = "omb.log.name";
+    private static final String DRIVER_PROCESS = "Driver process ";
     private static final String DRIVER_LOG_NAME = "benchmark-driver";
 
     // Places the driver log next to the supervisor log, so a supervisor started with a log directory
@@ -276,14 +277,14 @@ final class DriverProcess {
         failures.close(closing.getOutputStream());
         try {
             if (!closing.waitFor(10, TimeUnit.SECONDS)) {
-                failures.add(new TimeoutException("Driver process " + closing.pid() + " did not stop"));
+                failures.add(new TimeoutException(DRIVER_PROCESS + closing.pid() + " did not stop"));
                 closing.destroy();
                 if (!closing.waitFor(5, TimeUnit.SECONDS)) {
                     closing.destroyForcibly();
                     if (!closing.waitFor(5, TimeUnit.SECONDS)) {
                         failures.add(
                                 new TimeoutException(
-                                        "Driver process " + closing.pid() + " did not exit after being killed"));
+                                        DRIVER_PROCESS + closing.pid() + " did not exit after being killed"));
                     }
                 }
             }
@@ -303,7 +304,7 @@ final class DriverProcess {
             if (wasAlive && closing.exitValue() != 0) {
                 failures.add(
                         new IllegalStateException(
-                                "Driver process " + closing.pid() + " exited with code " + closing.exitValue()));
+                                DRIVER_PROCESS + closing.pid() + " exited with code " + closing.exitValue()));
             }
             processStopped = true;
         }

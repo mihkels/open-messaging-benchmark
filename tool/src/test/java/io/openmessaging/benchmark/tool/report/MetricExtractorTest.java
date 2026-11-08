@@ -31,20 +31,22 @@ class MetricExtractorTest {
     void readsTheSummaryAndAggregatedLatenciesOfAVersion2File() {
         Map<Metric, Double> values =
                 MetricExtractor.extract(Fixtures.run("baseline-1.json"), LatencySource.AGGREGATED);
-        assertThat(values).hasSize(Metric.values().length);
-        assertThat(values).containsEntry(Metric.PUBLISH_RATE, 10000.0);
-        assertThat(values).containsEntry(Metric.PUBLISH_ERRORS, 0.0);
-        assertThat(values).containsEntry(Metric.MAX_BACKLOG, 100.0);
-        assertThat(values).containsEntry(Metric.PUBLISH_LATENCY_P99, 5.0);
-        assertThat(values).containsEntry(Metric.END_TO_END_LATENCY_MAX, 30.0);
+        assertThat(values)
+                .hasSize(Metric.values().length)
+                .containsEntry(Metric.PUBLISH_RATE, 10000.0)
+                .containsEntry(Metric.PUBLISH_ERRORS, 0.0)
+                .containsEntry(Metric.MAX_BACKLOG, 100.0)
+                .containsEntry(Metric.PUBLISH_LATENCY_P99, 5.0)
+                .containsEntry(Metric.END_TO_END_LATENCY_MAX, 30.0);
     }
 
     @Test
     void convertsPublishDelayFromMicrosecondsToMilliseconds() {
         Map<Metric, Double> values =
                 MetricExtractor.extract(Fixtures.run("baseline-1.json"), LatencySource.AGGREGATED);
-        assertThat(values).containsEntry(Metric.PUBLISH_DELAY_P99, 0.2);
-        assertThat(values).containsEntry(Metric.PUBLISH_DELAY_MAX, 0.9);
+        assertThat(values)
+                .containsEntry(Metric.PUBLISH_DELAY_P99, 0.2)
+                .containsEntry(Metric.PUBLISH_DELAY_MAX, 0.9);
     }
 
     @Test
@@ -52,10 +54,11 @@ class MetricExtractorTest {
         Run legacy = Fixtures.run("legacy-v1.json");
         assertThat(legacy.hasMetadata()).isFalse();
         Map<Metric, Double> values = MetricExtractor.extract(legacy, LatencySource.AGGREGATED);
-        assertThat(values).containsEntry(Metric.PUBLISH_RATE, 10000.0);
-        assertThat(values).containsEntry(Metric.CONSUME_RATE, 9990.0);
-        assertThat(values).containsEntry(Metric.MAX_BACKLOG, 120.0);
-        assertThat(values).doesNotContainKey(Metric.PUBLISH_ERRORS);
+        assertThat(values)
+                .containsEntry(Metric.PUBLISH_RATE, 10000.0)
+                .containsEntry(Metric.CONSUME_RATE, 9990.0)
+                .containsEntry(Metric.MAX_BACKLOG, 120.0)
+                .doesNotContainKey(Metric.PUBLISH_ERRORS);
     }
 
     @Test

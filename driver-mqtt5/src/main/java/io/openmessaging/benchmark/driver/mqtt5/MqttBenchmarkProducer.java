@@ -59,8 +59,9 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
+        Mqtt5AsyncClient target = client;
         return lifecycle.publish(settle ->
-                this.client
+                target
                         .publish(message)
                         .whenComplete((result, ex) -> {
                             try {
@@ -84,7 +85,8 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(client));
+        Mqtt5AsyncClient target = client;
+        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(target));
     }
 
     public void setClient(Mqtt5AsyncClient client) {

@@ -161,10 +161,12 @@ class TestResultJsonTest {
         Map<String, Object> config =
                 Map.of(
                         "commonConfig",
-                        "bootstrap.servers=kafka:9092\n"
-                                + "security.protocol=SASL_SSL\n"
-                                + "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule"
-                                + " required username=\"bench\" password=\"kafka-secret\";\n",
+                        """
+                        bootstrap.servers=kafka:9092
+                        security.protocol=SASL_SSL
+                        sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule \
+                        required username="bench" password="kafka-secret";
+                        """,
                         "connectionFactoryConfigurationParam",
                         "{\"brokerURL\":\"tcp://artemis:61616\",\"user\":\"bench\",\"password\":\"jms-secret\"}",
                         "amqpUri",
@@ -181,9 +183,11 @@ class TestResultJsonTest {
         JsonNode driverConfig = mapper.readTree(json).get("driverConfig");
         assertThat(driverConfig.get("commonConfig").asString())
                 .isEqualTo(
-                        "bootstrap.servers=kafka:9092\n"
-                                + "security.protocol=SASL_SSL\n"
-                                + "sasl.jaas.config=[REDACTED]\n");
+                        """
+                        bootstrap.servers=kafka:9092
+                        security.protocol=SASL_SSL
+                        sasl.jaas.config=[REDACTED]
+                        """);
         assertThat(mapper.readTree(driverConfig.get("connectionFactoryConfigurationParam").asString()))
                 .isEqualTo(
                         mapper.readTree(

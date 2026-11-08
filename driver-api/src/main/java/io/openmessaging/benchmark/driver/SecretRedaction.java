@@ -126,11 +126,11 @@ public final class SecretRedaction {
     /**
      * Masks credentials embedded in a string value.
      *
-     * @param value the string, may be {@code null}
+     * @param value the string
      * @return the string with embedded credentials masked
      */
     public static String redactString(String value) {
-        if (value == null || value.isEmpty()) {
+        if (value.isEmpty()) {
             return value;
         }
         String trimmed = value.strip();

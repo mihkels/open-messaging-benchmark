@@ -85,8 +85,11 @@ class SecretRedactionTest {
     static class DriverConfig {
         public ClientConfig client = new ClientConfig();
         public String producerConfig =
-                "acks=all\nsasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule"
-                        + " required username=\"u\" password=\"kafka-password\";\n";
+                """
+                acks=all
+                sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule \
+                required username="u" password="kafka-password";
+                """;
         public int qos = 1;
     }
 
@@ -181,19 +184,23 @@ class SecretRedactionTest {
     @Test
     void masksSecretPropertyLinesAndKeepsOthers() {
         String properties =
-                "bootstrap.servers=kafka:9092\n"
-                        + "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule"
-                        + " required username=\"u\" password=\"x\";\n"
-                        + "  ssl.keystore.password : hunter2\r\n"
-                        + "redis.pass=hunter3\n"
-                        + "sasl.mechanism=PLAIN\n";
+                """
+                bootstrap.servers=kafka:9092
+                sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule \
+                required username="u" password="x";
+                  ssl.keystore.password : hunter2\r
+                redis.pass=hunter3
+                sasl.mechanism=PLAIN
+                """;
 
         assertEquals(
-                "bootstrap.servers=kafka:9092\n"
-                        + "sasl.jaas.config=[REDACTED]\n"
-                        + "  ssl.keystore.password : [REDACTED]\r\n"
-                        + "redis.pass=[REDACTED]\n"
-                        + "sasl.mechanism=PLAIN\n",
+                """
+                bootstrap.servers=kafka:9092
+                sasl.jaas.config=[REDACTED]
+                  ssl.keystore.password : [REDACTED]\r
+                redis.pass=[REDACTED]
+                sasl.mechanism=PLAIN
+                """,
                 SecretRedaction.redactString(properties));
     }
 
@@ -254,7 +261,6 @@ class SecretRedactionTest {
 
     @Test
     void redactKeepsNonStringValuesAndNulls() {
-        assertNull(SecretRedaction.redactString(null));
         assertEquals("", SecretRedaction.redactString(""));
         assertEquals(42, SecretRedaction.redact(42));
         assertNull(SecretRedaction.redact(null));

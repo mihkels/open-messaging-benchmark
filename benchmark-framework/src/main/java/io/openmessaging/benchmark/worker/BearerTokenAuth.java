@@ -51,7 +51,7 @@ public final class BearerTokenAuth implements Handler {
      * @param openPaths exact request paths served without a token, such as {@code /metrics}
      */
     public BearerTokenAuth(String token, Set<String> openPaths) {
-        if (token == null || token.isBlank()) {
+        if (token.isBlank()) {
             throw new IllegalArgumentException("Worker token must not be blank");
         }
         this.expected = token.getBytes(StandardCharsets.UTF_8);

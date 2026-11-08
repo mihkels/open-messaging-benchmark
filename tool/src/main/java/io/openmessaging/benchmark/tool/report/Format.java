@@ -47,9 +47,11 @@ enum Format {
         }
     };
 
-    private static final List<String> SETTING_HEADER = List.of("Setting", "Baseline", "Candidate");
+    private static final String BASELINE = "Baseline";
+    private static final String CANDIDATE = "Candidate";
+    private static final List<String> SETTING_HEADER = List.of("Setting", BASELINE, CANDIDATE);
     private static final List<String> METRIC_HEADER =
-            List.of("Metric", "Baseline", "Candidate", "Δ", "Δ%", "Status");
+            List.of("Metric", BASELINE, CANDIDATE, "Δ", "Δ%", "Status");
     private static final boolean[] RIGHT_ALIGNED = {false, true, true, true, true, false};
 
     /**
@@ -64,8 +66,8 @@ enum Format {
     private static String render(DiffReport report, Style style) {
         StringBuilder out = new StringBuilder();
         style.title(out, report.workload());
-        style.field(out, "Baseline", runs(report.baselineFiles()));
-        style.field(out, "Candidate", runs(report.candidateFiles()));
+        style.field(out, BASELINE, runs(report.baselineFiles()));
+        style.field(out, CANDIDATE, runs(report.candidateFiles()));
         style.field(out, "Latency source", report.latencySource().description);
         style.field(out, "Result", report.statusSummary());
         for (String warning : report.warnings()) {

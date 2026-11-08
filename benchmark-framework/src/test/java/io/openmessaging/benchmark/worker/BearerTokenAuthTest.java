@@ -61,7 +61,6 @@ class BearerTokenAuthTest {
     }
 
     @ParameterizedTest
-    @NullSource
     @ValueSource(strings = {"", "  "})
     void rejectsBlankTokens(String token) {
         assertThatThrownBy(() -> new BearerTokenAuth(token, Set.of()))

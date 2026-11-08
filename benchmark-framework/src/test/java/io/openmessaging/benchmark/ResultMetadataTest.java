@@ -97,7 +97,8 @@ class ResultMetadataTest {
                         Map.entry("authToken", "[REDACTED]"),
                         Map.entry("nested", Map.of("clientSecret", "[REDACTED]", "username", "user")));
         assertThat(metadata.driverConfig()).isSameAs(metadata.driverConfig());
-        assertThatThrownBy(() -> metadata.driverConfig().put("password", "x"))
+        Map<String, Object> redacted = metadata.driverConfig();
+        assertThatThrownBy(() -> redacted.put("password", "x"))
                 .isInstanceOf(UnsupportedOperationException.class);
         config.put("password", "changed");
         assertThat(metadata.driverConfig()).containsEntry("password", "[REDACTED]");

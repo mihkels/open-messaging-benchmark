@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark;
 
 import static io.openmessaging.benchmark.driver.Failures.append;
-import static java.util.stream.Collectors.toList;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -227,7 +226,7 @@ public final class Benchmark {
             List<Worker> workers =
                     arguments.workers.stream()
                             .map(host -> (Worker) new HttpWorkerClient(host, token))
-                            .collect(toList());
+                            .toList();
             log.info("Using distributed workers ensemble");
             if (arguments.driverLocation != null) {
                 log.warn(

@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.redis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -28,10 +29,7 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
     private final JedisPool pool;
     private final String rmqTopic;
     private final XAddParams xaddParams;
-    private final Object lifecycleLock = new Object();
-    private final ThreadLocal<Boolean> inSend = new ThreadLocal<>();
-    private boolean closed;
-    private int activeSends;
+    private final PublicationLifecycle lifecycle = new PublicationLifecycle("Redis producer");
 
     public RedisBenchmarkProducer(final JedisPool pool, final String rmqTopic) {
         this.pool = pool;
@@ -41,16 +39,7 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(final Optional<String> key, final byte[] payload) {
-        synchronized (lifecycleLock) {
-            if (closed) {
-                return CompletableFuture.failedFuture(
-                        new IllegalStateException("Redis producer is closed"));
-            }
-            activeSends++;
-        }
-        Boolean previous = inSend.get();
-        inSend.set(true);
-        try {
+        return lifecycle.publish(settle -> {
             // byte[] keys have identity equality; the two field names are distinct arrays
             Map<byte[], byte[]> map1 = new IdentityHashMap<>();
             map1.put("payload".getBytes(UTF_8), payload);
@@ -60,37 +49,13 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
             try (Jedis jedis = this.pool.getResource()) {
                 jedis.xadd(this.rmqTopic.getBytes(UTF_8), map1, this.xaddParams);
             }
-            return CompletableFuture.completedFuture(null);
-        } catch (Exception e) {
-            return CompletableFuture.failedFuture(e);
-        } finally {
-            if (previous == null) {
-                inSend.remove();
-            } else {
-                inSend.set(previous);
-            }
-            synchronized (lifecycleLock) {
-                activeSends--;
-                lifecycleLock.notifyAll();
-            }
-        }
+            settle.complete(null);
+        });
     }
 
+    /** Waits for sends in progress to return; the shared pool is owned by the driver. */
     @Override
-    public void close() throws InterruptedException {
-        if (Boolean.TRUE.equals(inSend.get())) {
-            throw new IllegalStateException("Cannot close Redis producer during its send");
-        }
-        synchronized (lifecycleLock) {
-            closed = true;
-            while (activeSends != 0) {
-                try {
-                    lifecycleLock.wait();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw e;
-                }
-            }
-        }
+    public void close() {
+        lifecycle.close();
     }
 }

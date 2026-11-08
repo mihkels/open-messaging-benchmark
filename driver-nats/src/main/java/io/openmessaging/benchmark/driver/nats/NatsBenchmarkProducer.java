@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.nats;
 import io.nats.client.JetStream;
 import io.nats.client.api.PublishAck;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -31,7 +32,8 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
 
     private final Object lifecycleLock = new Object();
     private final Set<PendingSend> pendingSends = new HashSet<>();
-    private final ThreadLocal<Boolean> completingOnThread = new ThreadLocal<>();
+    // Only guards close against re-entry from a completion callback; pendingSends tracks the sends
+    private final PendingSendTracker callbacks = new PendingSendTracker("NATS producer");
     private volatile boolean closed;
 
     public NatsBenchmarkProducer(JetStream jetStream, final String topic) {
@@ -83,9 +85,8 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() {
-        if (Boolean.TRUE.equals(completingOnThread.get())) {
-            throw new IllegalStateException("Cannot close NATS producer from its completion callback");
-        }
+        // Rejects a close from a completion callback; every other close settles the sends again
+        callbacks.beginClose();
         List<PendingSend> sends;
         IllegalStateException failure = new IllegalStateException("NATS producer is closed");
         synchronized (lifecycleLock) {
@@ -121,21 +122,7 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
     }
 
     private void complete(PendingSend send) {
-        Boolean previous = completingOnThread.get();
-        completingOnThread.set(true);
-        try {
-            if (send.failure == null) {
-                send.future.complete(null);
-            } else {
-                send.future.completeExceptionally(send.failure);
-            }
-        } finally {
-            if (previous == null) {
-                completingOnThread.remove();
-            } else {
-                completingOnThread.set(previous);
-            }
-        }
+        callbacks.completeFromClient(send.future, send.failure);
     }
 
     private static CompletableFuture<Void> closedFuture() {

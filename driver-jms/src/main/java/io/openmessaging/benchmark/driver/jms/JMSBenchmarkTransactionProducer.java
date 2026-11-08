@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.jms;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
+import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,10 +48,9 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
     private final List<JMSConfig.AddProperty> properties;
     private final Object lifecycleLock = new Object();
     private final Set<SendOperation> pending = new HashSet<>();
-    private final CountDownLatch closeComplete = new CountDownLatch(1);
+    private final PublicationLifecycle.OwnedClose<Exception> closer =
+            new PublicationLifecycle.OwnedClose<>();
     private boolean closed;
-    private Thread closingThread;
-    private Throwable closeFailure;
 
     private JMSBenchmarkTransactionProducer(
             Connection connection,
@@ -82,46 +82,16 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
 
     @Override
     public void close() throws Exception {
-        List<SendOperation> operations = null;
-        synchronized (lifecycleLock) {
-            if (closed && closingThread == Thread.currentThread()) {
-                return;
-            }
-            if (!closed) {
-                closed = true;
-                closingThread = Thread.currentThread();
-                operations = new ArrayList<>(pending);
-            }
-        }
-
-        if (operations == null) {
-            awaitConcurrentClose().throwIfAny();
-            return;
-        }
-
-        try {
-            Failures failures = settle(operations);
-            closeFailure = failures.failure();
-            failures.throwIfAny();
-        } finally {
-            synchronized (lifecycleLock) {
-                closingThread = null;
-            }
-            closeComplete.countDown();
-        }
+        closer.closeInterruptibly(this::closeOwned);
     }
 
-    // Waits for the owning close to finish and returns the failure the caller should rethrow.
-    private Failures awaitConcurrentClose() {
-        Failures failures = new Failures();
-        try {
-            closeComplete.await();
-            failures.add(closeFailure);
-        } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            failures.add(error);
+    private void closeOwned() throws Exception {
+        List<SendOperation> operations;
+        synchronized (lifecycleLock) {
+            closed = true;
+            operations = new ArrayList<>(pending);
         }
-        return failures;
+        settle(operations).throwIfAny();
     }
 
     private static Failures settle(List<SendOperation> operations) {

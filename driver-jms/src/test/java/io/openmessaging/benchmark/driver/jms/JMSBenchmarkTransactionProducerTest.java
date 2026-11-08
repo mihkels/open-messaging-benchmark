@@ -519,6 +519,43 @@ class JMSBenchmarkTransactionProducerTest {
         drainCallbacks();
     }
 
+    @Test
+    void interruptedCloseStillWaitsForEverySendBeingCommitted() throws Exception {
+        Scenario scenario = new Scenario();
+        scenario.commitEntered = new CountDownLatch(2);
+        scenario.releaseCommit = new CountDownLatch(1);
+        JMSBenchmarkTransactionProducer producer = scenario.producer(false);
+        List<AtomicReference<CompletableFuture<Void>>> sends =
+                List.of(new AtomicReference<>(), new AtomicReference<>());
+        List<Thread> senders =
+                sends.stream()
+                        .map(send ->
+                                Thread.ofVirtual()
+                                        .start(() -> send.set(producer.sendAsync(Optional.empty(), new byte[] {1}))))
+                        .toList();
+        AtomicReference<Exception> closeFailure = new AtomicReference<>();
+        Thread closer;
+        try {
+            assertTrue(scenario.commitEntered.await(2, TimeUnit.SECONDS));
+            closer = Thread.ofPlatform().start(() -> closeInto(producer, closeFailure));
+            long firstWait = awaitWaitCount(closer, 1);
+            closer.interrupt();
+            awaitWaitCount(closer, firstWait + 1);
+        } finally {
+            scenario.releaseCommit.countDown();
+        }
+        closer.join(2000);
+        for (Thread sender : senders) {
+            sender.join(2000);
+        }
+        assertFalse(closer.isAlive());
+        assertInstanceOf(InterruptedException.class, closeFailure.get());
+        for (AtomicReference<CompletableFuture<Void>> send : sends) {
+            send.get().join();
+        }
+        assertEquals(2, scenario.commits.get());
+    }
+
     private static void closeInto(
             JMSBenchmarkTransactionProducer producer, AtomicReference<Exception> failure) {
         try {

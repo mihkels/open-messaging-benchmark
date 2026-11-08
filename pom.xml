@@ -70,11 +70,17 @@
         <maven.enforcer.plugin.version>3.7.0</maven.enforcer.plugin.version>
         <maven.surefire.plugin.version>3.6.1</maven.surefire.plugin.version>
         <maven.clean.plugin.version>3.5.0</maven.clean.plugin.version>
+        <maven.deploy.plugin.version>3.2.0</maven.deploy.plugin.version>
         <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
+        <maven.install.plugin.version>3.2.0</maven.install.plugin.version>
+        <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
+        <maven.site.plugin.version>3.22.0</maven.site.plugin.version>
         <flatten.plugin.version>1.8.0</flatten.plugin.version>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
         <spotless.plugin.version>3.11.0</spotless.plugin.version>
+        <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
+        <google-java-format.version>2.0.0</google-java-format.version>
         <sonar.plugin.version>5.8.0.7211</sonar.plugin.version>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
@@ -257,7 +263,38 @@
 
     <build>
         <pluginManagement>
+            <!-- Pin default-lifecycle plugins so requirePluginVersions passes and builds don't depend on Maven's defaults -->
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven.clean.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>${maven.deploy.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven.install.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.jar.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven.resources.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>${maven.site.plugin.version}</version>
+                </plugin>
                 <plugin>
                     <groupId>org.sonarsource.scanner.maven</groupId>
                     <artifactId>sonar-maven-plugin</artifactId>
@@ -283,7 +320,9 @@
                         </sortPom>
                     </pom>
                     <java>
-                        <googleJavaFormat/>
+                        <googleJavaFormat>
+                            <version>${google-java-format.version}</version>
+                        </googleJavaFormat>
                         <importOrder/>
                         <removeUnusedImports/>
                         <indent>
@@ -445,7 +484,7 @@
                 <version>${maven.enforcer.plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>enforce-maven-version</id>
+                        <id>enforce-build-rules</id>
                         <goals>
                             <goal>enforce</goal>
                         </goals>
@@ -457,6 +496,11 @@
                                 <requireJavaVersion>
                                     <version>[27,)</version>
                                 </requireJavaVersion>
+                                <requirePluginVersions>
+                                    <banSnapshots>true</banSnapshots>
+                                    <banTimestamps>true</banTimestamps>
+                                </requirePluginVersions>
+                                <banDuplicatePomDependencyVersions/>
                             </rules>
                             <fail>true</fail>
                         </configuration>
@@ -726,7 +770,6 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-clean-plugin</artifactId>
-                        <version>${maven.clean.plugin.version}</version>
                         <executions>
                             <execution>
                                 <id>omb-plugin-clean-generated</id>
@@ -776,7 +819,6 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-resources-plugin</artifactId>
-                        <version>${maven.resources.plugin.version}</version>
                         <executions>
                             <execution>
                                 <id>omb-plugin-descriptor</id>

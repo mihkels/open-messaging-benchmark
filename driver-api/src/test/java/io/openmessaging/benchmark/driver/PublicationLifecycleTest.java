@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.driver;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -22,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class PublicationLifecycleTest {
@@ -141,5 +143,39 @@ class PublicationLifecycleTest {
         closer.join(5000);
 
         assertSame(Boolean.TRUE, interruptedAfterClose.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void onlyTheFirstCloseClosesTheClient() {
+        PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
+        AtomicInteger clientCloses = new AtomicInteger();
+        assertFalse(lifecycle.isClosed());
+
+        lifecycle.close(clientCloses::incrementAndGet);
+        lifecycle.close(clientCloses::incrementAndGet);
+
+        assertTrue(lifecycle.isClosed());
+        assertEquals(1, clientCloses.get());
+    }
+
+    @Test
+    void clientCloseFailureIsThrownAndBecomesThePendingSendsCause() {
+        PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
+        CompletableFuture<Void> send = lifecycle.begin();
+        lifecycle.end();
+        Exception closeFailure = new Exception("close failed");
+
+        Exception thrown =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                lifecycle.close(() -> {
+                                    throw closeFailure;
+                                }));
+
+        assertSame(closeFailure, thrown);
+        CompletionException failure = assertThrows(CompletionException.class, send::join);
+        assertEquals("test producer is closed", failure.getCause().getMessage());
+        assertSame(closeFailure, failure.getCause().getCause());
     }
 }

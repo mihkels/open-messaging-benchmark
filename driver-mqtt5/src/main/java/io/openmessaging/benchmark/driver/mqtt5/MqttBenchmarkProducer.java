@@ -20,6 +20,7 @@ import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperties;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -32,12 +33,8 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
     private final String topic;
     private final MqttQos qos;
     private volatile Mqtt5AsyncClient client;
-    private final PendingSendTracker pending = new PendingSendTracker("MQTT producer");
-    private final Object lifecycleLock = new Object();
-    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
-    private volatile boolean closed;
-    private boolean closeComplete;
-    private int activePublications;
+    private final PublicationLifecycle lifecycle = new PublicationLifecycle("MQTT producer");
+    private final PendingSendTracker pending = lifecycle.pending();
 
     public MqttBenchmarkProducer(String topic, int qosCode) {
         this.topic = topic;
@@ -64,15 +61,9 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
-        CompletableFuture<Void> future;
-        synchronized (lifecycleLock) {
-            future = pending.register();
-            if (future.isDone()) {
-                return future;
-            }
-            activePublications++;
-            Integer depth = publishingDepth.get();
-            publishingDepth.set(depth == null ? 1 : depth + 1);
+        CompletableFuture<Void> future = lifecycle.begin();
+        if (future.isDone()) {
+            return future;
         }
         try {
             this.client
@@ -99,16 +90,7 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception failure) {
             future.completeExceptionally(failure);
         } finally {
-            int depth = publishingDepth.get() - 1;
-            if (depth == 0) {
-                publishingDepth.remove();
-            } else {
-                publishingDepth.set(depth);
-            }
-            synchronized (lifecycleLock) {
-                activePublications--;
-                lifecycleLock.notifyAll();
-            }
+            lifecycle.end();
         }
 
         return future;
@@ -116,52 +98,7 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        if (publishingDepth.get() != null) {
-            throw new IllegalStateException(
-                    "Cannot close an MQTT producer while publishing on the same thread; "
-                            + "retry after sendAsync returns");
-        }
-        publishingDepth.remove();
-        boolean interrupted = false;
-        boolean closeOwner;
-        synchronized (lifecycleLock) {
-            closeOwner = pending.beginClose();
-            if (closeOwner) {
-                closed = true;
-            }
-            while (closeOwner ? activePublications != 0 : !closeComplete) {
-                try {
-                    lifecycleLock.wait();
-                } catch (InterruptedException _) {
-                    interrupted = true;
-                }
-            }
-        }
-        Throwable closeFailure = null;
-        try {
-            if (closeOwner) {
-                MqttBenchmarkDriver.closeClient(client);
-            }
-        } catch (Exception | Error failure) {
-            closeFailure = failure;
-            throw failure;
-        } finally {
-            try {
-                if (closeOwner) {
-                    pending.failRemaining(closeFailure);
-                }
-            } finally {
-                if (closeOwner) {
-                    synchronized (lifecycleLock) {
-                        closeComplete = true;
-                        lifecycleLock.notifyAll();
-                    }
-                }
-                if (interrupted) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
+        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(client));
     }
 
     public void setClient(Mqtt5AsyncClient client) {
@@ -169,6 +106,6 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
     }
 
     public boolean isClosed() {
-        return closed;
+        return lifecycle.isClosed();
     }
 }

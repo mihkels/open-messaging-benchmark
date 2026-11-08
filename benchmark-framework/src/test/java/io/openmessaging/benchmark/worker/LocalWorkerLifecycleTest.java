@@ -115,11 +115,13 @@ class LocalWorkerLifecycleTest {
             assertThat(worker.getCumulativeLatencies().publishLatency.getTotalCount()).isZero();
 
             worker.startLoad(
-                    new ProducerWorkAssignment(List.of(new byte[8]), 10, KeyDistributorType.NO_KEY));
+                    new ProducerWorkAssignment(List.of(new byte[8]), 2, KeyDistributorType.NO_KEY));
             waitUntil(() -> worker.getCountersStats().messagesSent() > 0);
 
+            // At the initial 2 msg/s only a handful of sends fit in the wait; reaching 200 shows
+            // the running producer task picked up the new rate (#266)
             worker.adjustPublishRate(10_000);
-            waitUntil(() -> worker.getCountersStats().messagesSent() >= 10);
+            waitUntil(() -> worker.getCountersStats().messagesSent() >= 200);
         }
     }
 

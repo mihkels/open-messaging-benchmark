@@ -384,10 +384,10 @@ public final class LocalWorker implements Worker {
                 () -> {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
-                        MessageProducer messageProducer = current.requireMessageProducer();
                         while (!current.stopping) {
-                            messageProducer.sendMessage(
-                                    producer, Optional.ofNullable(keyDistributor.next()), payloads.next(random));
+                            Optional<String> key = Optional.ofNullable(keyDistributor.next());
+                            // Read on every send: adjustPublishRate installs a new producer
+                            current.requireMessageProducer().sendMessage(producer, key, payloads.next(random));
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();

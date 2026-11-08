@@ -94,6 +94,7 @@ Common variations:
 | `mvn clean verify -Dlicense.skip`        | Skip the license header check                  |
 | `mvn clean verify -Dspotbugs.skip`       | Skip SpotBugs                                  |
 | `mvn -pl driver-kafka -am install`       | Build one module and the modules it depends on |
+| `mvn -Pmutation verify -pl driver-api`   | Also run PIT mutation testing on `driver-api`  |
 
 After a source-tree build, the `bin/` scripts run straight from the checkout. They find the bundles in
 `driver-*/target/omb-plugin` (see [Runtime and plugins](../reference/runtime-and-plugins.md)).
@@ -131,6 +132,56 @@ Classes excluded from coverage are listed in the JaCoCo plugin configuration of 
 The coverage and branch badges in the README show instruction and branch coverage summed over every
 module. On each push to `main`, the `coverage-badge` job of the build workflow regenerates them from
 the modules' `jacoco.csv` files and force-pushes them to the orphan `badges` branch.
+
+## Mutation testing
+
+JaCoCo shows which lines the tests run, not whether their assertions would catch a bug. PIT measures
+that: it makes small changes ("mutants") to the bytecode, such as flipping a condition or replacing a
+return value, and reruns the tests. A mutant that makes a test fail is *killed*; one that survives
+points at code whose behaviour no assertion checks.
+
+PIT runs only in the opt-in `mutation` profile. It is not part of the default build or of CI, and no
+score is enforced. The profile is defined in `driver-api` and `benchmark-framework`, and only
+deterministic code is mutated:
+
+|        Module         |                                              Mutated                                              |
+|-----------------------|---------------------------------------------------------------------------------------------------|
+| `driver-api`          | The whole driver SPI                                                                              |
+| `benchmark-framework` | Stats and histogram math, workload and threshold parsing, plugin descriptors, rate control, utils |
+
+Coordinator orchestration, worker processes, HTTP and process IPC, broker contracts and the wall-clock
+`Timer` are left out, together with their tests. Those are slow, need real processes, or turn timing
+noise into false survivors. The target classes and tests are listed in each module's `mutation`
+profile; the shared settings (versions, threads, report formats) are in the root `pom.xml`
+`pluginManagement`.
+
+|                          Command                           |                 Effect                  |
+|------------------------------------------------------------|-----------------------------------------|
+| `mvn -Pmutation verify -pl driver-api`                     | Mutation-test `driver-api`              |
+| `mvn -Pmutation verify -pl driver-api,benchmark-framework` | Mutation-test both modules              |
+| `mvn -Pmutation verify -pl driver-api -Dpitest.threads=8`  | Use more PIT worker threads (default 4) |
+
+`benchmark-framework` depends on `driver-api`, so either list both in `-pl` or `install` `driver-api`
+first. Expect two to three minutes per module with 4 threads. `-DskipTests` also skips PIT. Append
+`-Dlicense.skip` in a linked worktree, as for any build.
+
+The report is written to `<module>/target/pit-reports/`:
+
+- `index.html` gives the mutation score per package and class. Open a class to see each line with its
+  mutants: green lines are killed, red lines have a survivor, and the list below explains each mutant.
+- `mutations.xml` holds the same data for tooling, one `<mutation>` element per mutant with its
+  `status`.
+
+The headline numbers are the *mutation score* (killed out of all mutants) and the *test strength*
+(killed out of mutants in covered code). A low test strength means the tests run the code but do not
+check its result. Besides `KILLED` and `SURVIVED`, expect `NO_COVERAGE` (no test runs the line) and
+`TIMED_OUT`. A timeout comes from a mutated loop that never ends or, often in `driver-api`, a mutated
+future that never completes, so the test's bounded wait fails. PIT counts timeouts as detected. An
+occasional `RUN_ERROR` is a minion that failed to start.
+
+To improve a score, pick a surviving mutant in the HTML report and add an assertion that would fail
+under that change. Not every survivor is worth killing; equivalent mutants (changes with no
+observable effect) cannot be killed.
 
 ## Formatting and license headers
 

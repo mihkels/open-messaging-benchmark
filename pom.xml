@@ -82,6 +82,10 @@
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
         <google-java-format.version>2.0.0</google-java-format.version>
         <sonar.plugin.version>5.8.0.7211</sonar.plugin.version>
+        <pitest.plugin.version>1.30.2</pitest.plugin.version>
+        <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
+        <!-- PIT worker threads for the opt-in mutation profile; override with -Dpitest.threads=N -->
+        <pitest.threads>4</pitest.threads>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
@@ -294,6 +298,45 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
                     <version>${maven.site.plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <!--
+                        PIT mutation testing, used only by the opt-in `mutation` profile of driver-api and
+                        benchmark-framework (mvn -Pmutation verify). Each of those modules picks its target and
+                        test classes; this block holds the shared settings. The JUnit 5 plugin is required:
+                        without it PIT finds no JUnit 6 (Jupiter) tests. No mutation threshold is enforced.
+                        See docs/development/building-the-project.md#mutation-testing.
+                    -->
+                    <groupId>org.pitest</groupId>
+                    <artifactId>pitest-maven</artifactId>
+                    <version>${pitest.plugin.version}</version>
+                    <configuration>
+                        <threads>${pitest.threads}</threads>
+                        <timestampedReports>false</timestampedReports>
+                        <outputFormats>
+                            <outputFormat>HTML</outputFormat>
+                            <outputFormat>XML</outputFormat>
+                        </outputFormats>
+                        <!-- Surefire's argLine starts with @{argLine} for JaCoCo, which PIT cannot expand -->
+                        <parseSurefireArgLine>false</parseSurefireArgLine>
+                        <argLine>--add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
+                    </configuration>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.pitest</groupId>
+                            <artifactId>pitest-junit5-plugin</artifactId>
+                            <version>${pitest.junit5.plugin.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <executions>
+                        <execution>
+                            <id>mutation-coverage</id>
+                            <goals>
+                                <goal>mutationCoverage</goal>
+                            </goals>
+                            <phase>verify</phase>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.sonarsource.scanner.maven</groupId>

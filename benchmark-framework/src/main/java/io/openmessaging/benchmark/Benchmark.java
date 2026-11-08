@@ -134,10 +134,8 @@ public final class Benchmark {
         }
 
         Worker worker = createWorker(arguments);
-        try {
-            runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
-        } catch (ThresholdFailureException _) {
-            System.exit(thresholdFailureExitCode());
+        if (!runWorkloads(arguments, workloads, worker, WorkloadGenerator::new)) {
+            System.exit(THRESHOLD_FAILURE_EXIT_CODE);
         }
     }
 
@@ -248,9 +246,10 @@ public final class Benchmark {
     }
 
     // Throwable is caught on purpose here and in the helpers below: a failed workload, including an
-    // Error, is recorded and the worker is still stopped and closed before the failures are rethrown
+    // Error, is recorded and the worker is still stopped and closed before the failures are rethrown.
+    // Returns whether every threshold check passed
     @SuppressWarnings("java:S1181")
-    static void runWorkloads(
+    static boolean runWorkloads(
             Arguments arguments,
             Map<String, Workload> workloads,
             Worker worker,
@@ -290,9 +289,7 @@ public final class Benchmark {
             throw new IllegalStateException(
                     "One or more workloads or required cleanup operations failed", failures);
         }
-        if (thresholdFailed) {
-            throw new ThresholdFailureException();
-        }
+        return !thresholdFailed;
     }
 
     // Stops anything a previous run left on the worker
@@ -489,14 +486,4 @@ public final class Benchmark {
 
     // Directory for result files written without --output, for example in a read-only container
     static final String RESULTS_DIR_ENV = "OMB_RESULTS_DIR";
-
-    static final class ThresholdFailureException extends RuntimeException {
-        ThresholdFailureException() {
-            super("One or more workload threshold checks failed");
-        }
-    }
-
-    static int thresholdFailureExitCode() {
-        return THRESHOLD_FAILURE_EXIT_CODE;
-    }
 }

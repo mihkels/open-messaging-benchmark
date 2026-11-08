@@ -31,6 +31,7 @@ class ProducerWorkAssignmentTest {
         weights[0] = 9;
 
         assertThat(assignment.payloadWeights()).containsExactly(1, 3);
+        assertThat(assignment.payloadCount()).isEqualTo(2);
 
         int[] returnedWeights = assignment.payloadWeights();
         returnedWeights[0] = 8;

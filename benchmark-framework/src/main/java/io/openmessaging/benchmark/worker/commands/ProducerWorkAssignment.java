@@ -70,6 +70,11 @@ public record ProducerWorkAssignment(
         return new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList());
     }
 
+    /** Returns the number of payload templates without copying them. */
+    public int payloadCount() {
+        return payloadData.size();
+    }
+
     @Override
     public int @Nullable [] payloadWeights() {
         return payloadWeights == null ? null : payloadWeights.clone();
@@ -82,11 +87,11 @@ public record ProducerWorkAssignment(
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ProducerWorkAssignment(var data, var rate, var keyType, var weights)
-                && Double.compare(publishRate, rate) == 0
-                && keyDistributorType == keyType
-                && PayloadTemplates.equals(payloadData, data)
-                && Arrays.equals(payloadWeights, weights);
+        return other instanceof ProducerWorkAssignment that
+                && Double.compare(publishRate, that.publishRate) == 0
+                && keyDistributorType == that.keyDistributorType
+                && PayloadTemplates.equals(payloadData, that.payloadData)
+                && Arrays.equals(payloadWeights, that.payloadWeights);
     }
 
     @Override

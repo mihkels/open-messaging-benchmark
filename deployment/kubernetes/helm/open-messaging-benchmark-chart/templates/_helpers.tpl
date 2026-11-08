@@ -89,6 +89,34 @@ Comma-separated worker URLs, resolved through the headless Service in the releas
 {{- join "," $urls -}}
 {{- end -}}
 
+{{/*
+Secret holding the worker bearer token: workers.auth.existingSecret, or the one this chart creates.
+*/}}
+{{- define "omb.authSecretName" -}}
+{{- if .Values.workers.auth.existingSecret -}}
+{{- .Values.workers.auth.existingSecret -}}
+{{- else -}}
+{{- printf "%s-worker-token" (include "omb.fullname" . | trunc 48 | trimSuffix "-") -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "omb.authSecretKey" -}}
+{{- default "token" .Values.workers.auth.secretKey -}}
+{{- end -}}
+
+{{/*
+OMB_WORKER_TOKEN for the worker and coordinator containers when workers.auth.enabled is true.
+*/}}
+{{- define "omb.authEnv" -}}
+{{- if .Values.workers.auth.enabled -}}
+- name: OMB_WORKER_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "omb.authSecretName" . }}
+      key: {{ include "omb.authSecretKey" . }}
+{{- end }}
+{{- end -}}
+
 {{- define "omb.driverPath" -}}
 {{- if .Values.driverConfig -}}/config/driver.yaml{{- else -}}{{ .Values.driver }}{{- end -}}
 {{- end -}}

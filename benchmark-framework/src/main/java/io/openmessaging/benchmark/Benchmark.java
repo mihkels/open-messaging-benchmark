@@ -19,6 +19,7 @@ import static java.util.stream.Collectors.toList;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import io.openmessaging.benchmark.worker.BearerTokenAuth;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.DriverConfiguration;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
@@ -74,6 +75,14 @@ public final class Benchmark {
                 names = {"-wf", "--workers-file"},
                 description = "Path to a YAML file containing the list of workers addresses")
         public File workersFile;
+
+        @Parameter(
+                names = "--worker-token-file",
+                description =
+                        "File holding the bearer token sent to remote workers; overrides the "
+                                + BearerTokenAuth.TOKEN_ENV
+                                + " environment variable")
+        public Path workerTokenFile;
 
         @Parameter(
                 names = {"-x", "--extra"},
@@ -210,8 +219,12 @@ public final class Benchmark {
 
     private static Worker createWorker(Arguments arguments) {
         if (arguments.workers != null && !arguments.workers.isEmpty()) {
+            String token =
+                    BearerTokenAuth.resolveToken(System.getenv(), arguments.workerTokenFile).orElse(null);
             List<Worker> workers =
-                    arguments.workers.stream().map(HttpWorkerClient::new).collect(toList());
+                    arguments.workers.stream()
+                            .map(host -> (Worker) new HttpWorkerClient(host, token))
+                            .collect(toList());
             log.info("Using distributed workers ensemble");
             if (arguments.driverLocation != null) {
                 log.warn(
@@ -219,6 +232,9 @@ public final class Benchmark {
                                 + " own installed plugin bundles");
             }
             return new DistributedWorkersEnsemble(workers, arguments.extraConsumers);
+        }
+        if (arguments.workerTokenFile != null) {
+            log.warn("--worker-token-file is ignored without remote workers");
         }
         // Run the driver in a child JVM with only its plugin bundle on the classpath
         log.info("Using local driver process worker");

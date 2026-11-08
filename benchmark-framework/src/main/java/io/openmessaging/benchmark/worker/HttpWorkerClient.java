@@ -52,6 +52,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.asynchttpclient.AsyncHttpClient;
+import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Dsl;
 import org.asynchttpclient.Response;
 import org.slf4j.Logger;
@@ -72,24 +73,48 @@ public final class HttpWorkerClient implements Worker {
 
     private final AsyncHttpClient httpClient;
     private final String host;
+    private final String authorization;
     private final long closeTimeoutNanos;
 
+    /**
+     * Creates a client that sends no bearer token.
+     *
+     * @param host the worker's base URL
+     */
     public HttpWorkerClient(String host) {
+        this(host, null);
+    }
+
+    /**
+     * Creates a client that sends {@code Authorization: Bearer <token>} on every request.
+     *
+     * @param host the worker's base URL
+     * @param token the shared worker token, or {@code null} to send none
+     */
+    public HttpWorkerClient(String host, String token) {
         this(
                 asyncHttpClient(
                         Dsl.config()
                                 .setReadTimeout(Duration.ofMillis(600000))
                                 .setRequestTimeout(Duration.ofMillis(600000))),
-                host);
+                host,
+                token,
+                CLOSE_TIMEOUT);
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host) {
-        this(httpClient, host, CLOSE_TIMEOUT);
+        this(httpClient, host, null, CLOSE_TIMEOUT);
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host, Duration closeTimeout) {
+        this(httpClient, host, null, closeTimeout);
+    }
+
+    HttpWorkerClient(AsyncHttpClient httpClient, String host, String token, Duration closeTimeout) {
         this.httpClient = httpClient;
         this.host = host;
+        this.authorization =
+                token == null || token.isBlank() ? null : BearerTokenAuth.BEARER_PREFIX + token;
         this.closeTimeoutNanos = closeTimeout.toNanos();
         if (closeTimeoutNanos <= 0) {
             throw new IllegalArgumentException("HTTP client close timeout must be positive");
@@ -183,8 +208,7 @@ public final class HttpWorkerClient implements Worker {
     @Override
     public void stopAll() {
         await(
-                httpClient
-                        .preparePost(host + STOP_ALL)
+                authorized(httpClient.preparePost(host + STOP_ALL))
                         .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(EMPTY_BODY)
                         .setRequestTimeout(STOP_TIMEOUT)
@@ -227,6 +251,12 @@ public final class HttpWorkerClient implements Worker {
         }
     }
 
+    private BoundRequestBuilder authorized(BoundRequestBuilder request) {
+        return authorization == null
+                ? request
+                : request.setHeader(BearerTokenAuth.AUTHORIZATION, authorization);
+    }
+
     private void sendPost(String path) {
         sendPost(path, EMPTY_BODY);
     }
@@ -237,8 +267,7 @@ public final class HttpWorkerClient implements Worker {
 
     private void sendPost(String path, String contentType, byte[] body) {
         await(
-                httpClient
-                        .preparePost(host + path)
+                authorized(httpClient.preparePost(host + path))
                         .setHeader(CONTENT_TYPE, contentType)
                         .setBody(body)
                         .execute()
@@ -251,8 +280,7 @@ public final class HttpWorkerClient implements Worker {
 
     private <T> T get(String path, Class<T> clazz) {
         return await(
-                httpClient
-                        .prepareGet(host + path)
+                authorized(httpClient.prepareGet(host + path))
                         .execute()
                         .toCompletableFuture()
                         .thenApply(r -> {
@@ -265,8 +293,7 @@ public final class HttpWorkerClient implements Worker {
 
     private <T> T post(String path, byte[] body, Class<T> clazz) {
         return await(
-                httpClient
-                        .preparePost(host + path)
+                authorized(httpClient.preparePost(host + path))
                         .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(body)
                         .execute()

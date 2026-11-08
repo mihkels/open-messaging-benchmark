@@ -55,12 +55,21 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          command: ["benchmark-worker", "-p", "8080"]
+          command:
+            - benchmark-worker
+            - -p
+            - "8080"
+            {{- if and .Values.workers.auth.enabled .Values.workers.auth.protectMetrics }}
+            - --protect-metrics
+            {{- end }}
           env:
             - name: HEAP_OPTS
               value: {{ .Values.workers.heapOpts | quote }}
             - name: SUPERVISOR_HEAP_OPTS
               value: {{ .Values.workers.supervisorHeapOpts | quote }}
+            {{- with include "omb.authEnv" . }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -90,7 +90,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private ConnectionFactory buildConnectionFactory() throws Exception {
+    private ConnectionFactory buildConnectionFactory() throws ReflectiveOperationException {
         Class<ConnectionFactory> clazz =
                 (Class<ConnectionFactory>)
                         Class.forName(

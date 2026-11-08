@@ -165,6 +165,7 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
+    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the earlier close failure unchanged
     private void rethrowPreviousCloseFailure() throws Exception {
         if (closeFailure != null) {
             if (closeFailure instanceof InterruptedException) {

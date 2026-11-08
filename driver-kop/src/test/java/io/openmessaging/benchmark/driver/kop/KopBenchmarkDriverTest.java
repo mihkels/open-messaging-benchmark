@@ -97,10 +97,11 @@ class KopBenchmarkDriverTest {
         assertThat(pulsarConfig.receiverQueueSize()).isEqualTo(10000);
 
         final Properties props = config.getKafkaProperties();
-        assertThat(props).hasSize(3);
-        assertThat(props).containsEntry("bootstrap.servers", "localhost:9092");
-        assertThat(props).containsEntry("linger.ms", "1");
-        assertThat(props).containsEntry("batch.size", "1048576");
+        assertThat(props)
+                .hasSize(3)
+                .containsEntry("bootstrap.servers", "localhost:9092")
+                .containsEntry("linger.ms", "1")
+                .containsEntry("batch.size", "1048576");
     }
 
     @Test

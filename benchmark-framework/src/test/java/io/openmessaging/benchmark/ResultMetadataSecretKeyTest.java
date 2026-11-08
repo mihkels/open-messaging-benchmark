@@ -25,6 +25,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class ResultMetadataSecretKeyTest {
     /** The pattern before java:S8786 was fixed, used with {@code matches()}. */
+    // Pre-#140 backtracking pattern, kept on purpose as a regression reference.
+    @SuppressWarnings("java:S8786")
     private static final Pattern FORMER_SECRET_KEY =
             Pattern.compile(
                     ".*(password|passwd|passphrase|token|secret|credential|api.?key|access.?key|"

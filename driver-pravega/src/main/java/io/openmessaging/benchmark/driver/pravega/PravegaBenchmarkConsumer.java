@@ -158,6 +158,8 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
+    // The interrupt is deferred so that the reader still closes; close() restores it via throwIfAny.
+    @SuppressWarnings("java:S2142")
     private void shutdownExecutor(Failures failures) {
         try {
             executor.shutdown();

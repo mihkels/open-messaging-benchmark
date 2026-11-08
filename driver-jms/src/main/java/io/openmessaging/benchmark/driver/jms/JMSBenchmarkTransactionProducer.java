@@ -118,7 +118,8 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             closeComplete.await();
             failures.add(closeFailure);
         } catch (InterruptedException error) {
-            failures.addInterruption(error);
+            Thread.currentThread().interrupt();
+            failures.add(error);
         }
         return failures;
     }

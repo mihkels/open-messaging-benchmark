@@ -20,7 +20,6 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.Failures;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.pravega.config.PravegaConfig;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
@@ -53,11 +52,6 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = readConfig(configurationFile);
-        log.atInfo()
-                .setMessage("Pravega driver configuration: {}")
-                .addArgument(() -> SecretRedaction.redactedJson(config))
-                .log();
-
         ClientConfig clientConfig =
                 ClientConfig.builder().controllerURI(URI.create(config.client().controllerURI())).build();
         scopeName = config.client().scopeName();

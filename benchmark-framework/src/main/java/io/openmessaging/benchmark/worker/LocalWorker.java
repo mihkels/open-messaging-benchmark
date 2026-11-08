@@ -28,6 +28,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
@@ -63,9 +64,9 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
-import tools.jackson.databind.ObjectWriter;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class LocalWorker implements Worker {
@@ -147,12 +148,18 @@ public final class LocalWorker implements Worker {
                         next,
                         "driver initialization",
                         () -> {
-                            DriverConfiguration configuration;
+                            JsonNode tree;
                             try (var input = Files.newInputStream(driverConfigFile)) {
-                                configuration = reader.readValue(input);
+                                tree = mapper.readTree(input);
                             }
-                            log.info("Initializing driver: {}", writer.writeValueAsString(configuration));
-                            if (configuration.driverClass == null || configuration.driverClass.isEmpty()) {
+                            log.atInfo()
+                                    .setMessage("Initializing driver: {}")
+                                    .addArgument(() -> configurationForLog(tree))
+                                    .log();
+                            DriverConfiguration configuration = reader.readValue(tree);
+                            if (configuration == null
+                                    || configuration.driverClass == null
+                                    || configuration.driverClass.isEmpty()) {
                                 throw new IllegalArgumentException(
                                         "Driver configuration must specify a driverClass");
                             }
@@ -1062,9 +1069,13 @@ public final class LocalWorker implements Worker {
         }
     }
 
-    private record Detached(List<AutoCloseable> handles, @Nullable BenchmarkDriver driver) {}
+    // The whole driver configuration file, with credentials masked, as logged at initialization.
+    // Logging it here means drivers need not log, or remember to redact, their own configuration.
+    static String configurationForLog(JsonNode tree) {
+        return SecretRedaction.redactedJson(tree);
+    }
 
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
+    private record Detached(List<AutoCloseable> handles, @Nullable BenchmarkDriver driver) {}
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
     private static final ObjectReader reader =

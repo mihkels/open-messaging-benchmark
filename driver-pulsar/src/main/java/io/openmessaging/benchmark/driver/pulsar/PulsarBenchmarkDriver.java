@@ -21,7 +21,6 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.ResourceNames;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig.PersistenceConfiguration;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarConfig;
 import java.io.IOException;
@@ -63,11 +62,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     private volatile ProducerBuilder<byte[]> producerBuilder;
 
     @Override
-    // The configuration is logged once per run, so eager formatting costs nothing measurable
-    @SuppressWarnings("java:S2629")
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         this.config = readConfig(configurationFile);
-        log.info("Pulsar driver configuration: {}", SecretRedaction.redactedJson(config));
 
         ClientBuilder clientBuilder =
                 PulsarClient.builder()
@@ -107,15 +103,11 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
         try {
             client = clientBuilder.build();
 
-            log.info(
-                    "Created Pulsar client for service URL {}",
-                    SecretRedaction.redactString(config.client.serviceUrl));
+            log.info("Created Pulsar client");
 
             adminClient = pulsarAdminBuilder.build();
 
-            log.info(
-                    "Created Pulsar admin client for HTTP URL {}",
-                    SecretRedaction.redactString(config.client.httpUrl));
+            log.info("Created Pulsar admin client");
 
             producerBuilder =
                     client

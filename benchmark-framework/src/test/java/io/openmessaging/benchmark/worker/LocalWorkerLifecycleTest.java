@@ -55,6 +55,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.dataformat.yaml.YAMLFactory;
 
 class LocalWorkerLifecycleTest {
     @TempDir Path directory;
@@ -967,6 +970,46 @@ class LocalWorkerLifecycleTest {
             worker.stopAll();
             assertThat(worker.canReuseAfterFailure()).isTrue();
         }
+    }
+
+    @Test
+    void rejectsAnEmptyDriverConfigurationFile() throws Exception {
+        Path blank = Files.writeString(directory.resolve("blank.yaml"), "");
+        try (LocalWorker worker =
+                new LocalWorker(
+                        new PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(2))) {
+            assertThatThrownBy(() -> worker.initializeDriver(blank)).isInstanceOf(Exception.class);
+            worker.stopAll();
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+        }
+    }
+
+    @Test
+    void logsTheWholeDriverConfigurationWithCredentialsMasked() throws Exception {
+        JsonNode tree =
+                new ObjectMapper(new YAMLFactory())
+                        .readTree(
+                                """
+                                name: Example
+                                driverClass: com.example.Driver
+                                client:
+                                  serviceUrl: pulsar://admin:url-secret@broker:6650
+                                  username: bench
+                                  password: file-secret
+                                producerConfig: |
+                                  acks=all
+                                  sasl.jaas.config=props-secret
+                                """);
+
+        assertThat(LocalWorker.configurationForLog(tree))
+                .doesNotContain("file-secret", "url-secret", "props-secret")
+                .contains("\"password\" : \"[REDACTED]\"")
+                .contains("\"username\" : \"bench\"")
+                .contains("pulsar://admin:[REDACTED]@broker:6650")
+                .contains("acks=all")
+                .contains("com.example.Driver");
     }
 
     @Test

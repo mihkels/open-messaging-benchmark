@@ -40,7 +40,6 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceNames;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.mqtt5.client.MqttConfig;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -77,15 +76,6 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
-        log.atInfo()
-                .setMessage("MqttBenchmarkDriver configuration: {}")
-                .addArgument(this::configurationForLog)
-                .log();
-    }
-
-    // The configuration as logged at startup, with credentials masked.
-    String configurationForLog() {
-        return SecretRedaction.redactedJson(config);
     }
 
     @Override

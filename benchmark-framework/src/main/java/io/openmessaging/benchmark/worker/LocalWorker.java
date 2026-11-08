@@ -18,7 +18,6 @@ import static io.openmessaging.benchmark.driver.Failures.unwrap;
 import static java.util.stream.Collectors.toList;
 
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import io.openmessaging.benchmark.DriverConfiguration;
 import io.openmessaging.benchmark.driver.AbandonableCreation;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;

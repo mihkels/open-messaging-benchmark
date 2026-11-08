@@ -50,6 +50,7 @@
         <maven.compiler.target>27</maven.compiler.target>
         <maven.compiler.release>27</maven.compiler.release>
         <guava.version>33.8.0-jre</guava.version>
+        <archunit.version>1.5.1</archunit.version>
         <assertj.version>3.27.7</assertj.version>
         <bookkeeper.version>4.18.2</bookkeeper.version>
         <checkstyle.version>14.4.0</checkstyle.version>
@@ -209,6 +210,12 @@
                 <groupId>tools.jackson.jaxrs</groupId>
                 <artifactId>jackson-jaxrs-json-provider</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>net.bytebuddy</groupId>

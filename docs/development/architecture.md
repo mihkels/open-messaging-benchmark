@@ -128,6 +128,7 @@ maps HTTP routes to `Worker` methods. The supervisor and the driver process serv
 | Method |          Path           |                                        `Worker` call                                        |
 |--------|-------------------------|---------------------------------------------------------------------------------------------|
 | POST   | `/initialize-driver`    | `initializeDriver`. The body is the driver YAML, which is first written to a temporary file |
+| POST   | `/set-run-id`           | `setRunId(String)`. The body is the run ID as a JSON string                                 |
 | POST   | `/create-topics`        | `createTopics(TopicsInfo)`, which returns the created topic names                           |
 | POST   | `/create-producers`     | `createProducers(List<String> topics)`                                                      |
 | POST   | `/probe-producers`      | `probeProducers()`                                                                          |
@@ -142,11 +143,16 @@ maps HTTP routes to `Worker` methods. The supervisor and the driver process serv
 | GET    | `/counters-stats`       | `getCountersStats()`                                                                        |
 | POST   | `/reset-stats`          | `resetStats()`                                                                              |
 
+A `before` handler rejects every `POST` (on any route) with HTTP 415 unless its `Content-Type`,
+without parameters, is `application/json` or `application/yaml`. This blocks the request types a
+browser sends cross-site without a CORS preflight. `HttpWorkerClient` sends `application/yaml` for
+`/initialize-driver` and `application/json` for every other `POST`, including empty ones.
+
 Any exception becomes an HTTP 500 response whose body lists the exception chain
 (`Class: message | caused by: ...`).
 
-The driver process also serves `POST /initialize-driver-local`. Its body is the absolute path of a
-driver YAML file that already exists on the same host.
+The driver process also serves `POST /initialize-driver-local`. Its body is the absolute path, as a
+JSON string, of a driver YAML file that already exists on the same host.
 
 ## Distributed mode (`DistributedWorkersEnsemble`)
 

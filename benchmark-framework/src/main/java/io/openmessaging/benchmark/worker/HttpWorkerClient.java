@@ -20,6 +20,7 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.CREATE_PRODUCERS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.CREATE_TOPICS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.CUMULATIVE_LATENCIES;
 import static io.openmessaging.benchmark.worker.WorkerHandler.INITIALIZE_DRIVER;
+import static io.openmessaging.benchmark.worker.WorkerHandler.JSON_CONTENT_TYPE;
 import static io.openmessaging.benchmark.worker.WorkerHandler.PAUSE_CONSUMERS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.PERIOD_STATS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.PROBE_PRODUCERS;
@@ -28,6 +29,7 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.RESUME_CONSUMERS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.SET_RUN_ID;
 import static io.openmessaging.benchmark.worker.WorkerHandler.START_LOAD;
 import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
+import static io.openmessaging.benchmark.worker.WorkerHandler.YAML_CONTENT_TYPE;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -38,7 +40,6 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -61,6 +62,7 @@ import tools.jackson.databind.ObjectWriter;
 public final class HttpWorkerClient implements Worker {
     private static final Logger log = LoggerFactory.getLogger(HttpWorkerClient.class);
 
+    private static final String CONTENT_TYPE = "Content-Type";
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int HTTP_OK = 200;
     private static final Duration STOP_TIMEOUT = Duration.ofMinutes(3);
@@ -97,18 +99,18 @@ public final class HttpWorkerClient implements Worker {
     @Override
     public void initializeDriver(Path configurationFile) throws IOException {
         byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
-        sendPost(INITIALIZE_DRIVER, confFileContent);
+        sendPost(INITIALIZE_DRIVER, YAML_CONTENT_TYPE, confFileContent);
     }
 
     @Override
     public void setRunId(String runId) {
-        sendPost(SET_RUN_ID, runId.getBytes(StandardCharsets.UTF_8));
+        sendPost(SET_RUN_ID, writer.writeValueAsBytes(runId));
     }
 
     void initializeDriverFromLocalPath(Path configurationFile) {
         sendPost(
                 DriverProcessMain.INITIALIZE_DRIVER_LOCAL,
-                configurationFile.toAbsolutePath().toString().getBytes(StandardCharsets.UTF_8));
+                writer.writeValueAsBytes(configurationFile.toAbsolutePath().toString()));
     }
 
     @SuppressWarnings("unchecked")
@@ -183,6 +185,7 @@ public final class HttpWorkerClient implements Worker {
         await(
                 httpClient
                         .preparePost(host + STOP_ALL)
+                        .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(EMPTY_BODY)
                         .setRequestTimeout(STOP_TIMEOUT)
                         .setReadTimeout(STOP_TIMEOUT)
@@ -229,9 +232,14 @@ public final class HttpWorkerClient implements Worker {
     }
 
     private void sendPost(String path, byte[] body) {
+        sendPost(path, JSON_CONTENT_TYPE, body);
+    }
+
+    private void sendPost(String path, String contentType, byte[] body) {
         await(
                 httpClient
                         .preparePost(host + path)
+                        .setHeader(CONTENT_TYPE, contentType)
                         .setBody(body)
                         .execute()
                         .toCompletableFuture()
@@ -259,6 +267,7 @@ public final class HttpWorkerClient implements Worker {
         return await(
                 httpClient
                         .preparePost(host + path)
+                        .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(body)
                         .execute()
                         .toCompletableFuture()

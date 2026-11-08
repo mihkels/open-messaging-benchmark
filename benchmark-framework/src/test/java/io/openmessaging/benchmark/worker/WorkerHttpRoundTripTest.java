@@ -34,6 +34,10 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
@@ -319,6 +324,78 @@ class WorkerHttpRoundTripTest {
         WorkerHandler ownedHandler = new WorkerHandler(ownedWorker);
         assertThat(catchThrowable(ownedHandler::close)).isSameAs(failure);
         verify(ownedWorker).close();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(
+            strings = {
+                "text/plain",
+                "text/plain;charset=UTF-8",
+                "application/x-www-form-urlencoded",
+                "multipart/form-data; boundary=x"
+            })
+    void rejectsPostsWithContentTypesBrowsersSendWithoutPreflight(String contentType)
+            throws Exception {
+        for (String path :
+                List.of(WorkerHandler.START_LOAD, WorkerHandler.SET_RUN_ID, WorkerHandler.STOP_ALL)) {
+            HttpResponse<String> response = rawPost(host + path, contentType, "{}");
+            assertThat(response.statusCode()).as(path).isEqualTo(415);
+            assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+        }
+        verifyNoMoreInteractions(worker);
+    }
+
+    @Test
+    void rejectsSimplePostsToRoutesRegisteredAfterTheWorkerRoutes() throws Exception {
+        AtomicReference<String> received = new AtomicReference<>();
+        Javalin extended =
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    handler.configure(config);
+                    config.routes.post("/extra", ctx -> received.set(ctx.body()));
+                });
+        extended.start("127.0.0.1", 0);
+        try {
+            String url = "http://127.0.0.1:" + extended.port() + "/extra";
+            assertThat(rawPost(url, "text/plain", "\"x\"").statusCode()).isEqualTo(415);
+            assertThat(received).hasNullValue();
+            assertThat(rawPost(url, "application/yaml", "x").statusCode()).isEqualTo(200);
+            assertThat(received).hasValue("x");
+        } finally {
+            extended.stop();
+        }
+    }
+
+    @Test
+    void acceptsJsonWithParametersAndLeavesGetsUnchecked() throws Exception {
+        assertThat(
+                        rawPost(host + WorkerHandler.SET_RUN_ID, "Application/JSON; charset=utf-8", "\"run-1\"")
+                                .statusCode())
+                .isEqualTo(200);
+        verify(worker).setRunId("run-1");
+        when(worker.getCountersStats()).thenReturn(new CountersStats(1, 2, 3));
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            HttpResponse<String> response =
+                    client.send(
+                            HttpRequest.newBuilder(URI.create(host + WorkerHandler.COUNTERS_STATS))
+                                    .header("Content-Type", "text/plain")
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+    }
+
+    private static HttpResponse<String> rawPost(String url, String contentType, String body)
+            throws Exception {
+        HttpRequest.Builder request =
+                HttpRequest.newBuilder(URI.create(url)).POST(HttpRequest.BodyPublishers.ofString(body));
+        if (contentType != null) {
+            request.header("Content-Type", contentType);
+        }
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        }
     }
 
     private static Histogram histogram(long first, long second) {

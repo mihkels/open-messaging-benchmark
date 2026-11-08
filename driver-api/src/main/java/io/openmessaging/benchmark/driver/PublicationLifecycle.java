@@ -194,6 +194,143 @@ public final class PublicationLifecycle {
         }
     }
 
+    /**
+     * Runs a producer's close exactly once for producers whose sends are not synchronous
+     * publications.
+     *
+     * <p>The first caller owns the close and runs the close action. A close re-entered on the owner's
+     * thread while the action runs, for example from a send completion callback, returns at once.
+     * Every other close waits until the owner has finished and then rethrows the owner's failure, if
+     * any, so a failed close keeps being reported.
+     *
+     * @param <E> the checked failure type of the close action
+     */
+    public static final class OwnedClose<E extends Exception> {
+        private final Object lock = new Object();
+        private volatile boolean closed;
+        private @Nullable Thread owner;
+        private boolean complete;
+        private @Nullable Throwable failure;
+
+        /**
+         * Returns whether close has begun.
+         *
+         * @return true once the first close has started
+         */
+        public boolean isClosed() {
+            return closed;
+        }
+
+        /**
+         * Closes once, waiting for a concurrent owner without being interruptible. An interrupt while
+         * waiting is deferred and restored before returning.
+         *
+         * @param closeAction closes the producer; run only by the first caller
+         * @throws E the owner's close failure
+         */
+        // An interrupt while waiting is deferred so close still completes, then restored
+        @SuppressWarnings("java:S2142")
+        public void close(ClientCloser<E> closeAction) throws E {
+            if (claim()) {
+                runOwner(closeAction);
+                return;
+            }
+            boolean interrupted = false;
+            synchronized (lock) {
+                if (owner == Thread.currentThread()) {
+                    return;
+                }
+                while (!complete) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException _) {
+                        interrupted = true;
+                    }
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            rethrowFailure();
+        }
+
+        /**
+         * Closes once like {@link #close(ClientCloser)}, but a caller waiting for a concurrent owner
+         * can be interrupted.
+         *
+         * @param closeAction closes the producer; run only by the first caller
+         * @throws E the owner's close failure
+         * @throws InterruptedException if interrupted while waiting for the owner; the interrupt status
+         *     is restored
+         */
+        public void closeInterruptibly(ClientCloser<E> closeAction) throws E, InterruptedException {
+            if (claim()) {
+                runOwner(closeAction);
+                return;
+            }
+            synchronized (lock) {
+                if (owner == Thread.currentThread()) {
+                    return;
+                }
+                while (!complete) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw e;
+                    }
+                }
+            }
+            rethrowFailure();
+        }
+
+        private boolean claim() {
+            synchronized (lock) {
+                if (closed) {
+                    return false;
+                }
+                closed = true;
+                owner = Thread.currentThread();
+                return true;
+            }
+        }
+
+        private void runOwner(ClientCloser<E> closeAction) throws E {
+            Throwable closeFailure = null;
+            try {
+                closeAction.close();
+            } catch (Exception | Error e) {
+                closeFailure = e;
+                throw e;
+            } finally {
+                synchronized (lock) {
+                    failure = closeFailure;
+                    owner = null;
+                    complete = true;
+                    lock.notifyAll();
+                }
+            }
+        }
+
+        // Only the owner's action can have stored a checked failure, and it throws E
+        @SuppressWarnings("unchecked")
+        private void rethrowFailure() throws E {
+            Throwable closeFailure;
+            synchronized (lock) {
+                closeFailure = failure;
+            }
+            if (closeFailure instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (closeFailure instanceof Error error) {
+                throw error;
+            }
+            if (closeFailure != null) {
+                throw (E) closeFailure;
+            }
+        }
+    }
+
     /** Makes the client call of one send. */
     @FunctionalInterface
     public interface Send {

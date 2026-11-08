@@ -16,12 +16,10 @@ package io.openmessaging.benchmark.driver.nsq;
 import com.github.brainlag.nsq.NSQProducer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
-import java.util.HashSet;
-import java.util.List;
+import io.openmessaging.benchmark.driver.PendingSendTracker;
+import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -29,17 +27,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NsqBenchmarkProducer implements BenchmarkProducer {
-    private static final String CLOSED_MESSAGE = "NSQ producer is closed";
+    private static final String PRODUCER_NAME = "NSQ producer";
+    private static final String CLOSED_MESSAGE = PRODUCER_NAME + " is closed";
 
     private final NSQProducer nsqProducer;
     private final String topic;
     private final ExecutorService executor;
     private final Semaphore semaphore;
-    private final Object lifecycleLock = new Object();
-    private final Set<SendTask> pending = new HashSet<>();
-    private final CompletableFuture<Void> termination = new CompletableFuture<>();
-    private volatile boolean closed;
-    private Thread closingThread;
+    private final PendingSendTracker pending = new PendingSendTracker(PRODUCER_NAME);
+    private final PublicationLifecycle.OwnedClose<RuntimeException> lifecycle =
+            new PublicationLifecycle.OwnedClose<>();
 
     public NsqBenchmarkProducer(final NSQProducer nsqProducer, final String topic) {
         this(nsqProducer, topic, Executors.newCachedThreadPool(), 1000);
@@ -61,7 +58,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
 
         boolean acquired = false;
         try {
-            while (!closed) {
+            while (!lifecycle.isClosed()) {
                 acquired = semaphore.tryAcquire(100, TimeUnit.MILLISECONDS);
                 if (acquired) {
                     break;
@@ -72,77 +69,50 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
             return CompletableFuture.failedFuture(e);
         }
 
-        if (closed) {
+        if (lifecycle.isClosed()) {
             if (acquired) {
                 semaphore.release();
             }
             return CompletableFuture.failedFuture(new IllegalStateException(CLOSED_MESSAGE));
         }
 
-        SendTask task;
+        byte[] message;
         try {
             // Cancellation can complete the future while the NSQ client is still using the bytes.
-            task = new SendTask(payload.clone());
+            message = payload.clone();
         } catch (Throwable failure) {
             semaphore.release();
             return CompletableFuture.failedFuture(failure);
         }
 
-        synchronized (lifecycleLock) {
-            if (closed) {
-                task.fail(new IllegalStateException(CLOSED_MESSAGE));
-            } else {
-                pending.add(task);
-                try {
-                    executor.execute(task);
-                } catch (RuntimeException failure) {
-                    task.fail(failure);
-                }
-            }
+        CompletableFuture<Void> future = pending.register();
+        if (future.isDone()) {
+            semaphore.release();
+            return future;
         }
-        return task.future;
+        SendTask task = new SendTask(message, future);
+        try {
+            executor.execute(task);
+        } catch (RuntimeException failure) {
+            task.finish(failure);
+        }
+        return future;
     }
 
     @Override
     public void close() {
-        List<SendTask> outstanding = null;
-        synchronized (lifecycleLock) {
-            if (closed) {
-                if (closingThread == Thread.currentThread() && !termination.isDone()) {
-                    return;
-                }
-            } else {
-                closed = true;
-                closingThread = Thread.currentThread();
-                outstanding = List.copyOf(pending);
-            }
-        }
-
-        if (outstanding == null) {
-            awaitTermination();
-            return;
-        }
-
-        try {
-            shutdownResources(outstanding);
-        } catch (RuntimeException | Error failure) {
-            termination.completeExceptionally(failure);
-            throw failure;
-        } finally {
-            termination.complete(null);
-        }
+        lifecycle.close(this::shutdownResources);
     }
 
-    private void shutdownResources(List<SendTask> outstanding) {
+    private void shutdownResources() {
         Failures failures = new Failures();
         try {
             executor.shutdownNow();
         } catch (RuntimeException e) {
             failures.add(e);
         }
-        for (SendTask task : outstanding) {
-            task.fail(new IllegalStateException(CLOSED_MESSAGE));
-        }
+        pending.beginClose();
+        pending.failRemaining();
         try {
             nsqProducer.shutdown();
         } catch (RuntimeException e) {
@@ -154,36 +124,23 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
         }
     }
 
-    private void awaitTermination() {
-        try {
-            termination.join();
-        } catch (CompletionException failure) {
-            if (failure.getCause() instanceof RuntimeException runtime) {
-                throw runtime;
-            }
-            if (failure.getCause() instanceof Error error) {
-                throw error;
-            }
-            throw failure;
-        }
-    }
-
     private final class SendTask implements Runnable {
         private final byte[] payload;
-        private final CompletableFuture<Void> future = new CompletableFuture<>();
+        private final CompletableFuture<Void> future;
         private final AtomicBoolean released = new AtomicBoolean();
 
-        private SendTask(byte[] payload) {
+        private SendTask(byte[] payload, CompletableFuture<Void> future) {
             this.payload = payload;
+            this.future = future;
         }
 
         @Override
         public void run() {
             Throwable failure = null;
             try {
-                if (!future.isDone() && !closed) {
+                if (!future.isDone() && !lifecycle.isClosed()) {
                     nsqProducer.produce(topic, payload);
-                    if (closed) {
+                    if (lifecycle.isClosed()) {
                         failure = new IllegalStateException(CLOSED_MESSAGE);
                     }
                 } else if (!future.isDone()) {
@@ -202,24 +159,15 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
             }
         }
 
-        private void fail(Throwable failure) {
-            finish(failure);
-        }
-
+        // Release the permit before completing, so a completion callback can send again
         private void finish(Throwable failure) {
             if (released.compareAndSet(false, true)) {
                 semaphore.release();
             }
-            try {
-                if (failure == null) {
-                    future.complete(null);
-                } else {
-                    future.completeExceptionally(failure);
-                }
-            } finally {
-                synchronized (lifecycleLock) {
-                    pending.remove(this);
-                }
+            if (failure == null) {
+                future.complete(null);
+            } else {
+                future.completeExceptionally(failure);
             }
         }
     }

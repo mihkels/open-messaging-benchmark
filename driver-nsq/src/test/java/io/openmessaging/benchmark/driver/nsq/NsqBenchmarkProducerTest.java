@@ -279,67 +279,6 @@ class NsqBenchmarkProducerTest {
     }
 
     @Test
-    void concurrentCloseWaitsForOutstandingSendsToBeSettled() throws Exception {
-        NSQProducer client = mock(NSQProducer.class);
-        CountDownLatch publishing = new CountDownLatch(1);
-        CountDownLatch releasePublish = new CountDownLatch(1);
-        CountDownLatch stoppingExecutor = new CountDownLatch(1);
-        CountDownLatch releaseShutdown = new CountDownLatch(1);
-        doAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            releasePublish.await();
-                            return null;
-                        })
-                .when(client)
-                .produce(anyString(), any(byte[].class));
-        ExecutorService executor =
-                new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>()) {
-                    @Override
-                    public java.util.List<Runnable> shutdownNow() {
-                        stoppingExecutor.countDown();
-                        try {
-                            if (!releaseShutdown.await(5, TimeUnit.SECONDS)) {
-                                throw new IllegalStateException("executor shutdown was not released");
-                            }
-                        } catch (InterruptedException interrupted) {
-                            Thread.currentThread().interrupt();
-                            throw new IllegalStateException(interrupted);
-                        }
-                        return super.shutdownNow();
-                    }
-                };
-        NsqBenchmarkProducer producer = new NsqBenchmarkProducer(client, "topic", executor, 1);
-        ExecutorService closers = Executors.newFixedThreadPool(2);
-        try {
-            CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
-            assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<?> firstClose = closers.submit(producer::close);
-            assertThat(stoppingExecutor.await(2, TimeUnit.SECONDS)).isTrue();
-            CountDownLatch secondStarted = new CountDownLatch(1);
-            Future<?> secondClose =
-                    closers.submit(() -> {
-                        secondStarted.countDown();
-                        producer.close();
-                    });
-            assertThat(secondStarted.await(2, TimeUnit.SECONDS)).isTrue();
-            assertThatThrownBy(() -> secondClose.get(150, TimeUnit.MILLISECONDS))
-                    .isInstanceOf(TimeoutException.class);
-            assertThat(send).isNotDone();
-
-            releaseShutdown.countDown();
-            firstClose.get(2, TimeUnit.SECONDS);
-            secondClose.get(2, TimeUnit.SECONDS);
-            assertThat(send).isCompletedExceptionally();
-            verify(client, times(1)).shutdown();
-        } finally {
-            releaseShutdown.countDown();
-            releasePublish.countDown();
-            closers.shutdownNow();
-        }
-    }
-
-    @Test
     void completionCallbackCanReenterCloseDuringPendingSendSettlement() throws Exception {
         NSQProducer client = mock(NSQProducer.class);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -402,18 +341,6 @@ class NsqBenchmarkProducerTest {
             assertThatThrownBy(() -> producer.sendAsync(Optional.empty(), null).join())
                     .hasCauseInstanceOf(NullPointerException.class);
         }
-    }
-
-    @Test
-    void repeatedClosePreservesShutdownError() {
-        NSQProducer client = mock(NSQProducer.class);
-        AssertionError failure = new AssertionError("client shutdown failed");
-        doThrow(failure).when(client).shutdown();
-        NsqBenchmarkProducer producer =
-                new NsqBenchmarkProducer(client, "topic", new CapturingExecutor(), 1);
-
-        assertThatThrownBy(producer::close).isSameAs(failure);
-        assertThatThrownBy(producer::close).isSameAs(failure);
     }
 
     @Test

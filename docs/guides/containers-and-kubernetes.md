@@ -59,6 +59,16 @@ docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD/config:/config" openmess
   -o /config/result.json /config/workload.yaml
 ```
 
+To require a [bearer token](../reference/cli.md#authentication) on the worker API, pass the same
+`OMB_WORKER_TOKEN` to the workers and the coordinator, for example with `--env-file` so the token
+stays out of your shell history:
+
+```bash
+printf 'OMB_WORKER_TOKEN=%s\n' "$(openssl rand -hex 32)" > omb-token.env
+docker run -d --name omb-worker -p 8080:8080 --env-file omb-token.env \
+  openmessaging-benchmark:local bin/benchmark-worker
+```
+
 Each worker container runs a supervisor JVM (`SUPERVISOR_HEAP_OPTS`, default `-Xmx1G`) and one
 driver JVM (`HEAP_OPTS`, default 4 GiB). Give the container more memory than the sum; otherwise it is
 killed for exceeding its limit.
@@ -98,7 +108,7 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
   --set-file workloadConfig=my-workload.yaml
 ```
 
-|                                 Value                                  |                                    Default                                    |                                         Notes                                          |
+|                                  Value                                 |                                    Default                                    |                                          Notes                                         |
 |------------------------------------------------------------------------|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | `image.repository`                                                     | `docker.io/mihkels/open-messaging-benchmark`                                  |                                                                                        |
 | `image.tag`                                                            | chart `appVersion`                                                            |                                                                                        |
@@ -110,6 +120,9 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `coordinator.mode`                                                     | `interactive`                                                                 | `job` runs the workload once and prints the result JSON to the Job log                 |
 | `driverConfig` / `workloadConfig`                                      | empty                                                                         | YAML text (use `--set-file`), mounted at `/config` and used instead of the paths below |
 | `driver` / `workload`                                                  | `driver-kafka/kafka-latency.yaml`, `workloads/1-topic-16-partitions-1kb.yaml` | Paths in the image                                                                     |
+| `workers.auth.enabled`                                                 | `false`                                                                       | Require a bearer token on the worker API; the coordinator sends it. See below          |
+| `workers.auth.existingSecret` / `workers.auth.secretKey`               | empty, `token`                                                                | Secret holding the token. When empty, the chart creates `<fullname>-worker-token`      |
+| `workers.auth.protectMetrics`                                          | `false`                                                                       | Require the token on `/metrics` too                                                    |
 | `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                    |
 | `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                   |
 
@@ -125,9 +138,25 @@ Copy the result with `kubectl cp <coordinator-pod>:/results/result.json .` while
 remove everything with `helm uninstall omb`.
 
 The pods run as a non-root user with a read-only root file system, no Linux capabilities, the
-`RuntimeDefault` seccomp profile and no service account token. The worker API is unauthenticated
-and loads any driver configuration it receives, so the chart's NetworkPolicy only lets the
-coordinator of the release reach it; `networkPolicy.metricsFrom` adds peers such as Prometheus.
+`RuntimeDefault` seccomp profile and no service account token. The worker API loads any driver
+configuration it receives, so the chart's NetworkPolicy only lets the coordinator of the release
+reach it; `networkPolicy.metricsFrom` adds peers such as Prometheus.
+
+With `workers.auth.enabled=true` the worker API also requires a bearer token. The chart injects
+`OMB_WORKER_TOKEN` from a Secret into the workers and the coordinator, so `benchmark` in the
+coordinator sends it without extra arguments. Without `workers.auth.existingSecret`, the chart
+creates a Secret with a random token and reuses it on `helm upgrade`; `helm template` and
+`--dry-run` cannot look up the existing Secret and render a new token. To bring your own:
+
+```bash
+kubectl create secret generic omb-worker-token --from-literal=token="$(openssl rand -hex 32)"
+helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart --version <version> \
+  --set workers.auth.enabled=true --set workers.auth.existingSecret=omb-worker-token
+```
+
+`/metrics` stays open unless `workers.auth.protectMetrics=true`; then Prometheus must send the token
+too, for example with `authorization.credentials_file` in its scrape configuration. Readiness and
+liveness probes are TCP checks and are not affected.
 Broker addresses in the driver configuration must be reachable from the worker pods.
 
 For meaningful numbers, schedule workers on dedicated nodes, away from the brokers, with CPU

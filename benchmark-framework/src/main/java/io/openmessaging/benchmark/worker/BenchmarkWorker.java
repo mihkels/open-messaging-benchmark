@@ -19,6 +19,9 @@ import com.beust.jcommander.ParameterException;
 import io.javalin.Javalin;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -57,6 +60,19 @@ public final class BenchmarkWorker {
         // Deprecated since 0.0.3. Kept so existing launch scripts still parse; only read to warn.
         private Integer statsPort;
 
+        @Parameter(
+                names = "--token-file",
+                description =
+                        "File holding the shared bearer token that every request must send; overrides the "
+                                + BearerTokenAuth.TOKEN_ENV
+                                + " environment variable. Without either, the API is unauthenticated")
+        private Path tokenFile;
+
+        @Parameter(
+                names = "--protect-metrics",
+                description = "Require the bearer token on /metrics too (it is open by default)")
+        private boolean protectMetrics;
+
         public boolean isHelp() {
             return help;
         }
@@ -68,6 +84,22 @@ public final class BenchmarkWorker {
         public String getBindAddress() {
             return bindAddress;
         }
+    }
+
+    static final String METRICS_PATH = "/metrics";
+
+    /**
+     * Builds the request authenticator from the arguments and environment.
+     *
+     * @param arguments the parsed command line
+     * @param environment the process environment
+     * @return the authenticator, or {@code null} when no token is configured
+     */
+    static BearerTokenAuth authFor(Arguments arguments, Map<String, String> environment) {
+        return BearerTokenAuth.resolveToken(environment, arguments.tokenFile)
+                .map(token ->
+                        new BearerTokenAuth(token, arguments.protectMetrics ? Set.of() : Set.of(METRICS_PATH)))
+                .orElse(null);
     }
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook
@@ -98,6 +130,19 @@ public final class BenchmarkWorker {
                 new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         new JvmResourceMetrics().bindTo(prometheusRegistry, "supervisor");
 
+        BearerTokenAuth auth = authFor(arguments, System.getenv());
+        if (auth == null) {
+            log.warn(
+                    "No worker token configured (set {} or --token-file); anyone who can reach port {}"
+                            + " can control this worker",
+                    BearerTokenAuth.TOKEN_ENV,
+                    arguments.getHttpPort());
+        } else if (arguments.protectMetrics) {
+            log.info("Bearer token required on every request, including {}", METRICS_PATH);
+        } else {
+            log.info("Bearer token required on every request except {}", METRICS_PATH);
+        }
+
         // Dump configuration variables
         log.atInfo()
                 .setMessage("Starting benchmark with config: {}")
@@ -106,13 +151,13 @@ public final class BenchmarkWorker {
 
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();
-        WorkerHandler handler = new WorkerHandler(worker);
+        WorkerHandler handler = new WorkerHandler(worker, auth);
         Javalin app =
                 Javalin.create(
                                 config -> {
                                     handler.configure(config);
                                     config.routes.get(
-                                            "/metrics",
+                                            METRICS_PATH,
                                             ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
                                 })
                         .start(arguments.getBindAddress(), arguments.getHttpPort());

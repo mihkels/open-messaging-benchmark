@@ -9,9 +9,12 @@ reproduce.
 
 ## Scope
 
-The benchmark workers expose an unauthenticated HTTP API that loads driver configurations and
-connects to arbitrary brokers. Run workers only on networks you trust; the Helm chart restricts the
-worker port to the coordinator with a NetworkPolicy by default.
+The benchmark workers expose an HTTP API that loads driver configurations and connects to arbitrary
+brokers. It is unauthenticated unless a shared bearer token is configured with `OMB_WORKER_TOKEN` or
+`--token-file` (see [Authentication](docs/reference/cli.md#authentication)); the token is sent in
+clear text over HTTP. Run workers only on networks you trust; the Helm chart restricts the worker
+port to the coordinator with a NetworkPolicy by default and can enable the token with
+`workers.auth.enabled`.
 
 ## Verifying published artifacts
 

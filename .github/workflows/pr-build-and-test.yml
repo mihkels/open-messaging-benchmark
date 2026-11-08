@@ -18,6 +18,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Pull requests run the framework performance smoke only when framework code changes
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      framework: ${{ steps.filter.outputs.framework }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            framework:
+              - 'benchmark-framework/**'
+              - 'driver-api/**'
+              - 'performance-harness/**'
+              - 'bin/framework-performance'
+              - 'pom.xml'
+              - '.github/workflows/pr-build-and-test.yml'
+
   build:
 
     runs-on: ubuntu-latest
@@ -135,6 +156,11 @@ jobs:
           git push --force -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   framework-performance-smoke:
+    # Always runs on pushes to main; `changes` is skipped there, so the condition must tolerate that
+    needs: changes
+    if: >-
+      !cancelled()
+      && (github.event_name == 'push' || needs.changes.outputs.framework == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -30,6 +30,11 @@ on:
 permissions:
   contents: read
 
+# Queues repeat dispatches on the same ref instead of running them side by side
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   measure:
     runs-on: ubuntu-latest

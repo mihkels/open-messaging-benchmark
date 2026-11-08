@@ -59,7 +59,7 @@ class KafkaTopicCreatorLifecycleTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void cancellationInterruptsWorkerAndDisposesProgressExecutor() throws Exception {
+    void cancellationInterruptsWorker() throws Exception {
         AdminClient admin = mock(AdminClient.class);
         CreateTopicsResult topics = mock(CreateTopicsResult.class);
         KafkaFuture<Void> topic = mock(KafkaFuture.class);
@@ -89,9 +89,6 @@ class KafkaTopicCreatorLifecycleTest {
             assertTrue(creation.cancel(true));
             assertTrue(interrupted.await(2, TimeUnit.SECONDS));
             await(() -> !worker.get().isAlive());
-            await(() ->
-                    Thread.getAllStackTraces().keySet().stream()
-                            .noneMatch(KafkaTopicCreatorLifecycleTest::isProgressThreadAlive));
             verify(admin, times(1)).createTopics(any());
             verify(admin, never()).listTopics();
         } finally {
@@ -113,9 +110,5 @@ class KafkaTopicCreatorLifecycleTest {
             Thread.sleep(5);
         }
         assertTrue(condition.getAsBoolean(), "condition not met before timeout");
-    }
-
-    private static boolean isProgressThreadAlive(Thread thread) {
-        return thread.isAlive() && thread.getName().equals("kafka-topic-progress");
     }
 }

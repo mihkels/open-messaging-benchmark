@@ -43,6 +43,11 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
 
     private final String topic;
     private final String subscriptionName;
+    private final JedisPool pool;
+    private final byte[] groupName;
+    private final byte[] consumerName;
+    private final Map<byte[], StreamEntryID> streamQuery;
+    private final ConsumerCallback consumerCallback;
     private final ExecutorService executor;
     private final Future<?> consumerTask;
     private final long closeTimeoutNanos;
@@ -67,42 +72,32 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
             Duration closeTimeout) {
         this.topic = topic;
         this.subscriptionName = subscriptionName;
+        this.pool = pool;
+        this.consumerCallback = consumerCallback;
         this.closeTimeoutNanos = closeTimeout.toNanos();
         if (closeTimeoutNanos <= 0) {
             throw new IllegalArgumentException("Consumer close timeout must be positive");
         }
         this.executor = Executors.newSingleThreadExecutor();
-        byte[] groupName = subscriptionName.getBytes(UTF_8);
-        byte[] consumerName = consumerId.getBytes(UTF_8);
-        Map<byte[], StreamEntryID> streamQuery =
+        this.groupName = subscriptionName.getBytes(UTF_8);
+        this.consumerName = consumerId.getBytes(UTF_8);
+        this.streamQuery =
                 Collections.singletonMap(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
-        this.consumerTask =
-                this.executor.submit(
-                        () -> consume(pool, groupName, consumerName, streamQuery, consumerCallback));
+        this.consumerTask = this.executor.submit(this::consume);
     }
 
-    private void consume(
-            JedisPool pool,
-            byte[] groupName,
-            byte[] consumerName,
-            Map<byte[], StreamEntryID> streamQuery,
-            ConsumerCallback consumerCallback) {
+    private void consume() {
         consumerThread = Thread.currentThread();
         boolean keepReading = true;
         while (keepReading && !closing) {
-            keepReading = pollOnce(pool, groupName, consumerName, streamQuery, consumerCallback);
+            keepReading = pollOnce();
         }
         log.info("Consumer loop exited for topic '{}' subscription '{}'", topic, subscriptionName);
     }
 
     // Reads and delivers one batch; returns false when the loop should stop.
-    private boolean pollOnce(
-            JedisPool pool,
-            byte[] groupName,
-            byte[] consumerName,
-            Map<byte[], StreamEntryID> streamQuery,
-            ConsumerCallback consumerCallback) {
+    private boolean pollOnce() {
         // Get a fresh Jedis connection from the pool for each iteration
         try (Jedis jedis = pool.getResource()) {
             // Use block(1000) for 1 second timeout instead of block(0) which blocks
@@ -116,7 +111,7 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
                                     .count(100) // Read up to 100 messages at a time
                                     .block(1000), // 1 second timeout
                             streamQuery);
-            deliver(jedis, range, consumerCallback);
+            deliver(jedis, range);
         } catch (redis.clients.jedis.exceptions.JedisDataException e) {
             // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
             if (closing && e.getMessage() != null && e.getMessage().contains("NOGROUP")) {
@@ -133,10 +128,7 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         return true;
     }
 
-    private void deliver(
-            Jedis jedis,
-            List<Map.Entry<byte[], List<StreamEntryBinary>>> range,
-            ConsumerCallback consumerCallback) {
+    private void deliver(Jedis jedis, List<Map.Entry<byte[], List<StreamEntryBinary>>> range) {
         if (range == null) {
             return;
         }

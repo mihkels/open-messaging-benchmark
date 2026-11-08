@@ -18,18 +18,16 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
@@ -45,6 +43,7 @@ class KafkaTopicCreator {
             6; // Number of times to retry entire creation process
     private static final long ATTEMPT_TIMEOUT_MS = 60_000; // 1 minute per attempt
     private static final long RETRY_BACKOFF_MS = 2000L;
+    private static final long PROGRESS_LOG_INTERVAL_MS = 10_000;
     private static final String INTERRUPTED_MESSAGE = "Topic creation interrupted";
 
     private final AdminClient admin;
@@ -52,23 +51,32 @@ class KafkaTopicCreator {
     private final short replicationFactor;
     private final int maxBatchSize;
     private final long retryBackoffMs;
+    private final LongSupplier clockMillis;
 
     KafkaTopicCreator(
             AdminClient admin,
             Map<String, String> topicConfigs,
             short replicationFactor,
             int maxBatchSize) {
-        this(admin, topicConfigs, replicationFactor, maxBatchSize, RETRY_BACKOFF_MS);
+        this(
+                admin,
+                topicConfigs,
+                replicationFactor,
+                maxBatchSize,
+                RETRY_BACKOFF_MS,
+                System::currentTimeMillis);
     }
 
-    // The backoff is a parameter so tests can exercise the retry path quickly.
+    // The backoff and clock are parameters so tests can exercise the retry path quickly.
     KafkaTopicCreator(
             AdminClient admin,
             Map<String, String> topicConfigs,
             short replicationFactor,
             int maxBatchSize,
-            long retryBackoffMs) {
+            long retryBackoffMs,
+            LongSupplier clockMillis) {
         this.retryBackoffMs = retryBackoffMs;
+        this.clockMillis = clockMillis;
         this.admin = admin;
         this.topicConfigs = topicConfigs;
         this.replicationFactor = replicationFactor;
@@ -90,12 +98,6 @@ class KafkaTopicCreator {
                     thread.setDaemon(true);
                     return thread;
                 });
-        ScheduledExecutorService progress =
-                Executors.newSingleThreadScheduledExecutor(runnable -> {
-                    Thread thread = new Thread(runnable, "kafka-topic-progress");
-                    thread.setDaemon(true);
-                    return thread;
-                });
         class CreationFuture extends CompletableFuture<Void> {
             private boolean terminal;
             private boolean cancelled;
@@ -111,7 +113,6 @@ class KafkaTopicCreator {
                 }
                 try {
                     worker.shutdownNow();
-                    progress.shutdownNow();
                 } finally {
                     super.cancel(mayInterruptIfRunning);
                 }
@@ -137,31 +138,29 @@ class KafkaTopicCreator {
             worker.execute(() -> {
                 Throwable failure = null;
                 try {
-                    createWithRetry(topicInfos, progress);
+                    createWithRetry(topicInfos);
                 } catch (Throwable error) {
                     failure = error;
                 } finally {
-                    progress.shutdownNow();
                     worker.shutdown();
                 }
                 result.finish(failure);
             });
         } catch (RuntimeException error) {
             worker.shutdownNow();
-            progress.shutdownNow();
             result.finish(error);
         }
         return result;
     }
 
-    // Package-private so tests can drive the retry path with a controlled progress executor.
-    void createWithRetry(List<TopicInfo> topicInfos, ScheduledExecutorService progress) {
+    // Package-private so tests can drive the retry path synchronously.
+    void createWithRetry(List<TopicInfo> topicInfos) {
         RuntimeException lastException = null;
 
         for (int attempt = 1; attempt <= MAX_CREATION_ATTEMPTS; attempt++) {
             try {
                 log.info("Topic creation attempt {}/{}", attempt, MAX_CREATION_ATTEMPTS);
-                createBlocking(topicInfos, progress);
+                createBlocking(topicInfos);
                 log.info("Successfully created all {} topics", topicInfos.size());
                 return; // Success!
             } catch (RuntimeException e) {
@@ -177,10 +176,10 @@ class KafkaTopicCreator {
                         e.getMessage());
 
                 // Before retrying, check if topics were actually created
-                if (attempt < MAX_CREATION_ATTEMPTS && allTopicsExist(topicInfos)) {
-                    return;
-                }
                 if (attempt < MAX_CREATION_ATTEMPTS) {
+                    if (allTopicsExist(topicInfos)) {
+                        return;
+                    }
                     sleepBeforeRetry(attempt);
                 }
             }
@@ -231,39 +230,32 @@ class KafkaTopicCreator {
         }
     }
 
-    private void createBlocking(List<TopicInfo> topicInfos, ScheduledExecutorService progress) {
-        BlockingQueue<TopicInfo> queue = new ArrayBlockingQueue<>(topicInfos.size(), true, topicInfos);
+    // Failed topics are re-queued, so the queue is empty only once every topic has succeeded.
+    private void createBlocking(List<TopicInfo> topicInfos) {
+        Queue<TopicInfo> queue = new ArrayDeque<>(topicInfos);
         List<TopicInfo> batch = new ArrayList<>();
-        AtomicInteger succeeded = new AtomicInteger();
+        int succeeded = 0;
 
-        long startTime = System.currentTimeMillis();
+        long startTime = clockMillis.getAsLong();
+        long nextProgressLog = startTime + PROGRESS_LOG_INTERVAL_MS;
 
-        ScheduledFuture<?> loggingFuture =
-                progress.scheduleAtFixedRate(
-                        () -> log.info("Created topics {}/{}", succeeded.get(), topicInfos.size()),
-                        10,
-                        10,
-                        SECONDS);
-
-        try {
-            while (succeeded.get() < topicInfos.size()) {
-                checkAttemptTimeout(startTime, succeeded.get(), topicInfos.size());
-                int batchSize = queue.drainTo(batch, maxBatchSize);
-                if (batchSize > 0) {
-                    createBatch(batch, queue, succeeded);
-                    batch.clear();
-                } else {
-                    // Avoid busy-waiting
-                    sleepInterruptibly(100);
-                }
+        while (succeeded < topicInfos.size()) {
+            long now = clockMillis.getAsLong();
+            checkAttemptTimeout(now - startTime, succeeded, topicInfos.size());
+            if (now >= nextProgressLog) {
+                log.info("Created topics {}/{}", succeeded, topicInfos.size());
+                nextProgressLog = now + PROGRESS_LOG_INTERVAL_MS;
             }
-        } finally {
-            loggingFuture.cancel(true);
+            while (batch.size() < maxBatchSize && !queue.isEmpty()) {
+                batch.add(queue.remove());
+            }
+            succeeded += createBatch(batch, queue);
+            batch.clear();
         }
     }
 
-    private static void checkAttemptTimeout(long startTime, int succeeded, int total) {
-        if (System.currentTimeMillis() - startTime > ATTEMPT_TIMEOUT_MS) {
+    private static void checkAttemptTimeout(long elapsedMs, int succeeded, int total) {
+        if (elapsedMs > ATTEMPT_TIMEOUT_MS) {
             throw new IllegalStateException(
                     String.format(
                             "Topic creation attempt timed out after %d ms. Created %d/%d topics",
@@ -271,19 +263,19 @@ class KafkaTopicCreator {
         }
     }
 
-    private void createBatch(
-            List<TopicInfo> batch, BlockingQueue<TopicInfo> queue, AtomicInteger succeeded) {
+    // Returns the number of topics created; failed topics are re-queued for the next batch.
+    private int createBatch(List<TopicInfo> batch, Queue<TopicInfo> queue) {
+        int succeeded = 0;
         for (Map.Entry<TopicInfo, Boolean> result : executeBatch(batch).entrySet()) {
             TopicInfo topicInfo = result.getKey();
             if (Boolean.TRUE.equals(result.getValue())) {
-                succeeded.incrementAndGet();
+                succeeded++;
             } else {
                 log.warn("Topic creation failed for: {}, will retry", topicInfo.topic());
-                if (!queue.offer(topicInfo)) {
-                    log.error("Failed to re-queue topic for retry: {}", topicInfo.topic());
-                }
+                queue.add(topicInfo);
             }
         }
+        return succeeded;
     }
 
     private Map<TopicInfo, Boolean> executeBatch(List<TopicInfo> batch) {

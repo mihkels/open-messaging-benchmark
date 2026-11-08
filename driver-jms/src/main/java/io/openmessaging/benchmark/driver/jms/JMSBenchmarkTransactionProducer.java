@@ -228,7 +228,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                     return true;
                 }
             }
-            closeSession(created);
+            closeQuietly(created);
             return false;
         }
 
@@ -239,7 +239,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                     return true;
                 }
             }
-            closeProducer(created);
+            closeQuietly(created);
             return false;
         }
 
@@ -271,8 +271,8 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                     recordFailure(commitFailure, false);
                 }
             }
-            closeProducer(producerToClose);
-            closeSession(sessionToClose);
+            closeQuietly(producerToClose);
+            closeQuietly(sessionToClose);
 
             Throwable outcome;
             synchronized (lock) {
@@ -282,9 +282,9 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             resourcesReleased.countDown();
             try {
                 if (outcome == null) {
-                    result.succeed();
+                    result.complete(null);
                 } else {
-                    result.fail(outcome);
+                    result.completeExceptionally(outcome);
                 }
             } finally {
                 synchronized (lifecycleLock) {
@@ -294,21 +294,12 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             return true;
         }
 
-        private void closeProducer(MessageProducer resource) {
+        // Closes a session or producer, recording a failure instead of throwing it.
+        private void closeQuietly(AutoCloseable resource) {
             if (resource != null) {
                 try {
                     resource.close();
-                } catch (JMSException | RuntimeException error) {
-                    recordFailure(error, true);
-                }
-            }
-        }
-
-        private void closeSession(Session resource) {
-            if (resource != null) {
-                try {
-                    resource.close();
-                } catch (JMSException | RuntimeException error) {
+                } catch (Exception error) {
                     recordFailure(error, true);
                 }
             }
@@ -351,14 +342,6 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
                 return finish(new CancellationException("JMS send was cancelled"), false);
-            }
-
-            private void succeed() {
-                super.complete(null);
-            }
-
-            private void fail(Throwable error) {
-                super.completeExceptionally(error);
             }
         }
     }

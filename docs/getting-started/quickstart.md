@@ -84,8 +84,8 @@ the benchmark:
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 --list
-curl -fsS -o /dev/null http://localhost:18081/metrics
-curl -fsS -o /dev/null http://localhost:18082/metrics
+curl -fsS -o /dev/null http://127.0.0.1:18081/metrics
+curl -fsS -o /dev/null http://127.0.0.1:18082/metrics
 ```
 
 The topic list may be empty; all three commands should succeed. If one fails, wait and retry it.

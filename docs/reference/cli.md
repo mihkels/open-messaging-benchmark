@@ -88,11 +88,15 @@ in a child JVM.
 bin/benchmark-worker [options]
 ```
 
-|        Option         | Default |                    Description                    |
-|-----------------------|---------|---------------------------------------------------|
-| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics` |
-| `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed  |
-| `-h`, `--help`        |         | Print usage and exit                              |
+|        Option         | Default |                           Description                            |
+|-----------------------|---------|------------------------------------------------------------------|
+| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics`                |
+| `-b`, `--bind`        | 0.0.0.0 | Address to listen on; `127.0.0.1` accepts only local connections |
+| `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed                 |
+| `-h`, `--help`        |         | Print usage and exit                                             |
+
+Keep the default `0.0.0.0` for distributed workers that a coordinator on another host must reach.
+Use `--bind 127.0.0.1` when the coordinator runs on the same host.
 
 The worker keeps running until it is stopped. Initializing a different driver stops the previous
 driver process. Stopping the worker stops its driver process.

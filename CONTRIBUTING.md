@@ -20,8 +20,11 @@ below.
 
 ## Before you start
 
-- Open an issue, or find an existing one, before you start a change. The pull request closes it with
-  `Closes #<issue>` in its description.
+- Open an issue, or find an existing one, before you start a change. Issues are only for bug reports
+  and documentation problems, and the [new-issue page](https://github.com/mihkels/open-messaging-benchmark/issues/new/choose)
+  offers a form for each; blank issues are disabled. The pull request closes the issue with
+  `Closes #<issue>` in its description; the pull request template prefills it with a checklist of
+  the rules below.
 - If you are not a maintainer, wait until a maintainer labels the issue `accepted` before you open a
   pull request. Comment on the issue to say you want to work on it. Pull requests that don't close an
   open `accepted` issue are closed automatically, without review; adding `Closes #<issue>` for an
@@ -101,8 +104,9 @@ python3 -m venv .venv
   so the title must be a [Conventional Commit](https://www.conventionalcommits.org/): `feat`, `fix`,
   `perf`, `refactor`, `docs`, `deps`, `build`, `ci`, `chore` or `test`. Write commit subjects the
   same way and reference the issue, for example `fix: Close consumers on shutdown, ref: #123`.
-- **Checks.** `mvn verify` must pass: Spotless formatting, license headers, Checkstyle, SpotBugs and
-  JaCoCo.
+- **Checks.** `mvn verify` must pass: the Maven Enforcer rules, Spotless formatting, license headers,
+  Checkstyle, Error Prone with NullAway, SpotBugs, the ArchUnit architecture tests and the JaCoCo
+  coverage thresholds.
 - **Tests.** Cover behavior changes with unit tests. A new driver also needs a Testcontainers contract
   and a Compose case; see
   [Testcontainers end-to-end tests](https://mihkels.github.io/open-messaging-benchmark/development/testing-a-driver/#testcontainers-end-to-end-tests)

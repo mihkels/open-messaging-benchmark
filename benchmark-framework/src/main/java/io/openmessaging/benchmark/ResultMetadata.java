@@ -13,14 +13,13 @@
  */
 package io.openmessaging.benchmark;
 
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,15 +47,6 @@ public record ResultMetadata(
         return redactDriverConfig(driverConfig);
     }
 
-    // Two patterns keep each regex under Sonar's complexity limit (java:S5843)
-    private static final Pattern SECRET_WORD =
-            Pattern.compile(
-                    "password|passwd|passphrase|token|secret|credential|authorization",
-                    Pattern.CASE_INSENSITIVE);
-    private static final Pattern SECRET_COMPOUND =
-            Pattern.compile(
-                    "api.?key|access.?key|private.?key|sasl.?jaas|auth.?config", Pattern.CASE_INSENSITIVE);
-    private static final String REDACTED = "[REDACTED]";
     private static final String UNKNOWN = "unknown";
     private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
     private static final List<Path> GIT_LOCATIONS =
@@ -96,36 +86,15 @@ public record ResultMetadata(
     }
 
     static Map<String, Object> redactDriverConfig(Map<String, Object> driverConfig) {
-        return redactMap(driverConfig);
-    }
-
-    private static Map<String, Object> redactMap(Map<String, ?> values) {
-        Map<String, Object> redacted = new LinkedHashMap<>();
-        values.forEach(
-                (key, value) -> redacted.put(key, isSecretKey(key) ? REDACTED : redactValue(value)));
-        return redacted;
+        return SecretRedaction.redactMap(driverConfig);
     }
 
     /**
-     * Whether a configuration key names a credential; searches for a secret-like fragment anywhere in
-     * it.
+     * Whether a configuration key names a credential; delegates to {@link
+     * SecretRedaction#isSecretKey(String)}.
      */
     static boolean isSecretKey(String key) {
-        return SECRET_WORD.matcher(key).find() || SECRET_COMPOUND.matcher(key).find();
-    }
-
-    private static Object redactValue(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> values = new LinkedHashMap<>();
-            map.forEach((key, nestedValue) -> values.put(key.toString(), nestedValue));
-            return redactMap(values);
-        }
-        if (value instanceof List<?> list) {
-            List<Object> values = new ArrayList<>(list.size());
-            list.forEach(item -> values.add(redactValue(item)));
-            return values;
-        }
-        return value;
+        return SecretRedaction.isSecretKey(key);
     }
 
     private static String resolveGitCommit() {
@@ -188,6 +157,6 @@ public record ResultMetadata(
         if (!matcher.matches() || !isSecretKey(matcher.group(2))) {
             return option;
         }
-        return matcher.group(1) + matcher.group(2) + "=[REDACTED]";
+        return matcher.group(1) + matcher.group(2) + "=" + SecretRedaction.REDACTED;
     }
 }

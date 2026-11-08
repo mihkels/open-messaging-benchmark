@@ -153,6 +153,44 @@ class TestResultJsonTest {
                 .containsEntry("username", "user");
     }
 
+    @Test
+    void resultJsonRedactsCredentialsEmbeddedInStringValues() {
+        Map<String, Object> config =
+                Map.of(
+                        "commonConfig",
+                        "bootstrap.servers=kafka:9092\n"
+                                + "security.protocol=SASL_SSL\n"
+                                + "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule"
+                                + " required username=\"bench\" password=\"kafka-secret\";\n",
+                        "connectionFactoryConfigurationParam",
+                        "{\"brokerURL\":\"tcp://artemis:61616\",\"user\":\"bench\",\"password\":\"jms-secret\"}",
+                        "amqpUri",
+                        "amqp://bench:amqp-secret@rabbit:5672/vhost",
+                        "redisUrl",
+                        "redis://:redis-secret@redis:6379");
+        ResultMetadata metadata =
+                new ResultMetadata(
+                        "run", "start", "end", "1.2.3", "abc", "25", "", 1, new Workload(), config);
+
+        String json = mapper.writeValueAsString(metadata);
+
+        assertThat(json).doesNotContain("kafka-secret", "jms-secret", "amqp-secret", "redis-secret");
+        JsonNode driverConfig = mapper.readTree(json).get("driverConfig");
+        assertThat(driverConfig.get("commonConfig").asString())
+                .isEqualTo(
+                        "bootstrap.servers=kafka:9092\n"
+                                + "security.protocol=SASL_SSL\n"
+                                + "sasl.jaas.config=[REDACTED]\n");
+        assertThat(mapper.readTree(driverConfig.get("connectionFactoryConfigurationParam").asString()))
+                .isEqualTo(
+                        mapper.readTree(
+                                "{\"brokerURL\":\"tcp://artemis:61616\",\"user\":\"bench\","
+                                        + "\"password\":\"[REDACTED]\"}"));
+        assertThat(driverConfig.get("amqpUri").asString())
+                .isEqualTo("amqp://bench:[REDACTED]@rabbit:5672/vhost");
+        assertThat(driverConfig.get("redisUrl").asString()).isEqualTo("redis://:[REDACTED]@redis:6379");
+    }
+
     private static void removeScheduleFields(ObjectNode json) {
         for (String suffix : SCHEDULE_SUFFIXES) {
             json.remove("publishScheduleLatency" + suffix);

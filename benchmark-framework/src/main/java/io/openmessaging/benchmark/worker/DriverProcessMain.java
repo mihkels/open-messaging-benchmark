@@ -16,28 +16,27 @@ package io.openmessaging.benchmark.worker;
 import io.javalin.Javalin;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
-import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Entry point of a driver process started by {@link ProcessWorker}. Runs a {@link LocalWorker} on
  * the driver's own classpath and serves it over HTTP on a loopback port, which is written to the
- * file given with {@code --port-file}. The process exits when its standard input is closed, so it
- * never outlives its supervisor.
+ * file given with {@code --port-file}. Every request must carry the token the supervisor wrote to
+ * the file given with {@code --token-file}, which is deleted once read. The process exits when its
+ * standard input is closed, so it never outlives its supervisor.
  */
 public final class DriverProcessMain {
 
     private static final Logger log = LoggerFactory.getLogger(DriverProcessMain.class);
     static final String INITIALIZE_DRIVER_LOCAL = "/initialize-driver-local";
-    private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
 
     private DriverProcessMain() {}
@@ -46,20 +45,29 @@ public final class DriverProcessMain {
     @SuppressWarnings("java:S2095")
     public static void main(String[] args) throws Exception {
         Path portFile = null;
+        Path tokenFile = null;
         int i = 0;
         while (i < args.length) {
             if ("--port-file".equals(args[i]) && i + 1 < args.length) {
                 portFile = Path.of(args[i + 1]);
                 i += 2;
+            } else if ("--token-file".equals(args[i]) && i + 1 < args.length) {
+                tokenFile = Path.of(args[i + 1]);
+                i += 2;
             } else {
                 i++;
             }
         }
-        if (portFile == null) {
-            System.err.println("Usage: DriverProcessMain --port-file <file>");
+        if (portFile == null || tokenFile == null) {
+            System.err.println("Usage: DriverProcessMain --port-file <file> --token-file <file>");
             System.exit(2);
             return;
         }
+        String token = DriverProcessServer.readToken(tokenFile);
+        // The supervisor's work directory, which holds the port file
+        Path workDir =
+                Objects.requireNonNull(
+                        portFile.toAbsolutePath().getParent(), "Port file has no parent directory");
 
         Thread supervisorMonitor =
                 Thread.ofPlatform()
@@ -70,15 +78,11 @@ public final class DriverProcessMain {
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         new JvmResourceMetrics().bindTo(registry, "driver");
         LocalWorker worker = new LocalWorker(registry);
-        WorkerHandler handler = new WorkerHandler(worker);
+        DriverProcessServer handler = new DriverProcessServer(worker, registry::scrape, token, workDir);
         Javalin app =
                 Javalin.create(config -> {
                     config.startup.showJavalinBanner = false;
                     handler.configure(config);
-                    config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
-                    config.routes.post(
-                            INITIALIZE_DRIVER_LOCAL,
-                            ctx -> worker.initializeDriver(Path.of(MAPPER.readValue(ctx.body(), String.class))));
                 });
         app.start("127.0.0.1", 0);
 

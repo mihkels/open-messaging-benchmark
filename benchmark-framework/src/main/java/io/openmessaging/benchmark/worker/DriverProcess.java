@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -66,6 +67,7 @@ final class DriverProcess {
     private volatile boolean processStopped;
     private volatile @Nullable String endpoint;
     private volatile @Nullable HttpWorkerClient client;
+    private volatile @Nullable String token;
     private volatile boolean crashReported;
 
     DriverProcess(String description) {
@@ -98,8 +100,14 @@ final class DriverProcess {
     void start(List<Path> classpath, BooleanSupplier closed)
             throws IOException, InterruptedException {
         workDir = SecureTempFiles.createDirectory("omb-driver-");
-        Path portFile = workDir.resolve("port");
+        Path portFile = workDir.resolve(DriverProcessServer.PORT_FILE);
         Path argFile = workDir.resolve("java.args");
+        // The token reaches the child through the owner-only work directory, never argv or the
+        // environment, which other local users can read; the child deletes the file once read
+        Path tokenFile = SecureTempFiles.createFile(workDir.resolve(DriverProcessServer.TOKEN_FILE));
+        String newToken = DriverProcessServer.newToken();
+        token = newToken;
+        Files.writeString(tokenFile, newToken, StandardCharsets.US_ASCII);
 
         List<String> jvmArgs = new ArrayList<>();
         for (String property : FORWARDED_PROPERTIES) {
@@ -117,6 +125,8 @@ final class DriverProcess {
         jvmArgs.add(DriverProcessMain.class.getName());
         jvmArgs.add("--port-file");
         jvmArgs.add(portFile.toString());
+        jvmArgs.add("--token-file");
+        jvmArgs.add(tokenFile.toString());
         // An argument file keeps long classpaths clear of command line length limits
         Files.write(
                 argFile,
@@ -130,8 +140,8 @@ final class DriverProcess {
                         .redirectError(ProcessBuilder.Redirect.INHERIT)
                         .redirectInput(ProcessBuilder.Redirect.PIPE);
         builder.environment().remove("CLASSPATH");
-        // The child serves only 127.0.0.1 and does not check a token yet, so it has no use for the
-        // public worker token; keep it out of the child's environment
+        // The child checks its own per-process token and has no use for the public worker token;
+        // keep it out of the child's environment
         builder.environment().remove(BearerTokenAuth.TOKEN_ENV);
         log.debug("Driver process classpath: {}", classpath);
         Process started = builder.start();
@@ -160,7 +170,7 @@ final class DriverProcess {
         }
         int port = Integer.parseInt(Files.readString(portFile, StandardCharsets.US_ASCII).trim());
         endpoint = "http://127.0.0.1:" + port;
-        client = new HttpWorkerClient(endpoint);
+        client = new HttpWorkerClient(endpoint, newToken);
         log.info("Driver process pid {} is serving {} on {}", started.pid(), description, endpoint);
     }
 
@@ -170,6 +180,27 @@ final class DriverProcess {
 
     @Nullable HttpWorkerClient client() {
         return client;
+    }
+
+    /**
+     * The bearer token the driver process requires on every request.
+     *
+     * @return the token, or {@code null} before {@link #start}
+     */
+    @Nullable String token() {
+        return token;
+    }
+
+    /**
+     * Authorizes the driver process to read a driver configuration, which it then reads from its
+     * original location.
+     *
+     * @param driverConfigFile the configuration
+     * @throws IOException if the configuration does not exist or cannot be authorized
+     */
+    void authorizeConfig(Path driverConfigFile) throws IOException {
+        DriverProcessServer.authorizeConfig(
+                Objects.requireNonNull(workDir, "driver work directory after start"), driverConfigFile);
     }
 
     @Nullable String endpoint() {

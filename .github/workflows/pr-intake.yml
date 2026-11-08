@@ -1,0 +1,45 @@
+name: Pull request intake
+
+# Pull requests from outside contributors must close an open issue labelled `accepted`; others are
+# closed with a comment and reopened once the description links an accepted issue. See
+# .github/scripts/pr-intake.sh and CONTRIBUTING.md.
+#
+# pull_request_target is needed because fork pull requests get a read-only token under
+# pull_request and could not be commented on or closed. It is safe here: the job checks out only the
+# base branch (the default for this event), never the pull request's code, and reads the pull
+# request through the API.
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] base branch only, PR code is never checked out
+    types:
+      - opened
+      - reopened
+      - edited
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Require an accepted issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: .github/scripts/pr-intake.sh

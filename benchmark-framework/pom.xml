@@ -159,6 +159,28 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <!--
+                    Upper-bound dependency check is applied only to the host-side modules
+                    (driver-api, benchmark-framework, tool). Drivers are deliberately left out:
+                    driver isolation lets each driver ship its own broker-client dependency versions.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-upper-bound-deps</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireUpperBoundDeps/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

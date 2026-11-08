@@ -19,7 +19,6 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -40,12 +39,9 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ClientSession session;
 
     @Override
-    // The configuration is logged once per run, so eager formatting costs nothing measurable
-    @SuppressWarnings("java:S2629")
     public synchronized void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException {
         ArtemisConfig config = readConfig(configurationFile);
-        log.info("ActiveMQ Artemis driver configuration: {}", SecretRedaction.redactedJson(config));
         try {
             serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);
             // confirmation window size is in bytes, set to 1MB

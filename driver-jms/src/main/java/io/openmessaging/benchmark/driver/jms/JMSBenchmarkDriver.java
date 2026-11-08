@@ -20,7 +20,6 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.io.IOException;
 import java.io.StringReader;
@@ -50,11 +49,6 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
-        log.atInfo()
-                .setMessage("JMS driver configuration: {}")
-                .addArgument(() -> SecretRedaction.redactedJson(config))
-                .log();
-
         try {
             if (config.delegateForAdminOperationsClassName != null
                     && !config.delegateForAdminOperationsClassName.isEmpty()) {

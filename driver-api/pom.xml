@@ -108,4 +108,30 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <!--
+                Opt-in PIT mutation testing: mvn -Pmutation verify -pl driver-api
+                The whole SPI is deterministic, so every class and test is in scope.
+                Report: target/pit-reports/index.html (and mutations.xml).
+            -->
+            <id>mutation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <targetClasses>
+                                <param>io.openmessaging.benchmark.driver.*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>io.openmessaging.benchmark.driver.*Test</param>
+                            </targetTests>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

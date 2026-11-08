@@ -188,4 +188,66 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <!--
+                Opt-in PIT mutation testing: mvn -Pmutation verify -pl driver-api,benchmark-framework
+                Only deterministic code is mutated: stats and histogram math (worker.commands, worker.jackson),
+                configuration parsing (Workload, Thresholds, plugin descriptors and coordinates), rate control
+                and the pure utilities. Coordinator orchestration, worker processes, HTTP/IPC and the timing
+                helper are excluded, and their tests are not run, because they are slow, flaky under mutation
+                or need real processes. Report: target/pit-reports/index.html (and mutations.xml).
+            -->
+            <id>mutation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <targetClasses>
+                                <param>io.openmessaging.benchmark.RateController*</param>
+                                <param>io.openmessaging.benchmark.Thresholds*</param>
+                                <param>io.openmessaging.benchmark.Workload</param>
+                                <param>io.openmessaging.benchmark.Workload$*</param>
+                                <param>io.openmessaging.benchmark.ResultsToCsv*</param>
+                                <param>io.openmessaging.benchmark.plugin.ArtifactCoordinates*</param>
+                                <param>io.openmessaging.benchmark.plugin.PluginDescriptor*</param>
+                                <param>io.openmessaging.benchmark.utils.*</param>
+                                <param>io.openmessaging.benchmark.worker.commands.*</param>
+                                <param>io.openmessaging.benchmark.worker.jackson.*</param>
+                                <param>io.openmessaging.benchmark.worker.JvmOptions*</param>
+                                <param>io.openmessaging.benchmark.worker.LatencyMetric*</param>
+                                <param>io.openmessaging.benchmark.worker.WorkerStats*</param>
+                            </targetClasses>
+                            <excludedClasses>
+                                <!-- Wall-clock helper; mutants only change elapsed-time readings -->
+                                <param>io.openmessaging.benchmark.utils.Timer*</param>
+                                <!-- File-system permissions, not logic -->
+                                <param>io.openmessaging.benchmark.utils.SecureTempFiles*</param>
+                            </excludedClasses>
+                            <targetTests>
+                                <param>io.openmessaging.benchmark.RateControllerTest</param>
+                                <param>io.openmessaging.benchmark.ThresholdsTest</param>
+                                <param>io.openmessaging.benchmark.WorkloadTest</param>
+                                <param>io.openmessaging.benchmark.ResultsToCsvTest</param>
+                                <param>io.openmessaging.benchmark.plugin.ArtifactCoordinatesTest</param>
+                                <param>io.openmessaging.benchmark.plugin.PluginDescriptorTest</param>
+                                <param>io.openmessaging.benchmark.utils.*Test</param>
+                                <param>io.openmessaging.benchmark.worker.commands.*Test</param>
+                                <param>io.openmessaging.benchmark.worker.jackson.*Test</param>
+                                <param>io.openmessaging.benchmark.worker.JvmOptionsTest</param>
+                                <param>io.openmessaging.benchmark.worker.LatencyMetricTest</param>
+                                <param>io.openmessaging.benchmark.worker.WorkerStatsTest</param>
+                            </targetTests>
+                            <excludedTestClasses>
+                                <param>io.openmessaging.benchmark.utils.TimerTest</param>
+                                <param>io.openmessaging.benchmark.utils.SecureTempFilesTest</param>
+                            </excludedTestClasses>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

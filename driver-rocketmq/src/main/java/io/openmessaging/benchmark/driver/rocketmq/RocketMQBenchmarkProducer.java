@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.driver.rocketmq;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -27,7 +26,6 @@ public class RocketMQBenchmarkProducer implements BenchmarkProducer {
     private final MQProducer rmqProducer;
     private final String rmqTopic;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("RocketMQ producer");
-    private final PendingSendTracker pending = lifecycle.pending();
 
     public RocketMQBenchmarkProducer(final MQProducer rmqProducer, final String rmqTopic) {
         this.rmqProducer = rmqProducer;
@@ -46,35 +44,21 @@ public class RocketMQBenchmarkProducer implements BenchmarkProducer {
             return CompletableFuture.failedFuture(e);
         }
 
-        CompletableFuture<Void> future = lifecycle.begin();
-        if (future.isDone()) {
-            return future;
-        }
-        try {
-            this.rmqProducer.send(
-                    message,
-                    new SendCallback() {
-                        @Override
-                        public void onSuccess(final SendResult sendResult) {
-                            pending.completeFromClient(future, null);
-                        }
+        return lifecycle.publish(settle ->
+                this.rmqProducer.send(
+                        message,
+                        new SendCallback() {
+                            @Override
+                            public void onSuccess(final SendResult sendResult) {
+                                settle.complete(null);
+                            }
 
-                        @Override
-                        public void onException(final Throwable e) {
-                            pending.completeFromClient(
-                                    future,
-                                    e != null ? e : new IllegalStateException("Missing RocketMQ send failure"));
-                        }
-                    });
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            future.completeExceptionally(e);
-        } finally {
-            lifecycle.end();
-        }
-        return future;
+                            @Override
+                            public void onException(final Throwable e) {
+                                settle.complete(
+                                        e != null ? e : new IllegalStateException("Missing RocketMQ send failure"));
+                            }
+                        }));
     }
 
     @Override

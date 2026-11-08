@@ -19,7 +19,6 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperties;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -34,7 +33,6 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
     private final MqttQos qos;
     private volatile Mqtt5AsyncClient client;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("MQTT producer");
-    private final PendingSendTracker pending = lifecycle.pending();
 
     public MqttBenchmarkProducer(String topic, int qosCode) {
         this.topic = topic;
@@ -61,39 +59,27 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
-        CompletableFuture<Void> future = lifecycle.begin();
-        if (future.isDone()) {
-            return future;
-        }
-        try {
-            this.client
-                    .publish(message)
-                    .whenComplete((result, ex) -> {
-                        try {
-                            if (ex != null) {
-                                pending.completeFromClient(future, ex);
-                                log.error("Failed to publish MQTT message, topic={}", topic, ex);
-                            } else if (result == null) {
-                                pending.completeFromClient(
-                                        future, new IllegalStateException("Missing MQTT publish result"));
-                            } else if (result.getError().isPresent()) {
-                                Throwable error = result.getError().get();
-                                pending.completeFromClient(future, error);
-                                log.error("Failed to publish MQTT message, topic={}", topic, error);
-                            } else {
-                                pending.completeFromClient(future, null);
+        return lifecycle.publish(settle ->
+                this.client
+                        .publish(message)
+                        .whenComplete((result, ex) -> {
+                            try {
+                                if (ex != null) {
+                                    settle.complete(ex);
+                                    log.error("Failed to publish MQTT message, topic={}", topic, ex);
+                                } else if (result == null) {
+                                    settle.complete(new IllegalStateException("Missing MQTT publish result"));
+                                } else if (result.getError().isPresent()) {
+                                    Throwable error = result.getError().get();
+                                    settle.complete(error);
+                                    log.error("Failed to publish MQTT message, topic={}", topic, error);
+                                } else {
+                                    settle.complete(null);
+                                }
+                            } catch (Exception failure) {
+                                settle.complete(failure);
                             }
-                        } catch (Exception failure) {
-                            pending.completeFromClient(future, failure);
-                        }
-                    });
-        } catch (Exception failure) {
-            future.completeExceptionally(failure);
-        } finally {
-            lifecycle.end();
-        }
-
-        return future;
+                        }));
     }
 
     @Override

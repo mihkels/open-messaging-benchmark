@@ -621,8 +621,8 @@ public class JMSBenchmarkDriverTest {
         }
 
         public NotAFactory(String configuration) {
-            this();
             Objects.requireNonNull(configuration);
+            this();
         }
     }
 

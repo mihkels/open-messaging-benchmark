@@ -51,14 +51,30 @@ class SecretRedactionTest {
                 "sasl.jaas.config",
                 "api_key",
                 "authentication",
-                "Authorization"
+                "Authorization",
+                "redisPass",
+                "db.pass",
+                "adminPwd",
+                "REDIS_PASS"
             })
     void flagsSecretKeys(String key) {
         assertTrue(SecretRedaction.isSecretKey(key), key);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"username", "bootstrap.servers", "sasl.mechanism", "auth", "key", ""})
+    @ValueSource(
+            strings = {
+                "username",
+                "bootstrap.servers",
+                "sasl.mechanism",
+                "auth",
+                "key",
+                "",
+                "bypassCache",
+                "passive",
+                "passThrough",
+                "redisUser"
+            })
     void keepsOrdinaryKeys(String key) {
         assertFalse(SecretRedaction.isSecretKey(key), key);
     }
@@ -96,12 +112,14 @@ class SecretRedactionTest {
                         + "sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule"
                         + " required username=\"u\" password=\"x\";\n"
                         + "  ssl.keystore.password : hunter2\r\n"
+                        + "redis.pass=hunter3\n"
                         + "sasl.mechanism=PLAIN\n";
 
         assertEquals(
                 "bootstrap.servers=kafka:9092\n"
                         + "sasl.jaas.config=[REDACTED]\n"
                         + "  ssl.keystore.password : [REDACTED]\r\n"
+                        + "redis.pass=[REDACTED]\n"
                         + "sasl.mechanism=PLAIN\n",
                 SecretRedaction.redactString(properties));
     }

@@ -42,7 +42,7 @@ public final class SecretRedaction {
     /** The text that replaces a masked value. */
     public static final String REDACTED = "[REDACTED]";
 
-    // Two patterns keep each regex under Sonar's complexity limit (java:S5843)
+    // Separate patterns keep each regex under Sonar's complexity limit (java:S5843)
     private static final Pattern SECRET_WORD =
             Pattern.compile(
                     "password|passwd|passphrase|token|secret|credential|authorization|authentication",
@@ -50,6 +50,10 @@ public final class SecretRedaction {
     private static final Pattern SECRET_COMPOUND =
             Pattern.compile(
                     "api.?key|access.?key|private.?key|sasl.?jaas|auth.?config", Pattern.CASE_INSENSITIVE);
+    // Abbreviated password keys such as redisPass or adminPwd. Only as a suffix, so that names like
+    // bypassCache or passive are not masked.
+    private static final Pattern SECRET_SUFFIX =
+            Pattern.compile("(?:pass|pwd)$", Pattern.CASE_INSENSITIVE);
     private static final String SCHEME_SEPARATOR = "://";
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final ObjectWriter PRETTY = MAPPER.writerWithDefaultPrettyPrinter();
@@ -57,14 +61,17 @@ public final class SecretRedaction {
     private SecretRedaction() {}
 
     /**
-     * Whether a configuration key names a credential; searches for a secret-like fragment anywhere in
-     * it, ignoring case.
+     * Whether a configuration key names a credential, ignoring case: it contains a secret-like
+     * fragment such as {@code password} or {@code apiKey}, or ends in an abbreviation such as {@code
+     * pass} or {@code pwd}.
      *
      * @param key the configuration key
      * @return {@code true} if the value of this key must not be shown
      */
     public static boolean isSecretKey(String key) {
-        return SECRET_WORD.matcher(key).find() || SECRET_COMPOUND.matcher(key).find();
+        return SECRET_WORD.matcher(key).find()
+                || SECRET_COMPOUND.matcher(key).find()
+                || SECRET_SUFFIX.matcher(key).find();
     }
 
     /**

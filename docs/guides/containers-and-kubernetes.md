@@ -108,7 +108,7 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
   --set-file workloadConfig=my-workload.yaml
 ```
 
-|                                  Value                                 |                                    Default                                    |                                          Notes                                         |
+|                                 Value                                  |                                    Default                                    |                                         Notes                                          |
 |------------------------------------------------------------------------|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | `image.repository`                                                     | `docker.io/mihkels/open-messaging-benchmark`                                  |                                                                                        |
 | `image.tag`                                                            | chart `appVersion`                                                            |                                                                                        |

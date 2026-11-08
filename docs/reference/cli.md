@@ -31,6 +31,7 @@ bin/benchmark [options] <workload.yaml>...
 | `-d`, `--drivers`       | Comma-separated paths | Driver configuration files. Every workload runs once with each driver                                                                                      |
 | `-w`, `--workers`       | Comma-separated URLs  | Worker addresses such as `http://10.0.0.1:8080`. Distributed mode needs at least two; a single worker is rejected with `At least two workers are required` |
 | `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs. Cannot be combined with `--workers`                                                                              |
+| `--worker-token-file`   | Path                  | File with the bearer token to send to remote workers; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication)                                  |
 | `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                         |
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                  |
 | `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                        |
@@ -88,11 +89,17 @@ in a child JVM.
 bin/benchmark-worker [options]
 ```
 
-|        Option         | Default |                    Description                    |
-|-----------------------|---------|---------------------------------------------------|
-| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics` |
-| `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed  |
-| `-h`, `--help`        |         | Print usage and exit                              |
+|        Option         | Default |                                                       Description                                                       |
+|-----------------------|---------|-------------------------------------------------------------------------------------------------------------------------|
+| `-p`, `--port`        | 8080    | HTTP port for coordinator commands and `/metrics`                                                                       |
+| `-b`, `--bind`        | 0.0.0.0 | Address to listen on; `127.0.0.1` accepts only local connections                                                        |
+| `--token-file`        |         | File with the bearer token every request must send; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication) |
+| `--protect-metrics`   |         | Require the token on `/metrics` too; it is open by default                                                              |
+| `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed                                                                        |
+| `-h`, `--help`        |         | Print usage and exit                                                                                                    |
+
+Keep the default `0.0.0.0` for distributed workers that a coordinator on another host must reach.
+Use `--bind 127.0.0.1` when the coordinator runs on the same host.
 
 The worker keeps running until it is stopped. Initializing a different driver stops the previous
 driver process. Stopping the worker stops its driver process.
@@ -121,7 +128,30 @@ host without a CORS preflight, so this stops a web page from driving a worker on
 LAN. Workers and coordinators from before this check do not interoperate with newer ones: run the
 same version on all of them.
 
-The interface has no authentication. Run workers on a trusted network.
+### Authentication
+
+Workers can require a shared bearer token. Give the worker the token in the `OMB_WORKER_TOKEN`
+environment variable or in a file named by `--token-file` (which wins when both are set);
+surrounding whitespace is trimmed. There is no option that takes the token itself, so it never shows
+in the process list. With a token, every request without `Authorization: Bearer <token>` gets
+`401 Unauthorized`, checked before anything else, including the Content-Type check above.
+`/metrics` stays open so Prometheus can scrape it without the token; `--protect-metrics` closes it
+too.
+
+The coordinator sends the header to every remote worker when `OMB_WORKER_TOKEN` is set or
+`--worker-token-file` is given; use the same token on all workers. A coordinator without the token
+gets `401` from a worker that requires one.
+
+```bash
+export OMB_WORKER_TOKEN="$(openssl rand -hex 32)"
+bin/benchmark-worker                                        # on each worker host, same token
+bin/benchmark -d driver-kafka/kafka-latency.yaml -w http://w1:8080,http://w2:8080 workloads/simple.yaml
+```
+
+Without a token the API is unauthenticated, and the worker logs a warning at startup. Either way,
+the token travels in clear text over HTTP: run workers on a trusted network and keep the port closed
+to everything but the coordinator (and Prometheus). The supervisor's own channel to its driver
+process on `127.0.0.1` does not use this token, and the driver process does not get it.
 
 ## bin/create_charts.py
 

@@ -54,6 +54,9 @@ spec:
           value: {{ include "omb.workloadPath" . | quote }}
         - name: SUPERVISOR_HEAP_OPTS
           value: {{ .Values.coordinator.heapOpts | quote }}
+        {{- with include "omb.authEnv" . }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- with .Values.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -53,6 +53,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -67,6 +69,31 @@ import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
 
 class MqttBenchmarkDriverTest {
+    @Test
+    void loggedConfigurationMasksThePassword() throws Exception {
+        Path file = Files.createTempFile("mqtt", ".yaml");
+        try {
+            Files.writeString(
+                    file,
+                    """
+                    client:
+                      serverUri: tcp://broker:1883
+                      username: bench
+                      password: mqtt-secret
+                    """);
+            MqttBenchmarkDriver driver = new MqttBenchmarkDriver();
+            driver.initialize(file, null);
+
+            assertThat(driver.configurationForLog())
+                    .doesNotContain("mqtt-secret")
+                    .contains("\"password\" : \"[REDACTED]\"")
+                    .contains("\"username\" : \"bench\"")
+                    .contains("tcp://broker:1883");
+        } finally {
+            Files.delete(file);
+        }
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void realClientBuilderPathSubscribesAfterConnectWithManualAcknowledgements() throws Exception {

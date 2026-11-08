@@ -325,6 +325,7 @@ install_chart() {
         --set image.variant= \
         --set image.pullPolicy=IfNotPresent \
         --set coordinator.mode="$mode" \
+        --set workers.auth.enabled=true \
         --set coordinator.job.activeDeadlineSeconds="$CASE_TIMEOUT" \
         --set workers.replicas=2 \
         --set workers.heapOpts="-Xms512m -Xmx512m" \
@@ -476,6 +477,8 @@ cmd_lint() {
     helm lint --strict "$CHART_DIR" --set coordinator.mode=job \
         --set-file driverConfig="$SUITE_DIR/drivers/kafka.yaml" \
         --set-file workloadConfig="$SUITE_DIR/workloads/contract.yaml"
+    helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.protectMetrics=true
+    helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.existingSecret=omb-token
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm lint --strict "$CHART_DIR" -f "$values"
     done
@@ -486,6 +489,14 @@ cmd_lint() {
         --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
         --set-file driverConfig="$SUITE_DIR/drivers/kafka.yaml" \
         --set-file workloadConfig="$SUITE_DIR/workloads/contract.yaml" > "$rendered/job.yaml"
+    helm template "$RELEASE" "$CHART_DIR" --set workers.auth.enabled=true \
+        --set workers.auth.protectMetrics=true > "$rendered/auth.yaml"
+    helm template "$RELEASE" "$CHART_DIR" --set workers.auth.enabled=true \
+        --set workers.auth.existingSecret=omb-token --set workers.auth.secretKey=key > "$rendered/auth-existing.yaml"
+    grep -q 'name: OMB_WORKER_TOKEN' "$rendered/auth.yaml" || die "auth.yaml has no OMB_WORKER_TOKEN"
+    grep -q -- '--protect-metrics' "$rendered/auth.yaml" || die "auth.yaml has no --protect-metrics"
+    grep -q 'kind: Secret' "$rendered/auth-existing.yaml" && die "existingSecret must not create a Secret"
+    grep -q 'OMB_WORKER_TOKEN' "$rendered/default.yaml" && die "auth must be off by default"
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm template "$RELEASE" "$CHART_DIR" -f "$values" > "$rendered/values-$(basename "$values")"
     done

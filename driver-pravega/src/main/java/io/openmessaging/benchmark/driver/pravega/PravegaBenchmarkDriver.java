@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.pravega.config.PravegaConfig;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
@@ -34,14 +35,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectWriter;
 
 public class PravegaBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(PravegaBenchmarkDriver.class);
-
-    private static final ObjectWriter objectWriter =
-            new ObjectMapper().writerWithDefaultPrettyPrinter();
 
     private PravegaConfig config;
     private String scopeName;
@@ -58,7 +54,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         config = readConfig(configurationFile);
         log.atInfo()
                 .setMessage("Pravega driver configuration: {}")
-                .addArgument(() -> objectWriter.writeValueAsString(config))
+                .addArgument(() -> SecretRedaction.redactedJson(config))
                 .log();
 
         ClientConfig clientConfig =

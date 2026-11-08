@@ -66,6 +66,18 @@ workers:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Shared bearer token on the worker HTTP API. When enabled, workers get it as OMB_WORKER_TOKEN and
+  # answer 401 to requests without "Authorization: Bearer <token>"; the coordinator gets the same
+  # variable and sends it. Readiness and liveness probes are TCP checks and keep working.
+  auth:
+    enabled: false
+    # Name of an existing Secret with the token. When empty, the chart creates
+    # <fullname>-worker-token with a random token that stays the same across upgrades
+    existingSecret: ""
+    # Key in the Secret that holds the token
+    secretKey: token
+    # Require the token on /metrics too. Leave false so Prometheus can scrape without it
+    protectMetrics: false
 
 coordinator:
   # interactive: a long-running pod to exec into and start runs by hand
@@ -101,8 +113,9 @@ workloadConfig: ""
 # Size limit of the emptyDir volume that receives result files
 resultsSizeLimit: 1Gi
 
-# Restrict ingress to the worker port 8080 to the coordinator of this release. The worker API is
-# unauthenticated and loads arbitrary driver configurations.
+# Restrict ingress to the worker port 8080 to the coordinator of this release. The worker API loads
+# arbitrary driver configurations and is unauthenticated unless workers.auth.enabled is true; keep
+# this on either way.
 networkPolicy:
   enabled: true
   # Additional NetworkPolicy peers allowed to reach port 8080, for example a Prometheus namespace

@@ -68,6 +68,7 @@ public class WorkerHandler implements AutoCloseable {
     private static final Set<String> ACCEPTED_POST_TYPES =
             Set.of(JSON_CONTENT_TYPE, YAML_CONTENT_TYPE);
     private final Worker worker;
+    private final @Nullable BearerTokenAuth auth;
 
     public WorkerHandler(PrometheusMeterRegistry statsLogger) {
         this(new LocalWorker(statsLogger));
@@ -79,7 +80,18 @@ public class WorkerHandler implements AutoCloseable {
      * @param worker the worker to expose
      */
     public WorkerHandler(Worker worker) {
+        this(worker, null);
+    }
+
+    /**
+     * Creates a handler for serving {@code worker} over HTTP that requires a bearer token.
+     *
+     * @param worker the worker to expose
+     * @param auth checks every request before any other handler runs, or {@code null} for none
+     */
+    public WorkerHandler(Worker worker, @Nullable BearerTokenAuth auth) {
         this.worker = worker;
+        this.auth = auth;
     }
 
     public void configure(JavalinConfig config) {
@@ -95,6 +107,11 @@ public class WorkerHandler implements AutoCloseable {
                     log.error("Request {} {} failed", ctx.method(), ctx.path(), e);
                     ctx.status(500).result(describe(e));
                 });
+        // Runs first so an unauthenticated caller learns nothing, not even the accepted types.
+        // Before handlers apply to every path, including routes callers add after these.
+        if (auth != null) {
+            routes.before(auth);
+        }
         // Applies to every POST, including routes that callers add after these, such as the
         // driver process's /initialize-driver-local
         routes.before(WorkerHandler::rejectUnsupportedPostTypes);

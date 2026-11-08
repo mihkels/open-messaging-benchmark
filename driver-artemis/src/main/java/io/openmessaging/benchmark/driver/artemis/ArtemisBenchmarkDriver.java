@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -32,8 +33,6 @@ import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.apache.activemq.artemis.api.core.client.ServerLocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectWriter;
 
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     private ServerLocator serverLocator;
@@ -46,7 +45,7 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     public synchronized void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException {
         ArtemisConfig config = readConfig(configurationFile);
-        log.info("ActiveMQ Artemis driver configuration: {}", writer.writeValueAsString(config));
+        log.info("ActiveMQ Artemis driver configuration: {}", SecretRedaction.redactedJson(config));
         try {
             serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);
             // confirmation window size is in bytes, set to 1MB
@@ -199,6 +198,5 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         return DriverConfigs.read(configurationFile, ArtemisConfig.class);
     }
 
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Logger log = LoggerFactory.getLogger(ArtemisBenchmarkDriver.class);
 }

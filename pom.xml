@@ -118,6 +118,8 @@
         <sonar.projectKey>mihkels_open-messaging-benchmark</sonar.projectKey>
         <!-- Reports written by the jacoco-maven-plugin report execution in every module -->
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/*/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- Same CLI entry points the jacoco-maven-plugin excludes; otherwise Sonar counts them as 0% covered -->
+        <sonar.coverage.exclusions>**/benchmark/worker/BenchmarkWorker.java,**/benchmark/worker/DriverProcessMain.java</sonar.coverage.exclusions>
         <!--
           Rules suppressed as verified false positives / deliberate design, see issue #146:
           - S3077: volatile fields only publish immutable or thread-safe objects (Thread, Path, clients)

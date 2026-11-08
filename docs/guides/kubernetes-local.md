@@ -107,15 +107,15 @@ benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WOR
 
 ### Environment
 
-|           Variable            |                                         Effect                                          |
-|-------------------------------|-----------------------------------------------------------------------------------------|
-| `OMB_K8S_REBUILD=1`           | Rebuild the stack image even if it exists                                               |
-| `OMB_K8S_KEEP=1`              | Keep the stack namespace after `k8s:run`                                                |
-| `OMB_K8S_PUBLISHED=1`         | Use `docker.io/mihkels/open-messaging-benchmark:edge-<driver>` instead of a local build |
-| `OMB_K8S_KAFKA_JMS_JAR`       | Confluent Kafka JMS client jar for the `jms-kafka` stack                                |
-| `OMB_K8S_STARTUP_TIMEOUT`     | Seconds to wait for the broker and chart (default 900)                                  |
-| `OMB_K8S_CASE_TIMEOUT`        | Seconds for one case (default 600)                                                      |
-| `OMB_K8S_UNSCHEDULABLE_GRACE` | Seconds a pod may stay unschedulable before a wait fails (default 90)                   |
+|           Variable            |                                          Effect                                           |
+|-------------------------------|-------------------------------------------------------------------------------------------|
+| `OMB_K8S_REBUILD=1`           | Rebuild the stack image even if it exists                                                 |
+| `OMB_K8S_KEEP=1`              | Keep the stack namespace after `k8s:run`                                                  |
+| `OMB_K8S_PUBLISHED=1`         | Use `docker.io/mihkels/open-messaging-benchmark:latest-<driver>` instead of a local build |
+| `OMB_K8S_KAFKA_JMS_JAR`       | Confluent Kafka JMS client jar for the `jms-kafka` stack                                  |
+| `OMB_K8S_STARTUP_TIMEOUT`     | Seconds to wait for the broker and chart (default 900)                                    |
+| `OMB_K8S_CASE_TIMEOUT`        | Seconds for one case (default 600)                                                        |
+| `OMB_K8S_UNSCHEDULABLE_GRACE` | Seconds a pod may stay unschedulable before a wait fails (default 90)                     |
 
 ## Stacks with prerequisites
 

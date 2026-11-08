@@ -19,11 +19,13 @@ limitations under the License.
 Published images are in `docker.io/mihkels/open-messaging-benchmark` for `linux/amd64` and
 `linux/arm64`:
 
-|                   Tag                    |                  Contents                   |
-|------------------------------------------|---------------------------------------------|
-| `edge`, `sha-<commit>`                   | latest `main` build, every driver           |
-| `<version>`, `<major>.<minor>`, `latest` | release, every driver                       |
-| `<tag>-<driver>`                         | one driver plugin, for example `edge-kafka` |
+|                   Tag                    |                   Contents                    |
+|------------------------------------------|-----------------------------------------------|
+| `<version>`, `<major>.<minor>`, `latest` | release, every driver                         |
+| `<tag>-<driver>`                         | one driver plugin, for example `latest-kafka` |
+
+Images are published from release tags only; there are no images of unreleased `main` commits.
+Build one locally to try changes that are not released yet.
 
 Images are signed with cosign and carry SBOM and provenance attestations; see
 [Releasing](../development/releasing.md#verifying-images-and-charts).

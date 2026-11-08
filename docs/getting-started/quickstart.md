@@ -49,7 +49,7 @@ compiles the project inside a Maven container and produces a Java 27 (Eclipse Te
 image, `openmessaging-benchmark:local`, with the benchmark installed in `/benchmark`. The first
 build downloads all dependencies and takes several minutes; later builds reuse the Maven cache.
 `DRIVERS=kafka docker buildx bake` builds only the Kafka plugin and is faster. You can also pull
-the published image instead and set `OMB_IMAGE=docker.io/mihkels/open-messaging-benchmark:edge`
+the published image instead and set `OMB_IMAGE=docker.io/mihkels/open-messaging-benchmark:latest`
 for the next step.
 
 The image runs as a non-root user and `/benchmark` is read-only; results go to `/results`.

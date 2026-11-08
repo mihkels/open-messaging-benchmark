@@ -32,7 +32,7 @@ Run a first benchmark against a single Kafka broker with Docker only:
 ```bash
 git clone https://github.com/mihkels/open-messaging-benchmark.git
 cd open-messaging-benchmark
-docker buildx bake                # or pull docker.io/mihkels/open-messaging-benchmark:edge
+docker buildx bake                # or pull docker.io/mihkels/open-messaging-benchmark:latest
 cd local-test && docker compose up -d
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \

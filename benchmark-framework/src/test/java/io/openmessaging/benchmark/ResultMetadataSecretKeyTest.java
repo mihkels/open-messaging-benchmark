@@ -156,6 +156,26 @@ class ResultMetadataSecretKeyTest {
     }
 
     @Test
+    void redactsTheRedisPasswordAndKeepsTheUser() {
+        Map<String, Object> redacted =
+                ResultMetadata.redactDriverConfig(
+                        Map.of(
+                                "driverClass",
+                                "io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver",
+                                "redisHost",
+                                "redis",
+                                "redisUser",
+                                "default",
+                                "redisPass",
+                                "secret"));
+
+        assertThat(redacted)
+                .containsEntry("redisPass", "[REDACTED]")
+                .containsEntry("redisUser", "default")
+                .containsEntry("redisHost", "redis");
+    }
+
+    @Test
     void redactsSecretJvmOptions() {
         assertThat(ResultMetadata.redactJvmOption("-Dkafka.sasl.jaas.config=secret"))
                 .isEqualTo("-Dkafka.sasl.jaas.config=[REDACTED]");

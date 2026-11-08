@@ -673,6 +673,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         cleanup(() -> stopScheduler(initiator), failure);
     }
 
+    // The interrupt is deferred until every executor has terminated, then restored
+    @SuppressWarnings("java:S2142")
     private void awaitResourceTermination() {
         boolean interrupted = false;
         for (ExecutorService executor : List.of(connector, callbacks, scheduler)) {

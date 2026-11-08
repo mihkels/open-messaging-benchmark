@@ -14,7 +14,7 @@
 
 # Java 27 image used by the regression suite for the coordinator and both benchmark workers.
 # The build context only contains the distribution tarball produced by the `package` module.
-FROM eclipse-temurin:27-jre
+FROM eclipse-temurin:27-jre@sha256:0dd0465f90d398fa3226b56a3973f5d3c47ac323934dceebdab45ac8910bee6e
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
@@ -23,8 +23,15 @@ RUN apt-get update \
 ARG BENCHMARK_TARBALL=openmessaging-benchmark-bin.tar.gz
 ADD ${BENCHMARK_TARBALL} /opt/
 RUN mv /opt/openmessaging-benchmark-* /benchmark \
-    && mkdir -p /benchmark/drivers/driver-jms/ext
+    && mkdir -p /benchmark/drivers/driver-jms/ext \
+    && groupadd --system --gid 10001 omb \
+    && useradd --system --uid 10001 --gid omb --home-dir /tmp --shell /usr/sbin/nologin omb \
+    && chown -R 10001:10001 /benchmark
 
+# Non-root like docker/Dockerfile. /benchmark stays writable because the workers and the coordinator
+# write their logs there; the compose files mount the result directory at /out.
+USER 10001
+ENV HOME=/tmp
 WORKDIR /benchmark
 ENV OMB_HOME=/benchmark
 CMD ["bin/benchmark-worker", "-p", "8080", "-sp", "8081"]

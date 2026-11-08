@@ -17,7 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
+// Sets the driver JVM options property that concurrent ProcessWorkerTest methods read
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class JvmOptionsTest {
 
     @Test

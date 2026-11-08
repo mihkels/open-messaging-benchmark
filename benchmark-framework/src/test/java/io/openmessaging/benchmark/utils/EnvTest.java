@@ -17,7 +17,12 @@ import static com.github.stefanbirkner.systemlambda.SystemLambda.withEnvironment
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
+// system-lambda rewrites the process environment, which concurrent ProcessWorkerTest methods read
+// for the driver JVM options; the system properties lock guards both
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class EnvTest {
     private static final String ENV_KEY = "KEY";
 

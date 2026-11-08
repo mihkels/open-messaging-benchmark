@@ -173,6 +173,26 @@ The coverage and branch badges in the README show instruction and branch coverag
 module. On each push to `main`, the `coverage-badge` job of the build workflow regenerates them from
 the modules' `jacoco.csv` files and force-pushes them to the orphan `badges` branch.
 
+## Parallel tests
+
+`benchmark-framework` enables JUnit parallel execution in
+`src/test/resources/junit-platform.properties`, but it is opt-in. Classes and methods run in the
+same thread unless a class is annotated `@Execution(ExecutionMode.CONCURRENT)`. Today only
+`ProcessWorkerTest` is, because its methods spend most of their time waiting on child JVMs.
+
+A concurrent class still runs alongside the other classes in the same JVM. Guard JVM-wide state with
+`@ResourceLock(Resources.SYSTEM_PROPERTIES)`:
+
+- A test or class that changes system properties or the process environment takes the lock in the
+  default read-write mode.
+- `ProcessWorkerTest` takes it in `READ` mode for each method
+  (`target = ResourceLockTarget.CHILDREN`), so its methods run together but never alongside a
+  writer.
+
+Surefire keeps one fork per module (`forkCount` is not set). Forking per CPU was measured and made
+the full reactor build slower: about 4:00 instead of 2:43, because every small module pays for
+extra JVM starts.
+
 ## Mutation testing
 
 JaCoCo shows which lines the tests run, not whether their assertions would catch a bug. PIT measures

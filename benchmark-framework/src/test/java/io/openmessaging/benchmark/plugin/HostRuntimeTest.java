@@ -30,7 +30,11 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
+// Sets java.class.path, which concurrent ProcessWorkerTest methods read through HostRuntime
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class HostRuntimeTest {
     @TempDir Path dir;
 

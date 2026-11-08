@@ -32,8 +32,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.jar.JarFile;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.junit.jupiter.api.io.TempDir;
 
+// Sets the plugin home property while concurrent ProcessWorkerTest methods read system properties
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class PluginRegistryTest {
 
     private static final String KAFKA = "test.kafka.KafkaDriver";

@@ -89,20 +89,7 @@
     <property name="max" value="120"/> <!-- Customization -->
   </module>
 
-  <!-- Checks for whitespace                               -->
-  <!-- See https://checkstyle.org/config_whitespace.html -->
-  <module name="FileTabCharacter"/>
-
-  <!-- Miscellaneous other checks.                   -->
-  <!-- See https://checkstyle.org/config_misc.html -->
-  <module name="RegexpSingleline">
-    <property name="format" value="\s+$"/>
-    <property name="minimum" value="0"/>
-    <property name="maximum" value="0"/>
-    <property name="message" value="Line has trailing spaces."/>
-  </module>
-
-  <!-- Checks for Headers                                -->
+  <!-- Checks for Headers                               -->
   <!-- See https://checkstyle.org/config_header.html   -->
   <!-- <module name="Header"> -->
   <!--   <property name="headerFile" value="${checkstyle.header.file}"/> -->
@@ -112,6 +99,10 @@
   <module name="SuppressWarningsFilter"/>
 
   <module name="TreeWalker">
+    <!--
+      Whitespace, brace placement, tabs, trailing spaces and unused imports are not checked here:
+      Spotless (google-java-format + removeUnusedImports) owns formatting and fails `mvn verify`.
+    -->
     <module name="SuppressWarningsHolder"/>
 
     <!-- Checks for Javadoc comments.                     -->
@@ -140,29 +131,11 @@
     <module name="AvoidStarImport"/>
     <module name="IllegalImport"/> <!-- defaults to sun.* packages -->
     <module name="RedundantImport"/>
-    <module name="UnusedImports">
-      <property name="processJavadoc" value="false"/>
-    </module>
 
     <!-- Checks for Size Violations.                    -->
     <!-- See https://checkstyle.org/config_sizes.html -->
     <module name="MethodLength"/>
     <module name="ParameterNumber"/>
-
-    <!-- Checks for whitespace                               -->
-    <!-- See https://checkstyle.org/config_whitespace.html -->
-    <module name="EmptyForIteratorPad">
-      <property name="option" value="space"/>
-    </module>
-    <module name="GenericWhitespace"/>
-    <module name="MethodParamPad"/>
-    <module name="NoWhitespaceAfter"/>
-    <module name="NoWhitespaceBefore"/>
-    <module name="OperatorWrap"/>
-    <module name="ParenPad"/>
-    <module name="TypecastParenPad"/>
-    <module name="WhitespaceAfter"/>
-    <!--<module name="WhitespaceAround"/>-->
 
     <!-- Modifier Checks                                    -->
     <!-- See https://checkstyle.org/config_modifier.html -->
@@ -173,9 +146,7 @@
     <!-- See https://checkstyle.org/config_blocks.html -->
     <module name="AvoidNestedBlocks"/>
     <module name="EmptyBlock"/>
-    <module name="LeftCurly"/>
     <module name="NeedBraces"/>
-    <module name="RightCurly"/>
 
     <!-- Checks for common coding problems               -->
     <!-- See https://checkstyle.org/config_coding.html -->

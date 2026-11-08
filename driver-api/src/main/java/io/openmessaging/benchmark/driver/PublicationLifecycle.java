@@ -28,6 +28,7 @@ public final class PublicationLifecycle {
     private final PendingSendTracker pending;
     private final Object lock = new Object();
     private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
+    private volatile boolean closed;
     private boolean closeComplete;
     private int activePublications;
 
@@ -84,15 +85,38 @@ public final class PublicationLifecycle {
     }
 
     /**
+     * Returns whether close has begun.
+     *
+     * @return true once the first {@link #close()} has started
+     */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /**
      * Closes the producer: waits for publications in progress, then fails the sends still pending. A
      * concurrent close waits until the first one has finished. The interrupt status is preserved.
      *
      * @throws IllegalStateException if called from a publication on the same thread
      */
     public void close() {
+        close(() -> {});
+    }
+
+    /**
+     * Closes the producer like {@link #close()}, and closes its client once publications in progress
+     * have returned. Only the first closer closes the client; the sends still pending are then failed
+     * with the client's close failure, if any, as their cause.
+     *
+     * @param closeClient closes the underlying client
+     * @param <E> the failure type of closing the client
+     * @throws E the client's close failure
+     * @throws IllegalStateException if called from a publication on the same thread
+     */
+    public <E extends Exception> void close(ClientCloser<E> closeClient) throws E {
         if (publishingDepth.get() != null) {
             throw new IllegalStateException(
-                    "Cannot close a "
+                    "Cannot close "
                             + producerName
                             + " while publishing on the same thread; retry after sendAsync returns");
         }
@@ -101,6 +125,9 @@ public final class PublicationLifecycle {
         boolean closeOwner;
         synchronized (lock) {
             closeOwner = pending.beginClose();
+            if (closeOwner) {
+                closed = true;
+            }
             while (closeOwner ? activePublications != 0 : !closeComplete) {
                 try {
                     lock.wait();
@@ -109,20 +136,45 @@ public final class PublicationLifecycle {
                 }
             }
         }
+        Throwable closeFailure = null;
         try {
             if (closeOwner) {
-                pending.failRemaining();
+                closeClient.close();
             }
+        } catch (Exception | Error failure) {
+            closeFailure = failure;
+            throw failure;
         } finally {
-            if (closeOwner) {
-                synchronized (lock) {
-                    closeComplete = true;
-                    lock.notifyAll();
+            try {
+                if (closeOwner) {
+                    pending.failRemaining(closeFailure);
+                }
+            } finally {
+                if (closeOwner) {
+                    synchronized (lock) {
+                        closeComplete = true;
+                        lock.notifyAll();
+                    }
+                }
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
                 }
             }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
         }
+    }
+
+    /**
+     * Closes a producer's underlying client.
+     *
+     * @param <E> the failure type of closing the client
+     */
+    @FunctionalInterface
+    public interface ClientCloser<E extends Exception> {
+        /**
+         * Closes the client.
+         *
+         * @throws E if the client fails to close
+         */
+        void close() throws E;
     }
 }

@@ -47,6 +47,11 @@ public final class BenchmarkWorker {
         private int httpPort = 8080;
 
         @Parameter(
+                names = {"-b", "--bind"},
+                description = "Address to listen on; use 127.0.0.1 to accept only local connections")
+        private String bindAddress = "0.0.0.0";
+
+        @Parameter(
                 names = {"-sp", "--stats-port"},
                 description = "Deprecated and ignored; accepted so existing launch scripts keep working")
         // Deprecated since 0.0.3. Kept so existing launch scripts still parse; only read to warn.
@@ -58,6 +63,10 @@ public final class BenchmarkWorker {
 
         public int getHttpPort() {
             return httpPort;
+        }
+
+        public String getBindAddress() {
+            return bindAddress;
         }
     }
 
@@ -106,7 +115,7 @@ public final class BenchmarkWorker {
                                             "/metrics",
                                             ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
                                 })
-                        .start(arguments.getHttpPort());
+                        .start(arguments.getBindAddress(), arguments.getHttpPort());
 
         // Stop server and driver process on JVM shutdown and keep the process alive
         Runtime.getRuntime()

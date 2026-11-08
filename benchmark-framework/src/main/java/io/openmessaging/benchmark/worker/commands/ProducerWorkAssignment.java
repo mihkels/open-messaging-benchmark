@@ -87,11 +87,15 @@ public record ProducerWorkAssignment(
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ProducerWorkAssignment that
-                && Double.compare(publishRate, that.publishRate) == 0
-                && keyDistributorType == that.keyDistributorType
-                && PayloadTemplates.equals(payloadData, that.payloadData)
-                && Arrays.equals(payloadWeights, that.payloadWeights);
+        return other instanceof ProducerWorkAssignment that && sameContent(this, that);
+    }
+
+    // Compares the fields rather than the accessors, which copy every payload template
+    private static boolean sameContent(ProducerWorkAssignment a, ProducerWorkAssignment b) {
+        return Double.compare(a.publishRate, b.publishRate) == 0
+                && a.keyDistributorType == b.keyDistributorType
+                && PayloadTemplates.equals(a.payloadData, b.payloadData)
+                && Arrays.equals(a.payloadWeights, b.payloadWeights);
     }
 
     @Override

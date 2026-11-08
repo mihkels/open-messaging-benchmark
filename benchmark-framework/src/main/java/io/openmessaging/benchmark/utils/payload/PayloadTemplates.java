@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.utils.payload;
 
 import java.util.Arrays;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Content-based {@code equals}, {@code hashCode}, and {@code toString} helpers for lists of payload
@@ -31,7 +32,7 @@ public final class PayloadTemplates {
      * @param second the second template list, or {@code null}
      * @return whether both lists hold the same number of templates with equal contents
      */
-    public static boolean equals(List<byte[]> first, List<byte[]> second) {
+    public static boolean equals(@Nullable List<byte[]> first, @Nullable List<byte[]> second) {
         if (first == second) {
             return true;
         }
@@ -52,7 +53,7 @@ public final class PayloadTemplates {
      * @param templates the template list, or {@code null}
      * @return a hash code consistent with {@link #equals(List, List)}
      */
-    public static int hashCode(List<byte[]> templates) {
+    public static int hashCode(@Nullable List<byte[]> templates) {
         if (templates == null) {
             return 0;
         }
@@ -70,7 +71,7 @@ public final class PayloadTemplates {
      * @param templates the template list, or {@code null}
      * @return the template count and sizes
      */
-    public static String describe(List<byte[]> templates) {
+    public static String describe(@Nullable List<byte[]> templates) {
         if (templates == null) {
             return "null";
         }

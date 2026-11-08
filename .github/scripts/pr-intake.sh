@@ -52,6 +52,9 @@ case "$association" in
     echo "Skipping: author is a $association"
     exit 0
     ;;
+  *)
+    # Contributors, first-time contributors and everyone else go through intake
+    ;;
 esac
 if [[ "$author_type" == Bot ]]; then
   echo "Skipping: author is an app installed on the repository"

@@ -33,6 +33,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -619,7 +620,8 @@ public class JMSBenchmarkDriverTest {
             instances.incrementAndGet();
         }
 
-        public NotAFactory(String ignored) {
+        public NotAFactory(String configuration) {
+            Objects.requireNonNull(configuration);
             this();
         }
     }

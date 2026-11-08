@@ -60,13 +60,14 @@ public final class PublicationLifecycle {
      * {@code send} fails the future; an {@link InterruptedException} also restores the interrupt
      * status.
      *
+     * @param <E> the checked exception the client call may throw
      * @param send makes the client call and arranges for the callback to be called once the client
      *     acknowledges or rejects the send
      * @return the future for the send
      */
     // The interrupt is restored before the failure is recorded on the future
     @SuppressWarnings("java:S2142")
-    public CompletableFuture<Void> publish(Send send) {
+    public <E extends Exception> CompletableFuture<Void> publish(Send<E> send) {
         CompletableFuture<Void> future = begin();
         if (future.isDone()) {
             return future;
@@ -331,17 +332,21 @@ public final class PublicationLifecycle {
         }
     }
 
-    /** Makes the client call of one send. */
+    /**
+     * Makes the client call of one send.
+     *
+     * @param <E> the checked exception the client call may throw
+     */
     @FunctionalInterface
-    public interface Send {
+    public interface Send<E extends Exception> {
         /**
          * Hands the send to the client.
          *
          * @param settle settles the send; the client calls it once it acknowledges or rejects the send,
          *     possibly before this method returns
-         * @throws Exception if the client rejects the send synchronously
+         * @throws E if the client rejects the send synchronously
          */
-        void publish(Settle settle) throws Exception;
+        void publish(Settle settle) throws E;
     }
 
     /** Settles one send from the client's acknowledgement. */

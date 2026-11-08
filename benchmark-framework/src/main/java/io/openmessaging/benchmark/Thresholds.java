@@ -93,6 +93,9 @@ public class Thresholds {
         }
 
         void print() {
+            if (!log.isInfoEnabled()) {
+                return;
+            }
             log.info("Thresholds: {}", status());
             log.info("| Check | Limit | Observed | Status |");
             checks.forEach((name, check) ->

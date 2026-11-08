@@ -23,67 +23,91 @@ enum Metric {
     PUBLISH_RATE("publish-rate", "Publish rate", Unit.RATE, Direction.HIGHER_IS_BETTER),
     CONSUME_RATE("consume-rate", "Consume rate", Unit.RATE, Direction.HIGHER_IS_BETTER),
     PUBLISH_LATENCY_P50(
-            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 50, r -> r.aggregatedPublishLatency50pct),
+            Labels.PUBLISH_LATENCY,
+            TestResult.PUBLISH_HISTOGRAM,
+            50,
+            r -> r.aggregatedPublishLatency50pct),
     PUBLISH_LATENCY_P95(
-            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 95, r -> r.aggregatedPublishLatency95pct),
+            Labels.PUBLISH_LATENCY,
+            TestResult.PUBLISH_HISTOGRAM,
+            95,
+            r -> r.aggregatedPublishLatency95pct),
     PUBLISH_LATENCY_P99(
-            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 99, r -> r.aggregatedPublishLatency99pct),
+            Labels.PUBLISH_LATENCY,
+            TestResult.PUBLISH_HISTOGRAM,
+            99,
+            r -> r.aggregatedPublishLatency99pct),
     PUBLISH_LATENCY_P999(
-            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 99.9, r -> r.aggregatedPublishLatency999pct),
+            Labels.PUBLISH_LATENCY,
+            TestResult.PUBLISH_HISTOGRAM,
+            99.9,
+            r -> r.aggregatedPublishLatency999pct),
     PUBLISH_LATENCY_MAX(
-            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 100, r -> r.aggregatedPublishLatencyMax),
+            Labels.PUBLISH_LATENCY,
+            TestResult.PUBLISH_HISTOGRAM,
+            100,
+            r -> r.aggregatedPublishLatencyMax),
     PUBLISH_DELAY_P50(
-            "Publish delay",
+            Labels.PUBLISH_DELAY,
             TestResult.PUBLISH_DELAY_HISTOGRAM,
             50,
             r -> fromMicros(r.aggregatedPublishDelayLatency50pct)),
     PUBLISH_DELAY_P95(
-            "Publish delay",
+            Labels.PUBLISH_DELAY,
             TestResult.PUBLISH_DELAY_HISTOGRAM,
             95,
             r -> fromMicros(r.aggregatedPublishDelayLatency95pct)),
     PUBLISH_DELAY_P99(
-            "Publish delay",
+            Labels.PUBLISH_DELAY,
             TestResult.PUBLISH_DELAY_HISTOGRAM,
             99,
             r -> fromMicros(r.aggregatedPublishDelayLatency99pct)),
     PUBLISH_DELAY_P999(
-            "Publish delay",
+            Labels.PUBLISH_DELAY,
             TestResult.PUBLISH_DELAY_HISTOGRAM,
             99.9,
             r -> fromMicros(r.aggregatedPublishDelayLatency999pct)),
     PUBLISH_DELAY_MAX(
-            "Publish delay",
+            Labels.PUBLISH_DELAY,
             TestResult.PUBLISH_DELAY_HISTOGRAM,
             100,
             r -> fromMicros(r.aggregatedPublishDelayLatencyMax)),
     END_TO_END_LATENCY_P50(
-            "End-to-end latency",
+            Labels.END_TO_END_LATENCY,
             TestResult.END_TO_END_HISTOGRAM,
             50,
             r -> r.aggregatedEndToEndLatency50pct),
     END_TO_END_LATENCY_P95(
-            "End-to-end latency",
+            Labels.END_TO_END_LATENCY,
             TestResult.END_TO_END_HISTOGRAM,
             95,
             r -> r.aggregatedEndToEndLatency95pct),
     END_TO_END_LATENCY_P99(
-            "End-to-end latency",
+            Labels.END_TO_END_LATENCY,
             TestResult.END_TO_END_HISTOGRAM,
             99,
             r -> r.aggregatedEndToEndLatency99pct),
     END_TO_END_LATENCY_P999(
-            "End-to-end latency",
+            Labels.END_TO_END_LATENCY,
             TestResult.END_TO_END_HISTOGRAM,
             99.9,
             r -> r.aggregatedEndToEndLatency999pct),
     END_TO_END_LATENCY_MAX(
-            "End-to-end latency",
+            Labels.END_TO_END_LATENCY,
             TestResult.END_TO_END_HISTOGRAM,
             100,
             r -> r.aggregatedEndToEndLatencyMax),
     PUBLISH_ERRORS("publish-errors", "Publish errors", Unit.COUNT, Direction.LOWER_IS_BETTER),
     MAX_BACKLOG("max-backlog", "Max backlog", Unit.COUNT, Direction.LOWER_IS_BETTER);
+
+    /** Labels shared by the percentile metrics of one histogram. */
+    private static final class Labels {
+        static final String PUBLISH_LATENCY = "Publish latency";
+        static final String PUBLISH_DELAY = "Publish delay";
+        static final String END_TO_END_LATENCY = "End-to-end latency";
+
+        private Labels() {}
+    }
 
     /** Whether a larger value is an improvement. */
     enum Direction {

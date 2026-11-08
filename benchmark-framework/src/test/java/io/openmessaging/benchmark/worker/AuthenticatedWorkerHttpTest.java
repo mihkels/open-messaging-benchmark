@@ -131,7 +131,8 @@ class AuthenticatedWorkerHttpTest {
         }
         assertThat(seenAuthorization).containsExactly("Bearer " + TOKEN);
         try (HttpWorkerClient client = new HttpWorkerClient(host, "wrong")) {
-            assertThatThrownBy(() -> client.getText(BenchmarkWorker.METRICS_PATH, Duration.ofSeconds(10)))
+            Duration timeout = Duration.ofSeconds(10);
+            assertThatThrownBy(() -> client.getText(BenchmarkWorker.METRICS_PATH, timeout))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("HTTP get " + host + BenchmarkWorker.METRICS_PATH)
                     .hasMessageContaining("failed with code 401");

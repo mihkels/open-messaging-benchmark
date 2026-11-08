@@ -138,8 +138,8 @@ final class DriverProcess {
                         .redirectError(ProcessBuilder.Redirect.INHERIT)
                         .redirectInput(ProcessBuilder.Redirect.PIPE);
         builder.environment().remove("CLASSPATH");
-        // The child checks its own per-process token and has no use for the public worker token;
-        // keep it out of the child's environment
+        // The child checks its own per-process token and has no use for the public worker token,
+        // so the public token is not passed down to it
         builder.environment().remove(BearerTokenAuth.TOKEN_ENV);
         log.debug("Driver process classpath: {}", classpath);
         Process started = builder.start();

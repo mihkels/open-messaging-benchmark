@@ -67,7 +67,6 @@ final class DriverProcess {
     private volatile boolean processStopped;
     private volatile @Nullable String endpoint;
     private volatile @Nullable HttpWorkerClient client;
-    private volatile @Nullable String token;
     private volatile boolean crashReported;
 
     DriverProcess(String description) {
@@ -106,8 +105,7 @@ final class DriverProcess {
         // environment, which other local users can read; the child deletes the file once read
         Path tokenFile = SecureTempFiles.createFile(workDir.resolve(DriverProcessServer.TOKEN_FILE));
         String newToken = DriverProcessServer.newToken();
-        token = newToken;
-        Files.writeString(tokenFile, newToken, StandardCharsets.US_ASCII);
+        Files.writeString(tokenFile, newToken, StandardCharsets.UTF_8);
 
         List<String> jvmArgs = new ArrayList<>();
         for (String property : FORWARDED_PROPERTIES) {
@@ -180,15 +178,6 @@ final class DriverProcess {
 
     @Nullable HttpWorkerClient client() {
         return client;
-    }
-
-    /**
-     * The bearer token the driver process requires on every request.
-     *
-     * @return the token, or {@code null} before {@link #start}
-     */
-    @Nullable String token() {
-        return token;
     }
 
     /**

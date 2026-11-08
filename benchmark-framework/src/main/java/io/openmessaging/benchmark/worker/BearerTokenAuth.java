@@ -92,21 +92,33 @@ public final class BearerTokenAuth implements Handler {
     public static Optional<String> resolveToken(
             Map<String, String> environment, @Nullable Path tokenFile) {
         if (tokenFile != null) {
-            String token;
-            try {
-                token = Files.readString(tokenFile, StandardCharsets.UTF_8).strip();
-            } catch (IOException e) {
-                throw new UncheckedIOException("Cannot read worker token file " + tokenFile, e);
-            }
-            if (token.isEmpty()) {
-                throw new IllegalArgumentException("Worker token file " + tokenFile + " is empty");
-            }
-            return Optional.of(token);
+            return Optional.of(readTokenFile(tokenFile));
         }
         String token = environment.get(TOKEN_ENV);
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
         return Optional.of(token.strip());
+    }
+
+    /**
+     * Reads a bearer token from {@code tokenFile} as UTF-8, stripped of surrounding whitespace.
+     *
+     * @param tokenFile a file holding the token
+     * @return the token, never blank
+     * @throws IllegalArgumentException when the file is blank
+     * @throws UncheckedIOException when the file cannot be read
+     */
+    public static String readTokenFile(Path tokenFile) {
+        String token;
+        try {
+            token = Files.readString(tokenFile, StandardCharsets.UTF_8).strip();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot read token file " + tokenFile, e);
+        }
+        if (token.isEmpty()) {
+            throw new IllegalArgumentException("Token file " + tokenFile + " is empty");
+        }
+        return token;
     }
 }

@@ -28,6 +28,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -119,6 +120,22 @@ class AuthenticatedWorkerHttpTest {
         assertThat(send(get(BenchmarkWorker.METRICS_PATH), null).statusCode()).isEqualTo(401);
         assertThat(send(get(BenchmarkWorker.METRICS_PATH), "Bearer " + TOKEN).statusCode())
                 .isEqualTo(200);
+    }
+
+    @Test
+    void clientGetsTextWithItsTokenAndReportsFailedStatus() throws Exception {
+        start("--protect-metrics");
+        try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
+            assertThat(client.getText(BenchmarkWorker.METRICS_PATH, Duration.ofSeconds(10)))
+                    .isEqualTo("metric 1");
+        }
+        assertThat(seenAuthorization).containsExactly("Bearer " + TOKEN);
+        try (HttpWorkerClient client = new HttpWorkerClient(host, "wrong")) {
+            assertThatThrownBy(() -> client.getText(BenchmarkWorker.METRICS_PATH, Duration.ofSeconds(10)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("HTTP get " + host + BenchmarkWorker.METRICS_PATH)
+                    .hasMessageContaining("failed with code 401");
+        }
     }
 
     @Test

@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.beust.jcommander.JCommander;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -81,6 +82,25 @@ class BearerTokenAuthTest {
         Path file = Files.writeString(directory.resolve("token"), "  from-file\n");
         assertThat(BearerTokenAuth.resolveToken(Map.of(BearerTokenAuth.TOKEN_ENV, "env"), file))
                 .contains("from-file");
+    }
+
+    @Test
+    void readsTokenFileAsUtf8AndStripsIt() throws Exception {
+        Path file =
+                Files.writeString(directory.resolve("token"), "\t t\u00f6ken \n", StandardCharsets.UTF_8);
+        assertThat(BearerTokenAuth.readTokenFile(file)).isEqualTo("t\u00f6ken");
+    }
+
+    @Test
+    void readTokenFileRejectsBlankOrMissingFileNamingIt() throws Exception {
+        Path blank = Files.writeString(directory.resolve("blank"), " \n");
+        assertThatThrownBy(() -> BearerTokenAuth.readTokenFile(blank))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Token file " + blank + " is empty");
+        Path missing = directory.resolve("missing");
+        assertThatThrownBy(() -> BearerTokenAuth.readTokenFile(missing))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasMessage("Cannot read token file " + missing);
     }
 
     @Test

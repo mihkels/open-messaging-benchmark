@@ -41,8 +41,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.ResourceLockTarget;
+import org.junit.jupiter.api.parallel.Resources;
 
 /** Runs drivers in real child JVMs built from plugin bundles with conflicting library versions. */
+// Methods mostly wait on child JVMs, so they run concurrently. Each one reads the driver JVM
+// options and classpath properties; the few that change them take the lock exclusively.
+@Execution(ExecutionMode.CONCURRENT)
+@ResourceLock(
+        value = Resources.SYSTEM_PROPERTIES,
+        mode = ResourceAccessMode.READ,
+        target = ResourceLockTarget.CHILDREN)
 class ProcessWorkerTest {
 
     private static final String LIB = "fixture.lib.Lib";
@@ -178,6 +191,7 @@ class ProcessWorkerTest {
     }
 
     @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void cleansUpFailedChildJvmStartupAndAllowsRestart() throws Exception {
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
         try (ProcessWorker worker = newWorker()) {
@@ -320,6 +334,7 @@ class ProcessWorkerTest {
     }
 
     @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void passesQuotedJvmOptionsToDriverProcess() throws Exception {
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
         try {
@@ -342,6 +357,7 @@ class ProcessWorkerTest {
     }
 
     @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void forwardsZoneIdAndAllowsDriverJvmOptionsToOverrideIt() throws Exception {
         String oldZone = System.getProperty("zone.id");
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);

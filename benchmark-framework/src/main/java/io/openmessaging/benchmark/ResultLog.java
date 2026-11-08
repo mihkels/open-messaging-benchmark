@@ -22,9 +22,7 @@ import org.slf4j.LoggerFactory;
 
 /** The console lines a workload run prints for each report interval and at its end. */
 final class ResultLog {
-    // Logged under the generator's name, which log configurations and users already know
-    @SuppressWarnings("java:S3416")
-    private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
+    private static final Logger log = LoggerFactory.getLogger(ResultLog.class);
 
     private static final DecimalFormat rateFormat = new PaddingDecimalFormat("0.0", 7);
     private static final DecimalFormat throughputFormat = new PaddingDecimalFormat("0.0", 4);

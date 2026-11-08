@@ -93,15 +93,21 @@ final class DriverProcessServer implements AutoCloseable {
     static String readToken(Path tokenFile) {
         String token;
         try {
-            token = Files.readString(tokenFile, StandardCharsets.US_ASCII).strip();
+            token = BearerTokenAuth.readTokenFile(tokenFile);
+        } catch (IllegalArgumentException blank) {
+            deleteTokenFile(tokenFile);
+            throw blank;
+        }
+        deleteTokenFile(tokenFile);
+        return token;
+    }
+
+    private static void deleteTokenFile(Path tokenFile) {
+        try {
             Files.delete(tokenFile);
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot read driver process token file " + tokenFile, e);
+            throw new UncheckedIOException("Cannot delete driver process token file " + tokenFile, e);
         }
-        if (token.isEmpty()) {
-            throw new IllegalArgumentException("Driver process token file " + tokenFile + " is empty");
-        }
-        return token;
     }
 
     /**

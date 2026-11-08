@@ -202,6 +202,28 @@ public final class HttpWorkerClient implements Worker {
         return get(CUMULATIVE_LATENCIES, CumulativeLatencies.class);
     }
 
+    /**
+     * Sends an authorized GET to {@code path} and returns the response body as text, for example a
+     * Prometheus scrape of {@code /metrics}.
+     *
+     * @param path the request path, starting with {@code /}
+     * @param timeout the request and read timeout for this call
+     * @return the response body
+     * @throws IllegalStateException if the response status is not 200
+     */
+    public String getText(String path, Duration timeout) {
+        return await(
+                authorized(httpClient.prepareGet(host + path))
+                        .setRequestTimeout(timeout)
+                        .setReadTimeout(timeout)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenApply(response -> {
+                            checkResponse("get", path, response);
+                            return response.getResponseBody();
+                        }));
+    }
+
     @Override
     public void resetStats() {
         sendPost(RESET_STATS);

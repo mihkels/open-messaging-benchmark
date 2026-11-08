@@ -227,6 +227,7 @@ class DriverProcessServerTest {
         assertThatThrownBy(() -> DriverProcessServer.readToken(tokenFile))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("is empty");
+        assertThat(tokenFile).doesNotExist();
     }
 
     @Test

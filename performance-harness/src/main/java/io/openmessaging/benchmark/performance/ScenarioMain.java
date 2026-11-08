@@ -39,10 +39,6 @@ import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -62,6 +58,7 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 /** One fresh-JVM experiment; orchestration, RSS sampling and comparison live in the Python CLI. */
 public final class ScenarioMain {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern RESOURCE =
             Pattern.compile("omb_resource_(\\w++)\\{([^}]*+)}\\s++(\\S++).*");
     private static final Pattern ROLE_LABEL = Pattern.compile("role=\"([^\"]++)\"");
@@ -283,10 +280,10 @@ public final class ScenarioMain {
                 Thread.sleep(25);
             }
             String endpoint = Files.readString(endpointFile);
-            Worker client = new HttpWorkerClient(endpoint);
+            HttpWorkerClient client = new HttpWorkerClient(endpoint);
             clients.add(client);
             handles.add(client);
-            scrapes.add(() -> scrape(endpoint));
+            scrapes.add(() -> client.getText("/metrics", SCRAPE_TIMEOUT));
         }
         if (count == 1) {
             return clients.getFirst();
@@ -406,26 +403,6 @@ public final class ScenarioMain {
                 monitor.interrupt();
                 monitor.join();
             }
-        }
-    }
-
-    private static String scrape(String endpoint) {
-        try (var client = HttpClient.newHttpClient()) {
-            var response =
-                    client.send(
-                            HttpRequest.newBuilder(URI.create(endpoint + "/metrics"))
-                                    .timeout(Duration.ofSeconds(10))
-                                    .build(),
-                            HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                throw new IllegalStateException("Metrics HTTP " + response.statusCode());
-            }
-            return response.body();
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new IllegalStateException("Cannot scrape " + endpoint, e);
         }
     }
 

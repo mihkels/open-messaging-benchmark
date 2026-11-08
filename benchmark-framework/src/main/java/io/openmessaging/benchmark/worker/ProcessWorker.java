@@ -24,11 +24,6 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -63,6 +58,7 @@ public class ProcessWorker implements Worker {
     public static final String STARTUP_TIMEOUT_PROPERTY = "omb.driver.startupTimeoutSeconds";
 
     private static final Duration CRASH_DETECTION_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
     private static final String DRIVER_CLASS = "driverClass";
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
@@ -235,8 +231,7 @@ public class ProcessWorker implements Worker {
      * @throws IllegalStateException if the driver exited or its metrics cannot be scraped
      */
     public String scrapeMetrics() {
-        String url;
-        String token;
+        HttpWorkerClient client;
         synchronized (this) {
             DriverProcess running = current;
             if (running == null || running.endpoint() == null) {
@@ -245,28 +240,9 @@ public class ProcessWorker implements Worker {
             if (running.hasExited()) {
                 throw running.crashed(null);
             }
-            url = running.endpoint() + DriverProcessServer.METRICS_PATH;
-            token = Objects.requireNonNull(running.token(), "driver token after start");
+            client = Objects.requireNonNull(running.client(), "driver client after start");
         }
-        try (HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
-            HttpResponse<String> response =
-                    http.send(
-                            HttpRequest.newBuilder(URI.create(url))
-                                    .timeout(Duration.ofSeconds(10))
-                                    .header(BearerTokenAuth.AUTHORIZATION, BearerTokenAuth.BEARER_PREFIX + token)
-                                    .build(),
-                            HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                throw new IllegalStateException(
-                        "Driver metrics request to " + url + " failed with HTTP " + response.statusCode());
-            }
-            return response.body();
-        } catch (IOException e) {
-            throw new IllegalStateException("Cannot scrape driver metrics from " + url, e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while scraping driver metrics from " + url, e);
-        }
+        return client.getText(DriverProcessServer.METRICS_PATH, SCRAPE_TIMEOUT);
     }
 
     // Forwards a call to the driver process and reports a crash instead of the failed call.

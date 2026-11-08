@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.HdrHistogram.Histogram;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The JSON result of one workload and driver, documented in docs/reference/results-schema.md.
@@ -34,18 +35,18 @@ public class TestResult {
     public int schemaVersion = 2;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public ResultMetadata metadata;
+    public @Nullable ResultMetadata metadata;
 
     public ResultSummary summary = ResultSummary.empty();
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public Thresholds.Result thresholds;
+    public Thresholds.@Nullable Result thresholds;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public Map<String, String> histograms;
+    public @Nullable Map<String, String> histograms;
 
-    public String workload;
-    public String driver;
+    public @Nullable String workload;
+    public @Nullable String driver;
     public long messageSize;
     public int topics;
     public int partitions;

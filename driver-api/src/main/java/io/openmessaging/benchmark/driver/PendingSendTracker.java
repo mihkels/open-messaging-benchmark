@@ -13,16 +13,20 @@
  */
 package io.openmessaging.benchmark.driver;
 
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /** Tracks a producer's sends independently of the underlying client's close behavior. */
 public final class PendingSendTracker {
     private final String producerName;
-    private final Set<CompletableFuture<Void>> pending = new HashSet<>();
+    // Identity set: futures have no value equality
+    private final Set<CompletableFuture<Void>> pending =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private final ThreadLocal<Boolean> inClientCallback = new ThreadLocal<>();
     private boolean closed;
 
@@ -40,6 +44,8 @@ public final class PendingSendTracker {
      *
      * @return the future for the send
      */
+    // pending is an identity set, so removing a future by reference is well defined
+    @SuppressWarnings("UndefinedEquals")
     public CompletableFuture<Void> register() {
         CompletableFuture<Void> send = new CompletableFuture<>();
         synchronized (pending) {
@@ -48,7 +54,7 @@ public final class PendingSendTracker {
             }
             pending.add(send);
         }
-        send.whenComplete((unused, failure) -> {
+        send.whenComplete((_, failure) -> {
             synchronized (pending) {
                 pending.remove(send);
             }
@@ -81,7 +87,7 @@ public final class PendingSendTracker {
      * @param send the registered future
      * @param failure the client failure, or null on success
      */
-    public void completeFromClient(CompletableFuture<Void> send, Throwable failure) {
+    public void completeFromClient(CompletableFuture<Void> send, @Nullable Throwable failure) {
         Boolean previous = inClientCallback.get();
         inClientCallback.set(true);
         try {
@@ -136,7 +142,7 @@ public final class PendingSendTracker {
      *
      * @param closeFailure the client's close failure, or null if close returned normally
      */
-    public void failRemaining(Throwable closeFailure) {
+    public void failRemaining(@Nullable Throwable closeFailure) {
         List<CompletableFuture<Void>> sends;
         synchronized (pending) {
             sends = List.copyOf(pending);

@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Maven coordinates of a jar on a driver process classpath.
@@ -34,7 +35,7 @@ import java.util.zip.ZipFile;
  * @param classifier the Maven classifier, or {@code null} for the main artifact
  */
 public record ArtifactCoordinates(
-        String groupId, String artifactId, String version, String classifier) {
+        String groupId, String artifactId, String version, @Nullable String classifier) {
 
     public ArtifactCoordinates(String groupId, String artifactId, String version) {
         this(groupId, artifactId, version, null);

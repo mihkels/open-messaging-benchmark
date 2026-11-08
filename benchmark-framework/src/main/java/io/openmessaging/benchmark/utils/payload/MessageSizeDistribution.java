@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.utils.payload;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -129,7 +130,7 @@ public class MessageSizeDistribution {
     }
 
     private static int parseSize(String s) {
-        s = s.trim().toUpperCase();
+        s = s.trim().toUpperCase(Locale.ROOT);
         int multiplier = 1;
 
         if (s.endsWith("KB")) {

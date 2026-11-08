@@ -20,6 +20,7 @@ import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
@@ -64,11 +65,12 @@ class WorkloadGenerationToolTest {
                     "-o", outputDir.toString()
                 });
 
-        List<String> generatedFiles =
-                Files.list(outputDir)
+        List<String> generatedFiles ;
+try (Stream<Path> stream = Files.list(outputDir)) {
+generatedFiles =stream
                         .map(path -> path.getFileName().toString())
                         .sorted()
-                        .toList();
+                        .toList();}
 
         assertThat(generatedFiles)
                 .containsExactly(

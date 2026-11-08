@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -206,7 +207,7 @@ public final class PluginRegistry {
         }
 
         private void addDriverError(String driver, String error) {
-            errorsByDriverClass.computeIfAbsent(driver, unused -> new ArrayList<>()).add(error);
+            errorsByDriverClass.computeIfAbsent(driver, _ -> new ArrayList<>()).add(error);
         }
     }
 
@@ -336,7 +337,8 @@ public final class PluginRegistry {
         Path dir;
         String fileName = String.valueOf(path.getFileName());
         if (Files.isRegularFile(path) && fileName.endsWith(".jar")) {
-            dir = path.getParent();
+            // An absolute path to a regular file always has a parent
+            dir = Objects.requireNonNull(path.getParent(), "jar directory");
             classpath = List.of(fileName);
         } else if (Files.isDirectory(path)) {
             dir = path;

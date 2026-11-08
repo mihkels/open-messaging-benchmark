@@ -33,10 +33,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -64,7 +66,7 @@ public class ProcessWorker implements Worker {
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
 
-    private final Path driverLocation;
+    private final @Nullable Path driverLocation;
     private final Supplier<PluginRegistry> registry;
     private final Supplier<HostRuntime> hostRuntime;
     private final Thread shutdownHook;
@@ -72,9 +74,9 @@ public class ProcessWorker implements Worker {
     private volatile boolean closed;
     private volatile boolean unusable;
     private volatile boolean initializing;
-    private volatile String runId;
+    private volatile @Nullable String runId;
     // The current driver process, kept until it is fully stopped so that termination can be retried
-    private volatile DriverProcess current;
+    private volatile @Nullable DriverProcess current;
 
     public ProcessWorker() {
         this(null);
@@ -87,7 +89,7 @@ public class ProcessWorker implements Worker {
      * @param driverLocation a plugin bundle directory, unpackaged driver module directory or jar, or
      *     {@code null} to use the installed plugin bundles
      */
-    public ProcessWorker(Path driverLocation) {
+    public ProcessWorker(@Nullable Path driverLocation) {
         this(driverLocation, PluginRegistry::discover, HostRuntime::current);
     }
 
@@ -96,7 +98,9 @@ public class ProcessWorker implements Worker {
     }
 
     ProcessWorker(
-            Path driverLocation, Supplier<PluginRegistry> registry, Supplier<HostRuntime> hostRuntime) {
+            @Nullable Path driverLocation,
+            Supplier<PluginRegistry> registry,
+            Supplier<HostRuntime> hostRuntime) {
         this.driverLocation = driverLocation;
         this.registry = registry;
         this.hostRuntime = hostRuntime;
@@ -105,7 +109,7 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
-    public synchronized void initializeDriver(Path driverConfigFile) throws Exception {
+    public synchronized void initializeDriver(Path driverConfigFile) throws InterruptedException {
         ensureOpen();
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("Interrupted before driver initialization");
@@ -113,7 +117,8 @@ public class ProcessWorker implements Worker {
         terminate();
 
         Map<String, Object> config = readDriverConfig(driverConfigFile);
-        Object driverClass = config.get("driverClass");
+        // readDriverConfig rejects a configuration without a driverClass
+        Object driverClass = Objects.requireNonNull(config.get("driverClass"), "driverClass");
 
         PluginRegistry plugins = registry.get();
         plugins.errors().forEach(error -> log.warn("Invalid driver plugin: {}", error));
@@ -138,10 +143,13 @@ public class ProcessWorker implements Worker {
         try {
             ensureOpen();
             starting.start(classpath.entries(), () -> closed);
-            if (runId != null) {
-                starting.client().setRunId(runId);
+            HttpWorkerClient client =
+                    Objects.requireNonNull(starting.client(), "driver client after start");
+            String id = runId;
+            if (id != null) {
+                client.setRunId(id);
             }
-            starting.client().initializeDriverFromLocalPath(driverConfigFile);
+            client.initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
             String failure = starting.describeFailure(e);
             cleanUpFailedStart(starting, e);
@@ -174,9 +182,10 @@ public class ProcessWorker implements Worker {
 
     // Stops and terminates a driver process that failed to start, recording cleanup failures on it.
     private void cleanUpFailedStart(DriverProcess starting, Exception failure) {
-        if (starting.isRunning() && !closed) {
+        HttpWorkerClient client = starting.client();
+        if (client != null && starting.isRunning() && !closed) {
             try {
-                starting.client().stopAll();
+                client.stopAll();
             } catch (Throwable cleanup) {
                 failure.addSuppressed(cleanup);
             }
@@ -192,8 +201,9 @@ public class ProcessWorker implements Worker {
     public synchronized void setRunId(String runId) {
         this.runId = runId;
         DriverProcess running = current;
-        if (running != null && running.client() != null) {
-            running.client().setRunId(runId);
+        HttpWorkerClient client = running == null ? null : running.client();
+        if (client != null) {
+            client.setRunId(runId);
         }
     }
 
@@ -211,7 +221,7 @@ public class ProcessWorker implements Worker {
      *
      * @return the pid, or {@code null} if no driver process is running
      */
-    public synchronized Long pid() {
+    public synchronized @Nullable Long pid() {
         DriverProcess running = current;
         return running == null ? null : running.pid();
     }
@@ -259,7 +269,7 @@ public class ProcessWorker implements Worker {
         synchronized (this) {
             running = current;
             client = running == null ? null : running.client();
-            if (client == null) {
+            if (running == null || client == null) {
                 throw new IllegalStateException("No driver process is running; initialize a driver first");
             }
             if (running.hasExited()) {

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A producer load command.
@@ -35,7 +36,7 @@ public record ProducerWorkAssignment(
         List<byte[]> payloadData,
         double publishRate,
         KeyDistributorType keyDistributorType,
-        int[] payloadWeights) {
+        int @Nullable [] payloadWeights) {
 
     public ProducerWorkAssignment(
             List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
@@ -46,7 +47,7 @@ public record ProducerWorkAssignment(
             List<byte[]> payloadData,
             double publishRate,
             KeyDistributorType keyDistributorType,
-            int[] payloadWeights) {
+            int @Nullable [] payloadWeights) {
         this.payloadData =
                 payloadData != null
                         ? new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList())
@@ -59,16 +60,18 @@ public record ProducerWorkAssignment(
         this.keyDistributorType = keyDistributorType;
     }
 
-    private static byte[] getBytes(byte[] bytes) {
+    private static byte @Nullable [] getBytes(byte @Nullable [] bytes) {
         return bytes != null ? bytes.clone() : null;
     }
 
     // Return defensive copy in getter
+    @Override
     public List<byte[]> payloadData() {
         return new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList());
     }
 
-    public int[] payloadWeights() {
+    @Override
+    public int @Nullable [] payloadWeights() {
         return payloadWeights == null ? null : payloadWeights.clone();
     }
 

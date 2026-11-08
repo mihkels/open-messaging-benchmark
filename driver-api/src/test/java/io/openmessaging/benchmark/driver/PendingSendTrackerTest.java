@@ -125,7 +125,7 @@ class PendingSendTrackerTest {
         CompletableFuture<Void> first = tracker.register();
         CompletableFuture<Void> second = tracker.register();
         CompletableFuture<Void> callback =
-                first.handle((unused, failure) -> {
+                first.handle((_, failure) -> {
                     assertThrows(IllegalStateException.class, tracker::beginClose);
                     return null;
                 });

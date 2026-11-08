@@ -59,6 +59,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
@@ -83,7 +84,7 @@ public final class LocalWorker implements Worker {
     private final long resourceCloseTimeoutNanos;
     private final long probeTimeoutNanos;
     private final long resetTimeoutNanos;
-    private volatile Run run;
+    private volatile @Nullable Run run;
     private volatile boolean closed;
     private volatile boolean unusable;
 
@@ -200,7 +201,11 @@ public final class LocalWorker implements Worker {
                         .toList();
 
         create(
-                current, "topic creation", () -> current.driver.createTopics(topicInfos), v -> {}, v -> {});
+                current,
+                "topic creation",
+                () -> current.requireDriver().createTopics(topicInfos),
+                v -> {},
+                v -> {});
 
         List<String> topics = topicInfos.stream().map(TopicInfo::topic).collect(toList());
 
@@ -210,7 +215,8 @@ public final class LocalWorker implements Worker {
 
     private String generateTopicName(Run current, int i) {
         return String.format(
-                "%s-%07d-%s", current.driver.getTopicNamePrefix(), i, RandomGenerator.getRandomString());
+                "%s-%07d-%s",
+                current.requireDriver().getTopicNamePrefix(), i, RandomGenerator.getRandomString());
     }
 
     @Override
@@ -223,8 +229,12 @@ public final class LocalWorker implements Worker {
                 current,
                 "producer creation",
                 () ->
-                        current.driver.createProducers(
-                                topics.stream().map(t -> new ProducerInfo(index.getAndIncrement(), t)).toList()),
+                        current
+                                .requireDriver()
+                                .createProducers(
+                                        topics.stream()
+                                                .map(t -> new ProducerInfo(index.getAndIncrement(), t))
+                                                .toList()),
                 created -> {
                     validateResources(created, "producer");
                     current.addProducers(created);
@@ -244,14 +254,16 @@ public final class LocalWorker implements Worker {
                 current,
                 "consumer creation",
                 () ->
-                        current.driver.createConsumers(
-                                consumerAssignment.topicsSubscriptions.stream()
-                                        .map(c -> {
-                                            int consumerIndex = index.getAndIncrement();
-                                            return new ConsumerInfo(
-                                                    consumerIndex, c.topic, c.subscription, current.callbacks);
-                                        })
-                                        .toList()),
+                        current
+                                .requireDriver()
+                                .createConsumers(
+                                        consumerAssignment.topicsSubscriptions.stream()
+                                                .map(c -> {
+                                                    int consumerIndex = index.getAndIncrement();
+                                                    return new ConsumerInfo(
+                                                            consumerIndex, c.topic, c.subscription, current.callbacks);
+                                                })
+                                                .toList()),
                 created -> {
                     validateResources(created, "consumer");
                     current.addConsumers(created);
@@ -372,8 +384,9 @@ public final class LocalWorker implements Worker {
                 () -> {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
+                        MessageProducer messageProducer = current.requireMessageProducer();
                         while (!current.stopping) {
-                            current.messageProducer.sendMessage(
+                            messageProducer.sendMessage(
                                     producer, Optional.ofNullable(keyDistributor.next()), payloads.next(random));
                         }
                     } catch (InterruptedException e) {
@@ -641,7 +654,7 @@ public final class LocalWorker implements Worker {
         }
 
         // Runs as a worker task and waits until the creation has been handed off or has failed.
-        private T create() throws Exception {
+        private T create() throws ExecutionException, InterruptedException {
             CompletableFuture<T> created =
                     Objects.requireNonNull(factory.get(), description + " returned null");
             // A creation that reports quiescence reports its own late cleanup failures through it.
@@ -652,7 +665,7 @@ public final class LocalWorker implements Worker {
                             : null;
             boolean tracksQuiescence = quiescence != null;
             run.creationsStarted(tracksQuiescence ? 2 : 1);
-            if (tracksQuiescence) {
+            if (quiescence != null) {
                 quiescence.whenComplete((ignored, failure) -> quiesced(failure));
             }
             created.whenComplete((value, failure) -> completed(value, failure, tracksQuiescence));
@@ -823,14 +836,14 @@ public final class LocalWorker implements Worker {
         private final List<BenchmarkConsumer> consumers = new ArrayList<>();
         private final RunCallbacks callbacks = new RunCallbacks(stats, this::recordFailure);
         private volatile boolean stopping;
-        private volatile MessageProducer messageProducer;
-        private BenchmarkDriver driver;
+        private volatile @Nullable MessageProducer messageProducer;
+        private @Nullable BenchmarkDriver driver;
         private boolean initialized;
         private boolean loadStarted;
         private int pendingCreations;
-        private Throwable failure;
+        private @Nullable Throwable failure;
         private boolean failureReported;
-        private Throwable cleanupFailure;
+        private @Nullable Throwable cleanupFailure;
 
         // Keeps a newly constructed driver unless stopping has begun. Returns false if the caller
         // still owns the driver and must close it.
@@ -882,7 +895,7 @@ public final class LocalWorker implements Worker {
 
         // Hands a created resource to this run unless stopping has begun. Returns null if the
         // resource was transferred, otherwise why it was not.
-        private <T> Throwable transfer(T value, ResourceAction<T> transfer) {
+        private <T> @Nullable Throwable transfer(T value, ResourceAction<T> transfer) {
             synchronized (monitor) {
                 if (stopping) {
                     return new CancellationException("Worker is stopping");
@@ -952,6 +965,22 @@ public final class LocalWorker implements Worker {
 
         // Takes ownership of the producer and consumer handles and the driver away from this run.
         // Returns the handles, and the driver if one was attached.
+        private BenchmarkDriver requireDriver() {
+            BenchmarkDriver initialized = driver;
+            if (initialized == null) {
+                throw new IllegalStateException("No driver is initialized");
+            }
+            return initialized;
+        }
+
+        private MessageProducer requireMessageProducer() {
+            MessageProducer initialized = messageProducer;
+            if (initialized == null) {
+                throw new IllegalStateException("No message producer is initialized");
+            }
+            return initialized;
+        }
+
         private Detached detach() {
             synchronized (monitor) {
                 List<AutoCloseable> handles = new ArrayList<>(producers);
@@ -964,7 +993,7 @@ public final class LocalWorker implements Worker {
             }
         }
 
-        private Throwable cleanupFailure() {
+        private @Nullable Throwable cleanupFailure() {
             synchronized (monitor) {
                 return cleanupFailure;
             }
@@ -972,7 +1001,7 @@ public final class LocalWorker implements Worker {
 
         // The failure of a producer or callback task that no caller has seen yet. Returns the
         // failure, or null if there is none or it was already reported.
-        private Throwable takeUnreportedFailure() {
+        private @Nullable Throwable takeUnreportedFailure() {
             synchronized (monitor) {
                 if (failureReported) {
                     return null;
@@ -1033,7 +1062,7 @@ public final class LocalWorker implements Worker {
         }
     }
 
-    private record Detached(List<AutoCloseable> handles, BenchmarkDriver driver) {}
+    private record Detached(List<AutoCloseable> handles, @Nullable BenchmarkDriver driver) {}
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 

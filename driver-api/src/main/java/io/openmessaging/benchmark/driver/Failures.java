@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver;
 
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Collects the failures of a multi-step cleanup so that every step runs and none is lost.
@@ -29,7 +30,7 @@ import java.util.concurrent.ExecutionException;
  * <p>Instances are not thread-safe.
  */
 public final class Failures {
-    private Throwable failure;
+    private @Nullable Throwable failure;
     private boolean interrupted;
 
     /**
@@ -37,7 +38,7 @@ public final class Failures {
      *
      * @param cause the failure
      */
-    public void add(Throwable cause) {
+    public void add(@Nullable Throwable cause) {
         failure = append(failure, cause);
     }
 
@@ -91,7 +92,7 @@ public final class Failures {
      *
      * @return the failure, or {@code null} if none was recorded
      */
-    public Throwable failure() {
+    public @Nullable Throwable failure() {
         return failure;
     }
 
@@ -141,7 +142,7 @@ public final class Failures {
      * @param next the additional failure, or {@code null}
      * @return the primary failure, or {@code next} if there is none
      */
-    public static Throwable append(Throwable primary, Throwable next) {
+    public static @Nullable Throwable append(@Nullable Throwable primary, @Nullable Throwable next) {
         if (primary == null) {
             return next;
         }

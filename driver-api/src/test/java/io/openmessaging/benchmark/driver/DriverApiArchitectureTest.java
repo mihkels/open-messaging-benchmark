@@ -25,8 +25,8 @@ import com.tngtech.archunit.lang.ArchRule;
  *
  * <p>The driver API is the contract between the benchmark framework and every driver. It must stay
  * small: it may use the JDK, its own package and the libraries it exposes in its API (Jackson,
- * Micrometer and SLF4J). It must not reach into framework, worker or tool packages, concrete driver
- * packages or broker client libraries.
+ * Micrometer and SLF4J) plus the JSpecify nullness annotations. It must not reach into framework,
+ * worker or tool packages, concrete driver packages or broker client libraries.
  */
 @AnalyzeClasses(
         packages = "io.openmessaging.benchmark.driver",
@@ -46,7 +46,8 @@ class DriverApiArchitectureTest {
                             "com.fasterxml.jackson.annotation..",
                             "tools.jackson..",
                             "io.micrometer..",
-                            "org.slf4j..")
+                            "org.slf4j..",
+                            "org.jspecify.annotations..")
                     .because(
                             "driver-api is the contract shared by the framework and every driver,"
                                     + " so it may only use the JDK and its declared API libraries");

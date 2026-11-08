@@ -23,9 +23,9 @@ public final class ListPartition {
     /**
      * partition a list to specified size.
      *
-     * @param originList
-     * @param size
-     * @param <T>
+     * @param originList the list to partition
+     * @param size the number of partitions
+     * @param <T> the element type
      * @return the partitioned list
      */
     public static <T> List<List<T>> partitionList(List<T> originList, int size) {

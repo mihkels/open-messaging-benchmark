@@ -30,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,13 +59,13 @@ final class DriverProcess {
     }
 
     private final String description;
-    private volatile Path workDir;
+    private volatile @Nullable Path workDir;
     // Never cleared once set, so that a call failing during a concurrent stop can still report the
     // exit; processStopped records that the process no longer needs stopping.
-    private volatile Process process;
+    private volatile @Nullable Process process;
     private volatile boolean processStopped;
-    private volatile String endpoint;
-    private volatile HttpWorkerClient client;
+    private volatile @Nullable String endpoint;
+    private volatile @Nullable HttpWorkerClient client;
     private volatile boolean crashReported;
 
     DriverProcess(String description) {
@@ -77,7 +78,7 @@ final class DriverProcess {
     }
 
     // The process, unless it has been stopped
-    private Process owned() {
+    private @Nullable Process owned() {
         return processStopped ? null : process;
     }
 
@@ -164,15 +165,15 @@ final class DriverProcess {
         return Long.getLong(ProcessWorker.STARTUP_TIMEOUT_PROPERTY, 120);
     }
 
-    HttpWorkerClient client() {
+    @Nullable HttpWorkerClient client() {
         return client;
     }
 
-    String endpoint() {
+    @Nullable String endpoint() {
         return endpoint;
     }
 
-    Long pid() {
+    @Nullable Long pid() {
         Process current = owned();
         return current == null ? null : current.pid();
     }
@@ -195,6 +196,9 @@ final class DriverProcess {
      */
     boolean awaitExit(Duration timeout) {
         Process current = process;
+        if (current == null) {
+            return false;
+        }
         try {
             return current.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException _) {
@@ -209,10 +213,12 @@ final class DriverProcess {
      * @param cause the failure that revealed the crash, or {@code null}
      * @return the failure to throw
      */
-    IllegalStateException crashed(Throwable cause) {
+    IllegalStateException crashed(@Nullable Throwable cause) {
         crashReported = true;
+        Process current = process;
+        String exitCode = current == null ? "unknown" : String.valueOf(current.exitValue());
         return new IllegalStateException(
-                "Driver process for " + description + " exited with code " + process.exitValue(), cause);
+                "Driver process for " + description + " exited with code " + exitCode, cause);
     }
 
     boolean crashReported() {
@@ -225,8 +231,9 @@ final class DriverProcess {
             cause = cause.getCause();
         }
         String message = cause.getMessage() == null ? cause.toString() : cause.getMessage();
-        if (hasExited()) {
-            message += " (driver process exited with code " + process.exitValue() + ")";
+        Process current = process;
+        if (current != null && !current.isAlive()) {
+            message += " (driver process exited with code " + current.exitValue() + ")";
         }
         return message;
     }
@@ -262,9 +269,10 @@ final class DriverProcess {
             stopProcess(closing, failures);
         }
         endpoint = null;
-        if (workDir != null && owned() == null) {
+        Path directory = workDir;
+        if (directory != null && owned() == null) {
             try {
-                deleteWorkDir(workDir);
+                deleteWorkDir(directory);
                 workDir = null;
             } catch (IOException e) {
                 failures.add(e);

@@ -32,7 +32,6 @@ class PaddingDecimalFormatTest {
         PaddingDecimalFormat format = new PaddingDecimalFormat("0.0", 7);
 
         assertThat(format)
-                .isEqualTo(format)
                 .isEqualTo(new PaddingDecimalFormat("0.0", 7))
                 .hasSameHashCodeAs(new PaddingDecimalFormat("0.0", 7))
                 .isNotEqualTo(new PaddingDecimalFormat("0.0", 8))

@@ -19,6 +19,7 @@ import com.beust.jcommander.ParameterException;
 import io.javalin.Javalin;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -50,7 +51,7 @@ public final class BenchmarkWorker {
                 names = {"-sp", "--stats-port"},
                 description = "Deprecated and ignored; accepted so existing launch scripts keep working")
         // Deprecated since 0.0.3. Kept so existing launch scripts still parse; only read to warn.
-        private Integer statsPort;
+        private @Nullable Integer statsPort;
 
         public boolean isHelp() {
             return help;
@@ -63,7 +64,7 @@ public final class BenchmarkWorker {
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
-    static void main(String[] args) throws Exception {
+    static void main(String[] args) throws InterruptedException {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("benchmark-worker");

@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -57,7 +58,7 @@ public class WorkerHotPathBenchmark {
         BenchmarkProducer producer;
         byte[] payload;
         final LongSupplier clock = System::nanoTime;
-        volatile Throwable callbackFailure;
+        volatile @Nullable Throwable callbackFailure;
 
         @Setup
         public void setup() {
@@ -84,7 +85,7 @@ public class WorkerHotPathBenchmark {
         }
 
         @TearDown
-        public void teardown() throws Exception {
+        public void teardown() throws InterruptedException {
             try {
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
                 if (!callbacks.seal(deadline)

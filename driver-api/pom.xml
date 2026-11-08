@@ -60,6 +60,11 @@
             <version>${log4j.version}</version>
         </dependency>
         <dependency>
+            <!-- Nullness annotations checked by NullAway at compile time -->
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
             <groupId>tools.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>

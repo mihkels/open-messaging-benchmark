@@ -24,6 +24,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,7 +120,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
         private final ResourceBatch<C> batch;
         private final AtomicInteger succeeded = new AtomicInteger();
         private final int total;
-        private volatile Thread workerThread;
+        private volatile @Nullable Thread workerThread;
         private int inFlight;
         private boolean stopping;
 
@@ -200,9 +201,10 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             }
         }
 
-        private void completed(Attempt attempt, C resource, Throwable error) {
+        private void completed(Attempt attempt, @Nullable C resource, @Nullable Throwable error) {
             Throwable cause = failureCause(resource, error);
-            if (cause == null) {
+            // failureCause reports a null resource as a failure, so resource is set here
+            if (cause == null && resource != null) {
                 succeeded.incrementAndGet();
                 batch.succeed(attempt.index, resource);
             }
@@ -227,7 +229,8 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             }
         }
 
-        private static Throwable failureCause(Object resource, Throwable error) {
+        private static @Nullable Throwable failureCause(
+                @Nullable Object resource, @Nullable Throwable error) {
             if (error != null) {
                 return Failures.unwrap(error);
             }
@@ -243,7 +246,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
          * @param cause why it failed
          * @return the failure that ends the batch, or {@code null} if the attempt is retried
          */
-        private synchronized Throwable retryOrStop(Attempt attempt, Throwable cause) {
+        private synchronized @Nullable Throwable retryOrStop(Attempt attempt, Throwable cause) {
             if (attempt.firstFailure == null) {
                 attempt.firstFailure = cause;
             }
@@ -285,7 +288,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             private final int index;
             private final R request;
             private int retries;
-            private Throwable firstFailure;
+            private @Nullable Throwable firstFailure;
 
             private Attempt(int index, R request) {
                 this.index = index;

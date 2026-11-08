@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,10 +65,10 @@ public final class WorkloadGenerator implements WorkloadRun {
     private volatile boolean needToWaitForBacklogDraining = false;
     private volatile boolean closed;
     private volatile boolean quiescentAfterClose;
-    private volatile Thread runThread;
+    private volatile @Nullable Thread runThread;
     private boolean started;
     private volatile boolean includeHistograms;
-    private Throwable controllerFailure;
+    private @Nullable Throwable controllerFailure;
     private boolean controllerFailureReported;
 
     private volatile double targetPublishRate;
@@ -102,7 +103,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     }
 
     @Override
-    public TestResult run() throws Exception {
+    public TestResult run() throws IOException, InterruptedException {
         synchronized (this) {
             if (closed || started) {
                 throw new IllegalStateException("Workload generator is closed or has already run");
@@ -221,7 +222,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      * Adjust the publish rate to a level that is sustainable, meaning that we can consume all the
      * messages that are being produced.
      *
-     * @param currentRate
+     * @param currentRate the publish rate to start the search from
      */
     private void findMaximumSustainableRate(double currentRate) throws InterruptedException {
         long lastControlTimestamp = System.nanoTime();

@@ -16,8 +16,12 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class WorkloadTest {
 
@@ -85,5 +89,26 @@ class WorkloadTest {
         assertThatThrownBy(workload::validate)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("minThroughputRatio requires a positive producerRate");
+    }
+
+    @Test
+    void loadingAWorkloadFileWithoutANameFailsWithTheMissingKey(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("unnamed.yaml");
+        Files.writeString(file, "topics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid workload " + file + ": name is required");
+    }
+
+    @Test
+    void loadingANamedWorkloadFileKeysItByFileName(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("named.yaml");
+        Files.writeString(file, "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+
+        assertThat(Benchmark.readWorkloads(List.of(file.toString())))
+                .containsOnlyKeys("named")
+                .extractingByKey("named")
+                .satisfies(workload -> assertThat(workload.name).isEqualTo("example"));
     }
 }

@@ -123,7 +123,7 @@ class JMSBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Exception> closeFailure = new AtomicReference<>();
-        first.whenComplete((unused, failure) -> {
+        first.whenComplete((_, failure) -> {
             try {
                 producer.close();
             } catch (Exception e) {

@@ -15,12 +15,13 @@ package io.openmessaging.benchmark;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Thresholds {
-    public Double maxPublishLatency99Ms;
-    public Double minThroughputRatio;
+    public @Nullable Double maxPublishLatency99Ms;
+    public @Nullable Double minThroughputRatio;
 
     void validate(Workload workload) {
         if (maxPublishLatency99Ms == null && minThroughputRatio == null) {
@@ -69,6 +70,8 @@ public class Thresholds {
         public String status;
         public Map<String, Check> checks;
 
+        // Jackson fills the fields
+        @SuppressWarnings("NullAway.Init")
         public Result() {}
 
         Result(Map<String, Check> checks) {
@@ -93,6 +96,8 @@ public class Thresholds {
         public double observed;
         public String status;
 
+        // Jackson fills the fields
+        @SuppressWarnings("NullAway.Init")
         public Check() {}
 
         Check(double limit, double observed, boolean passed) {

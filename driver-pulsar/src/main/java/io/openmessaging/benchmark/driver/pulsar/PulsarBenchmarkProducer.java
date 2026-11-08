@@ -58,7 +58,7 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
                 msgBuilder
                         .sendAsync()
                         .thenApply(msgId -> null)
-                        .whenComplete((unused, failure) -> pending.completeFromClient(send, failure));
+                        .whenComplete((_, failure) -> pending.completeFromClient(send, failure));
             } catch (RuntimeException e) {
                 send.completeExceptionally(e);
             }

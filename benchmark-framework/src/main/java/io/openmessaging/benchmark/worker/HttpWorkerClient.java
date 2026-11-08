@@ -78,8 +78,8 @@ public final class HttpWorkerClient implements Worker {
         this(
                 asyncHttpClient(
                         Dsl.config()
-                                .setReadTimeout(Duration.ofMillis(600000))
-                                .setRequestTimeout(Duration.ofMillis(600000))),
+                                .setReadTimeout(Duration.ofMinutes(10))
+                                .setRequestTimeout(Duration.ofMinutes(10))),
                 host);
     }
 

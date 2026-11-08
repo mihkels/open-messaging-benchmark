@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,7 @@ final class RunCallbacks implements ConsumerCallback {
             long intendedSendTime,
             long sendTime,
             LongSupplier nanoClock,
-            Throwable failure) {
+            @Nullable Throwable failure) {
         try {
             gate.readLock().lock();
             try {

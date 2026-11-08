@@ -265,7 +265,7 @@ class NsqEventLoopGroupTest {
         assertThat(scope.awaitTermination(1, TimeUnit.SECONDS)).isTrue();
         assertThat(scope.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).isSuccess()).isTrue();
         scope.next();
-        scope.iterator();
+        var _ = scope.iterator();
         verify(delegate).next();
         verify(delegate).iterator();
     }

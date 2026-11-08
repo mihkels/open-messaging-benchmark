@@ -142,7 +142,7 @@ class PublicationLifecycleTest {
         publisher.join(5000);
         closer.join(5000);
 
-        assertSame(Boolean.TRUE, interruptedAfterClose.get(5, TimeUnit.SECONDS));
+        assertSame(true, interruptedAfterClose.get(5, TimeUnit.SECONDS));
     }
 
     @Test

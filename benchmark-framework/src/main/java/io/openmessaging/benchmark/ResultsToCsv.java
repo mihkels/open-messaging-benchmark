@@ -14,9 +14,12 @@
 
 package io.openmessaging.benchmark;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Files;
 import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -64,15 +67,15 @@ public class ResultsToCsv {
             List<TestResult> sortedResults =
                     results.stream()
                             .sorted(
-                                    Comparator.comparing(TestResult::getMessageSize)
-                                            .thenComparing(TestResult::getTopics)
-                                            .thenComparing(TestResult::getPartitions))
+                                    Comparator.comparingLong(TestResult::getMessageSize)
+                                            .thenComparingInt(TestResult::getTopics)
+                                            .thenComparingInt(TestResult::getPartitions))
                             .toList();
             for (TestResult tr : sortedResults) {
                 lines.add(extractResults(tr));
             }
 
-            try (FileWriter writer = new FileWriter(outputFile)) {
+            try (Writer writer = Files.newBufferedWriter(outputFile.toPath(), UTF_8)) {
                 for (String str : lines) {
                     writer.write(str + System.lineSeparator());
                 }

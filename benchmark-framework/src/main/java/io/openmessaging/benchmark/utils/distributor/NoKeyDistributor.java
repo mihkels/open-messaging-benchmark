@@ -13,10 +13,12 @@
  */
 package io.openmessaging.benchmark.utils.distributor;
 
+import org.jspecify.annotations.Nullable;
+
 public class NoKeyDistributor extends KeyDistributor {
 
     @Override
-    public String next() {
+    public @Nullable String next() {
         return null;
     }
 }

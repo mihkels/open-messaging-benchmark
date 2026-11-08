@@ -22,6 +22,14 @@ below.
 
 - Open an issue, or find an existing one, before you start a change. The pull request closes it with
   `Closes #<issue>` in its description.
+- If you are not a maintainer, wait until a maintainer labels the issue `accepted` before you open a
+  pull request. Comment on the issue to say you want to work on it. Pull requests that don't close an
+  open `accepted` issue are closed automatically, without review; adding `Closes #<issue>` for an
+  accepted issue to the description reopens them. This includes typo-only changes, unrequested
+  refactors and bulk or generated changes.
+- Ask questions in [Discussions Q&A](https://github.com/mihkels/open-messaging-benchmark/discussions/categories/q-a)
+  and propose features or new drivers in
+  [Discussions Ideas](https://github.com/mihkels/open-messaging-benchmark/discussions/categories/ideas).
 - Report security problems privately as described in [`SECURITY.md`](SECURITY.md), not in a public
   issue.
 

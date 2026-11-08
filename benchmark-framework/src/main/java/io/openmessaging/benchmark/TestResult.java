@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.zip.DataFormatException;
 import org.HdrHistogram.Histogram;
 import org.jspecify.annotations.Nullable;
 
@@ -30,6 +31,15 @@ import org.jspecify.annotations.Nullable;
  * Publish and end-to-end latencies are in milliseconds; publish delay is in microseconds.
  */
 public class TestResult {
+    /** The {@link #histograms} key of the publish latency histogram. */
+    public static final String PUBLISH_HISTOGRAM = "publish";
+
+    /** The {@link #histograms} key of the publish delay histogram. */
+    public static final String PUBLISH_DELAY_HISTOGRAM = "publishDelay";
+
+    /** The {@link #histograms} key of the end-to-end latency histogram. */
+    public static final String END_TO_END_HISTOGRAM = "endToEnd";
+
     private static final double[] PERCENTILES = {50, 75, 95, 99, 99.9, 99.99};
 
     public int schemaVersion = 2;
@@ -276,13 +286,35 @@ public class TestResult {
     void recordHistogramData(CumulativeLatencies aggregate) {
         histograms =
                 Map.of(
-                        "publish", encode(aggregate.publishLatency),
-                        "publishDelay", encode(aggregate.publishDelayLatency),
-                        "endToEnd", encode(aggregate.endToEndLatency));
+                        PUBLISH_HISTOGRAM, encode(aggregate.publishLatency),
+                        PUBLISH_DELAY_HISTOGRAM, encode(aggregate.publishDelayLatency),
+                        END_TO_END_HISTOGRAM, encode(aggregate.endToEndLatency));
     }
 
-    private static double average(List<Double> values) {
+    /**
+     * Averages a per-period series, such as {@link #publishRate}.
+     *
+     * @param values the series
+     * @return the mean, or 0 for an empty series
+     */
+    public static double average(List<Double> values) {
         return values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    }
+
+    /**
+     * Decodes one of the {@link #histograms}, the inverse of how they are written.
+     *
+     * @param encoded the Base64 of the compressed histogram
+     * @return the histogram, in microseconds
+     * @throws IllegalArgumentException if the value is not a valid encoded histogram
+     */
+    public static Histogram decodeHistogram(String encoded) {
+        try {
+            return Histogram.decodeFromCompressedByteBuffer(
+                    ByteBuffer.wrap(Base64.getDecoder().decode(encoded)), Long.MIN_VALUE);
+        } catch (DataFormatException | RuntimeException e) {
+            throw new IllegalArgumentException(e.getMessage(), e);
+        }
     }
 
     private static String encode(Histogram histogram) {
@@ -321,8 +353,16 @@ public class TestResult {
         max.add(micros.getMaxValue());
     }
 
-    private static double millisAt(Histogram micros, double percentile) {
-        return millis(micros.getValueAtPercentile(percentile));
+    /**
+     * Reads a percentile of a microsecond histogram in milliseconds.
+     *
+     * @param micros the histogram, in microseconds
+     * @param percentile the percentile; 100 or more reads the maximum
+     * @return the value, in milliseconds
+     */
+    public static double millisAt(Histogram micros, double percentile) {
+        return millis(
+                percentile >= 100 ? micros.getMaxValue() : micros.getValueAtPercentile(percentile));
     }
 
     private static double millis(double micros) {

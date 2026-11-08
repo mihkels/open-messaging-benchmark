@@ -14,23 +14,24 @@
 package io.openmessaging.benchmark.tool.report;
 
 import io.openmessaging.benchmark.TestResult;
-import java.nio.ByteBuffer;
-import java.util.Base64;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.ToDoubleFunction;
-import java.util.zip.DataFormatException;
+import java.util.Objects;
 import org.HdrHistogram.Histogram;
 
 /** Reads the {@link Metric} values of a run. */
 final class MetricExtractor {
     /** The raw histograms every latency metric reads. */
     static final List<String> HISTOGRAMS =
-            List.of(
-                    Metric.Histograms.PUBLISH, Metric.Histograms.PUBLISH_DELAY, Metric.Histograms.END_TO_END);
+            Arrays.stream(Metric.values())
+                    .map(metric -> metric.histogram)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
 
     /** Where latency values come from. */
     enum LatencySource {
@@ -81,8 +82,8 @@ final class MetricExtractor {
             values.put(Metric.MAX_BACKLOG, (double) result.summary.maxBacklog());
         } else {
             // Version 1 files have no summary; derive it from the per-period series
-            values.put(Metric.PUBLISH_RATE, average(result.publishRate));
-            values.put(Metric.CONSUME_RATE, average(result.consumeRate));
+            values.put(Metric.PUBLISH_RATE, TestResult.average(result.publishRate));
+            values.put(Metric.CONSUME_RATE, TestResult.average(result.consumeRate));
             values.put(
                     Metric.MAX_BACKLOG,
                     (double) result.backlog.stream().mapToLong(Long::longValue).max().orElse(0));
@@ -91,15 +92,14 @@ final class MetricExtractor {
         Map<String, Histogram> decoded = new HashMap<>();
         for (Metric metric : Metric.values()) {
             String histogram = metric.histogram;
-            ToDoubleFunction<TestResult> aggregated = metric.aggregated;
-            if (histogram == null || aggregated == null) {
+            if (histogram == null) {
                 continue;
             }
             if (source == LatencySource.HISTOGRAMS) {
                 Histogram h = decoded.computeIfAbsent(histogram, key -> decode(run, key));
-                values.put(metric, millisAt(h, metric.percentile));
+                values.put(metric, TestResult.millisAt(h, metric.percentile));
             } else {
-                values.put(metric, aggregated.applyAsDouble(result));
+                values.put(metric, Objects.requireNonNull(metric.aggregated).applyAsDouble(result));
             }
         }
         return values;
@@ -120,21 +120,10 @@ final class MetricExtractor {
             throw new IllegalArgumentException(run.name() + " has no " + key + " histogram");
         }
         try {
-            return Histogram.decodeFromCompressedByteBuffer(
-                    ByteBuffer.wrap(Base64.getDecoder().decode(encoded)), Long.MIN_VALUE);
-        } catch (DataFormatException | RuntimeException e) {
+            return TestResult.decodeHistogram(encoded);
+        } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
                     run.name() + " has an invalid " + key + " histogram: " + e.getMessage(), e);
         }
-    }
-
-    // Histograms hold microseconds; latencies are compared in milliseconds
-    private static double millisAt(Histogram micros, double percentile) {
-        long value = percentile >= 100 ? micros.getMaxValue() : micros.getValueAtPercentile(percentile);
-        return value / 1000.0;
-    }
-
-    private static double average(List<Double> values) {
-        return values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
     }
 }

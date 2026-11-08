@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.tool.report;
 
 import io.openmessaging.benchmark.tool.report.Comparison.Row;
 import io.openmessaging.benchmark.tool.report.RunContext.SettingDifference;
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.Collection;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -32,7 +33,7 @@ final class JsonReport {
 
     private static final String BASELINE = "baseline";
     private static final String CANDIDATE = "candidate";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
 
     private JsonReport() {}
 
@@ -70,7 +71,7 @@ final class JsonReport {
 
         bencher(root.putObject(BASELINE), report, Row::baseline);
         bencher(root.putObject(CANDIDATE), report, Row::candidate);
-        return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        return ObjectMappers.DEFAULT.writer().writeValueAsString(root);
     }
 
     // Bencher Metric Format: per workload, one measure per metric id with value, lower_value and

@@ -92,7 +92,8 @@ mvn spotless:apply           # format sources and Markdown
 [Building the project](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/)
 covers the build profiles, Docker images (published to `docker.io/mihkels/open-messaging-benchmark`), the Testcontainers and Docker Compose regression suites,
 and known issues such as running the license check in a Git worktree. To contribute a change, see
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+[`CONTRIBUTING.md`](CONTRIBUTING.md). For help, see [`SUPPORT.md`](SUPPORT.md). Everyone taking part
+follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Repository layout
 

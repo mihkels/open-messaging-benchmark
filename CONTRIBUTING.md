@@ -32,6 +32,8 @@ below.
   [Discussions Ideas](https://github.com/mihkels/open-messaging-benchmark/discussions/categories/ideas).
 - Report security problems privately as described in [`SECURITY.md`](SECURITY.md), not in a public
   issue.
+- [`SUPPORT.md`](SUPPORT.md) lists where each kind of request goes.
+- Everyone taking part in this project follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 

@@ -16,6 +16,8 @@ package io.openmessaging.benchmark.worker;
 import io.javalin.config.JavalinConfig;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
+import io.javalin.http.HandlerType;
+import io.javalin.http.HttpStatus;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.utils.SecureTempFiles;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -27,6 +29,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +59,13 @@ public class WorkerHandler implements AutoCloseable {
     public static final String CUMULATIVE_LATENCIES = "/cumulative-latencies";
     public static final String COUNTERS_STATS = "/counters-stats";
     public static final String RESET_STATS = "/reset-stats";
+
+    // Browsers send text/plain, form and multipart POSTs cross-site without a CORS preflight, so
+    // accepting only these types stops a web page from driving a worker on localhost or the LAN
+    static final String JSON_CONTENT_TYPE = "application/json";
+    static final String YAML_CONTENT_TYPE = "application/yaml";
+    private static final Set<String> ACCEPTED_POST_TYPES =
+            Set.of(JSON_CONTENT_TYPE, YAML_CONTENT_TYPE);
     private final Worker worker;
 
     public WorkerHandler(PrometheusMeterRegistry statsLogger) {
@@ -84,6 +94,9 @@ public class WorkerHandler implements AutoCloseable {
                     log.error("Request {} {} failed", ctx.method(), ctx.path(), e);
                     ctx.status(500).result(describe(e));
                 });
+        // Applies to every POST, including routes that callers add after these, such as the
+        // driver process's /initialize-driver-local
+        routes.before(WorkerHandler::rejectUnsupportedPostTypes);
 
         routes.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
         routes.post(SET_RUN_ID, this::handleSetRunId);
@@ -105,6 +118,27 @@ public class WorkerHandler implements AutoCloseable {
     @Override
     public void close() throws Exception {
         worker.close();
+    }
+
+    static void rejectUnsupportedPostTypes(Context ctx) {
+        if (ctx.method() != HandlerType.POST) {
+            return;
+        }
+        String mediaType = mediaType(ctx.contentType());
+        if (mediaType == null || !ACCEPTED_POST_TYPES.contains(mediaType)) {
+            ctx.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                    .result("POST requests must use Content-Type application/json or application/yaml");
+            ctx.skipRemainingHandlers();
+        }
+    }
+
+    private static String mediaType(String contentType) {
+        if (contentType == null) {
+            return null;
+        }
+        int parameters = contentType.indexOf(';');
+        String mediaType = parameters < 0 ? contentType : contentType.substring(0, parameters);
+        return mediaType.strip().toLowerCase(Locale.ROOT);
     }
 
     private static String describe(Throwable e) {
@@ -143,7 +177,7 @@ public class WorkerHandler implements AutoCloseable {
     }
 
     private void handleSetRunId(Context ctx) {
-        worker.setRunId(ctx.body());
+        worker.setRunId(mapper.readValue(ctx.body(), String.class));
     }
 
     private void handleCreateTopics(Context ctx) {

@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker;
 import io.javalin.Javalin;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,6 +25,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Entry point of a driver process started by {@link ProcessWorker}. Runs a {@link LocalWorker} on
@@ -35,6 +37,7 @@ public final class DriverProcessMain {
 
     private static final Logger log = LoggerFactory.getLogger(DriverProcessMain.class);
     static final String INITIALIZE_DRIVER_LOCAL = "/initialize-driver-local";
+    private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
 
     private DriverProcessMain() {}
@@ -73,7 +76,8 @@ public final class DriverProcessMain {
                     handler.configure(config);
                     config.routes.get("/metrics", ctx -> ctx.result(registry.scrape()));
                     config.routes.post(
-                            INITIALIZE_DRIVER_LOCAL, ctx -> worker.initializeDriver(Path.of(ctx.body())));
+                            INITIALIZE_DRIVER_LOCAL,
+                            ctx -> worker.initializeDriver(Path.of(MAPPER.readValue(ctx.body(), String.class))));
                 });
         app.start("127.0.0.1", 0);
 

@@ -114,6 +114,13 @@ The coordinator uses these endpoints; they are not intended to be called by hand
 | GET    | `/period-stats`, `/cumulative-latencies`, `/counters-stats` | Statistics polled by the coordinator                          |
 | GET    | `/metrics`                                                  | Prometheus metrics; see [Monitoring](../guides/monitoring.md) |
 
+Every `POST` must send `Content-Type: application/json`, or `application/yaml` for
+`/initialize-driver`; parameters such as `; charset=utf-8` are allowed. Any other type, or none,
+gets `415 Unsupported Media Type`. Browsers can send `text/plain`, form and multipart requests to any
+host without a CORS preflight, so this stops a web page from driving a worker on `localhost` or the
+LAN. Workers and coordinators from before this check do not interoperate with newer ones: run the
+same version on all of them.
+
 The interface has no authentication. Run workers on a trusted network.
 
 ## bin/create_charts.py

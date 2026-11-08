@@ -340,6 +340,47 @@ class MqttBenchmarkProducerTest {
     }
 
     @Test
+    void interruptedCloseStillWaitsForTheActivePublicationAndRestoresTheInterrupt() throws Exception {
+        Mqtt5AsyncClient client = client();
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch closing = new CountDownLatch(1);
+        when(client.publish(any(Mqtt5Publish.class)))
+                .thenAnswer(invocation -> {
+                    publishing.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new AssertionError("publication was not released");
+                    }
+                    return new CompletableFuture<Mqtt5PublishResult>();
+                });
+        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
+        producer.setClient(client);
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            Future<CompletableFuture<Void>> send =
+                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
+            assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> close =
+                    workers.submit(() -> {
+                        Thread.currentThread().interrupt();
+                        closing.countDown();
+                        producer.close();
+                        return Thread.interrupted();
+                    });
+            assertThat(closing.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            release.countDown();
+            send.get(2, TimeUnit.SECONDS);
+            assertThat(close.get(2, TimeUnit.SECONDS)).isTrue();
+            verify(client, times(1)).disconnect();
+        } finally {
+            release.countDown();
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
     void concurrentCloseWaitsForDisconnectAndKeepsItsAsynchronousFailure() throws Exception {
         Mqtt5AsyncClient client = client();
         when(client.publish(any(Mqtt5Publish.class))).thenReturn(new CompletableFuture<>());

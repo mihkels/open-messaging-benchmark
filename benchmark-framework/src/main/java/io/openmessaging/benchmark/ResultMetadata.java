@@ -162,9 +162,9 @@ public record ResultMetadata(
             String revision =
                     new String(process.getInputStream().readAllBytes(), StandardCharsets.US_ASCII).trim();
             return process.exitValue() == 0 ? revision : UNKNOWN;
-        } catch (IOException e) {
+        } catch (IOException _) {
             return UNKNOWN;
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return UNKNOWN;
         }

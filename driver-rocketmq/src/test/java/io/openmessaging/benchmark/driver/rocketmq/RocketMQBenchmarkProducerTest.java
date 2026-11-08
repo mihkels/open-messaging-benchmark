@@ -203,6 +203,47 @@ class RocketMQBenchmarkProducerTest {
     }
 
     @Test
+    void interruptedCloseStillWaitsForTheActivePublicationAndRestoresTheInterrupt() throws Exception {
+        MQProducer client = mock(MQProducer.class);
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch closing = new CountDownLatch(1);
+        doAnswer(
+                        invocation -> {
+                            publishing.countDown();
+                            if (!release.await(5, TimeUnit.SECONDS)) {
+                                throw new AssertionError("publication was not released");
+                            }
+                            return null;
+                        })
+                .when(client)
+                .send(any(Message.class), any(SendCallback.class));
+        RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            Future<CompletableFuture<Void>> send =
+                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
+            assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> close =
+                    workers.submit(() -> {
+                        Thread.currentThread().interrupt();
+                        closing.countDown();
+                        producer.close();
+                        return Thread.interrupted();
+                    });
+            assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            release.countDown();
+            send.get(5, TimeUnit.SECONDS);
+            assertThat(close.get(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
     void asynchronousAcknowledgementCannotCloseWhileAnotherPublicationIsActive() throws Exception {
         MQProducer client = mock(MQProducer.class);
         AtomicInteger calls = new AtomicInteger();

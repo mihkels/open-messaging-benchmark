@@ -221,7 +221,7 @@ public final class DistributedWorkersEnsemble implements Worker {
         Failures failures = new Failures();
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException _) {
             // JVM shutdown is already in progress.
         } catch (Throwable t) {
             failures.add(t);

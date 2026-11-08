@@ -80,7 +80,28 @@ class DriverProcessTest {
                 .hasStackTraceContaining("exited with code 137");
     }
 
-    private static final class TimedOutProcess extends Process {
+    @Test
+    void awaitExitRestoresTheInterruptAndReportsWhetherTheProcessIsAlive() {
+        InterruptedProcess process = new InterruptedProcess();
+        DriverProcess driverProcess = new DriverProcess("fixture driver", process);
+
+        assertThat(driverProcess.awaitExit(Duration.ofSeconds(5))).isFalse();
+        assertThat(Thread.interrupted()).isTrue();
+    }
+
+    @Test
+    void stopOnShutdownKillsTheProcessWhenInterrupted() {
+        TimedOutProcess process = new InterruptedProcess();
+        DriverProcess driverProcess = new DriverProcess("fixture driver", process);
+
+        driverProcess.stopOnShutdown();
+
+        assertThat(Thread.interrupted()).isTrue();
+        assertThat(process.forceCalls).isEqualTo(1);
+        assertThat(process.isAlive()).isFalse();
+    }
+
+    private static class TimedOutProcess extends Process {
         private final AtomicInteger waitCalls = new AtomicInteger();
         private int destroyCalls;
         private int forceCalls;
@@ -107,7 +128,7 @@ class DriverProcessTest {
         }
 
         @Override
-        public boolean waitFor(long timeout, TimeUnit unit) {
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
             return waitCalls.incrementAndGet() == 3;
         }
 
@@ -139,6 +160,13 @@ class DriverProcessTest {
         @Override
         public long pid() {
             return 137;
+        }
+    }
+
+    private static final class InterruptedProcess extends TimedOutProcess {
+        @Override
+        public boolean waitFor(long timeout, TimeUnit unit) throws InterruptedException {
+            throw new InterruptedException("interrupted while waiting for the driver");
         }
     }
 }

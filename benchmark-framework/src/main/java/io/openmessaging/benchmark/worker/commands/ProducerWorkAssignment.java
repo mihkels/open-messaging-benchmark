@@ -79,11 +79,11 @@ public record ProducerWorkAssignment(
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ProducerWorkAssignment that
-                && Double.compare(publishRate, that.publishRate) == 0
-                && keyDistributorType == that.keyDistributorType
-                && PayloadTemplates.equals(payloadData, that.payloadData)
-                && Arrays.equals(payloadWeights, that.payloadWeights);
+        return other instanceof ProducerWorkAssignment(var data, var rate, var keyType, var weights)
+                && Double.compare(publishRate, rate) == 0
+                && keyDistributorType == keyType
+                && PayloadTemplates.equals(payloadData, data)
+                && Arrays.equals(payloadWeights, weights);
     }
 
     @Override

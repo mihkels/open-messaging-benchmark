@@ -101,6 +101,9 @@ public final class DriverProcessMain {
         supervisorMonitor.join();
     }
 
+    // DriverProcessMain is excluded from coverage, so renaming the unused catch variable would add
+    // a new line that can never be covered
+    @SuppressWarnings("java:S7467")
     private static void exitWhenSupervisorDisconnects() {
         try {
             // The supervisor never writes; EOF means it closed the pipe or died

@@ -413,7 +413,7 @@ public class ProcessWorker implements Worker {
         }
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException _) {
             // JVM is already shutting down
         } catch (Throwable t) {
             failures.add(t);

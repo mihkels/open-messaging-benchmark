@@ -40,6 +40,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceNames;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.mqtt5.client.MqttConfig;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -55,13 +56,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectWriter;
 
 public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkDriver.class);
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Pattern server_uri_pattern =
             Pattern.compile("(?:[^:]*+://)?+([^:]++)(?::(\\w++))?+");
     public static final MqttUtf8String USER_PROPERTY_KEY_PUBLISH_TIMESTAMP =
@@ -81,8 +79,13 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         this.config = readConfig(configurationFile);
         log.atInfo()
                 .setMessage("MqttBenchmarkDriver configuration: {}")
-                .addArgument(() -> writer.writeValueAsString(config))
+                .addArgument(this::configurationForLog)
                 .log();
+    }
+
+    // The configuration as logged at startup, with credentials masked.
+    String configurationForLog() {
+        return SecretRedaction.redactedJson(config);
     }
 
     @Override

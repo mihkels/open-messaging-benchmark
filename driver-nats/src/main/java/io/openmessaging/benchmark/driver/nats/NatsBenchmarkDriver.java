@@ -32,6 +32,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -51,7 +52,10 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = DriverConfigs.read(configurationFile, NatsConfig.class);
-        log.info("read config file: {}", config);
+        log.atInfo()
+                .setMessage("NATS driver configuration: {}")
+                .addArgument(() -> SecretRedaction.redactedJson(config))
+                .log();
         try {
             this.connection =
                     Nats.connect(

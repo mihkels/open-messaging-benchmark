@@ -23,6 +23,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -57,7 +58,10 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         if (config.nsqdHttpPort < 1 || config.nsqdHttpPort > 65535) {
             throw new IllegalArgumentException("nsqdHttpPort must be between 1 and 65535");
         }
-        log.info("read config file, {}", config);
+        log.atInfo()
+                .setMessage("NSQ driver configuration: {}")
+                .addArgument(() -> SecretRedaction.redactedJson(config))
+                .log();
     }
 
     @Override

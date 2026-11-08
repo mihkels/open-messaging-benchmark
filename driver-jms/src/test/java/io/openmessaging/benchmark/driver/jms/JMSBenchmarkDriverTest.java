@@ -298,6 +298,52 @@ public class JMSBenchmarkDriverTest {
     }
 
     @Test
+    void connectionFactoryOfAnotherTypeIsRejectedBeforeItIsConstructed() {
+        NotAFactory.instances.set(0);
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        IOException failure =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                driver.initialize(
+                                        resource("/jms-not-a-factory-test.yaml"), new SimpleMeterRegistry()));
+
+        IllegalArgumentException cause =
+                assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+        assertEquals(
+                "Class "
+                        + NotAFactory.class.getName()
+                        + " configured as a javax.jms.ConnectionFactory does not implement it",
+                cause.getMessage());
+        assertEquals(0, NotAFactory.instances.get());
+    }
+
+    @Test
+    void adminDelegateOfAnotherTypeIsRejectedBeforeItIsConstructed() {
+        NotAFactory.instances.set(0);
+        JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
+
+        IOException failure =
+                assertThrows(
+                        IOException.class,
+                        () ->
+                                driver.initialize(
+                                        resource("/jms-not-a-delegate-test.yaml"), new SimpleMeterRegistry()));
+
+        IllegalArgumentException cause =
+                assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+        assertEquals(
+                "Class "
+                        + NotAFactory.class.getName()
+                        + " configured as a "
+                        + BenchmarkDriver.class.getName()
+                        + " does not implement it",
+                cause.getMessage());
+        assertEquals(0, NotAFactory.instances.get());
+    }
+
+    @Test
     void initializationCleanupFailureIsSuppressedIntoTheCause() {
         JMSException cause = new JMSException("start");
         JMSException closeFailure = new JMSException("close");
@@ -562,6 +608,19 @@ public class JMSBenchmarkDriverTest {
         @Override
         public Connection createConnection() {
             return proxy(Connection.class, (method, args) -> null);
+        }
+    }
+
+    /** Has both constructors the driver tries, but is neither a factory nor a driver. */
+    public static final class NotAFactory {
+        private static final AtomicInteger instances = new AtomicInteger();
+
+        public NotAFactory() {
+            instances.incrementAndGet();
+        }
+
+        public NotAFactory(String ignored) {
+            this();
         }
     }
 

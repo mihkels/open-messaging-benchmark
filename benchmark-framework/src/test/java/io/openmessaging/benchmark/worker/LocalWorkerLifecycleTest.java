@@ -968,6 +968,39 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    void rejectsADriverClassThatIsNotABenchmarkDriverBeforeInstantiatingIt() throws Exception {
+        Path notADriver =
+                Files.writeString(
+                        directory.resolve("not-a-driver.yaml"),
+                        "driverClass: " + NotADriver.class.getName() + "\n");
+        NotADriver.instances.set(0);
+        try (LocalWorker worker =
+                new LocalWorker(
+                        new PrometheusMeterRegistry(PrometheusConfig.DEFAULT),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(2))) {
+            assertThatThrownBy(() -> worker.initializeDriver(notADriver))
+                    .hasMessageContaining(
+                            NotADriver.class.getName()
+                                    + " configured as a "
+                                    + BenchmarkDriver.class.getName()
+                                    + " does not implement it");
+            worker.stopAll();
+            assertThat(NotADriver.instances).hasValue(0);
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+        }
+    }
+
+    /** Counts instances so the test can prove the worker never constructs it. */
+    static final class NotADriver {
+        static final AtomicInteger instances = new AtomicInteger();
+
+        NotADriver() {
+            instances.incrementAndGet();
+        }
+    }
+
+    @Test
     void rejectsInitializationWhileADriverIsActiveOrAfterClose() throws Exception {
         LocalWorker worker = worker(new Scenario(List.of()), Duration.ofSeconds(2));
         Scenario second = new Scenario(List.of());

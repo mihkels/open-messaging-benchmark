@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Discovers driver plugin bundles and maps driver classes to the bundles that provide them.
@@ -232,7 +233,7 @@ public final class PluginRegistry {
      * @param driverConfig the parsed driver configuration
      * @return the bundles to load, primary bundle first
      */
-    public ResolvedDriver resolve(String driverClass, Map<String, Object> driverConfig) {
+    public ResolvedDriver resolve(String driverClass, @Nullable Map<String, Object> driverConfig) {
         failOnDriverErrors(driverClass);
         PluginBundle primary = byDriverClass.get(driverClass);
         if (primary == null) {
@@ -259,7 +260,7 @@ public final class PluginRegistry {
      * @return the bundles to load, primary bundle first
      */
     public ResolvedDriver resolveOverride(
-            String driverClass, Map<String, Object> driverConfig, Path location) {
+            String driverClass, @Nullable Map<String, Object> driverConfig, Path location) {
         PluginBundle primary = legacyBundle(driverClass, location);
         List<PluginBundle> result = new ArrayList<>(List.of(primary));
         for (PluginBundle referenced : withReferences(primary, driverConfig)) {
@@ -270,7 +271,8 @@ public final class PluginRegistry {
         return new ResolvedDriver(driverClass, result);
     }
 
-    private List<PluginBundle> withReferences(PluginBundle primary, Map<String, Object> config) {
+    private List<PluginBundle> withReferences(
+            PluginBundle primary, @Nullable Map<String, Object> config) {
         List<PluginBundle> result = new ArrayList<>();
         result.add(primary);
         for (int i = 0; i < result.size(); i++) {

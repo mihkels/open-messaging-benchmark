@@ -203,8 +203,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
 
         private void completed(Attempt attempt, @Nullable C resource, @Nullable Throwable error) {
             Throwable cause = failureCause(resource, error);
-            // failureCause reports a null resource as a failure, so resource is set here
-            if (cause == null && resource != null) {
+            if (cause == null) {
                 succeeded.incrementAndGet();
                 batch.succeed(attempt.index, resource);
             }

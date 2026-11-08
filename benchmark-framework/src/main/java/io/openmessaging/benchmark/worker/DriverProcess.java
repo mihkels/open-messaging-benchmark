@@ -50,7 +50,7 @@ final class DriverProcess {
 
     // Places the driver log next to the supervisor log, so a supervisor started with a log directory
     // (OMB_LOG_DIR) does not make the driver write into a read-only working directory.
-    static String driverLogName(String supervisorLogName) {
+    static String driverLogName(@Nullable String supervisorLogName) {
         if (supervisorLogName == null) {
             return DRIVER_LOG_NAME;
         }

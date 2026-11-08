@@ -133,7 +133,10 @@ class ProcessWorkerTest {
     @Test
     void runsEachDriverInItsOwnProcessWithItsOwnLibraries() throws Exception {
         try (ProcessWorker worker = newWorker()) {
+            // A run id set before a driver process exists is passed to the next one that starts
+            worker.setRunId("run-before-start");
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            worker.setRunId("run-alpha");
             long alphaPid = worker.pid();
             assertThat(worker.createTopics(new TopicsInfo(1, 1)))
                     .singleElement()

@@ -14,11 +14,9 @@
 package io.openmessaging.benchmark.worker.commands;
 
 public class TopicSubscription {
-    public String topic;
-    public String subscription;
+    public String topic = "";
+    public String subscription = "";
 
-    // Jackson fills the fields
-    @SuppressWarnings("NullAway.Init")
     public TopicSubscription() {}
 
     public TopicSubscription(String topic, String subscription) {

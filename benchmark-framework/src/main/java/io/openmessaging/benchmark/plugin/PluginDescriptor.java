@@ -135,7 +135,7 @@ public record PluginDescriptor(
         }
     }
 
-    private static void validateEntry(String field, String entry, List<String> errors) {
+    private static void validateEntry(String field, @Nullable String entry, List<String> errors) {
         if (entry == null || entry.isBlank()) {
             errors.add(field + " must not contain blank entries");
             return;

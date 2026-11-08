@@ -87,7 +87,7 @@ final class RunCallbacks implements ConsumerCallback {
         }
     }
 
-    void completeProbe(Throwable failure) {
+    void completeProbe(@Nullable Throwable failure) {
         try {
             gate.readLock().lock();
             try {

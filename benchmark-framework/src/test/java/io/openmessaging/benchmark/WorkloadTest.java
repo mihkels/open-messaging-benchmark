@@ -73,6 +73,18 @@ class WorkloadTest {
     }
 
     @Test
+    void aSizeDistributionDeterminesTheEffectiveMessageSize() {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.messageSizeDistribution = Map.of("0-100", 1, "100-200", 1);
+
+        workload.validate();
+
+        // (50 * 1 + 150 * 1) / 2 = 100
+        assertThat(workload.effectiveMessageSize()).isEqualTo(100);
+    }
+
+    @Test
     void rejectsAnInvalidSizeDistribution() {
         Workload workload = new Workload();
         workload.messageSizeDistribution = Map.of("not-a-range", 1);
@@ -96,7 +108,9 @@ class WorkloadTest {
         Path file = dir.resolve("unnamed.yaml");
         Files.writeString(file, "topics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
 
-        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())))
+        List<String> paths = List.of(file.toString());
+
+        assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid workload " + file + ": name is required");
     }

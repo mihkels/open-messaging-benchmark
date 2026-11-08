@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.utils;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 public final class ListPartition {
 
@@ -28,7 +29,7 @@ public final class ListPartition {
      * @param <T> the element type
      * @return the partitioned list
      */
-    public static <T> List<List<T>> partitionList(List<T> originList, int size) {
+    public static <T> List<List<T>> partitionList(@Nullable List<T> originList, int size) {
 
         List<List<T>> resultList = new ArrayList<>();
         if (null == originList || originList.isEmpty() || size <= 0) {

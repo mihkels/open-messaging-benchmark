@@ -63,6 +63,7 @@ public class ProcessWorker implements Worker {
     public static final String STARTUP_TIMEOUT_PROPERTY = "omb.driver.startupTimeoutSeconds";
 
     private static final Duration CRASH_DETECTION_TIMEOUT = Duration.ofSeconds(2);
+    private static final String DRIVER_CLASS = "driverClass";
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
 
@@ -118,7 +119,7 @@ public class ProcessWorker implements Worker {
 
         Map<String, Object> config = readDriverConfig(driverConfigFile);
         // readDriverConfig rejects a configuration without a driverClass
-        Object driverClass = Objects.requireNonNull(config.get("driverClass"), "driverClass");
+        Object driverClass = Objects.requireNonNull(config.get(DRIVER_CLASS), DRIVER_CLASS);
 
         PluginRegistry plugins = registry.get();
         plugins.errors().forEach(error -> log.warn("Invalid driver plugin: {}", error));
@@ -172,7 +173,7 @@ public class ProcessWorker implements Worker {
             throw new IllegalArgumentException(
                     "Cannot read driver configuration " + driverConfigFile + ": " + e.getMessage(), e);
         }
-        Object driverClass = config == null ? null : config.get("driverClass");
+        Object driverClass = config == null ? null : config.get(DRIVER_CLASS);
         if (driverClass == null || driverClass.toString().isBlank()) {
             throw new IllegalArgumentException(
                     "Driver configuration " + driverConfigFile + " must specify a driverClass");

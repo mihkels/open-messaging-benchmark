@@ -67,11 +67,9 @@ public class Thresholds {
     public static final class Result {
         private static final Logger log = LoggerFactory.getLogger(Result.class);
 
-        public String status;
-        public Map<String, Check> checks;
+        public String status = "";
+        public Map<String, Check> checks = Map.of();
 
-        // Jackson fills the fields
-        @SuppressWarnings("NullAway.Init")
         public Result() {}
 
         Result(Map<String, Check> checks) {
@@ -94,10 +92,8 @@ public class Thresholds {
     public static final class Check {
         public double limit;
         public double observed;
-        public String status;
+        public String status = "";
 
-        // Jackson fills the fields
-        @SuppressWarnings("NullAway.Init")
         public Check() {}
 
         Check(double limit, double observed, boolean passed) {

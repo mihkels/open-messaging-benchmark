@@ -70,7 +70,7 @@ public final class Failures {
      *
      * @param resource the resource to close
      */
-    public void close(AutoCloseable resource) {
+    public void close(@Nullable AutoCloseable resource) {
         if (resource == null) {
             return;
         }

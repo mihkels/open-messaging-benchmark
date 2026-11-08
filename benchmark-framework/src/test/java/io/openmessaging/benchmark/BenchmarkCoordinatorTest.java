@@ -230,6 +230,26 @@ class BenchmarkCoordinatorTest {
         verify(worker).close();
     }
 
+    @Test
+    void driverConfigurationWithoutANameFailsTheRunWithTheMissingKey() throws Exception {
+        Path unnamed = directory.resolve("unnamed.yaml");
+        Files.writeString(unnamed, "driverClass: fixture.Driver\n");
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        arguments.drivers = List.of(unnamed.toString());
+        arguments.output = directory.resolve("result.json").toString();
+        Worker worker = mock(Worker.class);
+        WorkloadRun run = mock(WorkloadRun.class);
+        Map<String, Workload> workloads = Map.of("workload", workload("workload"));
+
+        assertThatThrownBy(
+                        () -> Benchmark.runWorkloads(arguments, workloads, worker, (d, w, selected) -> run))
+                .isInstanceOf(IllegalStateException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("Driver configuration " + unnamed + " must specify a name");
+        verify(run, never()).run();
+        verify(worker).close();
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void initialStopFailureOnlyAllowsRunsWhenWorkerCanBeSafelyReused(boolean reusable)

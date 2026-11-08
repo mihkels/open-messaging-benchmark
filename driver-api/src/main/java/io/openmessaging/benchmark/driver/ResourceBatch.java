@@ -150,7 +150,7 @@ final class ResourceBatch<C extends AutoCloseable> {
         }
     }
 
-    void succeed(int index, C resource) {
+    void succeed(int index, @Nullable C resource) {
         if (resource == null) {
             fail(new NullPointerException("creation completed with a null resource"));
             return;

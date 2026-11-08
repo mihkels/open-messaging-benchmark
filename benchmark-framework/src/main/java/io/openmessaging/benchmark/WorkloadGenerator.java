@@ -485,7 +485,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                 result.recordAggregate(aggregate);
                 var counters = worker.getCountersStats();
                 result.recordSummary(
-                        counters == null ? new CountersStats() : counters,
+                        counters,
                         targetPublishRate,
                         result.backlog.stream().mapToLong(Long::longValue).max().orElse(0));
                 if (includeHistograms) {

@@ -963,24 +963,24 @@ public final class LocalWorker implements Worker {
             }
         }
 
-        // Takes ownership of the producer and consumer handles and the driver away from this run.
-        // Returns the handles, and the driver if one was attached.
         private BenchmarkDriver requireDriver() {
-            BenchmarkDriver initialized = driver;
-            if (initialized == null) {
+            BenchmarkDriver attached = driver;
+            if (attached == null) {
                 throw new IllegalStateException("No driver is initialized");
             }
-            return initialized;
+            return attached;
         }
 
         private MessageProducer requireMessageProducer() {
-            MessageProducer initialized = messageProducer;
-            if (initialized == null) {
+            MessageProducer producer = messageProducer;
+            if (producer == null) {
                 throw new IllegalStateException("No message producer is initialized");
             }
-            return initialized;
+            return producer;
         }
 
+        // Takes ownership of the producer and consumer handles and the driver away from this run.
+        // Returns the handles, and the driver if one was attached.
         private Detached detach() {
             synchronized (monitor) {
                 List<AutoCloseable> handles = new ArrayList<>(producers);

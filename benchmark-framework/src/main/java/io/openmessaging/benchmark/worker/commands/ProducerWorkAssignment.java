@@ -44,7 +44,7 @@ public record ProducerWorkAssignment(
     }
 
     public ProducerWorkAssignment(
-            List<byte[]> payloadData,
+            @Nullable List<byte[]> payloadData,
             double publishRate,
             KeyDistributorType keyDistributorType,
             int @Nullable [] payloadWeights) {

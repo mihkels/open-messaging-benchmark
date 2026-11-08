@@ -25,6 +25,7 @@ import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A Javalin {@code before} handler that answers 401 to any request without a matching {@code
@@ -67,7 +68,7 @@ public final class BearerTokenAuth implements Handler {
         ctx.skipRemainingHandlers();
     }
 
-    boolean matches(String authorization) {
+    boolean matches(@Nullable String authorization) {
         if (authorization == null
                 || authorization.length() < BEARER_PREFIX.length()
                 || !authorization.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
@@ -88,7 +89,8 @@ public final class BearerTokenAuth implements Handler {
      * @throws IllegalArgumentException when {@code tokenFile} is given but blank
      * @throws UncheckedIOException when {@code tokenFile} cannot be read
      */
-    public static Optional<String> resolveToken(Map<String, String> environment, Path tokenFile) {
+    public static Optional<String> resolveToken(
+            Map<String, String> environment, @Nullable Path tokenFile) {
         if (tokenFile != null) {
             String token;
             try {

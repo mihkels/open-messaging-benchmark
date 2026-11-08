@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -89,5 +90,18 @@ class PayloadFactoryTest {
                         new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 3}), new int[] {5}))
                 .isNotEqualTo(new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), null))
                 .hasToString("Payloads[data=1 templates, sizes [2], weights=[5]]");
+    }
+
+    @Test
+    void aFileBasedWorkloadWithoutAPayloadFileFailsWithTheMissingKey() {
+        Workload workload = new Workload();
+        workload.name = "no-payload";
+        workload.messageSize = 10;
+
+        assertThatThrownBy(() -> PayloadFactory.create(workload))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(
+                        "Workload no-payload must set payloadFile, useRandomizedPayloads or"
+                                + " messageSizeDistribution");
     }
 }

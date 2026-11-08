@@ -65,12 +65,12 @@ public class PravegaBenchmarkProducer implements BenchmarkProducer {
             }
         }
 
-        write.whenComplete((unused, error) -> pending.completeFromClient(result, error));
+        write.whenComplete((_, error) -> pending.completeFromClient(result, error));
         return result;
     }
 
     private CompletableFuture<Void> writeEvent(Optional<String> key, ByteBuffer payload) {
-        return (key.isPresent()) ? writer.writeEvent(key.get(), payload) : writer.writeEvent(payload);
+        return key.isPresent() ? writer.writeEvent(key.get(), payload) : writer.writeEvent(payload);
     }
 
     @Override

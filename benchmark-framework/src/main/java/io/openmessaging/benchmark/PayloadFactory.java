@@ -19,8 +19,10 @@ import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +41,7 @@ final class PayloadFactory {
      * @param data the payload templates
      * @param weights the weight of each template, or {@code null} to pick them uniformly
      */
-    record Payloads(List<byte[]> data, int[] weights) {
+    record Payloads(List<byte[]> data, int @Nullable [] weights) {
 
         @Override
         public boolean equals(Object other) {
@@ -67,9 +69,9 @@ final class PayloadFactory {
 
     static Payloads create(Workload workload) {
         Random random = ThreadLocalRandom.current();
-        if (workload.usesMessageSizeDistribution()) {
-            MessageSizeDistribution distribution =
-                    new MessageSizeDistribution(workload.messageSizeDistribution);
+        Map<String, Integer> sizes = workload.messageSizeDistribution;
+        if (sizes != null && !sizes.isEmpty()) {
+            MessageSizeDistribution distribution = new MessageSizeDistribution(sizes);
             List<byte[]> payloads = new ArrayList<>();
             for (int size : distribution.getBucketSizes()) {
                 payloads.add(
@@ -92,8 +94,16 @@ final class PayloadFactory {
             }
             return new Payloads(payloads, null);
         }
+        String payloadFile = workload.payloadFile;
+        if (payloadFile == null) {
+            throw new IllegalArgumentException(
+                    "Workload "
+                            + workload.name
+                            + " must set payloadFile, useRandomizedPayloads or"
+                            + " messageSizeDistribution");
+        }
         return new Payloads(
-                List.of(new FilePayloadReader(workload.messageSize).load(workload.payloadFile)), null);
+                List.of(new FilePayloadReader(workload.messageSize).load(payloadFile)), null);
     }
 
     // A payload whose first randomBytesRatio share is random and whose remainder is zero

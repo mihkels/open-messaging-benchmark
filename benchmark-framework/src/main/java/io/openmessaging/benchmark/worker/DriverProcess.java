@@ -24,12 +24,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +51,7 @@ final class DriverProcess {
 
     // Places the driver log next to the supervisor log, so a supervisor started with a log directory
     // (OMB_LOG_DIR) does not make the driver write into a read-only working directory.
-    static String driverLogName(String supervisorLogName) {
+    static String driverLogName(@Nullable String supervisorLogName) {
         if (supervisorLogName == null) {
             return DRIVER_LOG_NAME;
         }
@@ -58,14 +60,14 @@ final class DriverProcess {
     }
 
     private final String description;
-    private volatile Path workDir;
+    private volatile @Nullable Path workDir;
     // Never cleared once set, so that a call failing during a concurrent stop can still report the
     // exit; processStopped records that the process no longer needs stopping.
-    private volatile Process process;
+    private volatile @Nullable Process process;
     private volatile boolean processStopped;
-    private volatile String endpoint;
-    private volatile HttpWorkerClient client;
-    private volatile String token;
+    private volatile @Nullable String endpoint;
+    private volatile @Nullable HttpWorkerClient client;
+    private volatile @Nullable String token;
     private volatile boolean crashReported;
 
     DriverProcess(String description) {
@@ -78,7 +80,7 @@ final class DriverProcess {
     }
 
     // The process, unless it has been stopped
-    private Process owned() {
+    private @Nullable Process owned() {
         return processStopped ? null : process;
     }
 
@@ -103,8 +105,9 @@ final class DriverProcess {
         // The token reaches the child through the owner-only work directory, never argv or the
         // environment, which other local users can read; the child deletes the file once read
         Path tokenFile = SecureTempFiles.createFile(workDir.resolve(DriverProcessServer.TOKEN_FILE));
-        token = DriverProcessServer.newToken();
-        Files.writeString(tokenFile, token, StandardCharsets.US_ASCII);
+        String newToken = DriverProcessServer.newToken();
+        token = newToken;
+        Files.writeString(tokenFile, newToken, StandardCharsets.US_ASCII);
 
         List<String> jvmArgs = new ArrayList<>();
         for (String property : FORWARDED_PROPERTIES) {
@@ -167,7 +170,7 @@ final class DriverProcess {
         }
         int port = Integer.parseInt(Files.readString(portFile, StandardCharsets.US_ASCII).trim());
         endpoint = "http://127.0.0.1:" + port;
-        client = new HttpWorkerClient(endpoint, token);
+        client = new HttpWorkerClient(endpoint, newToken);
         log.info("Driver process pid {} is serving {} on {}", started.pid(), description, endpoint);
     }
 
@@ -175,7 +178,7 @@ final class DriverProcess {
         return Long.getLong(ProcessWorker.STARTUP_TIMEOUT_PROPERTY, 120);
     }
 
-    HttpWorkerClient client() {
+    @Nullable HttpWorkerClient client() {
         return client;
     }
 
@@ -184,7 +187,7 @@ final class DriverProcess {
      *
      * @return the token, or {@code null} before {@link #start}
      */
-    String token() {
+    @Nullable String token() {
         return token;
     }
 
@@ -196,14 +199,15 @@ final class DriverProcess {
      * @throws IOException if the configuration does not exist or cannot be authorized
      */
     void authorizeConfig(Path driverConfigFile) throws IOException {
-        DriverProcessServer.authorizeConfig(workDir, driverConfigFile);
+        DriverProcessServer.authorizeConfig(
+                Objects.requireNonNull(workDir, "driver work directory after start"), driverConfigFile);
     }
 
-    String endpoint() {
+    @Nullable String endpoint() {
         return endpoint;
     }
 
-    Long pid() {
+    @Nullable Long pid() {
         Process current = owned();
         return current == null ? null : current.pid();
     }
@@ -226,6 +230,9 @@ final class DriverProcess {
      */
     boolean awaitExit(Duration timeout) {
         Process current = process;
+        if (current == null) {
+            return false;
+        }
         try {
             return current.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException _) {
@@ -240,10 +247,12 @@ final class DriverProcess {
      * @param cause the failure that revealed the crash, or {@code null}
      * @return the failure to throw
      */
-    IllegalStateException crashed(Throwable cause) {
+    IllegalStateException crashed(@Nullable Throwable cause) {
         crashReported = true;
+        Process current = process;
+        String exitCode = current == null ? "unknown" : String.valueOf(current.exitValue());
         return new IllegalStateException(
-                "Driver process for " + description + " exited with code " + process.exitValue(), cause);
+                "Driver process for " + description + " exited with code " + exitCode, cause);
     }
 
     boolean crashReported() {
@@ -256,8 +265,9 @@ final class DriverProcess {
             cause = cause.getCause();
         }
         String message = cause.getMessage() == null ? cause.toString() : cause.getMessage();
-        if (hasExited()) {
-            message += " (driver process exited with code " + process.exitValue() + ")";
+        Process current = process;
+        if (current != null && !current.isAlive()) {
+            message += " (driver process exited with code " + current.exitValue() + ")";
         }
         return message;
     }
@@ -293,9 +303,10 @@ final class DriverProcess {
             stopProcess(closing, failures);
         }
         endpoint = null;
-        if (workDir != null && owned() == null) {
+        Path directory = workDir;
+        if (directory != null && owned() == null) {
             try {
-                deleteWorkDir(workDir);
+                deleteWorkDir(directory);
                 workDir = null;
             } catch (IOException e) {
                 failures.add(e);

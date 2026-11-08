@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -53,7 +54,7 @@ public final class Benchmark {
         @Parameter(
                 names = {"-c", "--csv"},
                 description = "Print results from this directory to a csv file")
-        String resultsDir;
+        @Nullable String resultsDir;
 
         @Parameter(
                 names = {"-h", "--help"},
@@ -64,17 +65,17 @@ public final class Benchmark {
         @Parameter(
                 names = {"-d", "--drivers"},
                 description = "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml")
-        public List<String> drivers;
+        public @Nullable List<String> drivers;
 
         @Parameter(
                 names = {"-w", "--workers"},
                 description = "List of worker nodes. eg: http://1.2.3.4:8080,http://4.5.6.7:8080")
-        public List<String> workers;
+        public @Nullable List<String> workers;
 
         @Parameter(
                 names = {"-wf", "--workers-file"},
                 description = "Path to a YAML file containing the list of workers addresses")
-        public File workersFile;
+        public @Nullable File workersFile;
 
         @Parameter(
                 names = "--worker-token-file",
@@ -82,7 +83,7 @@ public final class Benchmark {
                         "File holding the bearer token sent to remote workers; overrides the "
                                 + BearerTokenAuth.TOKEN_ENV
                                 + " environment variable")
-        public Path workerTokenFile;
+        public @Nullable Path workerTokenFile;
 
         @Parameter(
                 names = {"-x", "--extra"},
@@ -95,16 +96,16 @@ public final class Benchmark {
                         "Load the driver from this plugin bundle directory, unpackaged driver module"
                                 + " directory or jar instead of the installed plugin bundles (local runs only)."
                                 + " --legacy-driver-name is a deprecated alias")
-        public String driverLocation;
+        public @Nullable String driverLocation;
 
         @Parameter(description = "Workloads")
-        public List<String> workloads;
+        public @Nullable List<String> workloads;
 
         @Parameter(
                 names = {"-o", "--output"},
                 description = "Output",
                 required = false)
-        public String output;
+        public @Nullable String output;
 
         @Parameter(
                 names = "--include-histograms",
@@ -126,7 +127,8 @@ public final class Benchmark {
             log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
         }
 
-        Map<String, Workload> workloads = readWorkloads(arguments.workloads);
+        Map<String, Workload> workloads =
+                readWorkloads(Objects.requireNonNull(arguments.workloads, "workloads"));
         if (log.isInfoEnabled()) {
             log.info("Workloads: {}", writer.writeValueAsString(workloads));
         }
@@ -176,7 +178,7 @@ public final class Benchmark {
         return arguments;
     }
 
-    private static void exitWithUsage(JCommander jc, String message) {
+    private static void exitWithUsage(JCommander jc, @Nullable String message) {
         log.error(message);
         jc.usage();
         System.exit(-1);
@@ -200,7 +202,7 @@ public final class Benchmark {
     }
 
     // Workloads keyed and ordered by file name without extension
-    private static Map<String, Workload> readWorkloads(List<String> paths) {
+    static Map<String, Workload> readWorkloads(List<String> paths) {
         Map<String, Workload> workloads = new TreeMap<>();
         for (String path : paths) {
             File file = new File(path);
@@ -208,6 +210,9 @@ public final class Benchmark {
 
             Workload workload = workloadReader.readValue(file);
             try {
+                if (workload.name == null || workload.name.isBlank()) {
+                    throw new IllegalArgumentException("name is required");
+                }
                 workload.validate();
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid workload " + path + ": " + e.getMessage(), e);
@@ -258,7 +263,8 @@ public final class Benchmark {
             failures = initialStop.failure();
             boolean safeToContinue = initialStop.safeToContinue();
 
-            for (Combination combination : combinations(workloads, arguments.drivers)) {
+            List<String> drivers = Objects.requireNonNull(arguments.drivers, "--drivers");
+            for (Combination combination : combinations(workloads, drivers)) {
                 if (!safeToContinue) {
                     log.error("Skipping remaining workloads because worker cleanup failed");
                     break;
@@ -302,7 +308,7 @@ public final class Benchmark {
     }
 
     @SuppressWarnings("java:S1181")
-    private static Throwable closeWorker(Worker worker, Throwable failures) {
+    private static @Nullable Throwable closeWorker(Worker worker, @Nullable Throwable failures) {
         try {
             worker.close();
             return failures;
@@ -328,7 +334,8 @@ public final class Benchmark {
      * @param safeToContinue whether the worker can run the next combination
      * @param thresholdFailed whether the run completed but failed an SLO threshold
      */
-    private record Outcome(Throwable failure, boolean safeToContinue, boolean thresholdFailed) {}
+    private record Outcome(
+            @Nullable Throwable failure, boolean safeToContinue, boolean thresholdFailed) {}
 
     // Workloads in name order, each with every driver in the order given
     private static List<Combination> combinations(
@@ -344,7 +351,7 @@ public final class Benchmark {
     @SuppressWarnings("java:S1181")
     private static Outcome runOne(
             Combination combination,
-            String output,
+            @Nullable String output,
             boolean includeHistograms,
             Worker worker,
             GeneratorFactory generatorFactory) {
@@ -358,17 +365,20 @@ public final class Benchmark {
                     driverConfigReader.readValue(new File(combination.driverConfig()));
             DriverConfiguration driverConfiguration =
                     driverConfigurationReader.readValue(new File(combination.driverConfig()));
+            String driverName = driverConfiguration.name;
+            if (driverName == null || driverName.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Driver configuration " + combination.driverConfig() + " must specify a name");
+            }
             String runId = RunId.create();
             Instant startedAt = Instant.now();
             worker.setRunId(runId);
             log.info(
                     "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                     workload.name,
-                    driverConfiguration.name);
+                    driverName);
             worker.initializeDriver(Path.of(combination.driverConfig()));
-            generator =
-                    Objects.requireNonNull(
-                            generatorFactory.create(driverConfiguration.name, workload, worker));
+            generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
             generator.includeHistograms(includeHistograms);
             TestResult result = generator.run();
             result.schemaVersion = 2;
@@ -387,10 +397,7 @@ public final class Benchmark {
             }
             String fileName =
                     resultFileName(
-                            output,
-                            combination.workloadFileName(),
-                            driverConfiguration.name,
-                            System.getenv(RESULTS_DIR_ENV));
+                            output, combination.workloadFileName(), driverName, System.getenv(RESULTS_DIR_ENV));
             log.info("Writing test result into {}", fileName);
             writer.writeValue(new File(fileName), result);
         } catch (Throwable e) {
@@ -426,7 +433,10 @@ public final class Benchmark {
     // The explicit output file, or a generated name in the results directory. Without a results
     // directory the generated name is relative to the working directory.
     static String resultFileName(
-            String output, String workloadFileName, String driverName, String resultsDirectory) {
+            @Nullable String output,
+            String workloadFileName,
+            String driverName,
+            @Nullable String resultsDirectory) {
         if (output != null && !output.isEmpty()) {
             return output;
         }
@@ -445,7 +455,7 @@ public final class Benchmark {
 
     @SuppressWarnings("java:S1181")
     private static boolean canContinueAfterFailure(
-            Worker worker, WorkloadRun generator, Throwable failure) {
+            Worker worker, @Nullable WorkloadRun generator, Throwable failure) {
         if (failure instanceof Error) {
             return false;
         }

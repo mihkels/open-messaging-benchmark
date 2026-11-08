@@ -61,6 +61,7 @@ public final class DriverProcessMain {
         if (portFile == null || tokenFile == null) {
             System.err.println("Usage: DriverProcessMain --port-file <file> --token-file <file>");
             System.exit(2);
+            return;
         }
         String token = DriverProcessServer.readToken(tokenFile);
         // The supervisor's work directory, which holds the port file

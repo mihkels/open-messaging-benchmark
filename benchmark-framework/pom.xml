@@ -99,6 +99,11 @@
             <artifactId>jcommander</artifactId>
         </dependency>
         <dependency>
+            <!-- Nullness annotations checked by NullAway at compile time -->
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.github.stefanbirkner</groupId>
             <artifactId>system-lambda</artifactId>
             <version>1.2.1</version>

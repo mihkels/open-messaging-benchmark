@@ -125,7 +125,7 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
                                     throw new CompletionException(e);
                                 }
                             })
-                    .whenComplete((unused, failure) -> {
+                    .whenComplete((_, failure) -> {
                         if (failure != null) {
                             future.completeExceptionally(failure);
                         }

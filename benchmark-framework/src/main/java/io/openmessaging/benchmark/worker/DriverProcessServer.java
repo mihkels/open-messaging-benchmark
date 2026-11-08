@@ -28,6 +28,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -157,7 +158,7 @@ final class DriverProcessServer implements AutoCloseable {
      * @param body the JSON string holding the path
      * @return the absolute path, or {@code null} if it is not the authorized configuration
      */
-    Path allowedConfig(String body) {
+    @Nullable Path allowedConfig(String body) {
         try {
             String requested = MAPPER.readValue(body, String.class);
             if (requested == null) {

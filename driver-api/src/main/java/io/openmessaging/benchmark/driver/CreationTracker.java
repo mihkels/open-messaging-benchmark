@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Counts the outstanding work of a resource creation and completes its quiescence barrier once all
@@ -26,7 +27,7 @@ final class CreationTracker {
     private final CompletableFuture<Void> quiescence = new CompletableFuture<>();
     private final Set<Throwable> errors = Collections.newSetFromMap(new IdentityHashMap<>());
     private int active = 1;
-    private Throwable failure;
+    private @Nullable Throwable failure;
 
     synchronized void retain() {
         if (active == 0) {

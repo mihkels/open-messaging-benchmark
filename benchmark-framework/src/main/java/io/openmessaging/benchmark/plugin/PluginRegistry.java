@@ -23,8 +23,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Discovers driver plugin bundles and maps driver classes to the bundles that provide them.
@@ -206,7 +208,7 @@ public final class PluginRegistry {
         }
 
         private void addDriverError(String driver, String error) {
-            errorsByDriverClass.computeIfAbsent(driver, unused -> new ArrayList<>()).add(error);
+            errorsByDriverClass.computeIfAbsent(driver, _ -> new ArrayList<>()).add(error);
         }
     }
 
@@ -231,7 +233,7 @@ public final class PluginRegistry {
      * @param driverConfig the parsed driver configuration
      * @return the bundles to load, primary bundle first
      */
-    public ResolvedDriver resolve(String driverClass, Map<String, Object> driverConfig) {
+    public ResolvedDriver resolve(String driverClass, @Nullable Map<String, Object> driverConfig) {
         failOnDriverErrors(driverClass);
         PluginBundle primary = byDriverClass.get(driverClass);
         if (primary == null) {
@@ -258,7 +260,7 @@ public final class PluginRegistry {
      * @return the bundles to load, primary bundle first
      */
     public ResolvedDriver resolveOverride(
-            String driverClass, Map<String, Object> driverConfig, Path location) {
+            String driverClass, @Nullable Map<String, Object> driverConfig, Path location) {
         PluginBundle primary = legacyBundle(driverClass, location);
         List<PluginBundle> result = new ArrayList<>(List.of(primary));
         for (PluginBundle referenced : withReferences(primary, driverConfig)) {
@@ -269,7 +271,8 @@ public final class PluginRegistry {
         return new ResolvedDriver(driverClass, result);
     }
 
-    private List<PluginBundle> withReferences(PluginBundle primary, Map<String, Object> config) {
+    private List<PluginBundle> withReferences(
+            PluginBundle primary, @Nullable Map<String, Object> config) {
         List<PluginBundle> result = new ArrayList<>();
         result.add(primary);
         for (int i = 0; i < result.size(); i++) {
@@ -336,7 +339,8 @@ public final class PluginRegistry {
         Path dir;
         String fileName = String.valueOf(path.getFileName());
         if (Files.isRegularFile(path) && fileName.endsWith(".jar")) {
-            dir = path.getParent();
+            // An absolute path to a regular file always has a parent
+            dir = Objects.requireNonNull(path.getParent(), "jar directory");
             classpath = List.of(fileName);
         } else if (Files.isDirectory(path)) {
             dir = path;

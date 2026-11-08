@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.utils.payload;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,9 @@ class PayloadTemplatesTest {
         assertThat(PayloadTemplates.equals(templates, null)).isFalse();
         assertThat(PayloadTemplates.equals(null, templates)).isFalse();
         assertThat(PayloadTemplates.equals(null, null)).isTrue();
-        assertThat(PayloadTemplates.equals(Arrays.asList((byte[]) null), Arrays.asList((byte[]) null)))
+        assertThat(
+                        PayloadTemplates.equals(
+                                Collections.singletonList((byte[]) null), Collections.singletonList((byte[]) null)))
                 .isTrue();
     }
 

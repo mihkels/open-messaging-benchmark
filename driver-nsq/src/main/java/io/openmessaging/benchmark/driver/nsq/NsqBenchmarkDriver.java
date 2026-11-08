@@ -34,7 +34,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -47,7 +48,9 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     private static final String CLOSED_MESSAGE = "NSQ driver is closed";
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
-    private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations = new HashSet<>();
+    // Identity set: futures have no value equality
+    private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private NsqConfig config;
     private EventLoopGroup consumerEventLoops;
     private boolean closed;
@@ -126,6 +129,8 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    // consumerCreations is an identity set, so removing a future by reference is well defined
+    @SuppressWarnings("UndefinedEquals")
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         NsqBenchmarkConsumer consumer = null;
@@ -238,7 +243,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws InterruptedException {
         EventLoopGroup eventLoops;
         List<CompletableFuture<BenchmarkConsumer>> pending;
         synchronized (this) {

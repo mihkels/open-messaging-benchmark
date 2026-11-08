@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Contents of a driver plugin bundle descriptor ({@code plugin.yaml}).
@@ -41,14 +42,14 @@ import java.util.regex.Pattern;
 public record PluginDescriptor(
         @JsonProperty(value = "descriptorVersion", required = true) Integer descriptorVersion,
         @JsonProperty(value = "id", required = true) String id,
-        @JsonProperty("version") String version,
+        @JsonProperty("version") @Nullable String version,
         @JsonProperty(value = "driverApiVersion", required = true) Integer driverApiVersion,
-        @JsonProperty("javaVersion") Integer javaVersion,
+        @JsonProperty("javaVersion") @Nullable Integer javaVersion,
         @JsonProperty(value = "drivers", required = true) List<String> drivers,
         @JsonProperty(value = "classpath", required = true) List<String> classpath,
         @JsonProperty("optionalClasspath") List<String> optionalClasspath,
         @JsonProperty("classReferenceProperties") List<String> classReferenceProperties,
-        @JsonProperty("description") String description) {
+        @JsonProperty("description") @Nullable String description) {
 
     public static final int CURRENT_DESCRIPTOR_VERSION = 1;
 
@@ -134,7 +135,7 @@ public record PluginDescriptor(
         }
     }
 
-    private static void validateEntry(String field, String entry, List<String> errors) {
+    private static void validateEntry(String field, @Nullable String entry, List<String> errors) {
         if (entry == null || entry.isBlank()) {
             errors.add(field + " must not contain blank entries");
             return;

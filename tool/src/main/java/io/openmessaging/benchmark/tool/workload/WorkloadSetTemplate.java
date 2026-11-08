@@ -18,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.Collections;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A template that defines a set of workload definitions. This is much like the {@link
@@ -51,7 +52,7 @@ public record WorkloadSetTemplate(
         List<Integer> consumerPerSubscription,
         List<Integer> producerRate,
         KeyDistributorType keyDistributor,
-        String payloadFile,
+        @Nullable String payloadFile,
         boolean useRandomizedPayloads,
         double randomBytesRatio,
         int randomizedPayloadPoolSize,
@@ -77,7 +78,7 @@ public record WorkloadSetTemplate(
             List<Integer> consumerPerSubscription,
             List<Integer> producerRate,
             KeyDistributorType keyDistributor,
-            String payloadFile,
+            @Nullable String payloadFile,
             boolean useRandomizedPayloads,
             double randomBytesRatio,
             int randomizedPayloadPoolSize,
@@ -166,30 +167,37 @@ public record WorkloadSetTemplate(
     }
 
     // Defensive copy getters for mutable List fields
+    @Override
     public List<Integer> topics() {
         return List.copyOf(topics);
     }
 
+    @Override
     public List<Integer> partitionsPerTopic() {
         return List.copyOf(partitionsPerTopic);
     }
 
+    @Override
     public List<Integer> messageSize() {
         return List.copyOf(messageSize);
     }
 
+    @Override
     public List<Integer> subscriptionsPerTopic() {
         return List.copyOf(subscriptionsPerTopic);
     }
 
+    @Override
     public List<Integer> producersPerTopic() {
         return List.copyOf(producersPerTopic);
     }
 
+    @Override
     public List<Integer> consumerPerSubscription() {
         return List.copyOf(consumerPerSubscription);
     }
 
+    @Override
     public List<Integer> producerRate() {
         return List.copyOf(producerRate);
     }

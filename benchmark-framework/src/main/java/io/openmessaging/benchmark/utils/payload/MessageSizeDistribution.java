@@ -15,7 +15,9 @@ package io.openmessaging.benchmark.utils.payload;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Parses and represents a message size distribution from workload config. Creates one payload size
@@ -59,7 +61,7 @@ public class MessageSizeDistribution {
         }
     }
 
-    public MessageSizeDistribution(Map<String, Integer> config) {
+    public MessageSizeDistribution(@Nullable Map<String, Integer> config) {
         this(parse(config));
     }
 
@@ -68,7 +70,7 @@ public class MessageSizeDistribution {
         this.totalWeight = parsed.totalWeight();
     }
 
-    private static ParsedDistribution parse(Map<String, Integer> config) {
+    private static ParsedDistribution parse(@Nullable Map<String, Integer> config) {
         if (config == null || config.isEmpty()) {
             throw new IllegalArgumentException("Distribution config cannot be null or empty");
         }
@@ -100,7 +102,7 @@ public class MessageSizeDistribution {
         return new ParsedDistribution(List.copyOf(parsed), total);
     }
 
-    private static int[] parseRange(String range) {
+    private static int[] parseRange(@Nullable String range) {
         if (range == null || range.isEmpty()) {
             throw new IllegalArgumentException("Range cannot be null or empty");
         }
@@ -129,7 +131,7 @@ public class MessageSizeDistribution {
     }
 
     private static int parseSize(String s) {
-        s = s.trim().toUpperCase();
+        s = s.trim().toUpperCase(Locale.ROOT);
         int multiplier = 1;
 
         if (s.endsWith("KB")) {
@@ -188,7 +190,7 @@ public class MessageSizeDistribution {
         return cumulative;
     }
 
-    public static int bucketIndexForTicket(int ticket, int[] cumulativeWeights) {
+    public static int bucketIndexForTicket(int ticket, int @Nullable [] cumulativeWeights) {
         if (cumulativeWeights == null
                 || cumulativeWeights.length == 0
                 || ticket < 0

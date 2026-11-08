@@ -44,7 +44,7 @@ public final class DlogBenchmarkProducer implements BenchmarkProducer {
     @Override
     // DlogFailures records an interrupted writer close and throwIfAny() restores the interrupt
     // after the manager has been closed too, so cleanup is not cut short by the interrupt flag
-    @SuppressWarnings("java:S2142")
+    @SuppressWarnings({"java:S2142", "InterruptedExceptionSwallowed"})
     public void close() throws Exception {
         if (!pending.beginClose()) {
             return;
@@ -84,7 +84,7 @@ public final class DlogBenchmarkProducer implements BenchmarkProducer {
                 writer
                         .write(record)
                         .thenApply(dlsn -> null)
-                        .whenComplete((unused, failure) -> pending.completeFromClient(send, failure));
+                        .whenComplete((_, failure) -> pending.completeFromClient(send, failure));
             } catch (Exception e) {
                 send.completeExceptionally(e);
                 if (DlogFailures.isInterrupted(e)) {

@@ -171,7 +171,7 @@ class KafkaBenchmarkProducerTest {
         KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected = new CompletableFuture<>();
-        first.whenComplete((unused, error) -> {
+        first.whenComplete((_, error) -> {
             try {
                 producer.close();
                 rejected.complete(null);
@@ -200,7 +200,7 @@ class KafkaBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         CompletableFuture<Throwable> rejected = new CompletableFuture<>();
-        first.whenComplete((unused, error) -> {
+        first.whenComplete((_, error) -> {
             try {
                 producer.close();
                 rejected.complete(null);

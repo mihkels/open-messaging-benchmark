@@ -31,6 +31,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
@@ -67,7 +68,7 @@ public class WorkerHandler implements AutoCloseable {
     private static final Set<String> ACCEPTED_POST_TYPES =
             Set.of(JSON_CONTENT_TYPE, YAML_CONTENT_TYPE);
     private final Worker worker;
-    private final BearerTokenAuth auth;
+    private final @Nullable BearerTokenAuth auth;
 
     public WorkerHandler(PrometheusMeterRegistry statsLogger) {
         this(new LocalWorker(statsLogger));
@@ -88,7 +89,7 @@ public class WorkerHandler implements AutoCloseable {
      * @param worker the worker to expose
      * @param auth checks every request before any other handler runs, or {@code null} for none
      */
-    public WorkerHandler(Worker worker, BearerTokenAuth auth) {
+    public WorkerHandler(Worker worker, @Nullable BearerTokenAuth auth) {
         this.worker = worker;
         this.auth = auth;
     }
@@ -149,7 +150,7 @@ public class WorkerHandler implements AutoCloseable {
         }
     }
 
-    private static String mediaType(String contentType) {
+    private static @Nullable String mediaType(@Nullable String contentType) {
         if (contentType == null) {
             return null;
         }
@@ -165,7 +166,7 @@ public class WorkerHandler implements AutoCloseable {
     }
 
     private static void appendDescription(
-            StringBuilder message, Throwable failure, String relation, Set<Throwable> visited) {
+            StringBuilder message, @Nullable Throwable failure, String relation, Set<Throwable> visited) {
         if (failure == null || !visited.add(failure)) {
             return;
         }

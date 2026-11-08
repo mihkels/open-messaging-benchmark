@@ -17,9 +17,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 public class Workload {
-    public String name;
+    public @Nullable String name;
 
     /** Number of topics to create in the test. */
     public int topics;
@@ -32,7 +33,7 @@ public class Workload {
     public int messageSize;
 
     /** Optional weighted size buckets; when configured, this takes precedence over messageSize. */
-    public Map<String, Integer> messageSizeDistribution;
+    public @Nullable Map<String, Integer> messageSizeDistribution;
 
     public boolean usesMessageSizeDistribution() {
         return messageSizeDistribution != null && !messageSizeDistribution.isEmpty();
@@ -42,7 +43,7 @@ public class Workload {
     public double randomBytesRatio;
     public int randomizedPayloadPoolSize;
 
-    public String payloadFile;
+    public @Nullable String payloadFile;
 
     public int subscriptionsPerTopic;
 
@@ -77,7 +78,7 @@ public class Workload {
     public int warmupDurationMinutes = 1;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public Thresholds thresholds;
+    public @Nullable Thresholds thresholds;
 
     /**
      * The message size used for backlog and result calculations.
@@ -85,8 +86,9 @@ public class Workload {
      * @return the distribution's weighted average size, or {@link #messageSize}
      */
     public int effectiveMessageSize() {
-        return usesMessageSizeDistribution()
-                ? new MessageSizeDistribution(messageSizeDistribution).getAvgSize()
+        Map<String, Integer> distribution = messageSizeDistribution;
+        return distribution != null && !distribution.isEmpty()
+                ? new MessageSizeDistribution(distribution).getAvgSize()
                 : messageSize;
     }
 
@@ -102,8 +104,9 @@ public class Workload {
         if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
             throw new IllegalArgumentException("Randomized payload pool size must be positive");
         }
-        if (usesMessageSizeDistribution()) {
-            new MessageSizeDistribution(messageSizeDistribution);
+        Map<String, Integer> distribution = messageSizeDistribution;
+        if (distribution != null && !distribution.isEmpty()) {
+            new MessageSizeDistribution(distribution);
         }
         if (consumerBacklogSizeGB > 0) {
             if (producerRate == 0) {

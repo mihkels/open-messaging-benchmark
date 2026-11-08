@@ -14,9 +14,8 @@
 package io.openmessaging.benchmark.tool.report;
 
 import io.openmessaging.benchmark.TestResult;
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.nio.file.Path;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 
 /**
@@ -28,9 +27,7 @@ import tools.jackson.databind.ObjectReader;
 record Run(String name, TestResult result) {
     // Unknown properties are ignored, so files written by older and newer versions both load
     private static final ObjectReader READER =
-            new ObjectMapper()
-                    .readerFor(TestResult.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+            ObjectMappers.DEFAULT.mapper().readerFor(TestResult.class);
 
     /**
      * Reads a result file.

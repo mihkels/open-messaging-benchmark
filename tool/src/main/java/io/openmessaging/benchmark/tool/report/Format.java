@@ -24,45 +24,7 @@ enum Format {
     TEXT {
         @Override
         String render(DiffReport report) {
-            StringBuilder out = new StringBuilder();
-            out.append("Benchmark comparison: ").append(report.workload()).append('\n');
-            out.append("Baseline:       ").append(runs(report.baselineFiles())).append('\n');
-            out.append("Candidate:      ").append(runs(report.candidateFiles())).append('\n');
-            out.append("Latency source: ").append(report.latencySource().description).append('\n');
-            out.append("Result:         ").append(report.statusSummary()).append('\n');
-            for (String warning : report.warnings()) {
-                out.append("\nWarning: ").append(warning).append('\n');
-            }
-            if (!report.settingDifferences().isEmpty()) {
-                out.append('\n');
-                table(out, SETTING_HEADER, settingCells(report), new boolean[3]);
-            }
-            out.append('\n');
-            table(out, METRIC_HEADER, metricCells(report, false), RIGHT_ALIGNED);
-            return out.toString();
-        }
-
-        private void table(
-                StringBuilder out, List<String> header, List<List<String>> rows, boolean[] rightAligned) {
-            int[] widths = new int[header.size()];
-            List<List<String>> all = new ArrayList<>();
-            all.add(header);
-            all.addAll(rows);
-            for (List<String> row : all) {
-                for (int i = 0; i < widths.length; i++) {
-                    widths[i] = Math.max(widths[i], row.get(i).length());
-                }
-            }
-            for (List<String> row : all) {
-                StringBuilder line = new StringBuilder();
-                for (int i = 0; i < widths.length; i++) {
-                    String cell = row.get(i);
-                    String padding = " ".repeat(widths[i] - cell.length());
-                    line.append(rightAligned[i] ? padding + cell : cell + padding);
-                    line.append(i < widths.length - 1 ? "  " : "");
-                }
-                out.append(line.toString().stripTrailing()).append('\n');
-            }
+            return Format.render(report, new TextStyle());
         }
     },
 
@@ -70,36 +32,7 @@ enum Format {
     MARKDOWN {
         @Override
         String render(DiffReport report) {
-            StringBuilder out = new StringBuilder();
-            out.append("## Benchmark comparison: ").append(escape(report.workload())).append("\n\n");
-            out.append("- **Baseline:** ").append(escape(runs(report.baselineFiles()))).append('\n');
-            out.append("- **Candidate:** ").append(escape(runs(report.candidateFiles()))).append('\n');
-            out.append("- **Latency source:** ").append(report.latencySource().description).append('\n');
-            out.append("- **Result:** ").append(report.statusSummary()).append('\n');
-            for (String warning : report.warnings()) {
-                out.append("\n> **Warning:** ").append(escape(warning)).append('\n');
-            }
-            if (!report.settingDifferences().isEmpty()) {
-                out.append('\n');
-                table(out, SETTING_HEADER, settingCells(report), new boolean[3]);
-            }
-            out.append('\n');
-            table(out, METRIC_HEADER, metricCells(report, true), RIGHT_ALIGNED);
-            return out.toString();
-        }
-
-        private void table(
-                StringBuilder out, List<String> header, List<List<String>> rows, boolean[] rightAligned) {
-            out.append("| ").append(String.join(" | ", header)).append(" |\n|");
-            for (boolean right : rightAligned) {
-                out.append(right ? " ---: |" : " --- |");
-            }
-            out.append('\n');
-            for (List<String> row : rows) {
-                out.append("| ")
-                        .append(String.join(" | ", row.stream().map(Format::escape).toList()))
-                        .append(" |\n");
-            }
+            return Format.render(report, new MarkdownStyle());
         }
     },
 
@@ -126,6 +59,128 @@ enum Format {
      * @return the rendered report
      */
     abstract String render(DiffReport report);
+
+    // The text and Markdown reports share one layout; a style writes each of its parts
+    private static String render(DiffReport report, Style style) {
+        StringBuilder out = new StringBuilder();
+        style.title(out, report.workload());
+        style.field(out, "Baseline", runs(report.baselineFiles()));
+        style.field(out, "Candidate", runs(report.candidateFiles()));
+        style.field(out, "Latency source", report.latencySource().description);
+        style.field(out, "Result", report.statusSummary());
+        for (String warning : report.warnings()) {
+            style.warning(out, warning);
+        }
+        if (!report.settingDifferences().isEmpty()) {
+            out.append('\n');
+            style.table(out, SETTING_HEADER, settingCells(report), new boolean[3]);
+        }
+        out.append('\n');
+        style.table(
+                out, METRIC_HEADER, metricCells(report, style.emphasizeRegressions()), RIGHT_ALIGNED);
+        return out.toString();
+    }
+
+    /** How {@link #render(DiffReport, Style)} writes each part of a report. */
+    private interface Style {
+        void title(StringBuilder out, String workload);
+
+        void field(StringBuilder out, String name, String value);
+
+        void warning(StringBuilder out, String warning);
+
+        void table(
+                StringBuilder out, List<String> header, List<List<String>> rows, boolean[] rightAligned);
+
+        boolean emphasizeRegressions();
+    }
+
+    private static final class TextStyle implements Style {
+        // The longest field name, "Latency source", with its colon and a space
+        private static final int FIELD_WIDTH = 16;
+
+        @Override
+        public void title(StringBuilder out, String workload) {
+            out.append("Benchmark comparison: ").append(workload).append('\n');
+        }
+
+        @Override
+        public void field(StringBuilder out, String name, String value) {
+            String label = name + ": ";
+            out.append(label).append(" ".repeat(FIELD_WIDTH - label.length())).append(value).append('\n');
+        }
+
+        @Override
+        public void warning(StringBuilder out, String warning) {
+            out.append("\nWarning: ").append(warning).append('\n');
+        }
+
+        @Override
+        public void table(
+                StringBuilder out, List<String> header, List<List<String>> rows, boolean[] rightAligned) {
+            int[] widths = new int[header.size()];
+            List<List<String>> all = new ArrayList<>();
+            all.add(header);
+            all.addAll(rows);
+            for (List<String> row : all) {
+                for (int i = 0; i < widths.length; i++) {
+                    widths[i] = Math.max(widths[i], row.get(i).length());
+                }
+            }
+            for (List<String> row : all) {
+                StringBuilder line = new StringBuilder();
+                for (int i = 0; i < widths.length; i++) {
+                    String cell = row.get(i);
+                    String padding = " ".repeat(widths[i] - cell.length());
+                    line.append(rightAligned[i] ? padding + cell : cell + padding);
+                    line.append(i < widths.length - 1 ? "  " : "");
+                }
+                out.append(line.toString().stripTrailing()).append('\n');
+            }
+        }
+
+        @Override
+        public boolean emphasizeRegressions() {
+            return false;
+        }
+    }
+
+    private static final class MarkdownStyle implements Style {
+        @Override
+        public void title(StringBuilder out, String workload) {
+            out.append("## Benchmark comparison: ").append(escape(workload)).append("\n\n");
+        }
+
+        @Override
+        public void field(StringBuilder out, String name, String value) {
+            out.append("- **").append(name).append(":** ").append(escape(value)).append('\n');
+        }
+
+        @Override
+        public void warning(StringBuilder out, String warning) {
+            out.append("\n> **Warning:** ").append(escape(warning)).append('\n');
+        }
+
+        @Override
+        public void table(
+                StringBuilder out, List<String> header, List<List<String>> rows, boolean[] rightAligned) {
+            out.append("| ").append(String.join(" | ", header)).append(" |\n|");
+            for (boolean right : rightAligned) {
+                out.append(right ? " ---: |" : " --- |");
+            }
+            out.append('\n');
+            for (List<String> row : rows) {
+                out.append("| ")
+                        .append(String.join(" | ", row.stream().map(Format::escape).toList()))
+                        .append(" |\n");
+            }
+        }
+
+        @Override
+        public boolean emphasizeRegressions() {
+            return true;
+        }
+    }
 
     private static String runs(List<String> files) {
         return files.size()

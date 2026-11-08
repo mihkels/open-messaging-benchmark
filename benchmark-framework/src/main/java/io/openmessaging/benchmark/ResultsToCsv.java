@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
@@ -34,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ResultsToCsv {
 
     private static final Logger log = LoggerFactory.getLogger(ResultsToCsv.class);
+    private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
 
     public void writeAllResultFiles(String directory) {
         writeAllResultFiles(directory, new File("results-" + Instant.now().getEpochSecond() + ".csv"));
@@ -57,9 +59,7 @@ public class ResultsToCsv {
             List<TestResult> results = new ArrayList<>();
             for (File file : directoryListing) {
                 if (file.isFile() && file.getAbsolutePath().endsWith(".json")) {
-                    ObjectMapper objectMapper = new ObjectMapper();
-                    TestResult tr =
-                            objectMapper.readValue(new File(file.getAbsolutePath()), TestResult.class);
+                    TestResult tr = MAPPER.readValue(new File(file.getAbsolutePath()), TestResult.class);
                     results.add(tr);
                 }
             }

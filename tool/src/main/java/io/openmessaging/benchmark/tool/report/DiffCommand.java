@@ -107,8 +107,8 @@ final class DiffCommand {
         List<Run> baselineRuns = sides.get(0);
         List<Run> candidateRuns = sides.get(1);
 
-        List<String> mismatches =
-                RunContext.workloadMismatches(RunContext.all(baselineRuns, candidateRuns));
+        List<Run> allRuns = RunContext.all(baselineRuns, candidateRuns);
+        List<String> mismatches = RunContext.workloadMismatches(allRuns);
         if (!mismatches.isEmpty() && !allowWorkloadMismatch) {
             mismatches.forEach(mismatch -> err.println("Error: " + mismatch));
             err.println("The runs are not comparable; pass --allow-workload-mismatch to compare anyway.");
@@ -117,7 +117,7 @@ final class DiffCommand {
 
         DiffReport report;
         try {
-            report = DiffReport.of(baselineRuns, candidateRuns, minChange, mismatches);
+            report = DiffReport.of(baselineRuns, candidateRuns, allRuns, minChange, mismatches);
         } catch (IllegalArgumentException e) {
             err.println("Cannot compare: " + e.getMessage());
             return 1;

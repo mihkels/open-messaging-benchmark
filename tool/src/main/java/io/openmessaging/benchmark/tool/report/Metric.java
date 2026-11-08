@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.tool.report;
 
 import io.openmessaging.benchmark.TestResult;
+import java.util.Locale;
 import java.util.function.ToDoubleFunction;
 import org.jspecify.annotations.Nullable;
 
@@ -22,106 +23,67 @@ enum Metric {
     PUBLISH_RATE("publish-rate", "Publish rate", Unit.RATE, Direction.HIGHER_IS_BETTER),
     CONSUME_RATE("consume-rate", "Consume rate", Unit.RATE, Direction.HIGHER_IS_BETTER),
     PUBLISH_LATENCY_P50(
-            "publish-latency-p50",
-            "Publish latency p50",
-            Histograms.PUBLISH,
-            50,
-            r -> r.aggregatedPublishLatency50pct),
+            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 50, r -> r.aggregatedPublishLatency50pct),
     PUBLISH_LATENCY_P95(
-            "publish-latency-p95",
-            "Publish latency p95",
-            Histograms.PUBLISH,
-            95,
-            r -> r.aggregatedPublishLatency95pct),
+            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 95, r -> r.aggregatedPublishLatency95pct),
     PUBLISH_LATENCY_P99(
-            "publish-latency-p99",
-            "Publish latency p99",
-            Histograms.PUBLISH,
-            99,
-            r -> r.aggregatedPublishLatency99pct),
+            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 99, r -> r.aggregatedPublishLatency99pct),
     PUBLISH_LATENCY_P999(
-            "publish-latency-p99.9",
-            "Publish latency p99.9",
-            Histograms.PUBLISH,
-            99.9,
-            r -> r.aggregatedPublishLatency999pct),
+            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 99.9, r -> r.aggregatedPublishLatency999pct),
     PUBLISH_LATENCY_MAX(
-            "publish-latency-max",
-            "Publish latency max",
-            Histograms.PUBLISH,
-            100,
-            r -> r.aggregatedPublishLatencyMax),
+            "Publish latency", TestResult.PUBLISH_HISTOGRAM, 100, r -> r.aggregatedPublishLatencyMax),
     PUBLISH_DELAY_P50(
-            "publish-delay-p50",
-            "Publish delay p50",
-            Histograms.PUBLISH_DELAY,
+            "Publish delay",
+            TestResult.PUBLISH_DELAY_HISTOGRAM,
             50,
             r -> fromMicros(r.aggregatedPublishDelayLatency50pct)),
     PUBLISH_DELAY_P95(
-            "publish-delay-p95",
-            "Publish delay p95",
-            Histograms.PUBLISH_DELAY,
+            "Publish delay",
+            TestResult.PUBLISH_DELAY_HISTOGRAM,
             95,
             r -> fromMicros(r.aggregatedPublishDelayLatency95pct)),
     PUBLISH_DELAY_P99(
-            "publish-delay-p99",
-            "Publish delay p99",
-            Histograms.PUBLISH_DELAY,
+            "Publish delay",
+            TestResult.PUBLISH_DELAY_HISTOGRAM,
             99,
             r -> fromMicros(r.aggregatedPublishDelayLatency99pct)),
     PUBLISH_DELAY_P999(
-            "publish-delay-p99.9",
-            "Publish delay p99.9",
-            Histograms.PUBLISH_DELAY,
+            "Publish delay",
+            TestResult.PUBLISH_DELAY_HISTOGRAM,
             99.9,
             r -> fromMicros(r.aggregatedPublishDelayLatency999pct)),
     PUBLISH_DELAY_MAX(
-            "publish-delay-max",
-            "Publish delay max",
-            Histograms.PUBLISH_DELAY,
+            "Publish delay",
+            TestResult.PUBLISH_DELAY_HISTOGRAM,
             100,
             r -> fromMicros(r.aggregatedPublishDelayLatencyMax)),
     END_TO_END_LATENCY_P50(
-            "end-to-end-latency-p50",
-            "End-to-end latency p50",
-            Histograms.END_TO_END,
+            "End-to-end latency",
+            TestResult.END_TO_END_HISTOGRAM,
             50,
             r -> r.aggregatedEndToEndLatency50pct),
     END_TO_END_LATENCY_P95(
-            "end-to-end-latency-p95",
-            "End-to-end latency p95",
-            Histograms.END_TO_END,
+            "End-to-end latency",
+            TestResult.END_TO_END_HISTOGRAM,
             95,
             r -> r.aggregatedEndToEndLatency95pct),
     END_TO_END_LATENCY_P99(
-            "end-to-end-latency-p99",
-            "End-to-end latency p99",
-            Histograms.END_TO_END,
+            "End-to-end latency",
+            TestResult.END_TO_END_HISTOGRAM,
             99,
             r -> r.aggregatedEndToEndLatency99pct),
     END_TO_END_LATENCY_P999(
-            "end-to-end-latency-p99.9",
-            "End-to-end latency p99.9",
-            Histograms.END_TO_END,
+            "End-to-end latency",
+            TestResult.END_TO_END_HISTOGRAM,
             99.9,
             r -> r.aggregatedEndToEndLatency999pct),
     END_TO_END_LATENCY_MAX(
-            "end-to-end-latency-max",
-            "End-to-end latency max",
-            Histograms.END_TO_END,
+            "End-to-end latency",
+            TestResult.END_TO_END_HISTOGRAM,
             100,
             r -> r.aggregatedEndToEndLatencyMax),
     PUBLISH_ERRORS("publish-errors", "Publish errors", Unit.COUNT, Direction.LOWER_IS_BETTER),
     MAX_BACKLOG("max-backlog", "Max backlog", Unit.COUNT, Direction.LOWER_IS_BETTER);
-
-    /** The keys of the raw histograms in {@code TestResult.histograms}. */
-    static final class Histograms {
-        static final String PUBLISH = "publish";
-        static final String PUBLISH_DELAY = "publishDelay";
-        static final String END_TO_END = "endToEnd";
-
-        private Histograms() {}
-    }
 
     /** Whether a larger value is an improvement. */
     enum Direction {
@@ -172,14 +134,23 @@ enum Metric {
         this.aggregated = null;
     }
 
+    /**
+     * A latency percentile, with an id and label derived from the latency name, such as {@code
+     * publish-latency-p99.9} and {@code Publish latency p99.9}.
+     *
+     * @param latency the latency name, such as {@code Publish latency}
+     * @param histogram the key of the raw histogram in {@code TestResult.histograms}
+     * @param percentile the percentile read from the raw histogram; 100 is the maximum
+     * @param aggregated the value from the aggregated fields of the result, in milliseconds
+     */
     Metric(
-            String id,
-            String label,
+            String latency,
             String histogram,
             double percentile,
             ToDoubleFunction<TestResult> aggregated) {
-        this.id = id;
-        this.label = label;
+        String suffix = percentile >= 100 ? "max" : "p" + formatPercentile(percentile);
+        this.id = (latency + "-" + suffix).toLowerCase(Locale.ROOT).replace(' ', '-');
+        this.label = latency + " " + suffix;
         this.unit = Unit.MILLIS;
         this.direction = Direction.LOWER_IS_BETTER;
         this.histogram = histogram;
@@ -194,6 +165,13 @@ enum Metric {
      */
     String labelWithUnit() {
         return unit.symbol.isEmpty() ? label : label + " (" + unit.symbol + ")";
+    }
+
+    // 50 as "50", 99.9 as "99.9"
+    private static String formatPercentile(double percentile) {
+        return percentile == Math.rint(percentile)
+                ? String.valueOf((long) percentile)
+                : String.valueOf(percentile);
     }
 
     // Publish delay is stored in microseconds; every latency is compared in milliseconds

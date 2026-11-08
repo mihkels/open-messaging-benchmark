@@ -23,6 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -158,8 +159,18 @@ class RedisBenchmarkProducerTest {
         verify(jedis)
                 .xadd(
                         any(byte[].class),
-                        org.mockito.ArgumentMatchers.<Map<byte[], byte[]>>argThat(map -> map.size() == 2),
+                        org.mockito.ArgumentMatchers.<Map<byte[], byte[]>>argThat(
+                                map -> map.size() == 2 && "k".equals(field(map, "key"))),
                         any(XAddParams.class));
         verify(jedis).close();
+    }
+
+    // The entry map uses identity keys, so look the field up by name
+    private static String field(Map<byte[], byte[]> entry, String name) {
+        return entry.entrySet().stream()
+                .filter(e -> name.equals(new String(e.getKey(), StandardCharsets.UTF_8)))
+                .map(e -> new String(e.getValue(), StandardCharsets.UTF_8))
+                .findFirst()
+                .orElse(null);
     }
 }

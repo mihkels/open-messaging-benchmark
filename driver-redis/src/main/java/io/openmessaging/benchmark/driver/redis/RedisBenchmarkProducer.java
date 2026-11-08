@@ -55,7 +55,7 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
             Map<byte[], byte[]> map1 = new IdentityHashMap<>();
             map1.put("payload".getBytes(UTF_8), payload);
             if (key.isPresent()) {
-                map1.put("key".getBytes(UTF_8), key.toString().getBytes(UTF_8));
+                map1.put("key".getBytes(UTF_8), key.get().getBytes(UTF_8));
             }
             try (Jedis jedis = this.pool.getResource()) {
                 jedis.xadd(this.rmqTopic.getBytes(UTF_8), map1, this.xaddParams);

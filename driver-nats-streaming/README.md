@@ -24,7 +24,7 @@ topic is a channel and each subscription is a queue group.
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/nats-streaming/>
 
 - Plugin ID: `nats-streaming`
-- `driverClass`: `io.openmessaging.benchmark.driver.natsStreaming.NatsStreamingBenchmarkDriver`
+- `driverClass`: `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`
 - Shipped config: [`nats-streaming.yaml`](nats-streaming.yaml) (`nats://localhost:4222`, cluster ID `mycluster`)
 - Tested with: `nats-streaming:0.25.6` ([stack file](../e2e-tests/compose/stacks/nats-streaming.yaml))
 

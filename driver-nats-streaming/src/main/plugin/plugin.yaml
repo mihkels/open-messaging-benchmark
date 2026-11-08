@@ -19,7 +19,7 @@ version: ${project.version}
 driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
-  - io.openmessaging.benchmark.driver.natsStreaming.NatsStreamingBenchmarkDriver
+  - io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver
 classpath:
   - ${project.build.finalName}.jar
   - lib/*.jar

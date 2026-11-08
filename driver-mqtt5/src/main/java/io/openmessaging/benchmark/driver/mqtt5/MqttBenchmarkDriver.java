@@ -101,25 +101,9 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         try {
             Mqtt5AsyncClient client =
                     createClient(
-                            buildPublisherClientId(),
-                            () -> producer.isClosed() || future.stopReconnectOnDisconnect());
+                            clientId("pub"), () -> producer.isClosed() || future.stopReconnectOnDisconnect());
             producer.setClient(client);
-            Objects.requireNonNull(client.connect(), "MQTT connection future")
-                    .whenComplete((connAck, ex) -> {
-                        try {
-                            Throwable failure = connectionFailure(connAck, ex);
-                            if (failure != null) {
-                                future.fail(failure);
-                            } else {
-                                future.connected();
-                                future.succeed();
-                            }
-                        } catch (Exception failure) {
-                            future.fail(failure);
-                        } finally {
-                            future.finished();
-                        }
-                    });
+            connect(future, client.connect(), future::succeed);
         } catch (Exception failure) {
             future.fail(failure);
             future.finished();
@@ -154,32 +138,21 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
 
             Mqtt5AsyncClient client =
                     createClient(
-                            buildSubscriberClientId(),
-                            () -> consumer.isClosed() || future.stopReconnectOnDisconnect());
+                            clientId("sub"), () -> consumer.isClosed() || future.stopReconnectOnDisconnect());
             consumer.setClient(client);
-            Objects.requireNonNull(connectConsumer(client), "MQTT connection future")
-                    .whenComplete((connAck, ex) -> {
-                        try {
-                            Throwable failure = connectionFailure(connAck, ex);
-                            if (failure != null) {
-                                future.fail(failure);
-                                return;
-                            }
-                            future.connected();
-                            if (future.isCancelled()) {
-                                return;
-                            }
-                            ConsumerCallback guardedCallback = consumer.guardedCallback(consumerCallback);
-                            CompletableFuture<Mqtt5SubAck> subscription =
-                                    Objects.requireNonNull(
-                                            subscribeConsumer(client, subscriptions, guardedCallback),
-                                            "MQTT subscription future");
-                            awaitSubscription(future, subscriptions, subscription);
-                        } catch (Throwable failureDuringConnection) {
-                            future.fail(failureDuringConnection);
-                        } finally {
-                            future.finished();
+            connect(
+                    future,
+                    connectConsumer(client),
+                    () -> {
+                        if (future.isCancelled()) {
+                            return;
                         }
+                        ConsumerCallback guardedCallback = consumer.guardedCallback(consumerCallback);
+                        CompletableFuture<Mqtt5SubAck> subscription =
+                                Objects.requireNonNull(
+                                        subscribeConsumer(client, subscriptions, guardedCallback),
+                                        "MQTT subscription future");
+                        awaitSubscription(future, subscriptions, subscription);
                     });
         } catch (Exception failure) {
             future.fail(failure);
@@ -187,6 +160,30 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
 
         return future;
+    }
+
+    // Marks the future connected and runs onConnected once the CONNACK succeeds, otherwise fails
+    // it; the connection attempt is finished either way.
+    private static void connect(
+            MqttCreationFuture<?> future,
+            CompletableFuture<Mqtt5ConnAck> connection,
+            Runnable onConnected) {
+        Objects.requireNonNull(connection, "MQTT connection future")
+                .whenComplete((connAck, ex) -> {
+                    try {
+                        Throwable failure = connectionFailure(connAck, ex);
+                        if (failure != null) {
+                            future.fail(failure);
+                            return;
+                        }
+                        future.connected();
+                        onConnected.run();
+                    } catch (Throwable failureDuringConnection) {
+                        future.fail(failureDuringConnection);
+                    } finally {
+                        future.finished();
+                    }
+                });
     }
 
     private static void awaitSubscription(
@@ -370,14 +367,9 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static String buildPublisherClientId() {
+    private static String clientId(String role) {
         return Joiner.on("_")
-                .join("benchmark", "pub", ResourceNames.randomSuffix(), System.currentTimeMillis());
-    }
-
-    private static String buildSubscriberClientId() {
-        return Joiner.on("_")
-                .join("benchmark", "sub", ResourceNames.randomSuffix(), System.currentTimeMillis());
+                .join("benchmark", role, ResourceNames.randomSuffix(), System.currentTimeMillis());
     }
 
     private static String extractClientId(MqttClientConfig clientConfig) {

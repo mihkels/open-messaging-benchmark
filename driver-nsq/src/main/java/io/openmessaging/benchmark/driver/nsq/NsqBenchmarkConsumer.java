@@ -58,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,11 +103,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     private final String channel;
     private final ConsumerCallback callback;
     private final Predicate<Set<ServerAddress>> publisherPresent;
-    private final long readinessMillis;
-    private final long lookupPeriodMillis;
-    private final long retryMillis;
-    private final long closeWaitMillis;
-    private final ConnectionFactory connectionFactory;
+    private final Settings settings;
     private final AtomicReference<Thread> connectorThread = new AtomicReference<>();
     private final AtomicReference<Thread> schedulerThread = new AtomicReference<>();
     private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
@@ -176,11 +173,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         this.callback = callback;
         this.publisherPresent = publisherPresent;
         this.eventLoopGroup = eventLoopGroup;
-        this.readinessMillis = settings.readinessMillis();
-        this.lookupPeriodMillis = settings.lookupPeriodMillis();
-        this.retryMillis = settings.retryMillis();
-        this.closeWaitMillis = settings.closeWaitMillis();
-        this.connectionFactory = settings.connectionFactory();
+        this.settings = settings;
         ScheduledThreadPoolExecutor scheduled =
                 new ScheduledThreadPoolExecutor(
                         1, daemonFactory("nsq-consumer-scheduler", schedulerThread));
@@ -221,7 +214,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             synchronized (lock) {
                 if (!closed) {
                     deadline =
-                            scheduler.schedule(this::readinessTimedOut, readinessMillis, TimeUnit.MILLISECONDS);
+                            scheduler.schedule(
+                                    this::readinessTimedOut, settings.readinessMillis(), TimeUnit.MILLISECONDS);
                     connector.execute(() -> {
                         try {
                             initializeAndConnect();
@@ -252,7 +246,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     private void readinessTimedOut() {
         TimeoutException timeout =
                 new TimeoutException(
-                        "NSQ consumer subscription was not ready within " + readinessMillis + " ms");
+                        "NSQ consumer subscription was not ready within " + settings.readinessMillis() + " ms");
         Throwable lastFailure = lastConnectionFailure;
         if (lastFailure != null) {
             timeout.initCause(lastFailure);
@@ -285,7 +279,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                 if (attemptStartup()) {
                     return;
                 }
-                Thread.sleep(retryMillis);
+                Thread.sleep(settings.retryMillis());
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -334,17 +328,20 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         if (!removeStaleConnections(discovered, removed)) {
             return false;
         }
-        closeConnections(removed, null);
-        if (initial && cleanupOutcome() != null) {
-            throw new IOException("Unable to close an NSQ connection", cleanupOutcome());
+        closeConnections(removed, closeFailure -> recordCleanupFailure(closeFailure, null));
+        Throwable cleanupFailure = initial ? cleanupOutcome() : null;
+        if (cleanupFailure != null) {
+            throw new IOException("Unable to close an NSQ connection", cleanupFailure);
         }
         if (!connectDiscovered(discovered, initial)) {
             return false;
         }
-        if (!allConnected(discovered) || (initial && !publisherPresent.test(discovered))) {
+        if (!allConnected(discovered)) {
             return false;
         }
-        return allConnected(discovered);
+        // A connection can drop while the publisher check runs, so readiness checks them again
+        // after it. A refresh ignores the result and needs neither.
+        return !initial || (publisherPresent.test(discovered) && allConnected(discovered));
     }
 
     // Moves dead or no longer discovered connections into removed; returns false once closed.
@@ -428,8 +425,10 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             return !closed
                     && !discovered.isEmpty()
                     && discovered.stream()
-                            .allMatch(address ->
-                                    connections.containsKey(address) && connections.get(address).isConnected());
+                            .allMatch(address -> {
+                                Connection connection = connections.get(address);
+                                return connection != null && connection.isConnected();
+                            });
         }
     }
 
@@ -450,7 +449,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         boolean constructed = false;
         eventLoopGroup.beginAttempt();
         try {
-            connection = connectionFactory.connect(address, config);
+            connection = settings.connectionFactory().connect(address, config);
             constructed = true;
         } finally {
             attemptChannels = eventLoopGroup.endAttempt(constructed);
@@ -463,7 +462,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             }
         }
         if (!accepted) {
-            closeConnections(List.of(connection), null);
+            closeConnections(
+                    List.of(connection), closeFailure -> recordCleanupFailure(closeFailure, null));
             cleanup(() -> eventLoopGroup.closeAttempt(attemptChannels), null);
             return;
         }
@@ -554,7 +554,10 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             }
             refresh =
                     scheduler.scheduleAtFixedRate(
-                            this::scheduleRefresh, lookupPeriodMillis, lookupPeriodMillis, TimeUnit.MILLISECONDS);
+                            this::scheduleRefresh,
+                            settings.lookupPeriodMillis(),
+                            settings.lookupPeriodMillis(),
+                            TimeUnit.MILLISECONDS);
             ready = true;
             deadline.cancel(false);
         }
@@ -671,8 +674,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         cleanup(eventLoopGroup::closeChannels, failure);
         cleanup(() -> stopConnector(initiator), failure);
         cleanup(callbacks::shutdownNow, failure);
-        closeConnections(closing.connecting(), failure);
-        closeConnections(closing.active(), failure);
+        closeConnections(
+                closing.connecting(), closeFailure -> recordCleanupFailure(closeFailure, failure));
+        closeConnections(closing.active(), closeFailure -> recordCleanupFailure(closeFailure, failure));
         cleanup(() -> stopScheduler(initiator), failure);
     }
 
@@ -747,7 +751,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                         ? termination
                         : closeResult;
         try {
-            outcome.get(closeWaitMillis, TimeUnit.MILLISECONDS);
+            outcome.get(settings.closeWaitMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw interrupted;
@@ -756,41 +760,30 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         } catch (TimeoutException timeout) {
             TimeoutException failureToClose =
                     new TimeoutException(
-                            "NSQ consumer close did not finish within " + closeWaitMillis + " ms");
+                            "NSQ consumer close did not finish within " + settings.closeWaitMillis() + " ms");
             failureToClose.initCause(timeout);
             throw failureToClose;
         }
     }
 
     private void closeReady(Closing closing, Thread initiator) throws Exception {
-        Throwable failure = null;
-        try {
-            eventLoopGroup.stopConnecting();
-        } catch (Throwable closeFailure) {
-            failure = Failures.appendDistinct(failure, closeFailure);
-        }
-        try {
-            stopConnector(initiator);
-        } catch (Throwable closeFailure) {
-            failure = Failures.appendDistinct(failure, closeFailure);
-        }
-        failure = closeConnectionsCollecting(closing.connecting(), failure);
-        try {
-            closeGracefully(closing, initiator);
-        } catch (Throwable closeFailure) {
-            failure = Failures.appendDistinct(failure, closeFailure);
-        }
-        Failures.rethrow(failure);
+        Failures failures = new Failures();
+        runCollecting(failures, eventLoopGroup::stopConnecting);
+        runCollecting(failures, () -> stopConnector(initiator));
+        closeConnections(closing.connecting(), failures::addDistinct);
+        runCollecting(failures, () -> closeGracefully(closing, initiator));
+        Failures.rethrow(failures.failure());
     }
 
     private void closeGracefully(Closing closing, Thread initiator) throws Exception {
-        Throwable failure = requestStartClose(closing.active());
+        Failures failures = new Failures();
+        failures.add(requestStartClose(closing.active()));
         try {
-            failure = drainCallbacks(failure);
+            drainCallbacks(failures);
         } finally {
-            failure = finishClose(closing, failure, initiator);
+            finishClose(closing, failures, initiator);
         }
-        Failures.rethrow(failure);
+        Failures.rethrow(failures.failure());
     }
 
     // Asks each connected connection to stop delivering; stops at the first interruption.
@@ -830,37 +823,27 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         return null;
     }
 
-    private Throwable drainCallbacks(Throwable failure) {
+    private void drainCallbacks(Failures failures) {
         try {
             callbacks.shutdown();
             if (!callbacks.awaitTermination(CALLBACK_DRAIN_SECONDS, TimeUnit.SECONDS)) {
                 callbacks.shutdownNow();
-                return Failures.appendDistinct(
-                        failure, new TimeoutException("NSQ consumer callbacks did not finish during close"));
+                failures.addDistinct(
+                        new TimeoutException("NSQ consumer callbacks did not finish during close"));
             }
-            return failure;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             callbacks.shutdownNow();
-            return Failures.appendDistinct(failure, interrupted);
+            failures.addDistinct(interrupted);
         } catch (Throwable closeFailure) {
-            return Failures.appendDistinct(failure, closeFailure);
+            failures.addDistinct(closeFailure);
         }
     }
 
-    private Throwable finishClose(Closing closing, Throwable failure, Thread initiator) {
-        failure = closeConnectionsCollecting(closing.active(), failure);
-        try {
-            eventLoopGroup.closeChannels();
-        } catch (Throwable closeFailure) {
-            failure = Failures.appendDistinct(failure, closeFailure);
-        }
-        try {
-            stopScheduler(initiator);
-        } catch (Throwable closeFailure) {
-            failure = Failures.appendDistinct(failure, closeFailure);
-        }
-        return failure;
+    private void finishClose(Closing closing, Failures failures, Thread initiator) {
+        closeConnections(closing.active(), failures::addDistinct);
+        runCollecting(failures, eventLoopGroup::closeChannels);
+        runCollecting(failures, () -> stopScheduler(initiator));
     }
 
     private void stopConnector(Thread initiator) {
@@ -879,22 +862,31 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void closeConnections(List<Connection> connections, Throwable failure) {
-        for (Connection connection : connections) {
-            cleanup(connection::close, failure);
-        }
-    }
-
-    private static Throwable closeConnectionsCollecting(
-            List<Connection> connections, Throwable failure) {
+    // Closes every connection, handing each close failure to onFailure.
+    private static void closeConnections(
+            List<Connection> connections, Consumer<Throwable> onFailure) {
         for (Connection connection : connections) {
             try {
                 connection.close();
             } catch (Throwable closeFailure) {
-                failure = Failures.appendDistinct(failure, closeFailure);
+                onFailure.accept(closeFailure);
             }
         }
-        return failure;
+    }
+
+    // Runs one cleanup step, recording its failure as distinct so that every step runs.
+    private static void runCollecting(Failures failures, CleanupStep step) {
+        try {
+            step.run();
+        } catch (Throwable closeFailure) {
+            failures.addDistinct(closeFailure);
+        }
+    }
+
+    @FunctionalInterface
+    private interface CleanupStep {
+        @SuppressWarnings("java:S112") // A cleanup step may throw any failure; it is collected
+        void run() throws Exception;
     }
 
     private void cleanup(Runnable action, Throwable failure) {

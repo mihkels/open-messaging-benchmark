@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.driver.rocketmq;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -28,7 +27,6 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
     private final Boolean sendDelayMsg;
     private final Long delayTimeInSec;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("RocketMQ 5 producer");
-    private final PendingSendTracker pending = lifecycle.pending();
 
     public RocketMQ5BenchmarkProducer(final Producer rmqProducer, final String rmqTopic) {
         this.rmqProducer = rmqProducer;
@@ -65,29 +63,18 @@ public class RocketMQ5BenchmarkProducer implements BenchmarkProducer {
             return CompletableFuture.failedFuture(e);
         }
 
-        CompletableFuture<Void> future = lifecycle.begin();
-        if (future.isDone()) {
-            return future;
-        }
-        try {
-            this.rmqProducer
-                    .sendAsync(message)
-                    .whenComplete((sendReceipt, throwable) -> {
-                        if (throwable != null) {
-                            pending.completeFromClient(future, throwable);
-                        } else if (sendReceipt == null) {
-                            pending.completeFromClient(
-                                    future, new IllegalStateException("Missing RocketMQ 5 send receipt"));
-                        } else {
-                            pending.completeFromClient(future, null);
-                        }
-                    });
-        } catch (Exception failure) {
-            future.completeExceptionally(failure);
-        } finally {
-            lifecycle.end();
-        }
-        return future;
+        return lifecycle.publish(settle ->
+                this.rmqProducer
+                        .sendAsync(message)
+                        .whenComplete((sendReceipt, throwable) -> {
+                            if (throwable != null) {
+                                settle.complete(throwable);
+                            } else if (sendReceipt == null) {
+                                settle.complete(new IllegalStateException("Missing RocketMQ 5 send receipt"));
+                            } else {
+                                settle.complete(null);
+                            }
+                        }));
     }
 
     @Override

@@ -16,17 +16,17 @@ package io.openmessaging.benchmark.driver.natsstreaming;
 import io.nats.streaming.AckHandler;
 import io.nats.streaming.StreamingConnection;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.PublicationLifecycle;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 
 public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
     private final StreamingConnection natsStreamingPublisher;
     private final String topic;
     private final PublicationLifecycle lifecycle =
             new PublicationLifecycle("NATS Streaming producer");
-    private final PendingSendTracker pending = lifecycle.pending();
 
     public NatsStreamingBenchmarkProducer(StreamingConnection natsStreamingPublisher, String topic) {
         this.natsStreamingPublisher = natsStreamingPublisher;
@@ -41,47 +41,40 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
-        CompletableFuture<Void> future = lifecycle.begin();
-        if (future.isDone()) {
-            return future;
-        }
+        return lifecycle.publish(settle -> publish(ownedPayload, settle));
+    }
+
+    private void publish(byte[] ownedPayload, PublicationLifecycle.Settle settle)
+            throws IOException, InterruptedException, TimeoutException {
         CompletableFuture<String> expectedGuid = new CompletableFuture<>();
-        AckHandler acb = ackHandler(future, expectedGuid);
+        AckHandler acb = ackHandler(settle, expectedGuid);
+        // The client may clear the caller's interrupt status while publishing
         boolean wasInterrupted = Thread.currentThread().isInterrupted();
         try {
             String guid = natsStreamingPublisher.publish(topic, ownedPayload, acb);
             if (guid == null || guid.isEmpty()) {
-                future.completeExceptionally(
-                        new IllegalStateException("Expected non-empty guid to be returned."));
-            } else {
-                expectedGuid.complete(guid);
+                throw new IllegalStateException("Expected non-empty guid to be returned.");
             }
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            future.completeExceptionally(e);
+            expectedGuid.complete(guid);
         } finally {
             if (wasInterrupted) {
                 Thread.currentThread().interrupt();
             }
-            lifecycle.end();
         }
-        return future;
     }
 
-    private AckHandler ackHandler(
-            CompletableFuture<Void> future, CompletableFuture<String> expectedGuid) {
+    private static AckHandler ackHandler(
+            PublicationLifecycle.Settle settle, CompletableFuture<String> expectedGuid) {
         return (s, e) -> {
             if (e != null) {
-                pending.completeFromClient(future, e);
+                settle.complete(e);
                 return;
             }
             expectedGuid.thenAccept(guid -> {
                 if (guid.equals(s)) {
-                    pending.completeFromClient(future, null);
+                    settle.complete(null);
                 } else {
-                    pending.completeFromClient(future, new IllegalStateException("guid != nuid"));
+                    settle.complete(new IllegalStateException("guid != nuid"));
                 }
             });
         };

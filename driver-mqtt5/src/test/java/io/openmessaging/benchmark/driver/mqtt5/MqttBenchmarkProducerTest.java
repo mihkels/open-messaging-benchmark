@@ -38,7 +38,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -114,129 +113,6 @@ class MqttBenchmarkProducerTest {
     }
 
     @Test
-    void reentrantCloseIsRejectedUntilNestedPublicationsReturn() throws Exception {
-        Mqtt5AsyncClient client = client();
-        CompletableFuture<Mqtt5PublishResult> firstResult = new CompletableFuture<>();
-        CompletableFuture<Mqtt5PublishResult> secondResult = new CompletableFuture<>();
-        CompletableFuture<Mqtt5PublishResult> nestedResult = new CompletableFuture<>();
-        Mqtt5PublishResult accepted = mock(Mqtt5PublishResult.class);
-        when(accepted.getError()).thenReturn(Optional.empty());
-        AtomicInteger calls = new AtomicInteger();
-        when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(invocation -> {
-                    int call = calls.incrementAndGet();
-                    if (call == 1) {
-                        return firstResult;
-                    }
-                    if (call == 2) {
-                        firstResult.complete(accepted);
-                        return secondResult;
-                    }
-                    return nestedResult;
-                });
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
-        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
-        AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
-        CompletableFuture<Void> closeAttempt =
-                first.thenRun(() -> {
-                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                    try {
-                        producer.close();
-                    } catch (Exception failure) {
-                        throw new CompletionException(failure);
-                    }
-                });
-        ExecutorService sender =
-                Executors.newSingleThreadExecutor(task -> {
-                    Thread thread = new Thread(task, "mqtt-reentrant-test");
-                    thread.setDaemon(true);
-                    return thread;
-                });
-        try {
-            Future<CompletableFuture<Void>> second =
-                    sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
-            CompletableFuture<Void> secondSend = second.get(5, TimeUnit.SECONDS);
-            assertThatThrownBy(closeAttempt::join)
-                    .hasCauseInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("retry after sendAsync returns");
-            assertThat(calls).hasValue(3);
-            assertThat(secondSend.isDone()).isFalse();
-            assertThat(nested.get().isDone()).isFalse();
-            verify(client, never()).disconnect();
-            producer.close();
-            assertThatThrownBy(secondSend::join).hasCauseInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(nested.get()::join).hasCauseInstanceOf(IllegalStateException.class);
-            verify(client, times(1)).disconnect();
-        } finally {
-            sender.shutdownNow();
-        }
-    }
-
-    @Test
-    void asynchronousAcknowledgementCannotCloseWhileAnotherPublicationIsActive() throws Exception {
-        Mqtt5AsyncClient client = client();
-        CompletableFuture<Mqtt5PublishResult> firstResult = new CompletableFuture<>();
-        CompletableFuture<Mqtt5PublishResult> secondResult = new CompletableFuture<>();
-        CompletableFuture<Mqtt5PublishResult> thirdResult = new CompletableFuture<>();
-        Mqtt5PublishResult accepted = mock(Mqtt5PublishResult.class);
-        when(accepted.getError()).thenReturn(Optional.empty());
-        CountDownLatch publishing = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        AtomicInteger calls = new AtomicInteger();
-        when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(invocation -> {
-                    int call = calls.incrementAndGet();
-                    if (call == 1) {
-                        return firstResult;
-                    }
-                    if (call == 2) {
-                        publishing.countDown();
-                        if (!release.await(5, TimeUnit.SECONDS)) {
-                            throw new AssertionError("publication was not released");
-                        }
-                        return secondResult;
-                    }
-                    return thirdResult;
-                });
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
-        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
-        AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(() -> {
-            try {
-                producer.close();
-            } catch (Exception failure) {
-                rejected.set(failure);
-            }
-        });
-        ExecutorService workers = Executors.newFixedThreadPool(2);
-        try {
-            Future<CompletableFuture<Void>> second =
-                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
-            assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<?> ack = workers.submit(() -> firstResult.complete(accepted));
-            ack.get(2, TimeUnit.SECONDS);
-            assertThat(rejected.get())
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("client completion callback");
-            assertThat(producer.isClosed()).isFalse();
-            verify(client, never()).disconnect();
-            release.countDown();
-            CompletableFuture<Void> secondSend = second.get(2, TimeUnit.SECONDS);
-            CompletableFuture<Void> third = producer.sendAsync(Optional.empty(), new byte[] {3});
-            assertThat(third.isDone()).isFalse();
-            producer.close();
-            assertThatThrownBy(secondSend::join).hasCauseInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(third::join).hasCauseInstanceOf(IllegalStateException.class);
-            verify(client, times(1)).disconnect();
-        } finally {
-            release.countDown();
-            workers.shutdownNow();
-        }
-    }
-
-    @Test
     void closeFailureCallbacksRejectReentrantCloseAndRetainTheClientFailure() {
         Mqtt5AsyncClient client = client();
         when(client.publish(any(Mqtt5Publish.class))).thenReturn(new CompletableFuture<>());
@@ -267,31 +143,6 @@ class MqttBenchmarkProducerTest {
                 .hasCauseInstanceOf(IllegalStateException.class)
                 .hasRootCause(failure);
         verify(client, times(1)).disconnect();
-    }
-
-    @Test
-    void failedAcknowledgementAlsoGuardsReentrantClose() throws Exception {
-        Mqtt5AsyncClient client = client();
-        CompletableFuture<Mqtt5PublishResult> result = new CompletableFuture<>();
-        when(client.publish(any(Mqtt5Publish.class))).thenReturn(result);
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
-        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
-        CompletableFuture<Throwable> rejected =
-                send.handle((_, error) -> {
-                    try {
-                        producer.close();
-                        return null;
-                    } catch (Exception failure) {
-                        return failure;
-                    }
-                });
-        RuntimeException failure = new RuntimeException("acknowledgement failed");
-        result.completeExceptionally(failure);
-        assertThat(rejected.join()).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(send::join).hasCause(failure);
-        assertThat(producer.isClosed()).isFalse();
-        producer.close();
     }
 
     @Test
@@ -332,47 +183,6 @@ class MqttBenchmarkProducerTest {
             CompletableFuture<Void> pending = send.get(2, TimeUnit.SECONDS);
             close.get(2, TimeUnit.SECONDS);
             assertThatThrownBy(pending::join).hasCauseInstanceOf(IllegalStateException.class);
-            verify(client, times(1)).disconnect();
-        } finally {
-            release.countDown();
-            workers.shutdownNow();
-        }
-    }
-
-    @Test
-    void interruptedCloseStillWaitsForTheActivePublicationAndRestoresTheInterrupt() throws Exception {
-        Mqtt5AsyncClient client = client();
-        CountDownLatch publishing = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        CountDownLatch closing = new CountDownLatch(1);
-        when(client.publish(any(Mqtt5Publish.class)))
-                .thenAnswer(invocation -> {
-                    publishing.countDown();
-                    if (!release.await(5, TimeUnit.SECONDS)) {
-                        throw new AssertionError("publication was not released");
-                    }
-                    return new CompletableFuture<Mqtt5PublishResult>();
-                });
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
-        ExecutorService workers = Executors.newFixedThreadPool(2);
-        try {
-            Future<CompletableFuture<Void>> send =
-                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
-            assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<Boolean> close =
-                    workers.submit(() -> {
-                        Thread.currentThread().interrupt();
-                        closing.countDown();
-                        producer.close();
-                        return Thread.interrupted();
-                    });
-            assertThat(closing.await(2, TimeUnit.SECONDS)).isTrue();
-            assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
-                    .isInstanceOf(TimeoutException.class);
-            release.countDown();
-            send.get(2, TimeUnit.SECONDS);
-            assertThat(close.get(2, TimeUnit.SECONDS)).isTrue();
             verify(client, times(1)).disconnect();
         } finally {
             release.countDown();

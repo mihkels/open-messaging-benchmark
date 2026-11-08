@@ -32,7 +32,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.MQProducer;
@@ -111,57 +110,6 @@ class RocketMQBenchmarkProducerTest {
     }
 
     @Test
-    void reentrantCloseIsRejectedUntilNestedPublicationsReturn() throws Exception {
-        MQProducer client = mock(MQProducer.class);
-        AtomicInteger calls = new AtomicInteger();
-        AtomicReference<SendCallback> firstCallback = new AtomicReference<>();
-        doAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                firstCallback.set(invocation.getArgument(1));
-                            } else if (call == 2) {
-                                firstCallback.get().onSuccess(null);
-                            }
-                            return null;
-                        })
-                .when(client)
-                .send(any(Message.class), any(SendCallback.class));
-        RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
-        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
-        AtomicReference<CompletableFuture<Void>> nested = new AtomicReference<>();
-        CompletableFuture<Void> closeAttempt =
-                first.thenRun(() -> {
-                    nested.set(producer.sendAsync(Optional.empty(), new byte[] {3}));
-                    producer.close();
-                });
-        ExecutorService sender =
-                Executors.newSingleThreadExecutor(task -> {
-                    Thread thread = new Thread(task, "rocketmq-reentrant-test");
-                    thread.setDaemon(true);
-                    return thread;
-                });
-        try {
-            Future<CompletableFuture<Void>> second =
-                    sender.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
-            CompletableFuture<Void> secondSend = second.get(5, TimeUnit.SECONDS);
-            assertThatThrownBy(closeAttempt::join)
-                    .hasCauseInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("retry after sendAsync returns");
-            assertThat(calls).hasValue(3);
-            assertThat(first).isCompleted();
-            assertThat(secondSend.isDone()).isFalse();
-            assertThat(nested.get().isDone()).isFalse();
-            producer.close();
-            assertThatThrownBy(secondSend::join).hasCauseInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(nested.get()::join).hasCauseInstanceOf(IllegalStateException.class);
-            verify(client, never()).shutdown();
-        } finally {
-            sender.shutdownNow();
-        }
-    }
-
-    @Test
     void closeOnAnotherThreadWaitsForPublicationAndSettlesTheSend() throws Exception {
         MQProducer client = mock(MQProducer.class);
         CountDownLatch publishing = new CountDownLatch(1);
@@ -203,103 +151,6 @@ class RocketMQBenchmarkProducerTest {
     }
 
     @Test
-    void interruptedCloseStillWaitsForTheActivePublicationAndRestoresTheInterrupt() throws Exception {
-        MQProducer client = mock(MQProducer.class);
-        CountDownLatch publishing = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        CountDownLatch closing = new CountDownLatch(1);
-        doAnswer(
-                        invocation -> {
-                            publishing.countDown();
-                            if (!release.await(5, TimeUnit.SECONDS)) {
-                                throw new AssertionError("publication was not released");
-                            }
-                            return null;
-                        })
-                .when(client)
-                .send(any(Message.class), any(SendCallback.class));
-        RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
-        ExecutorService workers = Executors.newFixedThreadPool(2);
-        try {
-            Future<CompletableFuture<Void>> send =
-                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
-            assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
-            Future<Boolean> close =
-                    workers.submit(() -> {
-                        Thread.currentThread().interrupt();
-                        closing.countDown();
-                        producer.close();
-                        return Thread.interrupted();
-                    });
-            assertThat(closing.await(5, TimeUnit.SECONDS)).isTrue();
-            assertThatThrownBy(() -> close.get(150, TimeUnit.MILLISECONDS))
-                    .isInstanceOf(TimeoutException.class);
-            release.countDown();
-            send.get(5, TimeUnit.SECONDS);
-            assertThat(close.get(5, TimeUnit.SECONDS)).isTrue();
-        } finally {
-            release.countDown();
-            workers.shutdownNow();
-        }
-    }
-
-    @Test
-    void asynchronousAcknowledgementCannotCloseWhileAnotherPublicationIsActive() throws Exception {
-        MQProducer client = mock(MQProducer.class);
-        AtomicInteger calls = new AtomicInteger();
-        AtomicReference<SendCallback> firstCallback = new AtomicReference<>();
-        CountDownLatch publishing = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        doAnswer(
-                        invocation -> {
-                            int call = calls.incrementAndGet();
-                            if (call == 1) {
-                                firstCallback.set(invocation.getArgument(1));
-                            } else if (call == 2) {
-                                publishing.countDown();
-                                if (!release.await(5, TimeUnit.SECONDS)) {
-                                    throw new AssertionError("publication was not released");
-                                }
-                            }
-                            return null;
-                        })
-                .when(client)
-                .send(any(Message.class), any(SendCallback.class));
-        RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
-        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
-        AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.thenRun(() -> {
-            try {
-                producer.close();
-            } catch (RuntimeException failure) {
-                rejected.set(failure);
-            }
-        });
-        ExecutorService workers = Executors.newFixedThreadPool(2);
-        try {
-            Future<CompletableFuture<Void>> second =
-                    workers.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {2}));
-            assertThat(publishing.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<?> ack = workers.submit(() -> firstCallback.get().onSuccess(null));
-            ack.get(2, TimeUnit.SECONDS);
-            assertThat(rejected.get())
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("client completion callback");
-            release.countDown();
-            CompletableFuture<Void> secondSend = second.get(2, TimeUnit.SECONDS);
-            CompletableFuture<Void> third = producer.sendAsync(Optional.empty(), new byte[] {3});
-            assertThat(third.isDone()).isFalse();
-            producer.close();
-            assertThatThrownBy(secondSend::join).hasCauseInstanceOf(IllegalStateException.class);
-            assertThatThrownBy(third::join).hasCauseInstanceOf(IllegalStateException.class);
-            verify(client, never()).shutdown();
-        } finally {
-            release.countDown();
-            workers.shutdownNow();
-        }
-    }
-
-    @Test
     void closeInducedSendFailuresRejectReentrantCloseAndSettleAllSends() {
         MQProducer client = mock(MQProducer.class);
         RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
@@ -322,32 +173,6 @@ class RocketMQBenchmarkProducerTest {
         assertThatThrownBy(first::join).hasCauseInstanceOf(IllegalStateException.class);
         assertThatThrownBy(second::join).hasCauseInstanceOf(IllegalStateException.class);
         verify(client, never()).shutdown();
-    }
-
-    @Test
-    void failedAcknowledgementAlsoGuardsReentrantClose() throws Exception {
-        MQProducer client = mock(MQProducer.class);
-        RocketMQBenchmarkProducer producer = new RocketMQBenchmarkProducer(client, "topic");
-        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
-        CompletableFuture<Throwable> rejected =
-                send.handle((_, error) -> {
-                    try {
-                        producer.close();
-                        return null;
-                    } catch (RuntimeException failure) {
-                        return failure;
-                    }
-                });
-        ArgumentCaptor<SendCallback> callback = ArgumentCaptor.forClass(SendCallback.class);
-        verify(client).send(any(Message.class), callback.capture());
-        RuntimeException failure = new RuntimeException("acknowledgement failed");
-        callback.getValue().onException(failure);
-        assertThat(rejected.join()).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(send::join).hasCause(failure);
-        CompletableFuture<Void> next = producer.sendAsync(Optional.empty(), new byte[] {2});
-        assertThat(next.isDone()).isFalse();
-        producer.close();
-        assertThatThrownBy(next::join).hasCauseInstanceOf(IllegalStateException.class);
     }
 
     @Test

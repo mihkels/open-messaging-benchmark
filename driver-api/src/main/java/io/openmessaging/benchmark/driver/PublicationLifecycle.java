@@ -14,14 +14,16 @@
 package io.openmessaging.benchmark.driver;
 
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Tracks the sends of a producer whose client publishes synchronously on the caller's thread, and
  * closes it only after every publication that has started has returned.
  *
- * <p>A send calls {@link #begin()} and, when the returned future is not already done, publishes and
- * then calls {@link #end()} in a {@code finally} block. {@link #close()} waits for publications in
- * progress, fails the sends still pending, and makes concurrent closers wait for the first one.
+ * <p>A send goes through {@link #publish(Send)}, which registers it, hands the client call a
+ * callback that settles it, and counts the publication as active until the client call returns.
+ * {@link #close()} waits for publications in progress, fails the sends still pending, and makes
+ * concurrent closers wait for the first one.
  */
 public final class PublicationLifecycle {
     private final String producerName;
@@ -52,12 +54,37 @@ public final class PublicationLifecycle {
     }
 
     /**
-     * Registers a send. If the returned future is not done, a publication has started and the caller
-     * must call {@link #end()} once the client call returns.
+     * Publishes one send. Once close has begun the send fails without calling the client. Otherwise
+     * the publication counts as active until {@code send} returns, so {@link #close()} waits for it,
+     * and the future settles when the client calls the {@link Settle} callback. A failure thrown by
+     * {@code send} fails the future; an {@link InterruptedException} also restores the interrupt
+     * status.
      *
-     * @return the future for the send, already failed once close has begun
+     * @param send makes the client call and arranges for the callback to be called once the client
+     *     acknowledges or rejects the send
+     * @return the future for the send
      */
-    public CompletableFuture<Void> begin() {
+    // The interrupt is restored before the failure is recorded on the future
+    @SuppressWarnings("java:S2142")
+    public CompletableFuture<Void> publish(Send send) {
+        CompletableFuture<Void> future = begin();
+        if (future.isDone()) {
+            return future;
+        }
+        try {
+            send.publish(failure -> pending.completeFromClient(future, failure));
+        } catch (Exception failure) {
+            if (failure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            future.completeExceptionally(failure);
+        } finally {
+            end();
+        }
+        return future;
+    }
+
+    private CompletableFuture<Void> begin() {
         synchronized (lock) {
             CompletableFuture<Void> future = pending.register();
             if (future.isDone()) {
@@ -70,8 +97,7 @@ public final class PublicationLifecycle {
         }
     }
 
-    /** Ends a publication started by {@link #begin()}. */
-    public void end() {
+    private void end() {
         int depth = publishingDepth.get() - 1;
         if (depth == 0) {
             publishingDepth.remove();
@@ -80,7 +106,10 @@ public final class PublicationLifecycle {
         }
         synchronized (lock) {
             activePublications--;
-            lock.notifyAll();
+            // Only the close owner waits on activePublications, and only once closed is set
+            if (closed && activePublications == 0) {
+                lock.notifyAll();
+            }
         }
     }
 
@@ -163,6 +192,30 @@ public final class PublicationLifecycle {
                 }
             }
         }
+    }
+
+    /** Makes the client call of one send. */
+    @FunctionalInterface
+    public interface Send {
+        /**
+         * Hands the send to the client.
+         *
+         * @param settle settles the send; the client calls it once it acknowledges or rejects the send,
+         *     possibly before this method returns
+         * @throws Exception if the client rejects the send synchronously
+         */
+        void publish(Settle settle) throws Exception;
+    }
+
+    /** Settles one send from the client's acknowledgement. */
+    @FunctionalInterface
+    public interface Settle {
+        /**
+         * Completes the send, without holding any lifecycle lock.
+         *
+         * @param failure the client failure, or null on success
+         */
+        void complete(@Nullable Throwable failure);
     }
 
     /**

@@ -130,7 +130,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                 .all()
                 .whenComplete((result, throwable) -> {
                     if (throwable == null) {
-                        future.complete(result);
+                        future.complete(null);
                     } else {
                         future.completeExceptionally(throwable);
                     }

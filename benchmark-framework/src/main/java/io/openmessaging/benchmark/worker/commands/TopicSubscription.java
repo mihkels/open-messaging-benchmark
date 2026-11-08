@@ -14,8 +14,8 @@
 package io.openmessaging.benchmark.worker.commands;
 
 public class TopicSubscription {
-    public String topic;
-    public String subscription;
+    public String topic = "";
+    public String subscription = "";
 
     public TopicSubscription() {}
 

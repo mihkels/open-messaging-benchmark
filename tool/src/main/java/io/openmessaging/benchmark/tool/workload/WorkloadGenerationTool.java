@@ -75,12 +75,14 @@ public class WorkloadGenerationTool {
                 names = {"-t", "--template-file"},
                 description = "Path to a YAML file containing the workload template",
                 required = true)
+        @SuppressWarnings("NullAway.Init") // JCommander sets required parameters
         public File templateFile;
 
         @Parameter(
                 names = {"-o", "--output-folder"},
                 description = "Output",
                 required = true)
+        @SuppressWarnings("NullAway.Init") // JCommander sets required parameters
         public File outputFolder;
 
         @Parameter(

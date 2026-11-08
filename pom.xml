@@ -83,6 +83,19 @@
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
         <google-java-format.version>2.0.0</google-java-format.version>
         <sonar.plugin.version>5.8.0.7211</sonar.plugin.version>
+        <errorprone.version>2.52.0</errorprone.version>
+        <nullaway.version>0.14.3</nullaway.version>
+        <!--
+            Error Prone runs its default checks plus NullAway and a set of checks promoted to ERROR because they
+            map to findings that used to fail Sonar on pull requests, or are cheap to keep at zero. Production
+            code also gets InterruptedExceptionSwallowed (errorprone.mainArgs); tests catch Exception too often
+            for it, and run without NullAway. FutureReturnValueIgnored and ReferenceEquality stay warnings until their hits are reviewed.
+            NullAway only checks @NullMarked packages. The javac internals Error Prone needs are exported in
+            .mvn/jvm.config.
+            See docs/development/building-the-project.md#static-analysis-and-null-safety.
+        -->
+        <errorprone.args>-XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-(test-)?sources/.* -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:CustomInitializerAnnotations=org.openjdk.jmh.annotations.Setup -Xep:BadImport:ERROR -Xep:BooleanLiteral:ERROR -Xep:BoxingComparator:ERROR -Xep:CanonicalDuration:ERROR -Xep:CatchAndPrintStackTrace:ERROR -Xep:DefaultCharset:ERROR -Xep:EmptyBlockTag:ERROR -Xep:EqualsGetClass:ERROR -Xep:FieldCanBeLocal:ERROR -Xep:InconsistentCapitalization:ERROR -Xep:JavaTimeDefaultTimeZone:ERROR -Xep:MissingOverride:ERROR -Xep:OperatorPrecedence:ERROR -Xep:StreamResourceLeak:ERROR -Xep:StringCaseLocaleUsage:ERROR -Xep:UndefinedEquals:ERROR -Xep:UnnamedVariable:ERROR -Xep:UnnecessaryParentheses:ERROR -Xep:UnusedException:ERROR -Xep:UnusedMethod:ERROR -Xep:UnusedVariable:ERROR</errorprone.args>
+        <errorprone.mainArgs>-Xep:InterruptedExceptionSwallowed:ERROR</errorprone.mainArgs>
         <pitest.plugin.version>1.30.2</pitest.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
         <!-- PIT worker threads for the opt-in mutation profile; override with -Dpitest.threads=N -->
@@ -931,7 +944,37 @@
                                 <encoding>${project.build.sourceEncoding}</encoding>
                                 <showDeprecation>true</showDeprecation>
                                 <showWarnings>true</showWarnings>
+                                <compilerArgs>
+                                    <arg>-XDcompilePolicy=simple</arg>
+                                    <arg>--should-stop=ifError=FLOW</arg>
+                                    <arg>-Xplugin:ErrorProne ${errorprone.args} ${errorprone.mainArgs}</arg>
+                                </compilerArgs>
+                                <annotationProcessorPaths>
+                                    <path>
+                                        <groupId>com.google.errorprone</groupId>
+                                        <artifactId>error_prone_core</artifactId>
+                                        <version>${errorprone.version}</version>
+                                    </path>
+                                    <path>
+                                        <groupId>com.uber.nullaway</groupId>
+                                        <artifactId>nullaway</artifactId>
+                                        <version>${nullaway.version}</version>
+                                    </path>
+                                </annotationProcessorPaths>
                             </configuration>
+                            <executions>
+                                <execution>
+                                    <id>default-testCompile</id>
+                                    <configuration>
+                                        <compilerArgs combine.self="override">
+                                            <arg>-XDcompilePolicy=simple</arg>
+                                            <arg>--should-stop=ifError=FLOW</arg>
+                                            <!-- Tests pass null on purpose to exercise null handling -->
+                                            <arg>-Xplugin:ErrorProne ${errorprone.args} -Xep:NullAway:OFF</arg>
+                                        </compilerArgs>
+                                    </configuration>
+                                </execution>
+                            </executions>
                         </plugin>
                     </plugins>
                 </pluginManagement>

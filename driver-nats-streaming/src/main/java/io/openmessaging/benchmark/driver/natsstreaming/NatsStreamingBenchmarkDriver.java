@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.LoggerFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
@@ -162,7 +163,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public synchronized void close() throws Exception {
+    public synchronized void close() throws IOException, InterruptedException, TimeoutException {
         closed = true;
         if (natsStreamingPublisher != null) {
             StreamingConnection publisher = natsStreamingPublisher;

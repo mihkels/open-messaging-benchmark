@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.commons.configuration2.PropertiesConfiguration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
@@ -168,7 +169,7 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() throws ExecutionException, InterruptedException {
             writer.asyncClose().get();
         }
     }

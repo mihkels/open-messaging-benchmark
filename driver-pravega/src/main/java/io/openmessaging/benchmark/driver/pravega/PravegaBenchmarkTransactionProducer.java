@@ -125,6 +125,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         }
     }
 
+    @GuardedBy("this")
     private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {
         if (key.isPresent()) {
             transaction.writeEvent(key.get(), payload);

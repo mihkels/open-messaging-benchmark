@@ -329,7 +329,7 @@ class NatsStreamingBenchmarkProducerTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
-        first.whenComplete((unused, error) -> {
+        first.whenComplete((_, error) -> {
             try {
                 producer.close();
             } catch (RuntimeException failure) {
@@ -356,7 +356,7 @@ class NatsStreamingBenchmarkProducerTest {
                 new NatsStreamingBenchmarkProducer(connection, "topic");
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Throwable> rejected =
-                send.handle((unused, error) -> {
+                send.handle((_, error) -> {
                     try {
                         producer.close();
                         return null;

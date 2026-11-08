@@ -94,7 +94,7 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
             return;
         }
         closeUntransferred()
-                .whenComplete((unused, closeError) -> {
+                .whenComplete((_, closeError) -> {
                     Throwable cause = unwrap(closeError);
                     if (cause != null && cause != failure) {
                         failure.addSuppressed(cause);

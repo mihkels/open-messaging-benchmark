@@ -22,6 +22,7 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -58,7 +59,7 @@ public final class BenchmarkWorker {
                 names = {"-sp", "--stats-port"},
                 description = "Deprecated and ignored; accepted so existing launch scripts keep working")
         // Deprecated since 0.0.3. Kept so existing launch scripts still parse; only read to warn.
-        private Integer statsPort;
+        private @Nullable Integer statsPort;
 
         @Parameter(
                 names = "--token-file",
@@ -66,7 +67,7 @@ public final class BenchmarkWorker {
                         "File holding the shared bearer token that every request must send; overrides the "
                                 + BearerTokenAuth.TOKEN_ENV
                                 + " environment variable. Without either, the API is unauthenticated")
-        private Path tokenFile;
+        private @Nullable Path tokenFile;
 
         @Parameter(
                 names = "--protect-metrics",
@@ -95,7 +96,7 @@ public final class BenchmarkWorker {
      * @param environment the process environment
      * @return the authenticator, or {@code null} when no token is configured
      */
-    static BearerTokenAuth authFor(Arguments arguments, Map<String, String> environment) {
+    static @Nullable BearerTokenAuth authFor(Arguments arguments, Map<String, String> environment) {
         return BearerTokenAuth.resolveToken(environment, arguments.tokenFile)
                 .map(token ->
                         new BearerTokenAuth(token, arguments.protectMetrics ? Set.of() : Set.of(METRICS_PATH)))
@@ -104,7 +105,7 @@ public final class BenchmarkWorker {
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
-    static void main(String[] args) throws Exception {
+    static void main(String[] args) throws InterruptedException {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("benchmark-worker");

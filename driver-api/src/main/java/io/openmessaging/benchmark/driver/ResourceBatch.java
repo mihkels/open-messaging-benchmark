@@ -23,6 +23,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,7 @@ final class ResourceBatch<C extends AutoCloseable> {
     private final Runnable onFinish;
     private final ResultFuture future = new ResultFuture();
     private State state = State.ACTIVE;
-    private Throwable failure;
+    private @Nullable Throwable failure;
     private int completed;
 
     ResourceBatch(int size, Runnable onFinish) {
@@ -149,7 +150,7 @@ final class ResourceBatch<C extends AutoCloseable> {
         }
     }
 
-    void succeed(int index, C resource) {
+    void succeed(int index, @Nullable C resource) {
         if (resource == null) {
             fail(new NullPointerException("creation completed with a null resource"));
             return;

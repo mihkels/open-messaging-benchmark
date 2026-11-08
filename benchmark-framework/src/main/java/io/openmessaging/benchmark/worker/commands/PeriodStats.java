@@ -17,6 +17,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 import org.HdrHistogram.Histogram;
+import org.jspecify.annotations.Nullable;
 
 public record PeriodStats(
         @JsonProperty("messagesSent") long messagesSent,
@@ -43,10 +44,10 @@ public record PeriodStats(
             long totalMessagesSent,
             long totalMessageSendErrors,
             long totalMessagesReceived,
-            Histogram publishLatency,
-            Histogram publishDelayLatency,
-            Histogram endToEndLatency,
-            Histogram publishScheduleLatency) {
+            @Nullable Histogram publishLatency,
+            @Nullable Histogram publishDelayLatency,
+            @Nullable Histogram endToEndLatency,
+            @Nullable Histogram publishScheduleLatency) {
         this.messagesSent = messagesSent;
         this.messageSendErrors = messageSendErrors;
         this.bytesSent = bytesSent;
@@ -96,18 +97,22 @@ public record PeriodStats(
     }
 
     // Return defensive copies in getters
+    @Override
     public Histogram publishLatency() {
         return publishLatency.copy();
     }
 
+    @Override
     public Histogram publishDelayLatency() {
         return publishDelayLatency.copy();
     }
 
+    @Override
     public Histogram publishScheduleLatency() {
         return publishScheduleLatency.copy();
     }
 
+    @Override
     public Histogram endToEndLatency() {
         return endToEndLatency.copy();
     }

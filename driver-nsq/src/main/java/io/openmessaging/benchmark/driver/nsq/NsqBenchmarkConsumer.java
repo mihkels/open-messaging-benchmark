@@ -432,6 +432,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
+    // The subscribe failure, including an interruption, is rethrown unchanged after cleanup
+    @SuppressWarnings("InterruptedExceptionSwallowed")
     private void connect(ServerAddress address) throws Exception {
         NSQConfig config;
         NSQConsumer consumer;

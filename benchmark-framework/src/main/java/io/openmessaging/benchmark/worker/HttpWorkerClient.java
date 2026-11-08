@@ -55,6 +55,7 @@ import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
 import org.asynchttpclient.Dsl;
 import org.asynchttpclient.Response;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -73,7 +74,7 @@ public final class HttpWorkerClient implements Worker {
 
     private final AsyncHttpClient httpClient;
     private final String host;
-    private final String authorization;
+    private final @Nullable String authorization;
     private final long closeTimeoutNanos;
 
     /**
@@ -91,12 +92,12 @@ public final class HttpWorkerClient implements Worker {
      * @param host the worker's base URL
      * @param token the shared worker token, or {@code null} to send none
      */
-    public HttpWorkerClient(String host, String token) {
+    public HttpWorkerClient(String host, @Nullable String token) {
         this(
                 asyncHttpClient(
                         Dsl.config()
-                                .setReadTimeout(Duration.ofMillis(600000))
-                                .setRequestTimeout(Duration.ofMillis(600000))),
+                                .setReadTimeout(Duration.ofMinutes(10))
+                                .setRequestTimeout(Duration.ofMinutes(10))),
                 host,
                 token,
                 CLOSE_TIMEOUT);
@@ -110,7 +111,8 @@ public final class HttpWorkerClient implements Worker {
         this(httpClient, host, null, closeTimeout);
     }
 
-    HttpWorkerClient(AsyncHttpClient httpClient, String host, String token, Duration closeTimeout) {
+    HttpWorkerClient(
+            AsyncHttpClient httpClient, String host, @Nullable String token, Duration closeTimeout) {
         this.httpClient = httpClient;
         this.host = host;
         this.authorization =

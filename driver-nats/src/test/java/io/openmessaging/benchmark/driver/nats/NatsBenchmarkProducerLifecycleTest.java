@@ -144,7 +144,7 @@ class NatsBenchmarkProducerLifecycleTest {
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), samplePayload());
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), samplePayload());
         CompletableFuture<Void> callback =
-                first.handle((unused, failure) -> {
+                first.handle((_, failure) -> {
                     assertThrows(IllegalStateException.class, producer::close);
                     return null;
                 });

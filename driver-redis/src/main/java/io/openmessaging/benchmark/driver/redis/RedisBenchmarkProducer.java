@@ -16,7 +16,7 @@ package io.openmessaging.benchmark.driver.redis;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -51,7 +51,8 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
         Boolean previous = inSend.get();
         inSend.set(true);
         try {
-            Map<byte[], byte[]> map1 = new HashMap<>();
+            // byte[] keys have identity equality; the two field names are distinct arrays
+            Map<byte[], byte[]> map1 = new IdentityHashMap<>();
             map1.put("payload".getBytes(UTF_8), payload);
             if (key.isPresent()) {
                 map1.put("key".getBytes(UTF_8), key.toString().getBytes(UTF_8));

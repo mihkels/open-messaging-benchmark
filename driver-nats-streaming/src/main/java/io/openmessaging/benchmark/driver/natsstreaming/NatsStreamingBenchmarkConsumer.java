@@ -15,6 +15,8 @@ package io.openmessaging.benchmark.driver.natsstreaming;
 
 import io.nats.streaming.StreamingConnection;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
+import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 public class NatsStreamingBenchmarkConsumer implements BenchmarkConsumer {
     private final StreamingConnection streamingConnection;
@@ -26,7 +28,7 @@ public class NatsStreamingBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException, InterruptedException, TimeoutException {
         if (!unsubscribe) {
             unsubscribe = true;
             streamingConnection.close();

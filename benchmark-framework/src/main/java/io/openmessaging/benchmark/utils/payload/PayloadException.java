@@ -13,9 +13,11 @@
  */
 package io.openmessaging.benchmark.utils.payload;
 
+import org.jspecify.annotations.Nullable;
+
 public class PayloadException extends RuntimeException {
 
-    public PayloadException(String message) {
+    public PayloadException(@Nullable String message) {
         super(message);
     }
 }

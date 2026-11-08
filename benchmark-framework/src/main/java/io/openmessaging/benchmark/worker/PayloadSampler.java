@@ -16,14 +16,16 @@ package io.openmessaging.benchmark.worker;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.List;
 import java.util.random.RandomGenerator;
+import org.jspecify.annotations.Nullable;
 
 /** Picks the payload of each message, uniformly or according to the payload weights. */
 final class PayloadSampler {
     private final List<byte[]> payloads;
-    private final int[] cumulativeWeights;
+    private final int @Nullable [] cumulativeWeights;
     private final int totalWeight;
 
-    private PayloadSampler(List<byte[]> payloads, int[] cumulativeWeights, int totalWeight) {
+    private PayloadSampler(
+            List<byte[]> payloads, int @Nullable [] cumulativeWeights, int totalWeight) {
         this.payloads = payloads;
         this.cumulativeWeights = cumulativeWeights;
         this.totalWeight = totalWeight;
@@ -37,7 +39,7 @@ final class PayloadSampler {
      * @return the sampler
      * @throws IllegalArgumentException if there are no payloads or the weights are invalid
      */
-    static PayloadSampler of(List<byte[]> payloads, int[] weights) {
+    static PayloadSampler of(List<byte[]> payloads, int @Nullable [] weights) {
         if (payloads.isEmpty()) {
             throw new IllegalArgumentException("At least one payload is required");
         }

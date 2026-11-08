@@ -59,7 +59,7 @@ public class PaddingDecimalFormat extends DecimalFormat {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) {
+        if (!(o instanceof PaddingDecimalFormat)) {
             return false;
         }
         if (!super.equals(o)) {

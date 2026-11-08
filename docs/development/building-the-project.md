@@ -76,8 +76,9 @@ reactor: the distribution collects plugin bundles from the driver modules, so bu
 `package` module can leave drivers out.
 
 During the build, the Maven Enforcer and Checkstyle run in the `validate` phase, the license header
-check runs in `process-sources`, and Spotless, SpotBugs (with `etc/findbugsExclude.xml`) and JaCoCo
-check in `verify`. Tests use JUnit 6 (Jupiter) and Mockito; metrics use Micrometer and the
+check runs in `process-sources`, Error Prone and NullAway run inside `javac` (see
+[Static analysis and null safety](#static-analysis-and-null-safety)), and Spotless, SpotBugs (with
+`etc/findbugsExclude.xml`) and JaCoCo check in `verify`. Tests use JUnit 6 (Jupiter) and Mockito; metrics use Micrometer and the
 Prometheus client libraries.
 
 `performance-harness` is not in the default module list. It is built only with `-Pperformance`; see
@@ -85,19 +86,58 @@ Prometheus client libraries.
 
 Common variations:
 
-|                 Command                  |                     Effect                     |
-|------------------------------------------|------------------------------------------------|
-| `mvn clean install -DskipTests`          | Skip unit tests                                |
-| `mvn clean verify -Djacoco.skip`         | Skip JaCoCo coverage                           |
-| `mvn clean verify -Dcheckstyle.skip`     | Skip Checkstyle                                |
-| `mvn clean verify -Dspotless.check.skip` | Skip the Spotless format check                 |
-| `mvn clean verify -Dlicense.skip`        | Skip the license header check                  |
-| `mvn clean verify -Dspotbugs.skip`       | Skip SpotBugs                                  |
-| `mvn -pl driver-kafka -am install`       | Build one module and the modules it depends on |
-| `mvn -Pmutation verify -pl driver-api`   | Also run PIT mutation testing on `driver-api`  |
+|                 Command                  |                      Effect                      |
+|------------------------------------------|--------------------------------------------------|
+| `mvn clean install -DskipTests`          | Skip unit tests                                  |
+| `mvn clean verify -Djacoco.skip`         | Skip JaCoCo coverage                             |
+| `mvn clean verify -Dcheckstyle.skip`     | Skip Checkstyle                                  |
+| `mvn clean verify -Dspotless.check.skip` | Skip the Spotless format check                   |
+| `mvn clean verify -Dlicense.skip`        | Skip the license header check                    |
+| `mvn clean verify -Dspotbugs.skip`       | Skip SpotBugs                                    |
+| `mvn -pl driver-kafka -am install`       | Build one module and the modules it depends on   |
+| `mvn -Pmutation verify -pl driver-api`   | Also run PIT mutation testing on `driver-api`    |
+| `mvn -pl driver-api compile`             | Compile one module with Error Prone and NullAway |
 
 After a source-tree build, the `bin/` scripts run straight from the checkout. They find the bundles in
 `driver-*/target/omb-plugin` (see [Runtime and plugins](../reference/runtime-and-plugins.md)).
+
+## Static analysis and null safety
+
+[Error Prone](https://errorprone.info) runs as a `javac` plugin on every module, main and test code,
+and [NullAway](https://github.com/uber/NullAway) runs inside it. Both fail the compile, so their
+findings surface in `mvn compile` instead of later in the SonarCloud scan. The configuration is the
+`errorprone.args` property in the root `pom.xml`.
+
+- **Error Prone** runs its default checks plus a set promoted to errors. Some of them match Sonar
+  rules that used to fail pull requests: `UnnamedVariable` (S7467), `UnusedVariable` and
+  `UnusedMethod` (S1481, S1068), `StreamResourceLeak` (S2095) and `FieldCanBeLocal` (S1450). The rest
+  are cheap to keep at zero, such as `MissingOverride`, `DefaultCharset`, `StringCaseLocaleUsage`,
+  `UndefinedEquals` and `EqualsGetClass`. Production code also gets `InterruptedExceptionSwallowed`:
+  declare the exceptions a method throws instead of `throws Exception`, and restore the interrupt flag
+  when you catch an `InterruptedException`. Other Error Prone warnings are printed but don't fail the
+  build.
+- **NullAway** checks the packages marked `@NullMarked` in their `package-info.java`. Today that is
+  every package in `driver-api`, `benchmark-framework` and `tool`. In those packages every type is
+  non-null unless it is annotated with JSpecify `@Nullable` (`org.jspecify.annotations.Nullable`).
+  Driver modules aren't marked yet and aren't checked.
+
+Common fixes for NullAway errors:
+
+|                       Situation                        |                                      Fix                                       |
+|--------------------------------------------------------|--------------------------------------------------------------------------------|
+| A field, parameter or return value can be `null`       | Annotate it `@Nullable`; callers then have to check it                         |
+| A lifecycle field is set later, e.g. in `initialize()` | Annotate it `@Nullable`, copy it to a local variable and check that before use |
+| A YAML/JSON field is optional                          | Annotate it `@Nullable`, or give it a default value                            |
+| A YAML/JSON field is required                          | Check it where the file is loaded and throw an error that names the key        |
+| Jackson or JCommander sets the field                   | `@SuppressWarnings("NullAway.Init")` on the field or no-arg constructor        |
+
+Suppress a false positive with `@SuppressWarnings("<CheckName>")` on the smallest enclosing element,
+with a comment that says why.
+
+Error Prone needs access to `javac` internals. `.mvn/jvm.config` holds the `--add-exports` and
+`--add-opens` flags, and Maven reads it automatically, so plain `mvn` commands work. Keep the file
+when copying the build elsewhere; the Docker build copies it with the sources. Without it, the
+compile fails with `IllegalAccessError: ... does not export com.sun.tools.javac.api`.
 
 ## Coverage thresholds
 

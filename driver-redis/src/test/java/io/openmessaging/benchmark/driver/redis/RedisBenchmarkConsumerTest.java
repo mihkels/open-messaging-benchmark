@@ -30,7 +30,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.reflect.Field;
 import java.time.Duration;
-import java.util.LinkedHashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -187,7 +187,7 @@ class RedisBenchmarkConsumerTest {
         JedisPool pool = mock();
         Jedis jedis = mock();
         when(pool.getResource()).thenReturn(jedis);
-        Map<byte[], byte[]> fields = new LinkedHashMap<>();
+        Map<byte[], byte[]> fields = new IdentityHashMap<>();
         fields.put("other".getBytes(UTF_8), new byte[] {9});
         fields.put("payload".getBytes(UTF_8), new byte[] {1, 2});
         StreamEntryBinary entry = new StreamEntryBinary(new StreamEntryID(42, 0), fields);

@@ -23,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,7 +170,7 @@ final class ResourceComposition {
     }
 
     private static void closeAfterFailure(
-            AutoCloseable resource, Throwable failure, CreationTracker tracker) {
+            AutoCloseable resource, @Nullable Throwable failure, CreationTracker tracker) {
         try {
             resource.close();
         } catch (Throwable error) {
@@ -192,7 +193,7 @@ final class ResourceComposition {
         log.warn("Failed to construct an untransferred aggregate resource", error);
     }
 
-    private static Throwable completionFailure(CompletableFuture<?> result) {
+    private static @Nullable Throwable completionFailure(CompletableFuture<?> result) {
         try {
             result.join();
             return null;

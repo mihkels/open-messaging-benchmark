@@ -13,8 +13,10 @@
  */
 package io.openmessaging.benchmark.worker;
 
-public class DriverConfiguration {
-    public String name;
+import org.jspecify.annotations.Nullable;
 
-    public String driverClass;
+public class DriverConfiguration {
+    public @Nullable String name;
+
+    public @Nullable String driverClass;
 }

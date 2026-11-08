@@ -28,6 +28,7 @@ package io.openmessaging.benchmark.utils.distributor;
 
 import java.util.Base64;
 import java.util.Random;
+import org.jspecify.annotations.Nullable;
 
 public abstract class KeyDistributor {
 
@@ -54,7 +55,7 @@ public abstract class KeyDistributor {
         return UNIQUE_COUNT;
     }
 
-    public abstract String next();
+    public abstract @Nullable String next();
 
     public static KeyDistributor build(KeyDistributorType keyType) {
         return switch (keyType) {

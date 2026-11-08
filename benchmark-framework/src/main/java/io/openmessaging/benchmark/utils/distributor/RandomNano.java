@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.utils.distributor;
 
 public class RandomNano extends KeyDistributor {
 
+    @Override
     public String next() {
         int randomIndex = Math.abs((int) System.nanoTime() % getLength());
         return get(randomIndex);

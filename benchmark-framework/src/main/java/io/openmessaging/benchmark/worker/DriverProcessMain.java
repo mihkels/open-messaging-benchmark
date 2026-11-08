@@ -58,6 +58,7 @@ public final class DriverProcessMain {
         if (portFile == null) {
             System.err.println("Usage: DriverProcessMain --port-file <file>");
             System.exit(2);
+            return;
         }
 
         Thread supervisorMonitor =

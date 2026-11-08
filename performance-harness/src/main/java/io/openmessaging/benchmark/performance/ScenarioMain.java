@@ -34,6 +34,7 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
@@ -150,6 +151,8 @@ public final class ScenarioMain {
         }
     }
 
+    // The run failure, including an interruption, is rethrown unchanged after cleanup
+    @SuppressWarnings("InterruptedExceptionSwallowed")
     private static void run(Scenario scenario, Path output, Path plugin) throws Exception {
         long setupStart = System.nanoTime();
         List<Process> supervisors = new ArrayList<>();
@@ -240,7 +243,7 @@ public final class ScenarioMain {
             List<Worker> handles,
             List<Supplier<String>> scrapes,
             PrometheusMeterRegistry localRegistry)
-            throws Exception {
+            throws IOException, InterruptedException {
         if ("local".equals(scenario.topology())) {
             Worker worker = new LocalWorker(localRegistry);
             handles.add(worker);
@@ -419,11 +422,14 @@ public final class ScenarioMain {
             }
             return response.body();
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new IllegalStateException("Cannot scrape " + endpoint, e);
         }
     }
 
-    private static void captureRuntime(Path output) throws Exception {
+    private static void captureRuntime(Path output) throws IOException, InterruptedException {
         List<ProcessHandle> processes = new ArrayList<>();
         processes.add(ProcessHandle.current());
         processes.addAll(ProcessHandle.current().descendants().toList());

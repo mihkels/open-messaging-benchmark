@@ -179,7 +179,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws InterruptedException {
         if (this.connection != null) {
             this.connection.close();
         }

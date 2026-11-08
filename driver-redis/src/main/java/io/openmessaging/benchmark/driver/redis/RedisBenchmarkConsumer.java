@@ -17,6 +17,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.Failures;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,21 +174,17 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         consumerTask.cancel(true);
         executor.shutdownNow();
 
-        CloseFailures failures = new CloseFailures(Thread.interrupted());
+        Failures failures = new Failures();
+        failures.deferInterrupt("Interrupted before consumer close");
         boolean terminated = awaitTermination(failures);
         if (terminated && !consumerTask.isCancelled()) {
             collectTaskFailure(failures);
         }
-        if (failures.interrupted) {
-            Thread.currentThread().interrupt();
-        }
-        if (failures.failure != null) {
-            throw failures.failure;
-        }
+        failures.throwIfAny();
         log.info("Redis consumer closed for topic '{}' subscription '{}'", topic, subscriptionName);
     }
 
-    private boolean awaitTermination(CloseFailures failures) {
+    private boolean awaitTermination(Failures failures) {
         long deadline = System.nanoTime() + closeTimeoutNanos;
         while (true) {
             try {
@@ -198,40 +195,18 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
                 }
                 return true;
             } catch (InterruptedException e) {
-                failures.interrupted = true;
-                failures.add(e);
+                failures.addInterruption(e);
             }
         }
     }
 
-    private void collectTaskFailure(CloseFailures failures) {
+    private void collectTaskFailure(Failures failures) {
         try {
             consumerTask.get();
         } catch (ExecutionException e) {
             failures.add(e);
         } catch (InterruptedException e) {
-            failures.interrupted = true;
-            failures.add(e);
-        }
-    }
-
-    // Collects close failures: the first is primary and later ones are suppressed into it.
-    private static final class CloseFailures {
-        private Exception failure;
-        private boolean interrupted;
-
-        private CloseFailures(boolean interrupted) {
-            this.interrupted = interrupted;
-            this.failure =
-                    interrupted ? new InterruptedException("Interrupted before consumer close") : null;
-        }
-
-        private void add(Exception next) {
-            if (failure == null) {
-                failure = next;
-            } else {
-                failure.addSuppressed(next);
-            }
+            failures.addInterruption(e);
         }
     }
 }

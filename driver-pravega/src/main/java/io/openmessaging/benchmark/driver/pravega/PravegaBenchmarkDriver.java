@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.pravega.config.PravegaConfig;
 import io.pravega.client.ClientConfig;
@@ -65,9 +66,11 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
             clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
         } catch (Exception failure) {
-            closeResource(clientFactory, failure);
-            closeResource(readerGroupManager, failure);
-            closeResource(streamManager, failure);
+            Failures cleanup = new Failures();
+            cleanup.add(failure);
+            closeResource(clientFactory, cleanup);
+            closeResource(readerGroupManager, cleanup);
+            closeResource(streamManager, cleanup);
             clientFactory = null;
             readerGroupManager = null;
             streamManager = null;
@@ -207,18 +210,17 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             topics = List.copyOf(createdTopics);
             createdTopics.clear();
         }
-        Exception failure = closeResource(factoryToClose, interrupted);
-        failure = closeResource(readerManagerToClose, failure);
-        if (streamManagerToClose != null) {
-            failure = sealAndDeleteTopics(streamManagerToClose, topics, failure);
-        }
-        failure = closeResource(streamManagerToClose, failure);
+        Failures failures = new Failures();
         if (interrupted != null) {
-            Thread.currentThread().interrupt();
+            failures.addInterruption(interrupted);
         }
-        if (failure != null) {
-            throw failure;
+        closeResource(factoryToClose, failures);
+        closeResource(readerManagerToClose, failures);
+        if (streamManagerToClose != null) {
+            sealAndDeleteTopics(streamManagerToClose, topics, failures);
         }
+        closeResource(streamManagerToClose, failures);
+        failures.throwIfAny();
     }
 
     // Waits until no topic creation is in flight. Interruptions do not stop the wait, since cleanup
@@ -237,8 +239,8 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         return interrupted;
     }
 
-    private Exception sealAndDeleteTopics(
-            StreamManager streamManagerToClose, List<String> topics, Exception failure) {
+    private void sealAndDeleteTopics(
+            StreamManager streamManagerToClose, List<String> topics, Failures failures) {
         for (String topic : topics) {
             try {
                 log.info("deleteTopics: topic={}", topic);
@@ -250,10 +252,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
                 if (topicFailure instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
-                failure = addFailure(failure, topicFailure);
+                failures.add(topicFailure);
             }
         }
-        return failure;
     }
 
     private static <T> CompletableFuture<T> failedCreation(Exception failure) {
@@ -263,27 +264,17 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         return CompletableFuture.failedFuture(failure);
     }
 
-    private static Exception closeResource(AutoCloseable resource, Exception failure) {
+    // Restores an interrupt at once instead of deferring it like Failures.close.
+    private static void closeResource(AutoCloseable resource, Failures failures) {
         if (resource != null) {
             try {
                 resource.close();
             } catch (InterruptedException closeFailure) {
                 Thread.currentThread().interrupt();
-                return addFailure(failure, closeFailure);
+                failures.add(closeFailure);
             } catch (Exception closeFailure) {
-                return addFailure(failure, closeFailure);
+                failures.add(closeFailure);
             }
         }
-        return failure;
-    }
-
-    private static Exception addFailure(Exception failure, Exception additional) {
-        if (failure == null) {
-            return additional;
-        }
-        if (failure != additional) {
-            failure.addSuppressed(additional);
-        }
-        return failure;
     }
 }

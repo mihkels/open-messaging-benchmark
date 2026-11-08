@@ -392,21 +392,18 @@ final class DriverProcess {
         if (!Files.exists(directory)) {
             return;
         }
-        IOException failure = null;
+        Failures failures = new Failures();
         try (Stream<Path> files = Files.walk(directory)) {
             for (Path path : files.sorted(Comparator.reverseOrder()).toList()) {
                 try {
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
-                    if (failure == null) {
-                        failure = e;
-                    } else {
-                        failure.addSuppressed(e);
-                    }
+                    failures.add(e);
                 }
             }
         }
-        if (failure != null) {
+        // Only I/O failures are recorded.
+        if (failures.failure() instanceof IOException failure) {
             throw failure;
         }
     }

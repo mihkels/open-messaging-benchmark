@@ -29,6 +29,7 @@ import io.netty.channel.ChannelFuture;
 import io.openmessaging.benchmark.driver.AbandonableCreation;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -751,7 +752,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             Thread.currentThread().interrupt();
             throw interrupted;
         } catch (ExecutionException failed) {
-            throwFailure(failed.getCause());
+            Failures.rethrow(failed.getCause());
         } catch (TimeoutException timeout) {
             TimeoutException failureToClose =
                     new TimeoutException(
@@ -766,20 +767,20 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         try {
             eventLoopGroup.stopConnecting();
         } catch (Throwable closeFailure) {
-            failure = merge(failure, closeFailure);
+            failure = Failures.appendDistinct(failure, closeFailure);
         }
         try {
             stopConnector(initiator);
         } catch (Throwable closeFailure) {
-            failure = merge(failure, closeFailure);
+            failure = Failures.appendDistinct(failure, closeFailure);
         }
         failure = closeConnectionsCollecting(closing.connecting(), failure);
         try {
             closeGracefully(closing, initiator);
         } catch (Throwable closeFailure) {
-            failure = merge(failure, closeFailure);
+            failure = Failures.appendDistinct(failure, closeFailure);
         }
-        throwFailure(failure);
+        Failures.rethrow(failure);
     }
 
     private void closeGracefully(Closing closing, Thread initiator) throws Exception {
@@ -789,7 +790,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         } finally {
             failure = finishClose(closing, failure, initiator);
         }
-        throwFailure(failure);
+        Failures.rethrow(failure);
     }
 
     // Asks each connected connection to stop delivering; stops at the first interruption.
@@ -798,7 +799,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         for (Connection connection : active) {
             Throwable closeFailure = startClose(connection);
             if (closeFailure != null) {
-                failure = merge(failure, closeFailure);
+                failure = Failures.appendDistinct(failure, closeFailure);
                 if (closeFailure instanceof InterruptedException) {
                     break;
                 }
@@ -834,16 +835,16 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             callbacks.shutdown();
             if (!callbacks.awaitTermination(CALLBACK_DRAIN_SECONDS, TimeUnit.SECONDS)) {
                 callbacks.shutdownNow();
-                return merge(
+                return Failures.appendDistinct(
                         failure, new TimeoutException("NSQ consumer callbacks did not finish during close"));
             }
             return failure;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             callbacks.shutdownNow();
-            return merge(failure, interrupted);
+            return Failures.appendDistinct(failure, interrupted);
         } catch (Throwable closeFailure) {
-            return merge(failure, closeFailure);
+            return Failures.appendDistinct(failure, closeFailure);
         }
     }
 
@@ -852,12 +853,12 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         try {
             eventLoopGroup.closeChannels();
         } catch (Throwable closeFailure) {
-            failure = merge(failure, closeFailure);
+            failure = Failures.appendDistinct(failure, closeFailure);
         }
         try {
             stopScheduler(initiator);
         } catch (Throwable closeFailure) {
-            failure = merge(failure, closeFailure);
+            failure = Failures.appendDistinct(failure, closeFailure);
         }
         return failure;
     }
@@ -890,17 +891,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             try {
                 connection.close();
             } catch (Throwable closeFailure) {
-                failure = merge(failure, closeFailure);
+                failure = Failures.appendDistinct(failure, closeFailure);
             }
         }
-        return failure;
-    }
-
-    private static Throwable merge(Throwable failure, Throwable additional) {
-        if (failure == null) {
-            return additional;
-        }
-        suppress(failure, additional);
         return failure;
     }
 
@@ -927,9 +920,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             if (recordedFailures.add(failure)) {
                 cleanupFailures.add(failure);
             }
-            suppress(primary, failure);
+            Failures.appendDistinct(primary, failure);
             if (startupFailure != primary) {
-                suppress(startupFailure, failure);
+                Failures.appendDistinct(startupFailure, failure);
             }
         }
     }
@@ -941,22 +934,10 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             }
             Throwable first = cleanupFailures.getFirst();
             for (int i = 1; i < cleanupFailures.size(); i++) {
-                suppress(first, cleanupFailures.get(i));
+                Failures.appendDistinct(first, cleanupFailures.get(i));
             }
             return first;
         }
-    }
-
-    private static void suppress(Throwable primary, Throwable additional) {
-        if (primary == null || primary == additional) {
-            return;
-        }
-        for (Throwable suppressed : primary.getSuppressed()) {
-            if (suppressed == additional) {
-                return;
-            }
-        }
-        primary.addSuppressed(additional);
     }
 
     private static void complete(CompletableFuture<Void> future, Throwable failure) {
@@ -964,19 +945,6 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             future.complete(null);
         } else {
             future.completeExceptionally(failure);
-        }
-    }
-
-    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
-    private static void throwFailure(Throwable failure) throws Exception {
-        if (failure instanceof Exception exception) {
-            throw exception;
-        }
-        if (failure instanceof Error error) {
-            throw error;
-        }
-        if (failure != null) {
-            throw new IllegalStateException("NSQ consumer close failed", failure);
         }
     }
 

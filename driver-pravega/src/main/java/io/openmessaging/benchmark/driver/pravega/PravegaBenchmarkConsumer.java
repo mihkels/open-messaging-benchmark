@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.pravega;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.Failures;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.stream.EventStreamReader;
@@ -41,7 +42,7 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object closeLock = new Object();
     private volatile Thread readerThread;
-    private Exception closeFailure;
+    private final Failures closeFailures = new Failures();
 
     /**
      * Constructs a consumer from owned resources.
@@ -148,77 +149,37 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
             throw new IllegalStateException("Cannot close a Pravega consumer from its own callback");
         }
         synchronized (closeLock) {
-            if (closed.getAndSet(true)) {
-                rethrowPreviousCloseFailure();
-                return;
+            // A repeated close reports the first close's failure again.
+            if (!closed.getAndSet(true)) {
+                shutdownExecutor(closeFailures);
+                closeFailures.close(reader);
             }
-            CloseOutcome outcome = new CloseOutcome();
-            shutdownExecutor(outcome);
-            closeReader(outcome);
-            closeFailure = outcome.failure;
-            if (outcome.interrupted) {
-                Thread.currentThread().interrupt();
-            }
-            if (outcome.failure != null) {
-                throw outcome.failure;
-            }
+            closeFailures.throwIfAny();
         }
     }
 
-    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the earlier close failure unchanged
-    private void rethrowPreviousCloseFailure() throws Exception {
-        if (closeFailure != null) {
-            if (closeFailure instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw closeFailure;
-        }
-    }
-
-    private void shutdownExecutor(CloseOutcome outcome) {
+    // The interrupt is deferred so that the reader still closes; close() restores it via throwIfAny.
+    @SuppressWarnings("java:S2142")
+    private void shutdownExecutor(Failures failures) {
         try {
             executor.shutdown();
             if (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
-                outcome.add(new TimeoutException("Timed out waiting for the Pravega reader to stop"));
+                failures.add(new TimeoutException("Timed out waiting for the Pravega reader to stop"));
                 executor.shutdownNow();
             }
-        } catch (Exception shutdownFailure) {
-            outcome.add(shutdownFailure);
-            if (shutdownFailure instanceof InterruptedException) {
-                outcome.interrupted = true;
-                forceShutdownExecutor(outcome);
-            }
+        } catch (InterruptedException interrupted) {
+            failures.addInterruption(interrupted);
+            forceShutdownExecutor(failures);
+        } catch (RuntimeException shutdownFailure) {
+            failures.add(shutdownFailure);
         }
     }
 
-    private void forceShutdownExecutor(CloseOutcome outcome) {
+    private void forceShutdownExecutor(Failures failures) {
         try {
             executor.shutdownNow();
         } catch (RuntimeException additional) {
-            outcome.add(additional);
-        }
-    }
-
-    private void closeReader(CloseOutcome outcome) {
-        try {
-            reader.close();
-        } catch (Exception readerFailure) {
-            outcome.interrupted |= readerFailure instanceof InterruptedException;
-            outcome.add(readerFailure);
-        }
-    }
-
-    /** Collects the first close failure and suppresses later distinct ones onto it. */
-    private static final class CloseOutcome {
-        private Exception failure;
-        private boolean interrupted;
-
-        private void add(Exception additional) {
-            if (failure == null) {
-                failure = additional;
-            } else if (failure != additional) {
-                failure.addSuppressed(additional);
-            }
+            failures.add(additional);
         }
     }
 }

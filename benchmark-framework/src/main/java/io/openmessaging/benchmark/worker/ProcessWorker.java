@@ -189,13 +189,13 @@ public class ProcessWorker implements Worker {
             try {
                 client.stopAll();
             } catch (Throwable cleanup) {
-                failure.addSuppressed(cleanup);
+                Failures.append(failure, cleanup);
             }
         }
         try {
             terminate();
         } catch (Throwable cleanup) {
-            failure.addSuppressed(cleanup);
+            Failures.append(failure, cleanup);
         }
     }
 
@@ -391,7 +391,7 @@ public class ProcessWorker implements Worker {
             try {
                 terminate();
             } catch (Throwable cleanup) {
-                failure.addSuppressed(cleanup);
+                Failures.append(failure, cleanup);
             }
             throw failure;
         }

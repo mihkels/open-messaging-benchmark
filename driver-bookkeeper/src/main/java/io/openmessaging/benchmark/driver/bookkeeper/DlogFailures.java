@@ -13,52 +13,40 @@
  */
 package io.openmessaging.benchmark.driver.bookkeeper;
 
+import io.openmessaging.benchmark.driver.Failures;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 
-/** Retains the first failure and subsequent cleanup failures, including late reader cleanup. */
+/**
+ * Thread-safe {@link Failures} that retains the first failure and subsequent cleanup failures,
+ * including late reader cleanup. A failure caused by an interruption, on any thread, restores the
+ * interrupt in {@link #throwIfAny()}.
+ */
 final class DlogFailures {
-    private final Set<Throwable> recorded = Collections.newSetFromMap(new IdentityHashMap<>());
-    private Throwable first;
+    private final Failures failures = new Failures();
     private boolean interrupted;
 
     synchronized void add(Throwable failure) {
-        if (!recorded.add(failure)) {
-            return;
-        }
         interrupted |= isInterrupted(failure);
-        if (first == null) {
-            first = failure;
-        } else if (first != failure) {
-            first.addSuppressed(failure);
-        }
+        failures.addDistinct(failure);
     }
 
     synchronized Throwable first() {
-        return first;
+        return failures.failure();
     }
 
-    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
     void throwIfAny() throws Exception {
         Throwable failure;
         boolean restoreInterrupt;
         synchronized (this) {
-            failure = first;
+            failure = failures.failure();
             restoreInterrupt = interrupted;
         }
         if (restoreInterrupt) {
             Thread.currentThread().interrupt();
         }
-        if (failure instanceof Exception exception) {
-            throw exception;
-        }
-        if (failure instanceof Error error) {
-            throw error;
-        }
-        if (failure != null) {
-            throw new IllegalStateException(failure);
-        }
+        Failures.rethrow(failure);
     }
 
     static boolean isInterrupted(Throwable failure) {

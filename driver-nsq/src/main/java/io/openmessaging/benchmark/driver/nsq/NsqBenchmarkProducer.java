@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.nsq;
 
 import com.github.brainlag.nsq.NSQProducer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -133,11 +134,11 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
     }
 
     private void shutdownResources(List<SendTask> outstanding) {
-        RuntimeException failure = null;
+        Failures failures = new Failures();
         try {
             executor.shutdownNow();
         } catch (RuntimeException e) {
-            failure = e;
+            failures.add(e);
         }
         for (SendTask task : outstanding) {
             task.fail(new IllegalStateException(CLOSED_MESSAGE));
@@ -145,13 +146,10 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
         try {
             nsqProducer.shutdown();
         } catch (RuntimeException e) {
-            if (failure == null) {
-                failure = e;
-            } else if (failure != e) {
-                failure.addSuppressed(e);
-            }
+            failures.add(e);
         }
-        if (failure != null) {
+        // Only runtime exceptions are recorded.
+        if (failures.failure() instanceof RuntimeException failure) {
             throw failure;
         }
     }

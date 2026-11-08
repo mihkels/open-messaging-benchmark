@@ -43,6 +43,16 @@ public final class Failures {
     }
 
     /**
+     * Records a failure unless it is already the primary failure or suppressed into it. A {@code
+     * null} cause is ignored.
+     *
+     * @param cause the failure
+     */
+    public void addDistinct(@Nullable Throwable cause) {
+        failure = appendDistinct(failure, cause);
+    }
+
+    /**
      * Records an interruption of the current thread and remembers to restore its interrupt status.
      *
      * @param interruption the interruption caught on the current thread
@@ -121,9 +131,20 @@ public final class Failures {
      *
      * @throws Exception the primary failure
      */
-    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
     public void throwIfAny() throws Exception {
         restoreInterrupt();
+        rethrow(failure);
+    }
+
+    /**
+     * Rethrows a failure unchanged, wrapping only a throwable that is neither an exception nor an
+     * error. A {@code null} failure is ignored.
+     *
+     * @param failure the failure, or {@code null}
+     * @throws Exception the failure
+     */
+    @SuppressWarnings("java:S112") // Failure aggregator: rethrows the recorded failure unchanged
+    public static void rethrow(@Nullable Throwable failure) throws Exception {
         if (failure instanceof Exception exception) {
             throw exception;
         }
@@ -150,6 +171,26 @@ public final class Failures {
             primary.addSuppressed(next);
         }
         return primary;
+    }
+
+    /**
+     * Combines two failures like {@link #append}, but does not suppress {@code next} again when it is
+     * already suppressed into {@code primary}.
+     *
+     * @param primary the primary failure, or {@code null}
+     * @param next the additional failure, or {@code null}
+     * @return the primary failure, or {@code next} if there is none
+     */
+    public static @Nullable Throwable appendDistinct(
+            @Nullable Throwable primary, @Nullable Throwable next) {
+        if (primary != null && next != null) {
+            for (Throwable suppressed : primary.getSuppressed()) {
+                if (suppressed == next) {
+                    return primary;
+                }
+            }
+        }
+        return append(primary, next);
     }
 
     /**

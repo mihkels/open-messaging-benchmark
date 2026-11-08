@@ -16,7 +16,7 @@ package io.openmessaging.benchmark.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.Workload;
-import io.openmessaging.benchmark.driver.natsStreaming.NatsStreamingBenchmarkDriver;
+import io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -72,7 +72,7 @@ class NatsStreamingE2eIT extends BaseE2eIT {
                 config,
                 """
                 name: NATS Streaming probe
-                driverClass: io.openmessaging.benchmark.driver.natsStreaming.NatsStreamingBenchmarkDriver
+                driverClass: io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver
                 natsHostUrl: nats://%s:%d
                 clusterId: omb-e2e
                 maxPubAcksInFlight: 1024

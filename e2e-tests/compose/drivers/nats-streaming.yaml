@@ -13,7 +13,7 @@
 #
 
 name: Nats Streaming
-driverClass: io.openmessaging.benchmark.driver.natsStreaming.NatsStreamingBenchmarkDriver
+driverClass: io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver
 natsHostUrl: nats://nats-streaming:4222
 clusterId: omb-e2e
 maxPubAcksInFlight: 1024

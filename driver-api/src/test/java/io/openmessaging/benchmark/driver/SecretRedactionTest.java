@@ -22,11 +22,59 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SecretRedactionTest {
+    /** The key pattern before java:S8786 was fixed, used with {@code matches()}. */
+    // Pre-#140 backtracking pattern, kept on purpose as a regression reference.
+    @SuppressWarnings("java:S8786")
+    private static final Pattern FORMER_SECRET_KEY =
+            Pattern.compile(
+                    ".*(password|passwd|passphrase|token|secret|credential|api.?key|access.?key|"
+                            + "private.?key|sasl.?jaas|authorization|auth.?config).*",
+                    Pattern.CASE_INSENSITIVE);
+
+    private static final List<String> FORMER_PATTERN_KEYS =
+            List.of(
+                    "password",
+                    "PASSWORD",
+                    "dbPassword",
+                    "passwd",
+                    "sslKeyPassphrase",
+                    "authToken",
+                    "token",
+                    "clientSecret",
+                    "credentials",
+                    "apiKey",
+                    "api_key",
+                    "api.key",
+                    "API-KEY",
+                    "apikey",
+                    "accessKey",
+                    "access_key_id",
+                    "privateKey",
+                    "private.key",
+                    "sasl.jaas.config",
+                    "saslJaasConfig",
+                    "Authorization",
+                    "authConfig",
+                    "auth.config",
+                    "authconfig",
+                    "bootstrap.servers",
+                    "topic",
+                    "api",
+                    "key",
+                    "apiXXkey",
+                    "author",
+                    "auth",
+                    "access",
+                    "sasl.mechanism",
+                    "",
+                    "x");
 
     static class ClientConfig {
         public String serverUri = "tcp://broker:1883";
@@ -46,12 +94,32 @@ class SecretRedactionTest {
     @ValueSource(
             strings = {
                 "password",
+                "PASSWORD",
                 "dbPassword",
+                "PASSWD",
+                "passphrase",
+                "sslKeyPassphrase",
+                "token",
                 "authToken",
+                "clientSecret",
+                "credential",
                 "sasl.jaas.config",
+                "saslJaasConfig",
+                "apiKey",
+                "apikey",
                 "api_key",
+                "api.key",
+                "ApI-kEy",
+                "accessKey",
+                "access_key_id",
+                "privateKey",
+                "private_key",
+                "private.key",
                 "authentication",
                 "Authorization",
+                "authConfig",
+                "auth.config",
+                "AuthConfig",
                 "redisPass",
                 "db.pass",
                 "adminPwd",
@@ -66,8 +134,13 @@ class SecretRedactionTest {
             strings = {
                 "username",
                 "bootstrap.servers",
+                "topic",
                 "sasl.mechanism",
+                "api",
+                "apiXXkey",
+                "author",
                 "auth",
+                "access",
                 "key",
                 "",
                 "bypassCache",
@@ -192,5 +265,52 @@ class SecretRedactionTest {
         assertEquals(
                 Map.of("1", Arrays.asList("redis://:[REDACTED]@h", null), "token", "[REDACTED]"),
                 SecretRedaction.redactMap(map));
+    }
+
+    @Test
+    void agreesWithFormerPatternOnSingleLineKeys() {
+        for (String key : FORMER_PATTERN_KEYS) {
+            assertEquals(FORMER_SECRET_KEY.matcher(key).matches(), SecretRedaction.isSecretKey(key), key);
+        }
+    }
+
+    @Test
+    void flagsSecretFragmentEvenAcrossLineBreaks() {
+        // The former ".*" could not cross a line terminator, so this key slipped through.
+        assertFalse(FORMER_SECRET_KEY.matcher("password\nsuffix").matches());
+        assertTrue(SecretRedaction.isSecretKey("password\nsuffix"));
+    }
+
+    @Test
+    @Timeout(5)
+    void handlesLongAdversarialKeysQuickly() {
+        String almost = "api".repeat(50_000) + "access".repeat(50_000) + "auth".repeat(50_000);
+        assertFalse(SecretRedaction.isSecretKey(almost));
+        assertTrue(SecretRedaction.isSecretKey(almost + "token"));
+    }
+
+    @Test
+    void redactMapMasksSecretKeysAndEmbeddedSecretsAtAnyDepth() {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("redisHost", "redis");
+        config.put("redisUser", "default");
+        config.put("redisPass", "secret");
+        config.put(
+                "producerConfig", "acks=all\nsasl.jaas.config=PlainLoginModule required password=\"x\";");
+        config.put("serviceUrl", "amqp://user:pass@host:5672");
+        config.put("jms", "{\"password\":\"x\",\"user\":\"u\"}");
+        config.put("nested", List.of(Map.of("url", "redis://:pass@redis:6379", "clientSecret", "s")));
+
+        Map<String, Object> expected = new LinkedHashMap<>();
+        expected.put("redisHost", "redis");
+        expected.put("redisUser", "default");
+        expected.put("redisPass", "[REDACTED]");
+        expected.put("producerConfig", "acks=all\nsasl.jaas.config=[REDACTED]");
+        expected.put("serviceUrl", "amqp://user:[REDACTED]@host:5672");
+        expected.put("jms", "{\"password\":\"[REDACTED]\",\"user\":\"u\"}");
+        expected.put(
+                "nested",
+                List.of(Map.of("url", "redis://:[REDACTED]@redis:6379", "clientSecret", "[REDACTED]")));
+        assertEquals(expected, SecretRedaction.redactMap(config));
     }
 }

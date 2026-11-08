@@ -140,7 +140,10 @@ class TestResultJsonTest {
                         "saslJaasConfig", "driver-jaas",
                         "nested", Map.of("clientSecret", "driver-secret", "username", "user"));
 
-        Map<String, Object> redacted = ResultMetadata.redactDriverConfig(config);
+        Map<String, Object> redacted =
+                new ResultMetadata(
+                                "run", "start", "end", "1.2.3", "abc", "25", "", 1, new Workload(), config)
+                        .driverConfig();
 
         assertThat(redacted)
                 .containsEntry("password", "[REDACTED]")

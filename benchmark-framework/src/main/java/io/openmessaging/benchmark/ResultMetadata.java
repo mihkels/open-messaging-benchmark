@@ -20,12 +20,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 public record ResultMetadata(
         String runId,
@@ -38,17 +38,12 @@ public record ResultMetadata(
         int workerCount,
         Workload workload,
         Map<String, Object> driverConfig) {
+    /** Masks credentials in the driver configuration once, into an unmodifiable map. */
     public ResultMetadata {
-        driverConfig = redactDriverConfig(driverConfig);
-    }
-
-    @Override
-    public Map<String, Object> driverConfig() {
-        return redactDriverConfig(driverConfig);
+        driverConfig = Collections.unmodifiableMap(SecretRedaction.redactMap(driverConfig));
     }
 
     private static final String UNKNOWN = "unknown";
-    private static final Pattern JVM_OPTION = Pattern.compile("^(--?D?)([^=]+)=(.*)$");
     private static final List<Path> GIT_LOCATIONS =
             List.of(
                     Path.of("/usr/bin/git"), Path.of("/usr/local/bin/git"), Path.of("/opt/homebrew/bin/git"));
@@ -70,43 +65,43 @@ public record ResultMetadata(
                 String.join(
                         " ",
                         ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
-                                .map(ResultMetadata::redactJvmOption)
+                                .map(SecretRedaction::redactString)
                                 .toList());
         return new ResultMetadata(
                 runId,
                 startedAt.toString(),
                 finishedAt.toString(),
                 ombVersion,
-                resolveGitCommit(),
+                GitCommit.VALUE,
                 System.getProperty("java.version"),
                 jvmOptions,
                 workerCount,
                 workload,
-                redactDriverConfig(driverConfig));
+                driverConfig);
     }
 
-    static Map<String, Object> redactDriverConfig(Map<String, Object> driverConfig) {
-        return SecretRedaction.redactMap(driverConfig);
+    /** The commit of this JVM's run, resolved on first use and then reused for every result. */
+    private static final class GitCommit {
+        static final String VALUE =
+                resolveGitCommit(System.getProperty("omb.gitCommit"), System.getenv(), GIT_LOCATIONS);
+
+        private GitCommit() {}
     }
 
     /**
-     * Whether a configuration key names a credential; delegates to {@link
-     * SecretRedaction#isSecretKey(String)}.
+     * Resolves the commit from, in order, the {@code omb.gitCommit} property, the {@code GIT_COMMIT}
+     * or {@code GITHUB_SHA} environment variable, and {@code git rev-parse HEAD}.
      */
-    static boolean isSecretKey(String key) {
-        return SecretRedaction.isSecretKey(key);
-    }
-
-    private static String resolveGitCommit() {
+    static String resolveGitCommit(
+            @Nullable String property, Map<String, String> env, List<Path> gitLocations) {
         String configured =
-                System.getProperty(
-                        "omb.gitCommit",
-                        System.getenv()
-                                .getOrDefault("GIT_COMMIT", System.getenv().getOrDefault("GITHUB_SHA", "")));
+                property != null
+                        ? property
+                        : env.getOrDefault("GIT_COMMIT", env.getOrDefault("GITHUB_SHA", ""));
         if (!configured.isBlank()) {
             return configured;
         }
-        return gitRevision(GIT_LOCATIONS);
+        return gitRevision(gitLocations);
     }
 
     /**
@@ -150,13 +145,5 @@ public record ResultMetadata(
                 .filter(Files::isRegularFile)
                 .filter(Files::isExecutable)
                 .findFirst();
-    }
-
-    static String redactJvmOption(String option) {
-        Matcher matcher = JVM_OPTION.matcher(option);
-        if (!matcher.matches() || !isSecretKey(matcher.group(2))) {
-            return option;
-        }
-        return matcher.group(1) + matcher.group(2) + "=" + SecretRedaction.REDACTED;
     }
 }

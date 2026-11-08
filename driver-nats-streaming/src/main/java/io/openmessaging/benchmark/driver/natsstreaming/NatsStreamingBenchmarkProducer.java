@@ -17,17 +17,16 @@ import io.nats.streaming.AckHandler;
 import io.nats.streaming.StreamingConnection;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
     private final StreamingConnection natsStreamingPublisher;
     private final String topic;
-    private final PendingSendTracker pending = new PendingSendTracker("NATS Streaming producer");
-    private final Object lifecycleLock = new Object();
-    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
-    private boolean closeComplete;
-    private int activePublications;
+    private final PublicationLifecycle lifecycle =
+            new PublicationLifecycle("NATS Streaming producer");
+    private final PendingSendTracker pending = lifecycle.pending();
 
     public NatsStreamingBenchmarkProducer(StreamingConnection natsStreamingPublisher, String topic) {
         this.natsStreamingPublisher = natsStreamingPublisher;
@@ -42,15 +41,9 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
-        CompletableFuture<Void> future;
-        synchronized (lifecycleLock) {
-            future = pending.register();
-            if (future.isDone()) {
-                return future;
-            }
-            activePublications++;
-            Integer depth = publishingDepth.get();
-            publishingDepth.set(depth == null ? 1 : depth + 1);
+        CompletableFuture<Void> future = lifecycle.begin();
+        if (future.isDone()) {
+            return future;
         }
         CompletableFuture<String> expectedGuid = new CompletableFuture<>();
         AckHandler acb = ackHandler(future, expectedGuid);
@@ -72,7 +65,7 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
             if (wasInterrupted) {
                 Thread.currentThread().interrupt();
             }
-            endPublication();
+            lifecycle.end();
         }
         return future;
     }
@@ -94,53 +87,8 @@ public class NatsStreamingBenchmarkProducer implements BenchmarkProducer {
         };
     }
 
-    private void endPublication() {
-        int depth = publishingDepth.get() - 1;
-        if (depth == 0) {
-            publishingDepth.remove();
-        } else {
-            publishingDepth.set(depth);
-        }
-        synchronized (lifecycleLock) {
-            activePublications--;
-            lifecycleLock.notifyAll();
-        }
-    }
-
     @Override
     public void close() {
-        if (publishingDepth.get() != null) {
-            throw new IllegalStateException(
-                    "Cannot close a NATS Streaming producer while publishing on the same thread; "
-                            + "retry after sendAsync returns");
-        }
-        publishingDepth.remove();
-        boolean interrupted = false;
-        boolean closeOwner;
-        synchronized (lifecycleLock) {
-            closeOwner = pending.beginClose();
-            while (closeOwner ? activePublications != 0 : !closeComplete) {
-                try {
-                    lifecycleLock.wait();
-                } catch (InterruptedException _) {
-                    interrupted = true;
-                }
-            }
-        }
-        try {
-            if (closeOwner) {
-                pending.failRemaining();
-            }
-        } finally {
-            if (closeOwner) {
-                synchronized (lifecycleLock) {
-                    closeComplete = true;
-                    lifecycleLock.notifyAll();
-                }
-            }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        lifecycle.close();
     }
 }

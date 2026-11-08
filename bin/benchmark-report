@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Reports on benchmark result files, for example: bin/benchmark-report diff baseline.json candidate.json
+BASE_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+if [ -d "$BASE_DIR/tools" ]; then
+    CLASSPATH="$BASE_DIR/tools/*:$BASE_DIR/lib/*"
+else
+    CLASSPATH="$BASE_DIR/tool/target/classes:$(cat "$BASE_DIR/tool/target/classpath.txt")"
+fi
+
+if [ -z "$HEAP_OPTS" ]
+then
+    HEAP_OPTS="-Xmx512m"
+fi
+
+exec java -cp "$CLASSPATH" $HEAP_OPTS io.openmessaging.benchmark.tool.report.BenchmarkReport "$@"

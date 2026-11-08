@@ -1,0 +1,38 @@
+{
+  "workload": "kafka-1-topic",
+  "driver": "Kafka",
+  "messageSize": 1024,
+  "topics": 1,
+  "partitions": 16,
+  "publishRate": [
+    9000.0,
+    11000.0
+  ],
+  "consumeRate": [
+    8990.0,
+    10990.0
+  ],
+  "backlog": [
+    50,
+    120
+  ],
+  "publishErrorRate": [
+    0.0,
+    0.0
+  ],
+  "aggregatedPublishLatency50pct": 2.0,
+  "aggregatedPublishLatency95pct": 4.0,
+  "aggregatedPublishLatency99pct": 5.0,
+  "aggregatedPublishLatency999pct": 9.0,
+  "aggregatedPublishLatencyMax": 20.0,
+  "aggregatedEndToEndLatency50pct": 3.0,
+  "aggregatedEndToEndLatency95pct": 6.0,
+  "aggregatedEndToEndLatency99pct": 8.0,
+  "aggregatedEndToEndLatency999pct": 14.0,
+  "aggregatedEndToEndLatencyMax": 30.0,
+  "aggregatedPublishDelayLatency50pct": 100,
+  "aggregatedPublishDelayLatency95pct": 180,
+  "aggregatedPublishDelayLatency99pct": 200,
+  "aggregatedPublishDelayLatency999pct": 400,
+  "aggregatedPublishDelayLatencyMax": 900
+}

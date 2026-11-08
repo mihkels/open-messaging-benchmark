@@ -490,6 +490,7 @@
                     </licenseSets>
                     <mapping>
                         <benchmark>SCRIPT_STYLE</benchmark>
+                        <benchmark-report>SCRIPT_STYLE</benchmark-report>
                         <j2>SCRIPT_STYLE</j2>
                         <conf>SCRIPT_STYLE</conf>
                         <yaml>SCRIPT_STYLE</yaml>

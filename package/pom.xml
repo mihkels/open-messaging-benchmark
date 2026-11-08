@@ -34,6 +34,12 @@
             <artifactId>benchmark-framework</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <!-- Report tools (bin/benchmark-report), packaged under tools/ -->
+            <groupId>${project.groupId}</groupId>
+            <artifactId>tool</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -53,5 +53,7 @@ status and each check's limit, observed value and status. The coordinator also p
 table. Without a `thresholds` block, behavior is unchanged.
 
 Keep the workload, driver configuration and result JSON as CI artifacts to make regressions
-reproducible. Choose limits based on stable repeated measurements and use a sufficiently long
+reproducible. To gate on a change relative to an earlier run, rather than on a fixed limit, compare
+the result files with `bin/benchmark-report diff --fail-on-regression`; see
+[Comparing runs](comparing-runs.md). Choose limits based on stable repeated measurements and use a sufficiently long
 measured window for reliable tail latency; see [reproducibility](../methodology/reproducibility.md).

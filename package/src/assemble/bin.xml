@@ -77,7 +77,19 @@
 
 			<excludes>
 				<exclude>ch.qos.logback:*</exclude>
+				<!-- Kept out of lib/ so its log4j2.xml cannot shadow the benchmark's -->
+				<exclude>io.openmessaging.benchmark:tool</exclude>
 			</excludes>
+		</dependencySet>
+		<dependencySet>
+			<outputDirectory>tools</outputDirectory>
+			<unpack>false</unpack>
+			<useProjectArtifact>false</useProjectArtifact>
+			<useTransitiveDependencies>false</useTransitiveDependencies>
+			<outputFileNameMapping>${artifact.groupId}-${artifact.artifactId}-${artifact.version}${dashClassifier?}.${artifact.extension}</outputFileNameMapping>
+			<includes>
+				<include>io.openmessaging.benchmark:tool</include>
+			</includes>
 		</dependencySet>
 	</dependencySets>
 

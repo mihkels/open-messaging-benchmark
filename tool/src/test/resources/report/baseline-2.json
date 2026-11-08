@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 2,
+  "metadata": {
+    "runId": "baseline-2",
+    "startedAtUtc": "2026-11-01T00:00:00Z",
+    "finishedAtUtc": "2026-11-01T00:10:00Z",
+    "ombVersion": "1.0.0",
+    "gitCommit": "abc123",
+    "jdk": "27",
+    "jvmOptions": "",
+    "workerCount": 2,
+    "workload": {
+      "name": "kafka-1-topic",
+      "topics": 1,
+      "partitionsPerTopic": 16,
+      "messageSize": 1024,
+      "subscriptionsPerTopic": 1,
+      "producersPerTopic": 1,
+      "consumerPerSubscription": 1,
+      "producerRate": 10000,
+      "testDurationMinutes": 5
+    },
+    "driverConfig": {
+      "name": "Kafka",
+      "producerConfig": {
+        "acks": "all",
+        "linger.ms": "1"
+      }
+    }
+  },
+  "summary": {
+    "publishRateAvg": 10100,
+    "consumeRateAvg": 10089.9,
+    "throughputMbSec": 10.3424,
+    "totalMessagesSent": 3030000,
+    "totalErrors": 0,
+    "maxBacklog": 100,
+    "targetRate": 10000
+  },
+  "workload": "kafka-1-topic",
+  "driver": "Kafka",
+  "messageSize": 1024,
+  "topics": 1,
+  "partitions": 16,
+  "producersPerTopic": 1,
+  "consumersPerTopic": 1,
+  "aggregatedPublishLatency50pct": 2.04,
+  "aggregatedPublishLatency95pct": 4.08,
+  "aggregatedPublishLatency99pct": 5.1,
+  "aggregatedPublishLatency999pct": 9.18,
+  "aggregatedPublishLatencyMax": 20.4,
+  "aggregatedEndToEndLatency50pct": 3.06,
+  "aggregatedEndToEndLatency95pct": 6.12,
+  "aggregatedEndToEndLatency99pct": 8.16,
+  "aggregatedEndToEndLatency999pct": 14.28,
+  "aggregatedEndToEndLatencyMax": 30.6,
+  "aggregatedPublishDelayLatency50pct": 102,
+  "aggregatedPublishDelayLatency95pct": 183,
+  "aggregatedPublishDelayLatency99pct": 204,
+  "aggregatedPublishDelayLatency999pct": 408,
+  "aggregatedPublishDelayLatencyMax": 918
+}

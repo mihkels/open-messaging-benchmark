@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.jms;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,7 +50,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
     private final CountDownLatch closeComplete = new CountDownLatch(1);
     private boolean closed;
     private Thread closingThread;
-    private Exception closeFailure;
+    private Throwable closeFailure;
 
     private JMSBenchmarkTransactionProducer(
             Connection connection,
@@ -94,19 +95,14 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         }
 
         if (operations == null) {
-            Exception concurrentFailure = awaitConcurrentClose();
-            if (concurrentFailure != null) {
-                throw concurrentFailure;
-            }
+            awaitConcurrentClose().throwIfAny();
             return;
         }
 
         try {
-            Exception failure = settle(operations);
-            closeFailure = failure;
-            if (failure != null) {
-                throw failure;
-            }
+            Failures failures = settle(operations);
+            closeFailure = failures.failure();
+            failures.throwIfAny();
         } finally {
             synchronized (lifecycleLock) {
                 closingThread = null;
@@ -116,37 +112,35 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
     }
 
     // Waits for the owning close to finish and returns the failure the caller should rethrow.
-    private Exception awaitConcurrentClose() {
+    private Failures awaitConcurrentClose() {
+        Failures failures = new Failures();
         try {
             closeComplete.await();
+            failures.add(closeFailure);
         } catch (InterruptedException error) {
-            Thread.currentThread().interrupt();
-            return error;
+            failures.addInterruption(error);
         }
-        return closeFailure;
+        return failures;
     }
 
-    private static Exception settle(List<SendOperation> operations) {
+    private static Failures settle(List<SendOperation> operations) {
         for (SendOperation operation : operations) {
             operation.finish(new IllegalStateException("JMS transactional producer is closed"), false);
         }
 
-        Exception failure = null;
+        Failures cleanup = new Failures();
         boolean interrupted = false;
         for (SendOperation operation : operations) {
             interrupted = awaitSettled(operation) || interrupted;
-            failure = addCleanupFailures(failure, operation);
+            operation.cleanupFailures().forEach(cleanup::add);
         }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-            InterruptedException error =
-                    new InterruptedException("Interrupted while closing JMS producer");
-            if (failure != null) {
-                error.addSuppressed(failure);
-            }
-            failure = error;
+        if (!interrupted) {
+            return cleanup;
         }
-        return failure;
+        Failures failures = new Failures();
+        failures.addInterruption(new InterruptedException("Interrupted while closing JMS producer"));
+        failures.add(cleanup.failure());
+        return failures;
     }
 
     private static boolean awaitSettled(SendOperation operation) {
@@ -159,18 +153,6 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             }
         }
         return interrupted;
-    }
-
-    private static Exception addCleanupFailures(Exception failure, SendOperation operation) {
-        Exception merged = failure;
-        for (Exception cleanupFailure : operation.cleanupFailures()) {
-            if (merged == null) {
-                merged = cleanupFailure;
-            } else if (merged != cleanupFailure) {
-                merged.addSuppressed(cleanupFailure);
-            }
-        }
-        return merged;
     }
 
     @Override
@@ -304,7 +286,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                     return error instanceof CancellationException && failure instanceof CancellationException;
                 }
                 finished = true;
-                failure = unwrap(error);
+                failure = error == null ? null : Failures.unwrap(error);
                 sessionToClose = session;
                 producerToClose = producer;
                 session = null;
@@ -363,11 +345,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
 
         private void recordFailure(Exception error, boolean cleanup) {
             synchronized (lock) {
-                if (failure == null) {
-                    failure = error;
-                } else if (failure != error) {
-                    failure.addSuppressed(error);
-                }
+                failure = Failures.append(failure, error);
                 if (cleanup) {
                     cleanupFailures.add(error);
                 }
@@ -412,12 +390,5 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                 super.completeExceptionally(error);
             }
         }
-    }
-
-    private static Throwable unwrap(Throwable error) {
-        if (error instanceof CompletionException && error.getCause() != null) {
-            return error.getCause();
-        }
-        return error;
     }
 }

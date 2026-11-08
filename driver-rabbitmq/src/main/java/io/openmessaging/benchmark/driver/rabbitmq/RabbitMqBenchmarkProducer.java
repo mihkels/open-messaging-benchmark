@@ -21,6 +21,7 @@ import com.rabbitmq.client.Recoverable;
 import com.rabbitmq.client.RecoveryListener;
 import com.rabbitmq.client.ShutdownListener;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -83,23 +84,23 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
             return;
         }
 
-        Exception failure = null;
+        Failures failures = new Failures();
         Listeners current = listeners.get();
         try {
             channel.removeConfirmListener(current.confirm());
         } catch (Exception e) {
-            failure = e;
+            failures.add(e);
         }
         try {
             channel.removeShutdownListener(current.shutdown());
         } catch (Exception e) {
-            failure = addFailure(failure, e);
+            failures.add(e);
         }
         if (channel instanceof Recoverable recoverable) {
             try {
                 recoverable.removeRecoveryListener(recoveryListener);
             } catch (Exception e) {
-                failure = addFailure(failure, e);
+                failures.add(e);
             }
         }
         try {
@@ -107,21 +108,9 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
         } catch (AlreadyClosedException e) {
             log.warn("Channel already closed", e);
         } catch (Exception e) {
-            failure = addFailure(failure, e);
+            failures.add(e);
         }
-        if (failure != null) {
-            throw failure;
-        }
-    }
-
-    private static Exception addFailure(Exception failure, Exception additional) {
-        if (failure == null) {
-            return additional;
-        }
-        if (failure != additional) {
-            failure.addSuppressed(additional);
-        }
-        return failure;
+        failures.throwIfAny();
     }
 
     @Override

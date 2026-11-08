@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -47,6 +48,48 @@ class FailuresTest {
 
         assertSame(first, failures.failure());
         assertArrayEquals(new Throwable[] {second}, first.getSuppressed());
+    }
+
+    @Test
+    void addDistinctDoesNotSuppressTheSameFailureTwice() {
+        Failures failures = new Failures();
+        IOException first = new IOException("first");
+        IllegalStateException second = new IllegalStateException("second");
+
+        failures.addDistinct(null);
+        failures.addDistinct(first);
+        failures.addDistinct(second);
+        failures.addDistinct(second);
+        failures.addDistinct(first);
+
+        assertSame(first, failures.failure());
+        assertArrayEquals(new Throwable[] {second}, first.getSuppressed());
+    }
+
+    @Test
+    void appendDistinctSkipsFailuresAlreadySuppressed() {
+        IOException primary = new IOException("primary");
+        IllegalStateException next = new IllegalStateException("next");
+
+        assertSame(next, Failures.appendDistinct(null, next));
+        assertSame(primary, Failures.appendDistinct(primary, next));
+        assertSame(primary, Failures.appendDistinct(primary, next));
+        assertSame(primary, Failures.appendDistinct(primary, null));
+
+        assertArrayEquals(new Throwable[] {next}, primary.getSuppressed());
+    }
+
+    @Test
+    void rethrowsFailuresUnchanged() {
+        IOException exception = new IOException("exception");
+        AssertionError error = new AssertionError("error");
+        Throwable other = new Throwable("other");
+
+        assertSame(exception, assertThrows(IOException.class, () -> Failures.rethrow(exception)));
+        assertSame(error, assertThrows(AssertionError.class, () -> Failures.rethrow(error)));
+        assertSame(
+                other, assertThrows(IllegalStateException.class, () -> Failures.rethrow(other)).getCause());
+        assertDoesNotThrow(() -> Failures.rethrow(null));
     }
 
     @Test

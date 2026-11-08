@@ -14,9 +14,9 @@
 package io.openmessaging.benchmark.driver.mqtt5;
 
 import io.openmessaging.benchmark.driver.AbandonableCreation;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 
 final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFuture<T>
@@ -95,9 +95,8 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
         }
         closeUntransferred()
                 .whenComplete((_, closeError) -> {
-                    Throwable cause = unwrap(closeError);
-                    if (cause != null && cause != failure) {
-                        failure.addSuppressed(cause);
+                    if (closeError != null) {
+                        Failures.append(failure, Failures.unwrap(closeError));
                     }
                     completeExceptionally(failure);
                 });
@@ -174,13 +173,6 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
                 finished();
             }
         }
-    }
-
-    private static Throwable unwrap(Throwable failure) {
-        if (failure instanceof CompletionException && failure.getCause() != null) {
-            return failure.getCause();
-        }
-        return failure;
     }
 
     @Override

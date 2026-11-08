@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.pravega;
 
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.stream.EventWriterConfig;
 import io.pravega.client.stream.Transaction;
@@ -119,9 +120,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             if (abortFailure instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            if (abortFailure != e) {
-                e.addSuppressed(abortFailure);
-            }
+            Failures.append(e, abortFailure);
         }
     }
 

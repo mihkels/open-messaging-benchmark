@@ -94,6 +94,7 @@ Common variations:
 | `mvn clean verify -Dspotless.check.skip` | Skip the Spotless format check                   |
 | `mvn clean verify -Dlicense.skip`        | Skip the license header check                    |
 | `mvn clean verify -Dspotbugs.skip`       | Skip SpotBugs                                    |
+| `mvn clean package -Derrorprone.skip`    | Compile without Error Prone and NullAway         |
 | `mvn -pl driver-kafka -am install`       | Build one module and the modules it depends on   |
 | `mvn -Pmutation verify -pl driver-api`   | Also run PIT mutation testing on `driver-api`    |
 | `mvn -pl driver-api compile`             | Compile one module with Error Prone and NullAway |
@@ -106,7 +107,9 @@ After a source-tree build, the `bin/` scripts run straight from the checkout. Th
 [Error Prone](https://errorprone.info) runs as a `javac` plugin on every module, main and test code,
 and [NullAway](https://github.com/uber/NullAway) runs inside it. Both fail the compile, so their
 findings surface in `mvn compile` instead of later in the SonarCloud scan. The configuration is the
-`errorprone.args` property in the root `pom.xml`.
+`errorprone.args` property in the root `pom.xml`, applied by the `errorprone` profile. The profile is
+active unless `-Derrorprone.skip` is set; CI sets it only in jobs that package code the `build` job
+has already checked, such as the Docker image build.
 
 - **Error Prone** runs its default checks plus a set promoted to errors. Some of them match Sonar
   rules that used to fail pull requests: `UnnamedVariable` (S7467), `UnusedVariable` and

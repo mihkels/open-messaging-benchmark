@@ -88,7 +88,7 @@ jobs:
             mvn --no-transfer-progress --batch-mode verify
           else
             mvn --no-transfer-progress --batch-mode -DskipTests -Dlicense.skip -Dspotless.check.skip \
-              -Dcheckstyle.skip -Dspotbugs.skip -Djacoco.skip package
+              -Dcheckstyle.skip -Dspotbugs.skip -Djacoco.skip -Derrorprone.skip package
           fi
           mkdir dist
           cp package/target/openmessaging-benchmark-*-bin.tar.gz dist/dist.tar.gz

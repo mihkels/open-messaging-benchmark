@@ -947,6 +947,32 @@
                                 <encoding>${project.build.sourceEncoding}</encoding>
                                 <showDeprecation>true</showDeprecation>
                                 <showWarnings>true</showWarnings>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+        <!--
+            Error Prone and NullAway (see errorprone.args). Active by default; -Derrorprone.skip turns it off for
+            jobs that only package already-verified code, such as the Docker image build.
+        -->
+        <profile>
+            <id>errorprone</id>
+            <activation>
+                <jdk>[27,)</jdk>
+                <property>
+                    <name>!errorprone.skip</name>
+                </property>
+            </activation>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <version>${maven.compiler.plugin.version}</version>
+                            <configuration>
                                 <compilerArgs>
                                     <arg>-XDcompilePolicy=simple</arg>
                                     <arg>--should-stop=ifError=FLOW</arg>

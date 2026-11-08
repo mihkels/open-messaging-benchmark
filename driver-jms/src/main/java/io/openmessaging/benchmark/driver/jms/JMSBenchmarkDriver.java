@@ -20,6 +20,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.io.IOException;
 import java.io.StringReader;
@@ -37,7 +38,6 @@ import javax.jms.Topic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectWriter;
 
 public class JMSBenchmarkDriver implements BenchmarkDriver {
 
@@ -52,7 +52,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         this.config = readConfig(configurationFile);
         log.atInfo()
                 .setMessage("JMS driver configuration: {}")
-                .addArgument(() -> writer.writeValueAsString(config))
+                .addArgument(() -> SecretRedaction.redactedJson(config))
                 .log();
 
         try {
@@ -242,6 +242,5 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         return DriverConfigs.read(configurationFile, JMSConfig.class);
     }
 
-    private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
     private static final Logger log = LoggerFactory.getLogger(JMSBenchmarkDriver.class);
 }

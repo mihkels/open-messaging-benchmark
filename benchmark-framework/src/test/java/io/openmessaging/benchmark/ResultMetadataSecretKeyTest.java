@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -126,6 +127,32 @@ class ResultMetadataSecretKeyTest {
         // The former ".*" could not cross a line terminator, so this key slipped through.
         assertThat(FORMER_SECRET_KEY.matcher("password\nsuffix").matches()).isFalse();
         assertThat(ResultMetadata.isSecretKey("password\nsuffix")).isTrue();
+    }
+
+    @Test
+    void redactsSecretPropertiesLinesUriPasswordsAndJsonInStringValues() {
+        Map<String, Object> redacted =
+                ResultMetadata.redactDriverConfig(
+                        Map.of(
+                                "producerConfig",
+                                "acks=all\nsasl.jaas.config=PlainLoginModule required password=\"x\";",
+                                "serviceUrl",
+                                "amqp://user:pass@host:5672",
+                                "jms",
+                                "{\"password\":\"x\",\"user\":\"u\"}",
+                                "nested",
+                                List.of(Map.of("url", "redis://:pass@redis:6379"))));
+
+        assertThat(redacted)
+                .containsEntry("producerConfig", "acks=all\nsasl.jaas.config=[REDACTED]")
+                .containsEntry("serviceUrl", "amqp://user:[REDACTED]@host:5672")
+                .containsEntry("jms", "{\"password\":\"[REDACTED]\",\"user\":\"u\"}")
+                .containsEntry("nested", List.of(Map.of("url", "redis://:[REDACTED]@redis:6379")));
+    }
+
+    @Test
+    void flagsPulsarAuthenticationBlock() {
+        assertThat(ResultMetadata.isSecretKey("authentication")).isTrue();
     }
 
     @Test

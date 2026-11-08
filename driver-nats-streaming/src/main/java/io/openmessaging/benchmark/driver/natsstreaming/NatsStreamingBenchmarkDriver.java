@@ -24,6 +24,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceNames;
+import io.openmessaging.benchmark.driver.SecretRedaction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -57,7 +58,10 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         NatsStreamingClientConfig config =
                 DriverConfigs.read(configurationFile, NatsStreamingClientConfig.class);
-        log.info("read config file, {}", config);
+        log.atInfo()
+                .setMessage("NATS Streaming driver configuration: {}")
+                .addArgument(() -> SecretRedaction.redactedJson(config))
+                .log();
         if (config.clusterId != null) {
             clusterId = config.clusterId;
         } else {
@@ -65,7 +69,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
         }
         if (config.natsHostUrl != null) {
             optsBuilder.natsUrl(config.natsHostUrl);
-            log.info("natUrl {}", config.natsHostUrl);
+            log.info("natUrl {}", SecretRedaction.redactString(config.natsHostUrl));
         }
         optsBuilder.maxPubAcksInFlight(config.maxPubAcksInFlight);
 

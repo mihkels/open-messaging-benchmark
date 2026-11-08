@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
@@ -61,13 +62,12 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                         "Initializing Driver for Admin operations {}",
                         config.delegateForAdminOperationsClassName);
                 delegateForAdminOperations =
-                        (BenchmarkDriver)
-                                Class.forName(
-                                                config.delegateForAdminOperationsClassName,
-                                                true,
-                                                JMSBenchmarkDriver.class.getClassLoader())
-                                        .getConstructor()
-                                        .newInstance();
+                        ConfiguredClasses.load(
+                                        config.delegateForAdminOperationsClassName,
+                                        BenchmarkDriver.class,
+                                        JMSBenchmarkDriver.class.getClassLoader())
+                                .getConstructor()
+                                .newInstance();
                 delegateForAdminOperations.initialize(configurationFile, statsLogger);
             }
 
@@ -91,16 +91,15 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     }
 
     private ConnectionFactory buildConnectionFactory() throws ReflectiveOperationException {
-        Class<ConnectionFactory> clazz =
-                (Class<ConnectionFactory>)
-                        Class.forName(
-                                config.connectionFactoryClassName,
-                                true,
-                                Thread.currentThread().getContextClassLoader());
+        Class<? extends ConnectionFactory> clazz =
+                ConfiguredClasses.load(
+                        config.connectionFactoryClassName,
+                        ConnectionFactory.class,
+                        Thread.currentThread().getContextClassLoader());
 
         // constructor with a String (like DataStax Pulsar JMS)
         try {
-            Constructor<ConnectionFactory> constructor = clazz.getConstructor(String.class);
+            Constructor<? extends ConnectionFactory> constructor = clazz.getConstructor(String.class);
             return constructor.newInstance(config.connectionFactoryConfigurationParam);
         } catch (NoSuchMethodException _) {
             // No String constructor: try the Properties one
@@ -108,7 +107,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
 
         // constructor with Properties (like Confluent Kafka)
         try {
-            Constructor<ConnectionFactory> constructor = clazz.getConstructor(Properties.class);
+            Constructor<? extends ConnectionFactory> constructor = clazz.getConstructor(Properties.class);
             Properties props = new Properties();
             ObjectMapper mapper = new ObjectMapper();
             Map map =

@@ -25,6 +25,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ConsumerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import io.openmessaging.benchmark.utils.RandomGenerator;
@@ -157,10 +158,12 @@ public final class LocalWorker implements Worker {
                             BenchmarkDriver driver;
                             try {
                                 driver =
-                                        (BenchmarkDriver)
-                                                Class.forName(configuration.driverClass)
-                                                        .getDeclaredConstructor()
-                                                        .newInstance();
+                                        ConfiguredClasses.load(
+                                                        configuration.driverClass,
+                                                        BenchmarkDriver.class,
+                                                        LocalWorker.class.getClassLoader())
+                                                .getDeclaredConstructor()
+                                                .newInstance();
                             } catch (ClassNotFoundException e) {
                                 throw new IllegalArgumentException(
                                         "Driver class " + configuration.driverClass + " is not on the classpath", e);

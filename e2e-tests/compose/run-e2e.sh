@@ -556,6 +556,8 @@ run_case() {
     workload=$(field "$row" 6)
     cdir="$REPORT_DIR/cases/$id"
     mkdir -p "$cdir"
+    # The runner image runs as UID 10001 and writes result.json here through a bind mount.
+    chmod a+rwx "$cdir"
     chmod 777 "$cdir"
     export OMB_E2E_CASE_DIR="$cdir"
     cp "$SUITE_DIR/drivers/$driver" "$cdir/driver.yaml"

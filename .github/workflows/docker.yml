@@ -1,13 +1,15 @@
 name: Docker image
 
 # Builds the distribution once, checks and scans the image on every pull request, and publishes
-# signed multi-arch images to Docker Hub from main (edge) and release tags (semver, latest).
-# Release tags also attach the distribution tarball and SHA256SUMS to the GitHub release as soon as
-# the distribution is built (the image scan does not gate it); only the latest release keeps them.
+# signed multi-arch images to Docker Hub from release tags only (semver, latest). Pushes to main
+# publish nothing. Release tags also attach the distribution tarball and SHA256SUMS to the GitHub
+# release as soon as the distribution is built (the image scan does not gate it); only the latest
+# release keeps them. A weekly scheduled run (or a manual dispatch) scans the published latest image
+# so code scanning stays current between releases.
 # Pull requests never see registry credentials: only the publish job uses the dockerhub
-# environment, and it runs for pushes to main and v* tags only. Only pushes to main write caches
-# (pull request caches are scoped to their own ref) and release tags use none, so nothing a pull
-# request writes can end up in a published image.
+# environment, and it runs for v* tags only. Pull requests restore the Maven repository that pushes
+# to main save in "Build and test" (pull request caches are scoped to their own ref) and release
+# tags use none, so nothing a pull request writes can end up in a published image.
 
 on:
   pull_request:
@@ -25,10 +27,11 @@ on:
       - 'mise.toml'
       - '.github/workflows/docker.yml'
   push:
-    branches:
-      - main
     tags:
       - 'v*.*.*'
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
 
 permissions: {}
 
@@ -44,6 +47,8 @@ env:
 jobs:
   dist:
     name: Build distribution
+    # Scheduled and manual runs only scan the published image (scan-published)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,7 +68,7 @@ jobs:
           install_args: java http:maven
           cache: false
 
-      # Release tags resolve dependencies fresh; main and pull requests restore the Maven
+      # Release tags resolve dependencies fresh; pull requests restore the Maven
       # repository that pushes to main save in "Build and test"
       - name: Restore Maven repository
         if: github.ref_type != 'tag'
@@ -73,7 +78,7 @@ jobs:
           key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
           restore-keys: maven-${{ runner.os }}-
 
-      # Release tags run the full verification; main and pull requests are verified by the
+      # Release tags run the full verification; pull requests are verified by the
       # "Build and test" workflow, so here only the distribution is packaged.
       - name: Package
         env:
@@ -107,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Upload of the vulnerability scan to code scanning (pushes only)
+      # Upload of the vulnerability scan to code scanning (release tags only)
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -213,8 +218,6 @@ jobs:
             latest=auto
             suffix=${{ matrix.variant != 'all' && format('-{0}', matrix.variant) || '' }},onlatest=true
           tags: |
-            type=edge,branch=main
-            type=sha,prefix=sha-
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
@@ -246,6 +249,40 @@ jobs:
           [[ "$digest" == sha256:* ]] || { echo "no image digest in bake metadata" >&2; exit 1; }
           mise exec "cosign@$COSIGN_VERSION" -- cosign sign --yes "$IMAGE_REPOSITORY@$digest"
           echo "Signed $IMAGE_REPOSITORY@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+  # Keeps code scanning current between releases without building: new advisories against the
+  # published image's packages show up within a week.
+  scan-published:
+    name: Scan published image
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          cache: false
+
+      - name: Scan for vulnerabilities
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          docker pull "$IMAGE_REPOSITORY:latest"
+          mise exec "trivy@$TRIVY_VERSION" -- trivy image --scanners vuln --ignore-unfixed \
+            --format sarif --output trivy.sarif "$IMAGE_REPOSITORY:latest"
+
+      - name: Upload scan results
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
 
   github-release:
     name: Attach distribution to release

@@ -34,7 +34,7 @@ RELEASE=omb
 # Seconds: broker startup, and one benchmark case (the e2e workloads run for one minute)
 STARTUP_TIMEOUT=${OMB_K8S_STARTUP_TIMEOUT:-900}
 CASE_TIMEOUT=${OMB_K8S_CASE_TIMEOUT:-600}
-# 1: use the published :edge images instead of building locally; 1 for OMB_K8S_REBUILD rebuilds
+# 1: use the published :latest images instead of building locally; 1 for OMB_K8S_REBUILD rebuilds
 PUBLISHED=${OMB_K8S_PUBLISHED:-0}
 REBUILD=${OMB_K8S_REBUILD:-0}
 KAFKA_JMS_JAR=${OMB_K8S_KAFKA_JMS_JAR:-}
@@ -174,7 +174,7 @@ prepare_image() {
     [[ -n "$plugin" ]] || die "stack $stack has no cases in cases.txt"
     if [[ "$PUBLISHED" == "1" ]]; then
         STACK_REPOSITORY=$PUBLISHED_REPOSITORY
-        STACK_TAG="edge-$plugin"
+        STACK_TAG="latest-$plugin"
         if [[ "$stack" == "jms-kafka" ]]; then
             docker pull -q "$STACK_REPOSITORY:$STACK_TAG"
             kafka_jms_image "$STACK_REPOSITORY:$STACK_TAG" "$IMAGE-jms-kafka"

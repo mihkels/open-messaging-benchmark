@@ -40,8 +40,10 @@ changes it.
    - `Helm chart`: the chart `X.Y.Z` pushed to `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`
      and signed.
 
-Every push to `main` also publishes the `edge` and `sha-<commit>` images. Pull requests build, test
-and scan the image but never publish, and never receive registry credentials.
+Images are published from release tags only; pushes to `main` publish nothing. Pull requests build,
+test and scan the image but never publish, and never receive registry credentials. A weekly
+scheduled `Docker image` run (also startable by hand) scans the published `latest` image so code
+scanning picks up new advisories between releases.
 
 `.github/scripts/check-versions.sh` fails the build when the version files disagree, or when a
 release tag does not match them. Do not edit the version lines marked `x-release-please-version` by

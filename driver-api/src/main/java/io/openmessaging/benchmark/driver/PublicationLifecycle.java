@@ -99,6 +99,8 @@ public final class PublicationLifecycle {
      *
      * @throws IllegalStateException if called from a publication on the same thread
      */
+    // An interrupt while waiting is deferred so close still completes, then restored in finally
+    @SuppressWarnings("java:S2142")
     public void close() {
         close(() -> {});
     }

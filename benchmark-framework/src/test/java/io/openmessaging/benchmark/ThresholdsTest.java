@@ -16,7 +16,10 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class ThresholdsTest {
     @Test
@@ -30,11 +33,11 @@ class ThresholdsTest {
 
         Thresholds.Result evaluation = thresholds.evaluate(result);
 
-        assertThat(evaluation.status).isEqualTo("FAIL");
+        assertThat(evaluation.status()).isEqualTo("FAIL");
         assertThat(evaluation.checks.get("maxPublishLatency99Ms").observed).isEqualTo(25.0);
-        assertThat(evaluation.checks.get("maxPublishLatency99Ms").status).isEqualTo("PASS");
+        assertThat(evaluation.checks.get("maxPublishLatency99Ms").status()).isEqualTo("PASS");
         assertThat(evaluation.checks.get("minThroughputRatio").observed).isEqualTo(0.8);
-        assertThat(evaluation.checks.get("minThroughputRatio").status).isEqualTo("FAIL");
+        assertThat(evaluation.checks.get("minThroughputRatio").status()).isEqualTo("FAIL");
     }
 
     @Test
@@ -85,7 +88,7 @@ class ThresholdsTest {
         Thresholds.Result latency = thresholds.evaluate(result);
         assertThat(latency.passed()).isFalse();
         assertThat(latency.checks).containsOnlyKeys("maxPublishLatency99Ms");
-        assertThat(latency.checks.get("maxPublishLatency99Ms").status).isEqualTo("FAIL");
+        assertThat(latency.checks.get("maxPublishLatency99Ms").status()).isEqualTo("FAIL");
 
         thresholds.maxPublishLatency99Ms = null;
         thresholds.minThroughputRatio = 0.1;
@@ -93,5 +96,27 @@ class ThresholdsTest {
         assertThat(throughput.passed()).isFalse();
         assertThat(throughput.checks).containsOnlyKeys("minThroughputRatio");
         assertThat(throughput.checks.get("minThroughputRatio").observed).isZero();
+    }
+
+    @Test
+    void serialisesStatusStringsAndReadsThemBack() throws Exception {
+        Map<String, Thresholds.Check> checks = new LinkedHashMap<>();
+        checks.put("maxPublishLatency99Ms", new Thresholds.Check(10, 12, false));
+        checks.put("minThroughputRatio", new Thresholds.Check(0.9, 1, true));
+        ObjectMapper mapper = new ObjectMapper();
+
+        String json = mapper.writeValueAsString(new Thresholds.Result(checks));
+
+        assertThat(json)
+                .isEqualTo(
+                        "{\"checks\":{"
+                                + "\"maxPublishLatency99Ms\":{\"limit\":10.0,\"observed\":12.0,\"status\":\"FAIL\"},"
+                                + "\"minThroughputRatio\":{\"limit\":0.9,\"observed\":1.0,\"status\":\"PASS\"}},"
+                                + "\"status\":\"FAIL\"}");
+        Thresholds.Result read = mapper.readValue(json, Thresholds.Result.class);
+        assertThat(read.passed()).isFalse();
+        assertThat(read.checks.get("maxPublishLatency99Ms").passed()).isFalse();
+        assertThat(read.checks.get("minThroughputRatio").passed()).isTrue();
+        assertThat(mapper.writeValueAsString(read)).isEqualTo(json);
     }
 }

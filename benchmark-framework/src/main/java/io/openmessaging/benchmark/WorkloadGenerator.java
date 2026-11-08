@@ -160,7 +160,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                         payloads.data(), targetPublishRate, workload.keyDistributor, payloads.weights());
         log.info(
                 "Prepared {} payloads from {} in {} ms",
-                producerWorkAssignment.payloadData().size(),
+                producerWorkAssignment.payloadCount(),
                 workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile,
                 timer.elapsedMillis());
         worker.startLoad(producerWorkAssignment);

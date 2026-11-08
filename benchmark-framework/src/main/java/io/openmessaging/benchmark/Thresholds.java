@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -67,43 +68,71 @@ public class Thresholds {
     public static final class Result {
         private static final Logger log = LoggerFactory.getLogger(Result.class);
 
-        public String status = "";
+        private boolean passed;
         public Map<String, Check> checks = Map.of();
 
         public Result() {}
 
         Result(Map<String, Check> checks) {
             this.checks = checks;
-            status = checks.values().stream().allMatch(Check::passed) ? "PASS" : "FAIL";
+            passed = checks.values().stream().allMatch(Check::passed);
         }
 
         boolean passed() {
-            return status.equals("PASS");
+            return passed;
+        }
+
+        @JsonProperty("status")
+        String status() {
+            return statusOf(passed);
+        }
+
+        @JsonProperty("status")
+        void status(String status) {
+            passed = isPass(status);
         }
 
         void print() {
-            log.info("Thresholds: {}", status);
+            log.info("Thresholds: {}", status());
             log.info("| Check | Limit | Observed | Status |");
             checks.forEach((name, check) ->
-                    log.info("| {} | {} | {} | {} |", name, check.limit, check.observed, check.status));
+                    log.info("| {} | {} | {} | {} |", name, check.limit, check.observed, check.status()));
         }
     }
 
     public static final class Check {
         public double limit;
         public double observed;
-        public String status = "";
+        private boolean passed;
 
         public Check() {}
 
         Check(double limit, double observed, boolean passed) {
             this.limit = limit;
             this.observed = observed;
-            status = passed ? "PASS" : "FAIL";
+            this.passed = passed;
         }
 
-        private boolean passed() {
-            return status.equals("PASS");
+        boolean passed() {
+            return passed;
         }
+
+        @JsonProperty("status")
+        String status() {
+            return statusOf(passed);
+        }
+
+        @JsonProperty("status")
+        void status(String status) {
+            passed = isPass(status);
+        }
+    }
+
+    private static String statusOf(boolean passed) {
+        return passed ? "PASS" : "FAIL";
+    }
+
+    private static boolean isPass(String status) {
+        return status.equals("PASS");
     }
 }

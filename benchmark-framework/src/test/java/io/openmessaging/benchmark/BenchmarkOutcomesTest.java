@@ -290,14 +290,13 @@ class BenchmarkOutcomesTest {
         workloads.put("first", firstWorkload);
         workloads.put("second", secondWorkload);
 
-        assertThatThrownBy(() ->
+        assertThat(
                         Benchmark.runWorkloads(
                                 arguments,
                                 workloads,
                                 worker,
                                 (driver, workload, ignored) -> workload.name.equals("first") ? first : second))
-                .isInstanceOf(Benchmark.ThresholdFailureException.class)
-                .hasMessage("One or more workload threshold checks failed");
+                .isFalse();
         assertThat(Files.readString(Path.of(arguments.output))).contains("second", "PASS");
         verify(worker, times(2)).initializeDriver(any());
         verify(first).close();
@@ -451,37 +450,37 @@ class BenchmarkOutcomesTest {
                 workload.thresholds = new Thresholds();
                 workload.thresholds.minThroughputRatio = 0.9;
             }
-            try {
-                Benchmark.runWorkloads(
-                        arguments,
-                        Map.of("fixture", workload),
-                        worker,
-                        (driver, selectedWorkload, ownedWorker) ->
-                                new WorkloadRun() {
-                                    @Override
-                                    public TestResult run() throws Exception {
-                                        if (fail) {
-                                            throw new IOException("fixture workload failure");
+            boolean thresholdsPassed =
+                    Benchmark.runWorkloads(
+                            arguments,
+                            Map.of("fixture", workload),
+                            worker,
+                            (driver, selectedWorkload, ownedWorker) ->
+                                    new WorkloadRun() {
+                                        @Override
+                                        public TestResult run() throws Exception {
+                                            if (fail) {
+                                                throw new IOException("fixture workload failure");
+                                            }
+                                            TestResult result = result("successful");
+                                            if (thresholdFailure) {
+                                                result.summary = new ResultSummary(80, 80, 0, 0, 0, 0, 100);
+                                            }
+                                            return result;
                                         }
-                                        TestResult result = result("successful");
-                                        if (thresholdFailure) {
-                                            result.summary = new ResultSummary(80, 80, 0, 0, 0, 0, 100);
+
+                                        @Override
+                                        public boolean isQuiescentAfterClose() {
+                                            return true;
                                         }
-                                        return result;
-                                    }
 
-                                    @Override
-                                    public boolean isQuiescentAfterClose() {
-                                        return true;
-                                    }
-
-                                    @Override
-                                    public void close() {
-                                        // The fixture run holds no resources
-                                    }
-                                });
-            } catch (Benchmark.ThresholdFailureException _) {
-                System.exit(Benchmark.thresholdFailureExitCode());
+                                        @Override
+                                        public void close() {
+                                            // The fixture run holds no resources
+                                        }
+                                    });
+            if (!thresholdsPassed) {
+                System.exit(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
             }
         }
     }

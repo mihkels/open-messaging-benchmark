@@ -153,6 +153,30 @@ the token travels in clear text over HTTP: run workers on a trusted network and 
 to everything but the coordinator (and Prometheus). The supervisor's own channel to its driver
 process on `127.0.0.1` does not use this token, and the driver process does not get it.
 
+## bin/benchmark-report
+
+```text
+bin/benchmark-report diff [options] BASELINE CANDIDATE
+bin/benchmark-report diff [options] --baseline <file>... --candidate <file>...
+```
+
+Compares baseline result files with candidate result files. See
+[Comparing runs](../guides/comparing-runs.md).
+
+|            Option            | Default |                                   Description                                   |
+|------------------------------|---------|---------------------------------------------------------------------------------|
+| `--baseline <file>...`       |         | Baseline result files, repeated runs of the same setup                          |
+| `--candidate <file>...`      |         | Candidate result files, repeated runs of the same setup                         |
+| `--format <format>`          | `text`  | Output format: `text`, `markdown` or `json`                                     |
+| `--fail-on-regression <pct>` |         | Exit with status `2` when a metric regresses by at least `<pct>`, such as `10%` |
+| `--min-change <pct>`         | `1%`    | Smallest relative change reported as improved or regressed                      |
+| `--allow-workload-mismatch`  |         | Compare runs of different workloads with a warning instead of refusing          |
+| `--output <file>`            | stdout  | Write the report to a file                                                      |
+
+Exit status `0` means the comparison passed, `1` means bad arguments, an unreadable file or a
+workload mismatch, and `2` means a regression past `--fail-on-regression`. `HEAP_OPTS` overrides
+the default `-Xmx512m`.
+
 ## bin/create_charts.py
 
 ```text

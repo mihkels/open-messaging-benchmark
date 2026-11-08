@@ -81,6 +81,25 @@
     <build>
         <plugins>
             <plugin>
+                <!-- Classpath for running the tools from the source tree, used by bin/benchmark-report -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven.dependency.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>build-classpath</id>
+                        <goals>
+                            <goal>build-classpath</goal>
+                        </goals>
+                        <phase>generate-sources</phase>
+                        <configuration>
+                            <outputFile>target/classpath.txt</outputFile>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <!--
                     Upper-bound dependency check is applied only to the host-side modules
                     (driver-api, benchmark-framework, tool). Drivers are deliberately left out:

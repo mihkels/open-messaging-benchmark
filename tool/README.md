@@ -1,6 +1,19 @@
 # Tool
 
-> **Note:** See [Workload generation](https://mihkels.github.io/open-messaging-benchmark/guides/workload-generation/) in the documentation site for a usage guide.
+> **Note:** See [Workload generation](https://mihkels.github.io/open-messaging-benchmark/guides/workload-generation/) and [Comparing runs](https://mihkels.github.io/open-messaging-benchmark/guides/comparing-runs/) in the documentation site for usage guides.
+
+## `BenchmarkReport`
+
+Reports on benchmark result files; run it with `bin/benchmark-report`. The `diff` command compares
+baseline result files with candidate result files:
+
+```bash
+bin/benchmark-report diff --baseline a1.json a2.json a3.json --candidate b1.json b2.json b3.json \
+  --format markdown --fail-on-regression 10%
+```
+
+The build writes the tool's runtime classpath to `tool/target/classpath.txt`, which the script uses
+when run from the source tree.
 
 ## `WorkloadGenerationTool`
 

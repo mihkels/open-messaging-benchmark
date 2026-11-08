@@ -101,6 +101,13 @@ directory:
 Each file name starts with `<workload name> - `, with `/` replaced by `-`. To compare drivers on one
 chart, pass their results for the same workload together.
 
+## Comparing two setups
+
+`bin/benchmark-report diff baseline.json candidate.json` prints a table of throughput, latency
+percentiles, errors and backlog with the delta of each, as text, Markdown or JSON. It accepts
+repeated runs per side and can fail a CI job on a regression. See
+[Comparing runs](comparing-runs.md).
+
 ## Keeping results
 
 Store each result file with the driver configuration, workload file, broker configuration and a

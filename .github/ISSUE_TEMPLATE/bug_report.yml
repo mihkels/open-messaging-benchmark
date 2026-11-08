@@ -1,0 +1,106 @@
+name: Bug report
+description: Something in the benchmark, a driver, the images or the Helm chart doesn't work.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are for bugs and documentation problems only. Ask questions in
+        [Discussions Q&A](https://github.com/mihkels/open-messaging-benchmark/discussions/categories/q-a)
+        and propose features or new drivers in
+        [Discussions Ideas](https://github.com/mihkels/open-messaging-benchmark/discussions/categories/ideas).
+        Report security problems privately, as described in
+        [SECURITY.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/SECURITY.md).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I reproduced this on the latest release.
+          required: true
+        - label: This is not a security problem.
+          required: true
+        - label: I agree to follow the [code of conduct](https://github.com/mihkels/open-messaging-benchmark/blob/main/CODE_OF_CONDUCT.md).
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or image tag
+      placeholder: 0.4.0, or docker.io/mihkels/open-messaging-benchmark:0.4.0
+    validations:
+      required: true
+  - type: dropdown
+    id: driver
+    attributes:
+      label: Driver
+      options:
+        - Not driver-specific
+        - Artemis
+        - BookKeeper
+        - JMS
+        - Kafka
+        - KoP (Kafka on Pulsar)
+        - MQTT 5
+        - NATS
+        - NATS Streaming
+        - NSQ
+        - Pravega
+        - Pulsar
+        - RabbitMQ
+        - Redis
+        - RocketMQ
+        - RocketMQ 5
+        - External plugin
+    validations:
+      required: true
+  - type: input
+    id: broker
+    attributes:
+      label: Broker and version
+      placeholder: Apache Kafka 4.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Local (built from source or tarball)
+        - Docker or Docker Compose
+        - Helm on Kubernetes
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Workload and driver configuration
+      description: The workload and driver YAML. Remove passwords, tokens and hostnames you don't want public.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Coordinator and worker output around the failure.
+      render: text
+    validations:
+      required: true

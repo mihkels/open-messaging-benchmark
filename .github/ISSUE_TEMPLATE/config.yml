@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/mihkels/open-messaging-benchmark/discussions/categories/q-a
+    about: Ask how to run, configure or interpret a benchmark in Discussions Q&A.
+  - name: Feature idea or new driver
+    url: https://github.com/mihkels/open-messaging-benchmark/discussions/categories/ideas
+    about: Propose features and new drivers in Discussions Ideas. Accepted ideas become issues.
+  - name: Security vulnerability
+    url: https://github.com/mihkels/open-messaging-benchmark/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Documentation site
+    url: https://mihkels.github.io/open-messaging-benchmark/
+    about: Guides and reference for running benchmarks and writing drivers.

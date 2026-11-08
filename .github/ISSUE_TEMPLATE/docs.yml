@@ -1,0 +1,33 @@
+name: Documentation problem
+description: A page on the documentation site or in the repository is wrong, unclear or missing.
+labels: [documentation, needs-triage]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I agree to follow the [code of conduct](https://github.com/mihkels/open-messaging-benchmark/blob/main/CODE_OF_CONDUCT.md).
+          required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: URL of the page, or the file path in the repository.
+      placeholder: https://mihkels.github.io/open-messaging-benchmark/...
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested fix
+    validations:
+      required: false

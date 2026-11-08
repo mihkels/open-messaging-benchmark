@@ -52,6 +52,18 @@ public final class SecureTempFiles {
     }
 
     /**
+     * Creates a new file readable and writable only by its owner.
+     *
+     * @param path the file to create, which must not exist
+     * @return the created file
+     * @throws IOException if the file exists or cannot be created, or the file system supports
+     *     neither POSIX permissions nor ACLs
+     */
+    public static Path createFile(Path path) throws IOException {
+        return Files.createFile(path, ownerOnly(path.getFileSystem(), false));
+    }
+
+    /**
      * Creates a temporary directory accessible only by its owner.
      *
      * @param prefix the directory name prefix

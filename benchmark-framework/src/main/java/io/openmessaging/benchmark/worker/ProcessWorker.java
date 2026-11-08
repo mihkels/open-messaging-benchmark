@@ -141,6 +141,7 @@ public class ProcessWorker implements Worker {
             if (runId != null) {
                 starting.client().setRunId(runId);
             }
+            starting.authorizeConfig(driverConfigFile);
             starting.client().initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
             String failure = starting.describeFailure(e);
@@ -224,6 +225,7 @@ public class ProcessWorker implements Worker {
      */
     public String scrapeMetrics() {
         String url;
+        String token;
         synchronized (this) {
             DriverProcess running = current;
             if (running == null || running.endpoint() == null) {
@@ -232,12 +234,16 @@ public class ProcessWorker implements Worker {
             if (running.hasExited()) {
                 throw running.crashed(null);
             }
-            url = running.endpoint() + "/metrics";
+            url = running.endpoint() + DriverProcessServer.METRICS_PATH;
+            token = running.token();
         }
         try (HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
             HttpResponse<String> response =
                     http.send(
-                            HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(10)).build(),
+                            HttpRequest.newBuilder(URI.create(url))
+                                    .timeout(Duration.ofSeconds(10))
+                                    .header(BearerTokenAuth.AUTHORIZATION, BearerTokenAuth.BEARER_PREFIX + token)
+                                    .build(),
                             HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 throw new IllegalStateException(

@@ -24,95 +24,104 @@ enum Metric {
     PUBLISH_LATENCY_P50(
             "publish-latency-p50",
             "Publish latency p50",
-            "publish",
+            Histograms.PUBLISH,
             50,
             r -> r.aggregatedPublishLatency50pct),
     PUBLISH_LATENCY_P95(
             "publish-latency-p95",
             "Publish latency p95",
-            "publish",
+            Histograms.PUBLISH,
             95,
             r -> r.aggregatedPublishLatency95pct),
     PUBLISH_LATENCY_P99(
             "publish-latency-p99",
             "Publish latency p99",
-            "publish",
+            Histograms.PUBLISH,
             99,
             r -> r.aggregatedPublishLatency99pct),
     PUBLISH_LATENCY_P999(
             "publish-latency-p99.9",
             "Publish latency p99.9",
-            "publish",
+            Histograms.PUBLISH,
             99.9,
             r -> r.aggregatedPublishLatency999pct),
     PUBLISH_LATENCY_MAX(
             "publish-latency-max",
             "Publish latency max",
-            "publish",
+            Histograms.PUBLISH,
             100,
             r -> r.aggregatedPublishLatencyMax),
     PUBLISH_DELAY_P50(
             "publish-delay-p50",
             "Publish delay p50",
-            "publishDelay",
+            Histograms.PUBLISH_DELAY,
             50,
             r -> fromMicros(r.aggregatedPublishDelayLatency50pct)),
     PUBLISH_DELAY_P95(
             "publish-delay-p95",
             "Publish delay p95",
-            "publishDelay",
+            Histograms.PUBLISH_DELAY,
             95,
             r -> fromMicros(r.aggregatedPublishDelayLatency95pct)),
     PUBLISH_DELAY_P99(
             "publish-delay-p99",
             "Publish delay p99",
-            "publishDelay",
+            Histograms.PUBLISH_DELAY,
             99,
             r -> fromMicros(r.aggregatedPublishDelayLatency99pct)),
     PUBLISH_DELAY_P999(
             "publish-delay-p99.9",
             "Publish delay p99.9",
-            "publishDelay",
+            Histograms.PUBLISH_DELAY,
             99.9,
             r -> fromMicros(r.aggregatedPublishDelayLatency999pct)),
     PUBLISH_DELAY_MAX(
             "publish-delay-max",
             "Publish delay max",
-            "publishDelay",
+            Histograms.PUBLISH_DELAY,
             100,
             r -> fromMicros(r.aggregatedPublishDelayLatencyMax)),
     END_TO_END_LATENCY_P50(
             "end-to-end-latency-p50",
             "End-to-end latency p50",
-            "endToEnd",
+            Histograms.END_TO_END,
             50,
             r -> r.aggregatedEndToEndLatency50pct),
     END_TO_END_LATENCY_P95(
             "end-to-end-latency-p95",
             "End-to-end latency p95",
-            "endToEnd",
+            Histograms.END_TO_END,
             95,
             r -> r.aggregatedEndToEndLatency95pct),
     END_TO_END_LATENCY_P99(
             "end-to-end-latency-p99",
             "End-to-end latency p99",
-            "endToEnd",
+            Histograms.END_TO_END,
             99,
             r -> r.aggregatedEndToEndLatency99pct),
     END_TO_END_LATENCY_P999(
             "end-to-end-latency-p99.9",
             "End-to-end latency p99.9",
-            "endToEnd",
+            Histograms.END_TO_END,
             99.9,
             r -> r.aggregatedEndToEndLatency999pct),
     END_TO_END_LATENCY_MAX(
             "end-to-end-latency-max",
             "End-to-end latency max",
-            "endToEnd",
+            Histograms.END_TO_END,
             100,
             r -> r.aggregatedEndToEndLatencyMax),
     PUBLISH_ERRORS("publish-errors", "Publish errors", Unit.COUNT, Direction.LOWER_IS_BETTER),
     MAX_BACKLOG("max-backlog", "Max backlog", Unit.COUNT, Direction.LOWER_IS_BETTER);
+
+    /** The keys of the raw histograms in {@code TestResult.histograms}. */
+    static final class Histograms {
+        static final String PUBLISH = "publish";
+        static final String PUBLISH_DELAY = "publishDelay";
+        static final String END_TO_END = "endToEnd";
+
+        private Histograms() {}
+    }
 
     /** Whether a larger value is an improvement. */
     enum Direction {
@@ -122,16 +131,18 @@ enum Metric {
 
     /** The unit of a metric, with the decimals it is printed with. */
     enum Unit {
-        RATE("msg/s", 0),
-        MILLIS("ms", 3),
-        COUNT("", 0);
+        RATE("msg/s", "%,.0f"),
+        MILLIS("ms", "%,.3f"),
+        COUNT("", "%,.0f");
 
         final String symbol;
-        final int decimals;
 
-        Unit(String symbol, int decimals) {
+        /** The {@link String#format} pattern of a value, with thousands separators. */
+        final String pattern;
+
+        Unit(String symbol, String pattern) {
             this.symbol = symbol;
-            this.decimals = decimals;
+            this.pattern = pattern;
         }
     }
 

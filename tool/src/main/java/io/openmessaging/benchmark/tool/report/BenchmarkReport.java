@@ -24,6 +24,7 @@ public final class BenchmarkReport {
 
     private BenchmarkReport() {}
 
+    @SuppressWarnings("java:S106") // The report and errors are this command-line tool's output
     static void main(String[] args) {
         System.exit(run(args, System.out, System.err));
     }

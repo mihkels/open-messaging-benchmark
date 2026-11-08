@@ -25,6 +25,15 @@ import tools.jackson.databind.JsonNode;
 
 class FormatTest {
 
+    private static JsonNode row(JsonNode json, String metric) {
+        for (JsonNode row : json.get("rows")) {
+            if (row.get("metric").asString().equals(metric)) {
+                return row;
+            }
+        }
+        throw new AssertionError("No row " + metric);
+    }
+
     private static DiffReport regression() {
         return DiffReport.of(
                 Fixtures.runs("baseline"), Fixtures.runs("candidate-regression"), 1, List.of());
@@ -116,7 +125,7 @@ class FormatTest {
         assertThat(rate.get("deltaPercent").asDouble()).isEqualTo(-15);
         assertThat(rate.get("status").asString()).isEqualTo("regressed");
 
-        JsonNode errors = json.get("rows").get(Metric.PUBLISH_ERRORS.ordinal());
+        JsonNode errors = row(json, "publish-errors");
         assertThat(errors.get("direction").asString()).isEqualTo("lower");
         assertThat(errors.get("deltaPercent").isNull()).isTrue();
 
@@ -132,7 +141,7 @@ class FormatTest {
                 Fixtures.MAPPER.readTree(
                         Format.JSON.render(single("legacy-v1.json", "baseline-1.json", List.of("w"))));
         assertThat(json.get("warnings").get(0).asString()).isEqualTo("w");
-        JsonNode errors = json.get("rows").get(Metric.PUBLISH_ERRORS.ordinal());
+        JsonNode errors = row(json, "publish-errors");
         assertThat(errors.get("baseline").isNull()).isTrue();
         assertThat(errors.get("delta").isNull()).isTrue();
         assertThat(errors.get("status").asString()).isEqualTo("not_available");

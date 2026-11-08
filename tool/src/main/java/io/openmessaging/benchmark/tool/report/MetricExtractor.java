@@ -28,7 +28,9 @@ import org.HdrHistogram.Histogram;
 /** Reads the {@link Metric} values of a run. */
 final class MetricExtractor {
     /** The raw histograms every latency metric reads. */
-    static final List<String> HISTOGRAMS = List.of("publish", "publishDelay", "endToEnd");
+    static final List<String> HISTOGRAMS =
+            List.of(
+                    Metric.Histograms.PUBLISH, Metric.Histograms.PUBLISH_DELAY, Metric.Histograms.END_TO_END);
 
     /** Where latency values come from. */
     enum LatencySource {

@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.tool.report;
 
-import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -66,9 +65,8 @@ final class Fixtures {
      * @param dir the directory to write the copy to
      * @param factor the scale of the recorded values
      * @return the written copy
-     * @throws IOException if the copy cannot be written
      */
-    static Path withHistograms(String name, Path dir, double factor) throws IOException {
+    static Path withHistograms(String name, Path dir, double factor) {
         ObjectNode tree = (ObjectNode) MAPPER.readTree(path(name).toFile());
         ObjectNode histograms = tree.putObject("histograms");
         for (String key : MetricExtractor.HISTOGRAMS) {
@@ -90,10 +88,8 @@ final class Fixtures {
      * @param dir the directory to write the copy to
      * @param encoded the histogram strings by key
      * @return the written copy
-     * @throws IOException if the copy cannot be written
      */
-    static Path withHistogramStrings(String name, Path dir, Map<String, String> encoded)
-            throws IOException {
+    static Path withHistogramStrings(String name, Path dir, Map<String, String> encoded) {
         ObjectNode tree = (ObjectNode) MAPPER.readTree(path(name).toFile());
         ObjectNode histograms = tree.putObject("histograms");
         encoded.forEach(histograms::put);

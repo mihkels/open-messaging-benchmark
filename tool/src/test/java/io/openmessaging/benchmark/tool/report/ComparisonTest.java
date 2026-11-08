@@ -26,6 +26,10 @@ class ComparisonTest {
     private static final Metric LATENCY = Metric.PUBLISH_LATENCY_P99;
     private static final Metric RATE = Metric.PUBLISH_RATE;
 
+    private static Row row(List<Row> rows, Metric metric) {
+        return rows.stream().filter(row -> row.metric() == metric).findFirst().orElseThrow();
+    }
+
     private static Spread single(double value) {
         return Spread.of(List.of(value));
     }
@@ -115,10 +119,10 @@ class ComparisonTest {
                         List.of(Map.of(LATENCY, 20.0, RATE, 5.0)),
                         1);
         assertThat(rows).hasSize(Metric.values().length);
-        Row latency = rows.get(LATENCY.ordinal());
+        Row latency = row(rows, LATENCY);
         assertThat(latency.baseline()).isEqualTo(new Spread(10, 10.5, 11, 2));
         assertThat(latency.status()).isEqualTo(Status.REGRESSED);
-        assertThat(rows.get(RATE.ordinal()).status()).isEqualTo(Status.NOT_AVAILABLE);
+        assertThat(row(rows, RATE).status()).isEqualTo(Status.NOT_AVAILABLE);
     }
 
     @Test

@@ -134,7 +134,7 @@ class BenchmarkReportTest {
     }
 
     @Test
-    void writesTheReportToAFile() throws IOException {
+    void writesTheReportToAFile() {
         Path report = tempDir.resolve("report.json");
         int exit =
                 run(
@@ -172,7 +172,7 @@ class BenchmarkReportTest {
     }
 
     @Test
-    void reportsAnInvalidHistogram() throws IOException {
+    void reportsAnInvalidHistogram() {
         Map<String, String> invalid = Map.of("publish", "!", "publishDelay", "!", "endToEnd", "!");
         Path baseline = Fixtures.withHistogramStrings("baseline-1.json", tempDir, invalid);
         Path candidate = Fixtures.withHistogramStrings("baseline-2.json", tempDir, invalid);
@@ -182,7 +182,7 @@ class BenchmarkReportTest {
     }
 
     @Test
-    void comparesRawHistogramsWhenBothSidesHaveThem() throws IOException {
+    void comparesRawHistogramsWhenBothSidesHaveThem() {
         Path baseline = Fixtures.withHistograms("baseline-1.json", tempDir, 1);
         Path candidate = Fixtures.withHistograms("baseline-2.json", tempDir, 2);
         int exit = run("diff", baseline.toString(), candidate.toString(), "--fail-on-regression", "90");

@@ -97,32 +97,15 @@ final class DiffCommand {
      *     with --baseline and --candidate
      */
     int execute(PrintStream out, PrintStream err) {
-        boolean named = !baseline.isEmpty() || !candidate.isEmpty();
-        List<Path> baselineFiles = baseline;
-        List<Path> candidateFiles = candidate;
-        if (named && !files.isEmpty()) {
-            throw new ParameterException(
-                    "Give the files either positionally or with --baseline/--candidate");
-        }
-        if (!named) {
-            if (files.size() != 2) {
-                throw new ParameterException("Expected BASELINE and CANDIDATE files, got " + files.size());
-            }
-            baselineFiles = List.of(files.get(0));
-            candidateFiles = List.of(files.get(1));
-        } else if (baseline.isEmpty() || candidate.isEmpty()) {
-            throw new ParameterException("Both --baseline and --candidate need at least one file");
-        }
-
-        List<Run> baselineRuns;
-        List<Run> candidateRuns;
+        List<List<Run>> sides;
         try {
-            baselineRuns = baselineFiles.stream().map(Run::read).toList();
-            candidateRuns = candidateFiles.stream().map(Run::read).toList();
+            sides = sides().stream().map(paths -> paths.stream().map(Run::read).toList()).toList();
         } catch (JacksonException e) {
             err.println("Cannot read result file: " + e.getOriginalMessage());
             return 1;
         }
+        List<Run> baselineRuns = sides.get(0);
+        List<Run> candidateRuns = sides.get(1);
 
         List<String> mismatches =
                 RunContext.workloadMismatches(RunContext.all(baselineRuns, candidateRuns));
@@ -139,44 +122,75 @@ final class DiffCommand {
             err.println("Cannot compare: " + e.getMessage());
             return 1;
         }
-        String rendered = format.render(report);
+        if (!write(format.render(report), out, err)) {
+            return 1;
+        }
+        Double threshold = failOnRegression;
+        return threshold == null ? 0 : checkRegressions(report, threshold, err);
+    }
+
+    /**
+     * Returns the baseline and candidate files, given either positionally or with --baseline and
+     * --candidate.
+     *
+     * @return the baseline files, then the candidate files
+     * @throws ParameterException if the files are given both ways, or incompletely
+     */
+    private List<List<Path>> sides() {
+        boolean named = !baseline.isEmpty() || !candidate.isEmpty();
+        if (!named) {
+            if (files.size() != 2) {
+                throw new ParameterException("Expected BASELINE and CANDIDATE files, got " + files.size());
+            }
+            return List.of(List.of(files.get(0)), List.of(files.get(1)));
+        }
+        if (!files.isEmpty()) {
+            throw new ParameterException(
+                    "Give the files either positionally or with --baseline/--candidate");
+        }
+        if (baseline.isEmpty() || candidate.isEmpty()) {
+            throw new ParameterException("Both --baseline and --candidate need at least one file");
+        }
+        return List.of(baseline, candidate);
+    }
+
+    // Writes the report to --output, or to out without it; returns false if writing failed
+    private boolean write(String rendered, PrintStream out, PrintStream err) {
         Path target = output;
         if (target == null) {
             out.print(rendered);
-        } else {
-            try {
-                Files.writeString(target, rendered, StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                err.println("Cannot write " + target + ": " + e.getMessage());
-                return 1;
-            }
+            return true;
         }
+        try {
+            Files.writeString(target, rendered, StandardCharsets.UTF_8);
+            return true;
+        } catch (IOException e) {
+            err.println("Cannot write " + target + ": " + e.getMessage());
+            return false;
+        }
+    }
 
-        Double threshold = failOnRegression;
-        if (threshold != null) {
-            List<Row> regressions = Comparison.regressions(report.rows(), threshold);
-            if (!regressions.isEmpty()) {
-                for (Row row : regressions) {
-                    err.println(
-                            "Regression: "
-                                    + row.metric().labelWithUnit()
-                                    + " "
-                                    + DiffReport.deltaPercent(row)
-                                    + " ("
-                                    + DiffReport.spread(row.metric(), row.baseline())
-                                    + " -> "
-                                    + DiffReport.spread(row.metric(), row.candidate())
-                                    + ")");
-                }
-                err.printf(
-                        Locale.ROOT,
-                        "%d metric(s) regressed by at least %s%%%n",
-                        regressions.size(),
-                        PercentConverter.format(threshold));
-                return EXIT_REGRESSION;
-            }
+    // Lists the regressions at or past the threshold; returns the exit code
+    private static int checkRegressions(DiffReport report, double threshold, PrintStream err) {
+        List<Row> regressions = Comparison.regressions(report.rows(), threshold);
+        if (regressions.isEmpty()) {
+            return 0;
         }
-        return 0;
+        for (Row row : regressions) {
+            err.printf(
+                    Locale.ROOT,
+                    "Regression: %s %s (%s -> %s)%n",
+                    row.metric().labelWithUnit(),
+                    DiffReport.deltaPercent(row),
+                    DiffReport.spread(row.metric(), row.baseline()),
+                    DiffReport.spread(row.metric(), row.candidate()));
+        }
+        err.printf(
+                Locale.ROOT,
+                "%d metric(s) regressed by at least %s%%%n",
+                regressions.size(),
+                PercentConverter.format(threshold));
+        return EXIT_REGRESSION;
     }
 
     /** Parses a format name in any case. */
@@ -206,7 +220,7 @@ final class DiffCommand {
             } catch (NumberFormatException e) {
                 throw new ParameterException("Not a percentage: '" + value + "'", e);
             }
-            if (!(percent >= 0) || Double.isInfinite(percent)) {
+            if (Double.isNaN(percent) || percent < 0 || Double.isInfinite(percent)) {
                 throw new ParameterException("Percentage must be zero or more: '" + value + "'");
             }
             return percent;

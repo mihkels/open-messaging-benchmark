@@ -30,6 +30,8 @@ final class JsonReport {
     /** Version of this output's shape; bumped on incompatible changes. */
     static final int SCHEMA_VERSION = 1;
 
+    private static final String BASELINE = "baseline";
+    private static final String CANDIDATE = "candidate";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private JsonReport() {}
@@ -47,8 +49,8 @@ final class JsonReport {
         for (SettingDifference difference : report.settingDifferences()) {
             ObjectNode setting = settings.addObject();
             setting.put("name", difference.name());
-            strings(setting.putArray("baseline"), difference.baseline());
-            strings(setting.putArray("candidate"), difference.candidate());
+            strings(setting.putArray(BASELINE), difference.baseline());
+            strings(setting.putArray(CANDIDATE), difference.candidate());
         }
 
         ArrayNode rows = root.putArray("rows");
@@ -59,19 +61,20 @@ final class JsonReport {
             node.put(
                     "direction",
                     row.metric().direction == Metric.Direction.HIGHER_IS_BETTER ? "higher" : "lower");
-            spread(node, "baseline", row.baseline());
-            spread(node, "candidate", row.candidate());
+            spread(node, BASELINE, row.baseline());
+            spread(node, CANDIDATE, row.candidate());
             number(node, "delta", row.delta());
             number(node, "deltaPercent", row.deltaPercent());
             node.put("status", row.status().name().toLowerCase(java.util.Locale.ROOT));
         }
 
-        bencher(root.putObject("baseline"), report, Row::baseline);
-        bencher(root.putObject("candidate"), report, Row::candidate);
+        bencher(root.putObject(BASELINE), report, Row::baseline);
+        bencher(root.putObject(CANDIDATE), report, Row::candidate);
         return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
     }
 
-    // Bencher Metric Format: {"<benchmark>": {"<measure>": {"value", "lower_value", "upper_value"}}}
+    // Bencher Metric Format: per workload, one measure per metric id with value, lower_value and
+    // upper_value
     private static void bencher(
             ObjectNode side, DiffReport report, Function<Row, @Nullable Spread> spreadOfSide) {
         ObjectNode measures = side.putObject(report.workload());

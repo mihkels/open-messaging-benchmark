@@ -18,7 +18,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import io.openmessaging.benchmark.tool.report.MetricExtractor.LatencySource;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -33,19 +32,19 @@ class MetricExtractorTest {
         Map<Metric, Double> values =
                 MetricExtractor.extract(Fixtures.run("baseline-1.json"), LatencySource.AGGREGATED);
         assertThat(values).hasSize(Metric.values().length);
-        assertThat(values.get(Metric.PUBLISH_RATE)).isEqualTo(10000);
-        assertThat(values.get(Metric.PUBLISH_ERRORS)).isZero();
-        assertThat(values.get(Metric.MAX_BACKLOG)).isEqualTo(100);
-        assertThat(values.get(Metric.PUBLISH_LATENCY_P99)).isEqualTo(5.0);
-        assertThat(values.get(Metric.END_TO_END_LATENCY_MAX)).isEqualTo(30.0);
+        assertThat(values).containsEntry(Metric.PUBLISH_RATE, 10000.0);
+        assertThat(values).containsEntry(Metric.PUBLISH_ERRORS, 0.0);
+        assertThat(values).containsEntry(Metric.MAX_BACKLOG, 100.0);
+        assertThat(values).containsEntry(Metric.PUBLISH_LATENCY_P99, 5.0);
+        assertThat(values).containsEntry(Metric.END_TO_END_LATENCY_MAX, 30.0);
     }
 
     @Test
     void convertsPublishDelayFromMicrosecondsToMilliseconds() {
         Map<Metric, Double> values =
                 MetricExtractor.extract(Fixtures.run("baseline-1.json"), LatencySource.AGGREGATED);
-        assertThat(values.get(Metric.PUBLISH_DELAY_P99)).isEqualTo(0.2);
-        assertThat(values.get(Metric.PUBLISH_DELAY_MAX)).isEqualTo(0.9);
+        assertThat(values).containsEntry(Metric.PUBLISH_DELAY_P99, 0.2);
+        assertThat(values).containsEntry(Metric.PUBLISH_DELAY_MAX, 0.9);
     }
 
     @Test
@@ -53,14 +52,14 @@ class MetricExtractorTest {
         Run legacy = Fixtures.run("legacy-v1.json");
         assertThat(legacy.hasMetadata()).isFalse();
         Map<Metric, Double> values = MetricExtractor.extract(legacy, LatencySource.AGGREGATED);
-        assertThat(values.get(Metric.PUBLISH_RATE)).isEqualTo(10000);
-        assertThat(values.get(Metric.CONSUME_RATE)).isEqualTo(9990);
-        assertThat(values.get(Metric.MAX_BACKLOG)).isEqualTo(120);
+        assertThat(values).containsEntry(Metric.PUBLISH_RATE, 10000.0);
+        assertThat(values).containsEntry(Metric.CONSUME_RATE, 9990.0);
+        assertThat(values).containsEntry(Metric.MAX_BACKLOG, 120.0);
         assertThat(values).doesNotContainKey(Metric.PUBLISH_ERRORS);
     }
 
     @Test
-    void usesRawHistogramsOnlyWhenEveryRunHasAllOfThem() throws IOException {
+    void usesRawHistogramsOnlyWhenEveryRunHasAllOfThem() {
         Run withHistograms = Run.read(Fixtures.withHistograms("baseline-1.json", tempDir, 1));
         Run partial =
                 Run.read(
@@ -76,18 +75,18 @@ class MetricExtractorTest {
     }
 
     @Test
-    void readsLatencyPercentilesFromRawHistogramsInMilliseconds() throws IOException {
+    void readsLatencyPercentilesFromRawHistogramsInMilliseconds() {
         // Values 10, 20, ... 10000 µs
         Run run = Run.read(Fixtures.withHistograms("baseline-1.json", tempDir, 1));
         Map<Metric, Double> values = MetricExtractor.extract(run, LatencySource.HISTOGRAMS);
         assertThat(values.get(Metric.PUBLISH_LATENCY_P50)).isCloseTo(5.0, within(0.01));
         assertThat(values.get(Metric.PUBLISH_DELAY_P99)).isCloseTo(9.9, within(0.01));
         assertThat(values.get(Metric.END_TO_END_LATENCY_MAX)).isCloseTo(10.0, within(0.01));
-        assertThat(values.get(Metric.PUBLISH_RATE)).isEqualTo(10000);
+        assertThat(values).containsEntry(Metric.PUBLISH_RATE, 10000.0);
     }
 
     @Test
-    void rejectsAMissingOrInvalidHistogram() throws IOException {
+    void rejectsAMissingOrInvalidHistogram() {
         Run none = Fixtures.run("baseline-1.json");
         assertThatThrownBy(() -> MetricExtractor.extract(none, LatencySource.HISTOGRAMS))
                 .isInstanceOf(IllegalArgumentException.class)

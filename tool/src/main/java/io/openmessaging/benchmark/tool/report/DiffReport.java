@@ -74,7 +74,7 @@ record DiffReport(
 
     /** Formats a value in the unit of its metric, with thousands separators. */
     static String value(Metric metric, double value) {
-        return String.format(Locale.ROOT, "%,." + metric.unit.decimals + "f", value);
+        return String.format(Locale.ROOT, metric.unit.pattern, value);
     }
 
     /** Formats a spread as "median [min – max]", or only the median when all runs agree. */

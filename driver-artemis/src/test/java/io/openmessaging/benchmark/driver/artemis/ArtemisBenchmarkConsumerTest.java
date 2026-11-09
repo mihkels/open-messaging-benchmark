@@ -27,6 +27,8 @@ import static org.mockito.Mockito.when;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import org.apache.activemq.artemis.api.core.ActiveMQBuffer;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
+import org.apache.activemq.artemis.api.core.ActiveMQQueueExistsException;
+import org.apache.activemq.artemis.api.core.QueueConfiguration;
 import org.apache.activemq.artemis.api.core.client.ClientConsumer;
 import org.apache.activemq.artemis.api.core.client.ClientMessage;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
@@ -36,6 +38,21 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class ArtemisBenchmarkConsumerTest {
+
+    @Test
+    void secondConsumerOnASubscriptionReusesTheExistingQueue() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.create();
+        doThrow(new ActiveMQQueueExistsException("AMQ229019"))
+                .when(fixture.session)
+                .createQueue(any(QueueConfiguration.class));
+
+        fixture.create();
+
+        verify(fixture.session, times(2)).createConsumer("subscription");
+        verify(fixture.session, times(2)).start();
+        verify(fixture.session, never()).close();
+    }
 
     @Test
     void closeStillClosesSessionWhenConsumerCloseFails() throws Exception {

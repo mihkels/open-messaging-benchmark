@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.artemis;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
+import org.apache.activemq.artemis.api.core.ActiveMQQueueExistsException;
 import org.apache.activemq.artemis.api.core.QueueConfiguration;
 import org.apache.activemq.artemis.api.core.RoutingType;
 import org.apache.activemq.artemis.api.core.SimpleString;
@@ -60,11 +61,7 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
 
         try {
             tempSession = sessionFactory.createSession();
-            tempSession.createQueue(
-                    QueueConfiguration.of(SimpleString.of(queueName))
-                            .setAddress(SimpleString.of(topic))
-                            .setRoutingType(RoutingType.MULTICAST)
-                            .setDurable(true));
+            createSubscriptionQueue(tempSession, topic, queueName);
             tempConsumer = tempSession.createConsumer(queueName);
             tempConsumer.setMessageHandler(message -> handleMessage(message, callback));
 
@@ -77,6 +74,19 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             ArtemisResources.closeAfterFailure(tempConsumer, e);
             ArtemisResources.closeAfterFailure(tempSession, e);
             throw e;
+        }
+    }
+
+    private static void createSubscriptionQueue(ClientSession session, String topic, String queueName)
+            throws ActiveMQException {
+        try {
+            session.createQueue(
+                    QueueConfiguration.of(SimpleString.of(queueName))
+                            .setAddress(SimpleString.of(topic))
+                            .setRoutingType(RoutingType.MULTICAST)
+                            .setDurable(true));
+        } catch (ActiveMQQueueExistsException _) {
+            // Another consumer on this subscription created the shared queue first.
         }
     }
 

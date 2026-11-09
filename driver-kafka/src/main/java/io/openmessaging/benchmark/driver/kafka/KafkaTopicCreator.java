@@ -32,6 +32,7 @@ import java.util.function.LongSupplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -164,6 +165,8 @@ class KafkaTopicCreator {
                 createBlocking(topicInfos);
                 log.info("Successfully created all {} topics", topicInfos.size());
                 return; // Success!
+            } catch (FatalTopicCreationException e) {
+                throw e;
             } catch (RuntimeException e) {
                 if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
                     Thread.currentThread().interrupt();
@@ -292,6 +295,8 @@ class KafkaTopicCreator {
         try {
             return admin.createTopics(newTopics).values().entrySet().stream()
                     .collect(toMap(e -> lookup.get(e.getKey()), e -> isSuccess(e.getValue())));
+        } catch (FatalTopicCreationException e) {
+            throw e;
         } catch (Exception e) {
             if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
                 Thread.currentThread().interrupt();
@@ -322,8 +327,21 @@ class KafkaTopicCreator {
             log.warn(
                     "Topic creation failed: {}",
                     e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
-            return e.getCause() instanceof TopicExistsException;
+            if (e.getCause() instanceof TopicExistsException) {
+                return true;
+            }
+            if (!(e.getCause() instanceof RetriableException)) {
+                // Errors such as an invalid replication factor or an ACL denial fail every retry
+                throw new FatalTopicCreationException(e.getCause());
+            }
+            return false;
         }
         return true;
+    }
+
+    private static final class FatalTopicCreationException extends RuntimeException {
+        FatalTopicCreationException(Throwable cause) {
+            super("Topic creation failed with a non-retriable error: " + cause, cause);
+        }
     }
 }

@@ -18,5 +18,9 @@ driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
 # Redis client-specific configuration
 redisPort: 6379
 redisHost: 127.0.0.1
+# Producer pool only; each consumer gets its own connection for its blocking reads
 jedisPoolMaxTotal: 8
 jedisPoolMaxIdle: 8
+# Approximate MAXLEN (XADD MAXLEN ~ N) per stream, so long runs do not fill Redis memory.
+# Entries a slow consumer has not read yet are trimmed too, so keep it well above the backlog.
+redisStreamMaxLen: 1000000

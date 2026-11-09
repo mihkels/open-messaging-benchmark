@@ -34,10 +34,10 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
     private final XAddParams xaddParams;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("Redis producer");
 
-    public RedisBenchmarkProducer(final JedisPool pool, final String rmqTopic) {
+    public RedisBenchmarkProducer(final JedisPool pool, final String rmqTopic, final long maxLen) {
         this.pool = pool;
         this.topic = rmqTopic.getBytes(UTF_8);
-        this.xaddParams = redis.clients.jedis.params.XAddParams.xAddParams();
+        this.xaddParams = XAddParams.xAddParams().maxLen(maxLen).approximateTrimming();
     }
 
     @Override

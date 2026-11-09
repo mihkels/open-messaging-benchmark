@@ -258,7 +258,7 @@ mvn license:format
 - The license plugin adds the Apache header from `etc/APACHE-2.txt`. Markdown files get it as an HTML
   comment.
 
-Run both commands before committing, because the build fails on formatting or header violations.
+Run `mvn spotless:apply` before `mvn verify` and both commands before committing.
 
 ### License check in linked Git worktrees
 

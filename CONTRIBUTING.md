@@ -76,16 +76,28 @@ mvn -pl e2e-tests -am -De2e verify
 e2e-tests/compose/run-e2e.sh --cases kafka-contract
 ```
 
+To preview or validate docs, use a virtual environment outside the checkout and install dependencies
+only when missing. From the repository root, set `DOCS_VENV` to that environment's absolute path:
+
+```bash
+DOCS_VENV="/absolute/path/outside-checkout/docs-venv"
+```
+
+If the documentation dependencies are missing:
+
+```bash
+python3 -m venv "$DOCS_VENV"
+"$DOCS_VENV/bin/pip" install --require-hashes --only-binary :all: -r docs/requirements.txt
+```
+
 Preview the documentation site, and build it strictly before opening a pull request:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install --require-hashes --only-binary :all: -r docs/requirements.txt
-.venv/bin/mkdocs serve
+"$DOCS_VENV/bin/mkdocs" serve
 ```
 
 ```bash
-.venv/bin/mkdocs build --strict
+"$DOCS_VENV/bin/mkdocs" build --strict
 ```
 
 ## Development guides

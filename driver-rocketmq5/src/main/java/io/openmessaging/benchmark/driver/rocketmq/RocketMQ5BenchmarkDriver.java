@@ -121,15 +121,12 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
         return "Benchmark";
     }
 
-    private void createOnMasters(TopicConfig topicConfig, int partitions)
-            throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
-        String[] masters =
-                fetchMasterAddrByClusterName(rmqAdmin, rmqClientConfig.clusterName).toArray(new String[0]);
-        // Masters only: slaves sync topic config from their master.
+    // Masters only: slaves sync topic config from their master.
+    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+            throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
         for (int i = 0; i < Math.min(partitions, masters.length); i++) {
-            int queues = queuesForMaster(partitions, masters.length, i);
-            topicConfig.setReadQueueNums(queues);
-            topicConfig.setWriteQueueNums(queues);
+            topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
+            topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
             rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
         }
     }
@@ -156,7 +153,10 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             topicConfig.setAttributes(properties);
 
             try {
-                createOnMasters(topicConfig, partitions);
+                String[] masters =
+                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
+                                .toArray(String[]::new);
+                createOnMasters(masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(

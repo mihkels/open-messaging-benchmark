@@ -146,7 +146,10 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             }
 
             try {
-                createOnMasters(topicConfig, partitions);
+                String[] masters =
+                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
+                                .toArray(String[]::new);
+                createOnMasters(masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
@@ -164,21 +167,18 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         });
     }
 
-    private void createOnMasters(TopicConfig topicConfig, int partitions)
-            throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
-        String[] masters =
-                fetchMasterAddrByClusterName(rmqAdmin, rmqClientConfig.clusterName).toArray(new String[0]);
-        // Masters only: slaves sync topic config from their master.
-        for (int i = 0; i < Math.min(partitions, masters.length); i++) {
-            int queues = queuesForMaster(partitions, masters.length, i);
-            topicConfig.setReadQueueNums(queues);
-            topicConfig.setWriteQueueNums(queues);
-            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
-        }
-    }
-
     static int queuesForMaster(int partitions, int masters, int index) {
         return partitions / masters + (index < partitions % masters ? 1 : 0);
+    }
+
+    // Masters only: slaves sync topic config from their master.
+    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+            throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
+        for (int i = 0; i < Math.min(partitions, masters.length); i++) {
+            topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
+            topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
+            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+        }
     }
 
     @Override

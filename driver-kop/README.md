@@ -20,6 +20,9 @@ and consumers each use either the Kafka client (`kafka-clients` 4.4.0) or the Pu
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/kop/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/kop.md#local-docker-compose) and
+[kind cluster](../docs/drivers/kop.md#local-kind-cluster).
+
 ## Plugin and configuration files
 
 - Plugin ID: `kop`

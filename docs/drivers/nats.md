@@ -31,6 +31,33 @@ server and client; see [NATS Streaming](nats-streaming.md).
 | Regression cases       | `nats-contract` (file storage), `nats-memory-fanout` (memory storage, 2 subjects x 2 durable consumers)                                                             |
 | Known limitations      | Partitions and keys are ignored; the payload's first 8 bytes carry the publish timestamp (messages must be at least 8 bytes); streams and consumers are not deleted |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks nats --cases nats-contract
+```
+
+This starts NATS with JetStream enabled and the benchmark containers, waits for readiness and runs
+the one-minute, 200 messages/s file-storage contract. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/nats-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run nats nats-contract
+```
+
+The broker, workers and coordinator run in `omb-nats`. Results and logs are saved in
+`e2e-tests/target/k8s/nats-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs:

@@ -91,6 +91,79 @@ checks, not performance comparisons.
 4. Before comparing systems, align durability and batching; see
    [Fair comparisons](../methodology/fair-comparisons.md).
 
+## Local quickstarts
+
+Every driver page has **Local Docker Compose** and **Local kind cluster** sections. Both paths use
+the registered contract cases: one topic, one partition, one producer, one subscription and one
+consumer, at 200 messages/s for one minute without warm-up. Brokers, two workers and the coordinator
+run in containers; startup and the first build take additional time. These are functional smoke
+checks, not representative performance results.
+
+|        Driver         |                    Docker Compose                    |                        kind                        |
+|-----------------------|------------------------------------------------------|----------------------------------------------------|
+| Kafka                 | [Quickstart](kafka.md#local-docker-compose)          | [Quickstart](kafka.md#local-kind-cluster)          |
+| KoP                   | [Quickstart](kop.md#local-docker-compose)            | [Quickstart](kop.md#local-kind-cluster)            |
+| Pulsar                | [Quickstart](pulsar.md#local-docker-compose)         | [Quickstart](pulsar.md#local-kind-cluster)         |
+| BookKeeper            | [Quickstart](bookkeeper.md#local-docker-compose)     | [Quickstart](bookkeeper.md#local-kind-cluster)     |
+| Pravega               | [Quickstart](pravega.md#local-docker-compose)        | [Quickstart](pravega.md#local-kind-cluster)        |
+| RabbitMQ              | [Quickstart](rabbitmq.md#local-docker-compose)       | [Quickstart](rabbitmq.md#local-kind-cluster)       |
+| Artemis               | [Quickstart](artemis.md#local-docker-compose)        | [Quickstart](artemis.md#local-kind-cluster)        |
+| JMS (three providers) | [Quickstart](jms.md#local-docker-compose)            | [Quickstart](jms.md#local-kind-cluster)            |
+| NATS JetStream        | [Quickstart](nats.md#local-docker-compose)           | [Quickstart](nats.md#local-kind-cluster)           |
+| NATS Streaming        | [Quickstart](nats-streaming.md#local-docker-compose) | [Quickstart](nats-streaming.md#local-kind-cluster) |
+| NSQ                   | [Quickstart](nsq.md#local-docker-compose)            | [Quickstart](nsq.md#local-kind-cluster)            |
+| Redis                 | [Quickstart](redis.md#local-docker-compose)          | [Quickstart](redis.md#local-kind-cluster)          |
+| RocketMQ              | [Quickstart](rocketmq.md#local-docker-compose)       | [Quickstart](rocketmq.md#local-kind-cluster)       |
+| RocketMQ 5            | [Quickstart](rocketmq5.md#local-docker-compose)      | [Quickstart](rocketmq5.md#local-kind-cluster)      |
+| MQTT 5                | [Quickstart](mqtt5.md#local-docker-compose)          | [Quickstart](mqtt5.md#local-kind-cluster)          |
+
+### Shared prerequisites
+
+Run commands from a clone of the repository, not from an extracted binary distribution. Docker
+must be running, with Compose v2, buildx, network access to broker images and pinned downloads, and
+about 8 GB of available memory. Run stacks one at a time; stop other brokers before starting kind.
+Compose builds the distribution in Docker if it is missing; no host Java or Maven is needed.
+After code changes, pass `--build docker` to rebuild it.
+
+For kind, first follow [Local Kubernetes setup](../guides/kubernetes-local.md#setup):
+
+```bash
+./setup.sh
+```
+
+Activate mise in your shell as described there before running the driver page's commands. The
+pinned tools and repository-local `.kube/config` keep this separate from other clusters. Leave
+Docker Desktop's own Kubernetes off. `k8s:run` builds and loads the driver image, deploys the broker,
+waits for readiness and runs the coordinator Job. Use `OMB_K8S_REBUILD=1` after code changes.
+
+### Results, troubleshooting and cleanup
+
+Compose waits for broker health and worker readiness, runs the benchmark and checks message counts,
+rates, errors and latency. It exits zero only when the selected cases and cleanup pass. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result for a case is
+`cases/<case>/result.json` below that directory, beside its coordinator and worker logs.
+The runner automatically removes its stack containers and volumes, including broker data.
+See the [Compose runner README](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/README.md)
+for report statuses and rerun options.
+
+kind writes `result.json`, `coordinator.log` and worker logs to
+`e2e-tests/target/k8s/<case>/`. A `PASSED <case>` message means the coordinator succeeded and emitted
+parseable JSON; unlike Compose, the kind runner does not apply the full report validation checks.
+Run `OMB_K8S_KEEP=1 mise run k8s:run <stack> <case>` to retain the namespace for inspection, then
+`mise run k8s:logs <stack>` for pods and recent logs. By default a completed run deletes its
+namespace and broker data, but leaves the cluster. After inspection:
+
+```bash
+mise run k8s:down <stack>  # delete a retained stack namespace and its broker data
+mise run k8s:down          # delete the local omb kind cluster when finished
+```
+
+If startup fails, check Docker memory, image downloads and broker readiness. For kind scheduling,
+context or architecture failures, see [Local Kubernetes troubleshooting](../guides/kubernetes-local.md#troubleshooting).
+For driver-specific connection and configuration errors, use the troubleshooting section on the
+driver page. Pravega and KoP need amd64 hosts for kind; Compose can emulate them on arm64.
+JMS Kafka needs a user-supplied provider jar on both paths.
+
 ## Writing a new driver
 
 See [Implementing a driver](../development/implementing-a-driver.md).

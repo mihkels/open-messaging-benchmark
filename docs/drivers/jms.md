@@ -33,6 +33,57 @@ Pulsar driver, for providers that cannot create topics through JMS.
 For Apache ActiveMQ Artemis there is also a native driver that uses the Artemis core client instead of
 JMS; see [Apache ActiveMQ Artemis](artemis.md#artemis-native-or-artemis-via-jms).
 
+## Local Docker Compose
+
+Follow the [shared local prerequisites](index.md#shared-prerequisites). Choose a provider and run
+its one-minute, 200 messages/s contract from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks jms-artemis --cases jms-artemis-contract
+e2e-tests/compose/run-e2e.sh --stacks jms-pulsar --cases jms-pulsar-contract
+```
+
+Run these separately. Each starts its broker and benchmark containers and waits for readiness.
+The runner downloads checksum-pinned Artemis or Pulsar `javax.jms` provider jars and mounts them
+in the JMS plugin's `ext/` directory. No manual jar installation is needed for these two lanes.
+
+For Kafka, first build the Confluent JMS fat jar as described under
+[Apache Kafka](#apache-kafka-confluent-jms-client); it cannot be redistributed:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks jms-kafka --cases jms-kafka-contract \
+  --kafka-jms-jar /absolute/path/to/kafka-jms-client-fat-6.2.1.jar
+```
+
+Replace the jar path with your local file. Without it, the Kafka lane is `blocked`, not passed.
+Each invocation writes `e2e-tests/target/e2e-reports/latest/index.html` and
+`cases/<case>/result.json` below that report directory; inspect it before the next invocation
+changes `latest`. Containers and volumes are removed after each run.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then create the cluster and choose a lane:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run jms-artemis jms-artemis-contract
+mise run k8s:run jms-pulsar jms-pulsar-contract
+```
+
+The init container downloads and verifies the provider jar for each of those two lanes. For Kafka,
+supply the same user-built jar to the image builder:
+
+```bash
+OMB_K8S_KAFKA_JMS_JAR=/absolute/path/to/kafka-jms-client-fat-6.2.1.jar \
+  mise run k8s:run jms-kafka jms-kafka-contract
+```
+
+Each lane deploys into `omb-<stack>` and writes results and logs to
+`e2e-tests/target/k8s/<case>/`. A completed run removes its namespace before the next lane starts.
+Use only `javax.jms` providers, not `jakarta.jms` jars. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 You need a running broker, its JMS client jar, and, for Pulsar and Kafka, the Pulsar or Kafka plugin

@@ -20,6 +20,9 @@ delegated to the Kafka or Pulsar driver.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/jms/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/jms.md#local-docker-compose) and
+[kind cluster](../docs/drivers/jms.md#local-kind-cluster), covering Artemis, Pulsar and Kafka providers.
+
 ## Plugin and configuration files
 
 - Plugin ID: `jms`

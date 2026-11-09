@@ -25,6 +25,9 @@ deduplication policies, and partitioned topics.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/pulsar/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/pulsar.md#local-docker-compose) and
+[kind cluster](../docs/drivers/pulsar.md#local-kind-cluster).
+
 ## Prerequisites
 
 - A Pulsar cluster whose binary endpoint (`serviceUrl`, port 6650) and admin endpoint (`httpUrl`,

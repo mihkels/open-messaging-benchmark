@@ -28,6 +28,33 @@ NSQ channel. It uses the `com.github.brainlag:nsq-client` library (1.0.0.RC4).
 | Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                          |
 | Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; fixed TCP 4150 and lookup HTTP 4161 ports; `nsqdHost` must identify the same daemon on HTTP and TCP |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks nsq --cases nsq-contract
+```
+
+This starts nsqd, nsqlookupd and the benchmark containers, waits for readiness and runs the one-minute,
+200 messages/s contract. The supplied config uses service names for publish and lookup connections.
+Open `e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/nsq-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run nsq nsq-contract
+```
+
+The brokers, workers and coordinator run in `omb-nsq`. Results and logs are saved in
+`e2e-tests/target/k8s/nsq-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver uses three ports, two of them fixed in the code:

@@ -32,6 +32,32 @@ with `KafkaProducer` and consumes with one `KafkaConsumer` per benchmark consume
 The Kafka plugin is also the admin delegate of the [JMS driver](jms.md) for the Confluent Kafka JMS
 client, and the [KoP driver](kop.md) reuses its producer and consumer classes.
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks kafka --cases kafka-contract
+```
+
+This starts the KRaft broker and benchmark containers, waits for readiness and runs the one-minute,
+200 messages/s contract. Open `e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/kafka-contract/result.json`. The runner removes its containers and volumes afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run kafka kafka-contract
+```
+
+The broker, workers and coordinator run in `omb-kafka`. Results and logs are saved in
+`e2e-tests/target/k8s/kafka-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs:

@@ -28,6 +28,9 @@ the benchmark exactly-once end to end.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/pravega/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/pravega.md#local-docker-compose) and
+[kind cluster](../docs/drivers/pravega.md#local-kind-cluster).
+
 ## Prerequisites
 
 - A Pravega cluster whose controller (`client.controllerURI`, port 9090) and segment stores (port

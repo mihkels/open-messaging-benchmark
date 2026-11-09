@@ -31,6 +31,33 @@ see [RocketMQ 5](rocketmq5.md).
 | Regression cases  | `rocketmq-contract`, `rocketmq-partitioned`                                                                      |
 | Known limitations | Keys do not select queues; queue count is divided across all broker addresses; topics and groups are not deleted |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks rocketmq --cases rocketmq-contract
+```
+
+This starts the RocketMQ name server, broker and benchmark containers, waits for readiness and runs
+the one-minute, 200 messages/s classic-client contract. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/rocketmq-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run rocketmq rocketmq-contract
+```
+
+The name server, broker, workers and coordinator run in `omb-rocketmq`. Results and logs are saved
+in `e2e-tests/target/k8s/rocketmq-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster. The supplied config uses the broker's in-network address.
+
 ## Prerequisites and broker setup
 
 The driver needs:

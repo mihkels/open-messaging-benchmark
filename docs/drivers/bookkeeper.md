@@ -30,6 +30,33 @@ ledger API, so results include the DistributedLog writer and reader layers.
 | Regression cases  | `bookkeeper-contract`                                                                                                                           |
 | Known limitations | One reader per consumer reads the whole stream; subscriptions are not shared; partitions are created but not used; keys are ignored; no cleanup |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks bookkeeper --cases bookkeeper-contract
+```
+
+This starts ZooKeeper and one bookie, initializes metadata, binds the DistributedLog namespace and
+waits for readiness before running the one-minute, 200 messages/s contract. The case uses single-bookie
+quorums, one partition and one consumer. Open `e2e-tests/target/e2e-reports/latest/index.html`; the
+result is in `cases/bookkeeper-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run bookkeeper bookkeeper-contract
+```
+
+The broker initialization Jobs, workers and coordinator run in `omb-bookkeeper`; no manual namespace
+binding is needed. Results and logs are saved in `e2e-tests/target/k8s/bookkeeper-contract/`; the
+namespace is removed after the run. See [results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup)
+to inspect a retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs:

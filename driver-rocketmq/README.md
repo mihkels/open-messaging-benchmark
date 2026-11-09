@@ -26,6 +26,9 @@ For the gRPC client that goes through the RocketMQ 5 proxy, use [`driver-rocketm
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/rocketmq/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/rocketmq.md#local-docker-compose) and
+[kind cluster](../docs/drivers/rocketmq.md#local-kind-cluster).
+
 ## Prerequisites
 
 - A name server (`namesrvAddr`, port 9876) and a broker cluster (`clusterName`) whose advertised

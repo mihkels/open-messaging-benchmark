@@ -19,6 +19,9 @@ fanout exchange and each subscription is a durable classic, quorum or stream que
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/rabbitmq/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/rabbitmq.md#local-docker-compose) and
+[kind cluster](../docs/drivers/rabbitmq.md#local-kind-cluster).
+
 - Plugin ID: `rabbitmq`
 - `driverClass`: `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`
 - Shipped config: [`rabbitmq.yaml`](rabbitmq.yaml) (quorum queues, `amqp://localhost`)

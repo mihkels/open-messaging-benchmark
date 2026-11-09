@@ -20,6 +20,9 @@ This plugin benchmarks Apache Kafka, or a Kafka-protocol broker, with the Java c
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/kafka/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/kafka.md#local-docker-compose) and
+[kind cluster](../docs/drivers/kafka.md#local-kind-cluster).
+
 ## Plugin and configuration files
 
 - Plugin ID: `kafka`

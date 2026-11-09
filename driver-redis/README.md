@@ -20,6 +20,9 @@ client. Each benchmark topic is one stream (`XADD`), and each subscription is a 
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/redis/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/redis.md#local-docker-compose) and
+[kind cluster](../docs/drivers/redis.md#local-kind-cluster).
+
 - Plugin ID: `redis`
 - `driverClass`: `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`
 - Shipped config: [`redis.yaml`](redis.yaml) (`127.0.0.1:6379`)

@@ -19,6 +19,9 @@ subscription is an MQTT 5 shared subscription group (`$share/<subscription>/<top
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/mqtt5/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/mqtt5.md#local-docker-compose) and
+[kind cluster](../docs/drivers/mqtt5.md#local-kind-cluster).
+
 - Plugin ID: `mqtt5`
 - `driverClass`: `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`
 - Shipped config: [`mqtt5.yaml`](mqtt5.yaml) (`tcp://localhost:1883`, no authentication, QoS 1)

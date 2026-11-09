@@ -18,6 +18,7 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
+import io.openmessaging.benchmark.driver.Failures;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -164,7 +165,7 @@ class KafkaTopicCreator {
                 log.info("Successfully created all {} topics", topicInfos.size());
                 return; // Success!
             } catch (RuntimeException e) {
-                if (Thread.currentThread().isInterrupted() || isInterruption(e)) {
+                if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
                     Thread.currentThread().interrupt();
                     throw e;
                 }
@@ -206,7 +207,7 @@ class KafkaTopicCreator {
             Thread.currentThread().interrupt();
             throw new RuntimeException(INTERRUPTED_MESSAGE, interrupted);
         } catch (Exception checkException) {
-            if (isInterruption(checkException)) {
+            if (Failures.isInterruption(checkException)) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(INTERRUPTED_MESSAGE, checkException);
             }
@@ -287,7 +288,7 @@ class KafkaTopicCreator {
             return admin.createTopics(newTopics).values().entrySet().stream()
                     .collect(toMap(e -> lookup.get(e.getKey()), e -> isSuccess(e.getValue())));
         } catch (Exception e) {
-            if (Thread.currentThread().isInterrupted() || isInterruption(e)) {
+            if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
                 Thread.currentThread().interrupt();
                 throw (RuntimeException) e;
             }
@@ -319,14 +320,5 @@ class KafkaTopicCreator {
             return e.getCause() instanceof TopicExistsException;
         }
         return true;
-    }
-
-    private static boolean isInterruption(Throwable failure) {
-        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof InterruptedException) {
-                return true;
-            }
-        }
-        return false;
     }
 }

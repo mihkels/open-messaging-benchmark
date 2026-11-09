@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig.PersistenceConfiguration;
@@ -123,7 +124,9 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
             createNamespace();
         } catch (IOException | RuntimeException failure) {
-            closeClients(failure);
+            Failures failures = new Failures();
+            failures.add(failure);
+            closeClients(failures);
             throw failure;
         }
     }
@@ -264,15 +267,14 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     public void close() throws Exception {
         log.info("Shutting down Pulsar benchmark driver");
 
-        Exception failure = closeClients(null);
-        if (failure != null) {
-            throw failure;
-        }
+        Failures failures = new Failures();
+        closeClients(failures);
+        failures.throwIfAny();
 
         log.info("Pulsar benchmark driver successfully shut down");
     }
 
-    private Exception closeClients(Exception failure) {
+    private void closeClients(Failures failures) {
         PulsarClient clientToClose;
         PulsarAdmin adminToClose;
         synchronized (this) {
@@ -282,27 +284,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             adminClient = null;
             producerBuilder = null;
         }
-        failure = closeResource(clientToClose, failure);
-        return closeResource(adminToClose, failure);
-    }
-
-    private static Exception closeResource(AutoCloseable resource, Exception failure) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (Exception closeFailure) {
-                if (closeFailure instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                if (failure == null) {
-                    return closeFailure;
-                }
-                if (failure != closeFailure) {
-                    failure.addSuppressed(closeFailure);
-                }
-            }
-        }
-        return failure;
+        failures.closeRestoringInterruptNow(clientToClose);
+        failures.closeRestoringInterruptNow(adminToClose);
     }
 
     private static PulsarConfig readConfig(Path configurationFile) throws IOException {

@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
@@ -112,7 +113,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
             kafkaProducer = new KafkaProducer<>(producerProperties);
             return CompletableFuture.completedFuture(new KafkaBenchmarkProducer(kafkaProducer, topic));
         } catch (Throwable t) {
-            closeAfterFailure(kafkaProducer, t);
+            Failures.closeAfterFailure(t, kafkaProducer);
             return CompletableFuture.failedFuture(t);
         }
     }
@@ -129,7 +130,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
             return KafkaBenchmarkConsumer.create(
                     consumer, topic, consumerProperties, consumerCallback, 100L);
         } catch (Throwable t) {
-            closeAfterFailure(consumer, t);
+            Failures.closeAfterFailure(t, consumer);
             return CompletableFuture.failedFuture(t);
         }
     }
@@ -140,18 +141,6 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
             AdminClient toClose = admin;
             admin = null;
             toClose.close();
-        }
-    }
-
-    private static void closeAfterFailure(AutoCloseable resource, Throwable failure) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (Throwable closeFailure) {
-                if (closeFailure != failure) {
-                    failure.addSuppressed(closeFailure);
-                }
-            }
         }
     }
 

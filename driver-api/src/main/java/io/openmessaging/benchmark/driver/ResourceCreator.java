@@ -249,7 +249,7 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
             if (attempt.firstFailure == null) {
                 attempt.firstFailure = cause;
             }
-            boolean interrupted = isInterruption(cause);
+            boolean interrupted = Failures.isInterruption(cause);
             if (interrupted || cause instanceof CancellationException) {
                 if (interrupted && Thread.currentThread() == workerThread) {
                     Thread.currentThread().interrupt();
@@ -294,14 +294,5 @@ public final class ResourceCreator<R, C extends AutoCloseable> {
                 this.request = request;
             }
         }
-    }
-
-    private static boolean isInterruption(Throwable error) {
-        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-            if (cause instanceof InterruptedException) {
-                return true;
-            }
-        }
-        return false;
     }
 }

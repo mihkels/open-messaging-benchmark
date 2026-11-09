@@ -14,9 +14,6 @@
 package io.openmessaging.benchmark.driver.bookkeeper;
 
 import io.openmessaging.benchmark.driver.Failures;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
 
 /**
  * Thread-safe {@link Failures} that retains the first failure and subsequent cleanup failures,
@@ -25,37 +22,16 @@ import java.util.Set;
  */
 final class DlogFailures {
     private final Failures failures = new Failures();
-    private boolean interrupted;
 
     synchronized void add(Throwable failure) {
-        interrupted |= isInterrupted(failure);
-        failures.addDistinct(failure);
+        failures.addRestoringInterrupt(failure);
     }
 
     synchronized Throwable first() {
         return failures.failure();
     }
 
-    void throwIfAny() throws Exception {
-        Throwable failure;
-        boolean restoreInterrupt;
-        synchronized (this) {
-            failure = failures.failure();
-            restoreInterrupt = interrupted;
-        }
-        if (restoreInterrupt) {
-            Thread.currentThread().interrupt();
-        }
-        Failures.rethrow(failure);
-    }
-
-    static boolean isInterrupted(Throwable failure) {
-        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
-            if (cause instanceof InterruptedException) {
-                return true;
-            }
-        }
-        return false;
+    synchronized void throwIfAny() throws Exception {
+        failures.throwIfAny();
     }
 }

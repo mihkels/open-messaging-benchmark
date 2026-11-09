@@ -51,32 +51,178 @@ class FailuresTest {
     }
 
     @Test
-    void addDistinctDoesNotSuppressTheSameFailureTwice() {
+    void doesNotSuppressTheSameFailureTwice() {
         Failures failures = new Failures();
         IOException first = new IOException("first");
         IllegalStateException second = new IllegalStateException("second");
 
-        failures.addDistinct(null);
-        failures.addDistinct(first);
-        failures.addDistinct(second);
-        failures.addDistinct(second);
-        failures.addDistinct(first);
+        failures.add(first);
+        failures.add(second);
+        failures.add(second);
 
         assertSame(first, failures.failure());
         assertArrayEquals(new Throwable[] {second}, first.getSuppressed());
     }
 
     @Test
-    void appendDistinctSkipsFailuresAlreadySuppressed() {
+    void appendSkipsFailuresAlreadySuppressed() {
         IOException primary = new IOException("primary");
         IllegalStateException next = new IllegalStateException("next");
 
-        assertSame(next, Failures.appendDistinct(null, next));
-        assertSame(primary, Failures.appendDistinct(primary, next));
-        assertSame(primary, Failures.appendDistinct(primary, next));
-        assertSame(primary, Failures.appendDistinct(primary, null));
+        assertSame(next, Failures.append(null, next));
+        assertSame(primary, Failures.append(primary, next));
+        assertSame(primary, Failures.append(primary, next));
+        assertSame(primary, Failures.append(primary, null));
+        assertSame(primary, Failures.append(primary, primary));
 
         assertArrayEquals(new Throwable[] {next}, primary.getSuppressed());
+    }
+
+    @Test
+    void suppressIgnoresMissingAndRepeatedFailures() {
+        IOException primary = new IOException("primary");
+        IllegalStateException next = new IllegalStateException("next");
+
+        Failures.suppress(null, next);
+        Failures.suppress(primary, null);
+        Failures.suppress(primary, primary);
+        Failures.suppress(primary, next);
+        Failures.suppress(primary, next);
+
+        assertArrayEquals(new Throwable[] {next}, primary.getSuppressed());
+        assertArrayEquals(new Throwable[0], next.getSuppressed());
+    }
+
+    @Test
+    void detectsInterruptionsAnywhereInTheCauseChain() {
+        RuntimeException nested =
+                new RuntimeException(new IOException(new InterruptedException("nested")));
+        IOException first = new IOException("first");
+        IOException second = new IOException("second", first);
+        first.initCause(second);
+
+        assertTrue(Failures.isInterruption(new InterruptedException("direct")));
+        assertTrue(Failures.isInterruption(nested));
+        assertFalse(Failures.isInterruption(new IOException("plain")));
+        assertFalse(Failures.isInterruption(second));
+        assertFalse(Failures.isInterruption(null));
+    }
+
+    @Test
+    void addRestoringInterruptRestoresANestedInterruption() {
+        Failures failures = new Failures();
+        RuntimeException failure = new RuntimeException(new InterruptedException("worker"));
+
+        failures.addRestoringInterrupt(new IOException("plain"));
+        assertDoesNotThrow(failures::restoreInterrupt);
+        assertFalse(Thread.currentThread().isInterrupted());
+
+        failures.addRestoringInterrupt(failure);
+        failures.addRestoringInterrupt(null);
+
+        assertInstanceOf(IOException.class, failures.failure());
+        assertArrayEquals(new Throwable[] {failure}, failures.failure().getSuppressed());
+        assertThrows(IOException.class, failures::throwIfAny);
+        assertTrue(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    void closeRestoringInterruptNowInterruptsBeforeTheNextStep() {
+        Failures failures = new Failures();
+        InterruptedException interruption = new InterruptedException("close interrupted");
+        boolean[] interruptedDuringNextClose = new boolean[1];
+
+        failures.closeRestoringInterruptNow(() -> {
+            throw interruption;
+        });
+        failures.closeRestoringInterruptNow(null);
+        failures.close(() -> interruptedDuringNextClose[0] = Thread.currentThread().isInterrupted());
+
+        assertTrue(interruptedDuringNextClose[0]);
+        assertSame(interruption, failures.failure());
+        Thread.interrupted();
+        failures.restoreInterrupt();
+        assertTrue(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    void closeDefersTheInterruptOfAnInterruptedClose() {
+        Failures failures = new Failures();
+
+        failures.close(() -> {
+            throw new InterruptedException("close interrupted");
+        });
+
+        assertFalse(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    void closeAfterFailureClosesEveryResourceIntoTheFailure() {
+        IOException failure = new IOException("create failed");
+        IllegalStateException closeFailure = new IllegalStateException("close failed");
+        InterruptedException interruption = new InterruptedException("close interrupted");
+        boolean[] closed = new boolean[1];
+
+        Failures.closeAfterFailure(
+                failure,
+                () -> {
+                    throw closeFailure;
+                },
+                null,
+                () -> {
+                    throw interruption;
+                },
+                () -> {
+                    throw failure;
+                },
+                () -> closed[0] = true);
+
+        assertTrue(closed[0]);
+        assertArrayEquals(new Throwable[] {closeFailure, interruption}, failure.getSuppressed());
+        assertTrue(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    void throwIfAnyOfTypeRethrowsMatchingAndUncheckedFailures() {
+        IOException io = new IOException("io");
+        IllegalArgumentException unchecked = new IllegalArgumentException("unchecked");
+        AssertionError error = new AssertionError("error");
+        Exception checked = new Exception("checked");
+        Failures ioFailures = failuresOf(io);
+        Failures uncheckedFailures = failuresOf(unchecked);
+        Failures errorFailures = failuresOf(error);
+        Failures checkedFailures = failuresOf(checked);
+
+        assertSame(io, assertThrows(IOException.class, () -> ioFailures.throwIfAny(IOException.class)));
+        assertSame(
+                unchecked,
+                assertThrows(
+                        IllegalArgumentException.class, () -> uncheckedFailures.throwIfAny(IOException.class)));
+        assertSame(
+                error,
+                assertThrows(AssertionError.class, () -> errorFailures.throwIfAny(IOException.class)));
+        assertSame(
+                checked,
+                assertThrows(
+                                IllegalStateException.class, () -> checkedFailures.throwIfAny(IOException.class))
+                        .getCause());
+        Failures none = new Failures();
+        assertDoesNotThrow(() -> none.throwIfAny(IOException.class));
+    }
+
+    @Test
+    void throwIfAnyOfTypeRestoresTheInterruptFirst() {
+        Failures failures = new Failures();
+        failures.addInterruption(new InterruptedException("interrupted"));
+
+        assertThrows(IllegalStateException.class, () -> failures.throwIfAny(IOException.class));
+        assertTrue(Thread.currentThread().isInterrupted());
+    }
+
+    private static Failures failuresOf(Throwable failure) {
+        Failures failures = new Failures();
+        failures.add(failure);
+        return failures;
     }
 
     @Test

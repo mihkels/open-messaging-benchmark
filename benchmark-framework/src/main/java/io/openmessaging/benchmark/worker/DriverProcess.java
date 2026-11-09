@@ -391,10 +391,7 @@ final class DriverProcess {
                 }
             }
         }
-        // Only I/O failures are recorded.
-        if (failures.failure() instanceof IOException failure) {
-            throw failure;
-        }
+        failures.throwIfAny(IOException.class);
     }
 
     private static void deleteWorkDirQuietly(Path directory) {

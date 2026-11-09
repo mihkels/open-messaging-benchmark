@@ -32,6 +32,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -76,20 +77,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
             this.jetStream = connection.jetStream();
             this.jetStreamManagement = connection.jetStreamManagement();
         } catch (IOException | InterruptedException | RuntimeException e) {
-            boolean interrupted = e instanceof InterruptedException;
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (InterruptedException | RuntimeException closeFailure) {
-                    interrupted |= closeFailure instanceof InterruptedException;
-                    var failure = closeFailure;
-                    if (failure != e) {
-                        e.addSuppressed(closeFailure);
-                    }
-                }
-                connection = null;
-            }
-            if (interrupted) {
+            Failures.closeAfterFailure(e, connection);
+            connection = null;
+            if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             throw e;

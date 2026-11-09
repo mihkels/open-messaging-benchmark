@@ -24,8 +24,6 @@ import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClientConfig;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +43,7 @@ import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.exception.RemotingConnectException;
+import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
@@ -131,15 +130,6 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         return brokerList;
     }
 
-    // Spreads partitions queues over at most masters brokers; slaves sync topic config from masters.
-    static int[] queuesPerMaster(int partitions, int masters) {
-        int[] queues = new int[Math.min(partitions, masters)];
-        for (int i = 0; i < queues.length; i++) {
-            queues[i] = partitions / masters + (i < partitions % masters ? 1 : 0);
-        }
-        return queues;
-    }
-
     @Override
     public CompletableFuture<Void> createTopic(final String topic, final int partitions) {
         return CompletableFuture.runAsync(() -> {
@@ -156,15 +146,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             }
 
             try {
-                Set<String> brokerList =
-                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
-                List<String> masters = new ArrayList<>(brokerList);
-                int[] queues = queuesPerMaster(partitions, masters.size());
-                for (int i = 0; i < queues.length; i++) {
-                    topicConfig.setReadQueueNums(queues[i]);
-                    topicConfig.setWriteQueueNums(queues[i]);
-                    this.rmqAdmin.createAndUpdateTopicConfig(masters.get(i), topicConfig);
-                }
+                createOnMasters(topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
@@ -180,6 +162,23 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                         e);
             }
         });
+    }
+
+    private void createOnMasters(TopicConfig topicConfig, int partitions)
+            throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
+        String[] masters =
+                fetchMasterAddrByClusterName(rmqAdmin, rmqClientConfig.clusterName).toArray(new String[0]);
+        // Masters only: slaves sync topic config from their master.
+        for (int i = 0; i < Math.min(partitions, masters.length); i++) {
+            int queues = queuesForMaster(partitions, masters.length, i);
+            topicConfig.setReadQueueNums(queues);
+            topicConfig.setWriteQueueNums(queues);
+            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+        }
+    }
+
+    static int queuesForMaster(int partitions, int masters, int index) {
+        return partitions / masters + (index < partitions % masters ? 1 : 0);
     }
 
     @Override

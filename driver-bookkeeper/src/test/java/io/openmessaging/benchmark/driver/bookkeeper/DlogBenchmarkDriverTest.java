@@ -47,6 +47,37 @@ class DlogBenchmarkDriverTest {
     private static final String TOPIC = "stream";
 
     @Test
+    void createTopicRejectsMultiplePartitions() throws Exception {
+        Namespace namespace = mock(Namespace.class);
+
+        CompletableFuture<Void> creation = new DlogBenchmarkDriver(namespace).createTopic(TOPIC, 16);
+
+        assertThatThrownBy(creation::join)
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("one partition per topic");
+        verify(namespace, never()).createLog(any());
+    }
+
+    @Test
+    void createConsumerRejectsASecondConsumerOnTheSameSubscription() throws Exception {
+        Namespace namespace = mock(Namespace.class);
+        DistributedLogManager manager = mock(DistributedLogManager.class);
+        when(namespace.openLog(TOPIC)).thenReturn(manager);
+        when(manager.openLogReader(DLSN.InitialDLSN)).thenReturn(mock(LogReader.class));
+        DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        driver.createConsumer(TOPIC, "sub-0", callback).get(5, TimeUnit.SECONDS);
+        driver.createConsumer(TOPIC, "sub-1", callback).get(5, TimeUnit.SECONDS);
+        CompletableFuture<BenchmarkConsumer> shared = driver.createConsumer(TOPIC, "sub-0", callback);
+
+        assertThatThrownBy(shared::join)
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not support shared subscriptions");
+        verify(namespace, times(2)).openLog(TOPIC);
+    }
+
+    @Test
     void producerCreationWaitsForWriterAndTransfersBothOwnedResources() throws Exception {
         Namespace namespace = mock(Namespace.class);
         DistributedLogManager manager = mock(DistributedLogManager.class);

@@ -49,4 +49,17 @@ class ArtemisE2eIT extends BaseE2eIT {
             assertThat(queues.getStdout()).contains("test-");
         }
     }
+
+    @Test
+    void testConsumersShareOneSubscriptionQueue() throws Exception {
+        try (Network network = Network.newNetwork();
+                GenericContainer<?> broker = BrokerFixtures.artemis(network);
+                NetworkBenchmark runner = new NetworkBenchmark(network)) {
+            broker.start();
+            runner.start();
+            Workload workload = createSimpleWorkload();
+            workload.consumerPerSubscription = 2;
+            validateResults(runner.run(BrokerFixtures.driverConfig("artemis.yaml"), workload), workload);
+        }
+    }
 }

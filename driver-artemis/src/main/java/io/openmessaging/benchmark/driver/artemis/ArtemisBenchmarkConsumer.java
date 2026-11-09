@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.artemis;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
+import org.apache.activemq.artemis.api.core.ActiveMQQueueExistsException;
 import org.apache.activemq.artemis.api.core.QueueConfiguration;
 import org.apache.activemq.artemis.api.core.RoutingType;
 import org.apache.activemq.artemis.api.core.SimpleString;
@@ -60,11 +61,15 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
 
         try {
             tempSession = sessionFactory.createSession();
-            tempSession.createQueue(
-                    QueueConfiguration.of(SimpleString.of(queueName))
-                            .setAddress(SimpleString.of(topic))
-                            .setRoutingType(RoutingType.MULTICAST)
-                            .setDurable(true));
+            try {
+                tempSession.createQueue(
+                        QueueConfiguration.of(SimpleString.of(queueName))
+                                .setAddress(SimpleString.of(topic))
+                                .setRoutingType(RoutingType.MULTICAST)
+                                .setDurable(true));
+            } catch (ActiveMQQueueExistsException e) {
+                // Another consumer on this subscription created the shared queue first.
+            }
             tempConsumer = tempSession.createConsumer(queueName);
             tempConsumer.setMessageHandler(message -> handleMessage(message, callback));
 

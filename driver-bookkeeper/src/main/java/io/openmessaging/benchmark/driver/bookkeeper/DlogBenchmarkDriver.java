@@ -35,8 +35,10 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.commons.configuration2.PropertiesConfiguration;
@@ -50,6 +52,7 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     private static final Logger log = LoggerFactory.getLogger(DlogBenchmarkDriver.class);
 
     private Namespace namespace;
+    private final Set<List<String>> subscriptions = ConcurrentHashMap.newKeySet();
 
     public DlogBenchmarkDriver() {}
 
@@ -89,23 +92,22 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         return "test-stream";
     }
 
-    private static String getFullyQualifiedPartitionedStreamName(String topic, int partitionIdx) {
-        return String.format("%s/%06d", topic, partitionIdx);
-    }
-
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
+        if (partitions > 1) {
+            // Producers and consumers open a single log per topic, so extra partitions would sit unused.
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException(
+                            "DistributedLog driver supports one partition per topic, but the workload asks for "
+                                    + partitions
+                                    + " (set partitionsPerTopic: 1)"));
+        }
         return CompletableFuture.runAsync(() -> {
             try {
                 namespace.createLog(topic);
-                if (partitions > 1) {
-                    for (int i = 0; i < partitions; i++) {
-                        namespace.createLog(getFullyQualifiedPartitionedStreamName(topic, i));
-                    }
-                }
-                log.info("Successfully create topic {} with {} partitions", topic, partitions);
+                log.info("Successfully created topic {}", topic);
             } catch (IOException ioe) {
-                log.error("Failed to create topic {} with {} partitions", topic, partitions, ioe);
+                log.error("Failed to create topic {}", topic, ioe);
                 throw new RuntimeException(ioe);
             }
         });
@@ -131,6 +133,16 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        if (!subscriptions.add(List.of(topic, subscriptionName))) {
+            // Every reader replays the whole log, so a second consumer would double the received count.
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException(
+                            "DistributedLog driver does not support shared subscriptions: subscription "
+                                    + subscriptionName
+                                    + " on topic "
+                                    + topic
+                                    + " already has a consumer (set consumerPerSubscription: 1)"));
+        }
         CompletableFuture<DistributedLogManager> manager = openLog(topic);
         CompletableFuture<LogReader> initialReader =
                 manager.thenApplyAsync(dlm -> {

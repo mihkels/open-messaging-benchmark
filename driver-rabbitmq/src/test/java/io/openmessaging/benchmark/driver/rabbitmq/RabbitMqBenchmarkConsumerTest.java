@@ -25,6 +25,7 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.Date;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -41,10 +42,7 @@ class RabbitMqBenchmarkConsumerTest {
                         fixture.channel, "stream", callback(received, timestamp), true);
 
         consumer.handleDelivery(
-                "tag",
-                new Envelope(17L, false, "exchange", "stream"),
-                new BasicProperties.Builder().timestamp(new Date(1234L)).build(),
-                body);
+                "tag", new Envelope(17L, false, "exchange", "stream"), published(1234L), body);
 
         assertEquals(RabbitMqBenchmarkConsumer.STREAM_PREFETCH, fixture.prefetch.get());
         assertEquals("stream", fixture.queue.get());
@@ -66,10 +64,7 @@ class RabbitMqBenchmarkConsumerTest {
                         fixture.channel, "queue", callback(received, timestamp), false);
 
         consumer.handleDelivery(
-                "tag",
-                new Envelope(4L, false, "", "queue"),
-                new BasicProperties.Builder().timestamp(new Date(9L)).build(),
-                new byte[] {9});
+                "tag", new Envelope(4L, false, "", "queue"), published(9L), new byte[] {9});
 
         assertEquals("queue", fixture.queue.get());
         assertEquals(true, fixture.autoAck.get());
@@ -98,7 +93,7 @@ class RabbitMqBenchmarkConsumerTest {
                 new RabbitMqBenchmarkConsumer(fixture.channel, throwingCallback, true);
 
         Envelope envelope = new Envelope(3L, false, "", "queue");
-        BasicProperties properties = new BasicProperties.Builder().timestamp(new Date(2L)).build();
+        BasicProperties properties = published(2L);
         byte[] body = {1};
 
         assertSame(
@@ -123,6 +118,31 @@ class RabbitMqBenchmarkConsumerTest {
                 .close();
 
         assertEquals(1, fixture.channelCloses.get());
+    }
+
+    @Test
+    void publishTimeComesFromTheMillisecondHeaderNotTheWholeSecondTimestamp() throws Exception {
+        AtomicReference<Long> timestamp = new AtomicReference<>();
+        RabbitMqBenchmarkConsumer consumer =
+                new RabbitMqBenchmarkConsumer(
+                        new Fixture().channel, callback(new AtomicReference<>(), timestamp), false);
+
+        consumer.handleDelivery(
+                "tag",
+                new Envelope(1L, false, "", "queue"),
+                new BasicProperties.Builder()
+                        .timestamp(new Date(12_000L))
+                        .headers(Map.of(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER, 12_999L))
+                        .build(),
+                new byte[] {1});
+
+        assertEquals(12_999L, timestamp.get());
+    }
+
+    private static BasicProperties published(long timestamp) {
+        return new BasicProperties.Builder()
+                .headers(Map.of(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER, timestamp))
+                .build();
     }
 
     private static ConsumerCallback callback(

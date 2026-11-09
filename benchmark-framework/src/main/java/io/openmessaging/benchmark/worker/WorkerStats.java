@@ -85,7 +85,7 @@ public class WorkerStats {
                         "Publish latency from intended send to acknowledgement (micros)",
                         registry);
         this.endToEndLatency =
-                LatencyMetric.positiveOnly(
+                LatencyMetric.skewTolerant(
                         TimeUnit.HOURS.toMicros(12), "e2e_latency", "End to end latency (micros)", registry);
     }
 

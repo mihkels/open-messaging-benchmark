@@ -75,7 +75,10 @@ public final class RabbitMqBenchmarkConsumer extends DefaultConsumer implements 
     public void handleDelivery(
             String consumerTag, Envelope envelope, BasicProperties properties, byte[] body)
             throws IOException {
-        callback.messageReceived(body, properties.getTimestamp().getTime());
+        long publishTimestamp =
+                ((Number) properties.getHeaders().get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER))
+                        .longValue();
+        callback.messageReceived(body, publishTimestamp);
         if (manualAck) {
             channel.basicAck(envelope.getDeliveryTag(), false);
         }

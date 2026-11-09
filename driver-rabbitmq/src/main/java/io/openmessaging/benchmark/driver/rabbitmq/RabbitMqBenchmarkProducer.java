@@ -22,8 +22,8 @@ import com.rabbitmq.client.RecoveryListener;
 import com.rabbitmq.client.ShutdownListener;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
-import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,6 +33,8 @@ import org.slf4j.LoggerFactory;
 public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqBenchmarkProducer.class);
+    // The AMQP timestamp property holds whole seconds only, so the publish time travels in a header.
+    static final String PUBLISH_TIMESTAMP_HEADER = "omb-ts";
     private static final BasicProperties defaultProperties = new BasicProperties();
 
     private final Channel channel;
@@ -115,7 +117,10 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        BasicProperties.Builder builder = defaultProperties.builder().timestamp(new Date());
+        BasicProperties.Builder builder =
+                defaultProperties
+                        .builder()
+                        .headers(Map.of(PUBLISH_TIMESTAMP_HEADER, System.currentTimeMillis()));
         if (messagePersistence) {
             builder.deliveryMode(2);
         }

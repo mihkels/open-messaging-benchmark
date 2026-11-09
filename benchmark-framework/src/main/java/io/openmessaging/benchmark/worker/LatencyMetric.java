@@ -26,19 +26,19 @@ import org.HdrHistogram.Recorder;
 final class LatencyMetric {
     private static final int SIGNIFICANT_DIGITS = 5;
 
-    private final boolean clampToHighest;
+    private final boolean skipNegatives;
     private final long highestTrackableMicros;
     private final Recorder interval;
     private final Recorder cumulative;
     private final Timer timer;
 
     private LatencyMetric(
-            boolean clampToHighest,
+            boolean skipNegatives,
             long highestTrackableMicros,
             String name,
             String description,
             MeterRegistry registry) {
-        this.clampToHighest = clampToHighest;
+        this.skipNegatives = skipNegatives;
         this.highestTrackableMicros = highestTrackableMicros;
         interval = new Recorder(highestTrackableMicros, SIGNIFICANT_DIGITS);
         cumulative = new Recorder(highestTrackableMicros, SIGNIFICANT_DIGITS);
@@ -56,12 +56,13 @@ final class LatencyMetric {
      */
     static LatencyMetric clamped(
             long highestTrackableMicros, String name, String description, MeterRegistry registry) {
-        return new LatencyMetric(true, highestTrackableMicros, name, description, registry);
+        return new LatencyMetric(false, highestTrackableMicros, name, description, registry);
     }
 
     /**
-     * A latency measured across hosts, where clock skew can make values zero or negative. Such values
-     * are skipped; values above the highest trackable value are rejected by the histograms.
+     * A latency measured across hosts, where clock skew can make values negative. Negative values are
+     * skipped; zero is a real sub-millisecond measurement and is recorded. Values above the highest
+     * trackable value are recorded as that value.
      *
      * @param highestTrackableMicros the highest value the histograms track
      * @param name the timer name
@@ -69,16 +70,16 @@ final class LatencyMetric {
      * @param registry the registry of the timer
      * @return the metric
      */
-    static LatencyMetric positiveOnly(
+    static LatencyMetric skewTolerant(
             long highestTrackableMicros, String name, String description, MeterRegistry registry) {
-        return new LatencyMetric(false, highestTrackableMicros, name, description, registry);
+        return new LatencyMetric(true, highestTrackableMicros, name, description, registry);
     }
 
     void record(long micros) {
-        long value = clampToHighest ? Math.min(highestTrackableMicros, micros) : micros;
-        if (!clampToHighest && value <= 0) {
+        if (skipNegatives && micros < 0) {
             return;
         }
+        long value = Math.min(highestTrackableMicros, micros);
         cumulative.recordValue(value);
         interval.recordValue(value);
         timer.record(value, TimeUnit.MICROSECONDS);

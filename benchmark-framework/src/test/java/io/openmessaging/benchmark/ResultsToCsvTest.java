@@ -68,7 +68,7 @@ class ResultsToCsvTest {
     @Test
     void placesGeneratedFileInResultsDirectory() {
         assertThat(ResultsToCsv.outputFile("/results").toPath()).hasParentRaw(Path.of("/results"));
-        assertThat(ResultsToCsv.outputFile(null).getParent()).isNull();
+        assertThat(ResultsToCsv.outputFile(null)).hasNoParent();
         assertThat(ResultsToCsv.outputFile("").getName()).matches("results-\\d+\\.csv");
     }
 

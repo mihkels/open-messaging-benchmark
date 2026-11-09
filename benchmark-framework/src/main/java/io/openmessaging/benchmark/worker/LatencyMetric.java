@@ -24,7 +24,7 @@ import org.HdrHistogram.Recorder;
  * Micrometer timer.
  */
 final class LatencyMetric {
-    private static final int SIGNIFICANT_DIGITS = 5;
+    private static final int SIGNIFICANT_DIGITS = 4;
 
     private final boolean skipNegatives;
     private final long highestTrackableMicros;

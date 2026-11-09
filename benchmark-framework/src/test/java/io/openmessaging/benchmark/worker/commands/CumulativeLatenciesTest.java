@@ -27,7 +27,8 @@ class CumulativeLatenciesTest {
         two.publishScheduleLatency.recordValue(100_000);
         CumulativeLatencies result = one.plus(two);
         assertThat(result.publishScheduleLatency.getTotalCount()).isEqualTo(2);
-        assertThat(result.publishScheduleLatency.getValueAtPercentile(99)).isEqualTo(100_000);
+        assertThat(result.publishScheduleLatency.getValueAtPercentile(99))
+                .isEqualTo(result.publishScheduleLatency.highestEquivalentValue(100_000));
         result.publishScheduleLatency.reset();
         assertThat(one.publishScheduleLatency.getTotalCount()).isEqualTo(1);
         assertThat(two.publishScheduleLatency.getTotalCount()).isEqualTo(1);

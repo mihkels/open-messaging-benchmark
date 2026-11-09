@@ -23,12 +23,8 @@ import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class MqttBenchmarkProducer implements BenchmarkProducer {
-
-    private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkProducer.class);
 
     private final String topic;
     private final MqttQos qos;
@@ -78,13 +74,11 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
                             try {
                                 if (ex != null) {
                                     settle.complete(ex);
-                                    log.error("Failed to publish MQTT message, topic={}", topic, ex);
                                 } else if (result == null) {
                                     settle.complete(new IllegalStateException("Missing MQTT publish result"));
                                 } else if (result.getError().isPresent()) {
                                     Throwable error = result.getError().get();
                                     settle.complete(error);
-                                    log.error("Failed to publish MQTT message, topic={}", topic, error);
                                 } else {
                                     settle.complete(null);
                                 }

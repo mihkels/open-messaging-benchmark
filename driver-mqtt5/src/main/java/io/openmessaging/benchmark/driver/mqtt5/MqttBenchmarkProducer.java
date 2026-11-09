@@ -22,6 +22,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,12 +32,23 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     private final String topic;
     private final MqttQos qos;
-    private volatile Mqtt5AsyncClient client;
+    private final Mqtt5AsyncClient client;
+    private final AtomicBoolean closed;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("MQTT producer");
 
-    public MqttBenchmarkProducer(String topic, int qosCode) {
+    /**
+     * Creates a producer that publishes through {@code client}.
+     *
+     * @param topic the topic to publish to
+     * @param qosCode the MQTT QoS level, 0 to 2
+     * @param client the client, closed with the producer
+     * @param closed set once the producer is closed, so the client stops reconnecting
+     */
+    MqttBenchmarkProducer(String topic, int qosCode, Mqtt5AsyncClient client, AtomicBoolean closed) {
         this.topic = topic;
         this.qos = MqttBenchmarkDriver.intToQoS(qosCode);
+        this.client = client;
+        this.closed = closed;
     }
 
     @Override
@@ -59,9 +71,8 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
-        Mqtt5AsyncClient target = client;
         return lifecycle.publish(settle ->
-                target
+                client
                         .publish(message)
                         .whenComplete((result, ex) -> {
                             try {
@@ -85,15 +96,7 @@ public class MqttBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        Mqtt5AsyncClient target = client;
-        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(target));
-    }
-
-    public void setClient(Mqtt5AsyncClient client) {
-        this.client = client;
-    }
-
-    public boolean isClosed() {
-        return lifecycle.isClosed();
+        closed.set(true);
+        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(client));
     }
 }

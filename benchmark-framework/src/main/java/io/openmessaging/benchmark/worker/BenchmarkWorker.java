@@ -87,8 +87,6 @@ public final class BenchmarkWorker {
         }
     }
 
-    static final String METRICS_PATH = "/metrics";
-
     /**
      * Builds the request authenticator from the arguments and environment.
      *
@@ -99,7 +97,8 @@ public final class BenchmarkWorker {
     static @Nullable BearerTokenAuth authFor(Arguments arguments, Map<String, String> environment) {
         return BearerTokenAuth.resolveToken(environment, arguments.tokenFile)
                 .map(token ->
-                        new BearerTokenAuth(token, arguments.protectMetrics ? Set.of() : Set.of(METRICS_PATH)))
+                        new BearerTokenAuth(
+                                token, arguments.protectMetrics ? Set.of() : Set.of(HttpWorkerClient.METRICS_PATH)))
                 .orElse(null);
     }
 
@@ -139,9 +138,10 @@ public final class BenchmarkWorker {
                     BearerTokenAuth.TOKEN_ENV,
                     arguments.getHttpPort());
         } else if (arguments.protectMetrics) {
-            log.info("Bearer token required on every request, including {}", METRICS_PATH);
+            log.info(
+                    "Bearer token required on every request, including {}", HttpWorkerClient.METRICS_PATH);
         } else {
-            log.info("Bearer token required on every request except {}", METRICS_PATH);
+            log.info("Bearer token required on every request except {}", HttpWorkerClient.METRICS_PATH);
         }
 
         // Dump configuration variables
@@ -158,7 +158,7 @@ public final class BenchmarkWorker {
                                 config -> {
                                     handler.configure(config);
                                     config.routes.get(
-                                            METRICS_PATH,
+                                            HttpWorkerClient.METRICS_PATH,
                                             ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
                                 })
                         .start(arguments.getBindAddress(), arguments.getHttpPort());

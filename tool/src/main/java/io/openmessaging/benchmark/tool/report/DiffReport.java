@@ -44,28 +44,18 @@ record DiffReport(
         List<String> warnings,
         List<Row> rows) {
 
-    /** Builds the report of two non-empty lists of runs. */
-    static DiffReport of(
-            List<Run> baseline, List<Run> candidate, double minChangePercent, List<String> warnings) {
-        return of(baseline, candidate, RunContext.all(baseline, candidate), minChangePercent, warnings);
-    }
-
     /**
-     * Builds the report of two non-empty lists of runs, for a caller that has already joined them.
+     * Builds the report of two non-empty lists of runs.
      *
      * @param baseline the baseline runs
      * @param candidate the candidate runs
-     * @param all the runs of both sides, from {@link RunContext#all}
      * @param minChangePercent the smallest relative change that counts as a difference
      * @param warnings problems that do not stop the comparison
      * @return the report
      */
     static DiffReport of(
-            List<Run> baseline,
-            List<Run> candidate,
-            List<Run> all,
-            double minChangePercent,
-            List<String> warnings) {
+            List<Run> baseline, List<Run> candidate, double minChangePercent, List<String> warnings) {
+        List<Run> all = RunContext.all(baseline, candidate);
         LatencySource source = MetricExtractor.latencySource(all);
         List<Map<Metric, Double>> baselineValues =
                 baseline.stream().map(run -> MetricExtractor.extract(run, source)).toList();

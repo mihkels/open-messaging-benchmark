@@ -22,10 +22,21 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MqttBenchmarkConsumer implements BenchmarkConsumer {
-    private volatile Mqtt5AsyncClient client;
-    private final AtomicBoolean closed = new AtomicBoolean();
+    private final Mqtt5AsyncClient client;
+    private final AtomicBoolean closed;
     private final CompletableFuture<Void> closeCompletion = new CompletableFuture<>();
     private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
+
+    /**
+     * Creates a consumer that receives through {@code client}.
+     *
+     * @param client the client, closed with the consumer
+     * @param closed set once the consumer is closed, so the client stops reconnecting
+     */
+    MqttBenchmarkConsumer(Mqtt5AsyncClient client, AtomicBoolean closed) {
+        this.client = client;
+        this.closed = closed;
+    }
 
     @Override
     public void close() throws Exception {
@@ -82,13 +93,5 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
                 inCallback.set(previous);
             }
         }
-    }
-
-    public void setClient(Mqtt5AsyncClient client) {
-        this.client = client;
-    }
-
-    public boolean isClosed() {
-        return closed.get();
     }
 }

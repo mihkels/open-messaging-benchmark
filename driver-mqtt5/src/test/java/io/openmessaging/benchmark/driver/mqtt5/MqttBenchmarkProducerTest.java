@@ -38,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -49,8 +50,8 @@ class MqttBenchmarkProducerTest {
         CompletableFuture<Mqtt5PublishResult> firstResult = new CompletableFuture<>();
         CompletableFuture<Mqtt5PublishResult> secondResult = new CompletableFuture<>();
         when(client.publish(any(Mqtt5Publish.class))).thenReturn(firstResult).thenReturn(secondResult);
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         byte[] payload = {1, 2, 3};
         CompletableFuture<Void> canceled = producer.sendAsync(Optional.empty(), payload);
         ArgumentCaptor<Mqtt5Publish> publish = ArgumentCaptor.forClass(Mqtt5Publish.class);
@@ -77,16 +78,16 @@ class MqttBenchmarkProducerTest {
         Mqtt5AsyncClient client = client();
         RuntimeException rejection = new RuntimeException("client rejected");
         when(client.publish(any(Mqtt5Publish.class))).thenThrow(rejection);
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         assertThatThrownBy(() -> producer.sendAsync(Optional.empty(), new byte[] {1}).join())
                 .hasCause(rejection);
 
         Mqtt5AsyncClient otherClient = client();
         CompletableFuture<Mqtt5PublishResult> result = new CompletableFuture<>();
         when(otherClient.publish(any(Mqtt5Publish.class))).thenReturn(result);
-        MqttBenchmarkProducer other = new MqttBenchmarkProducer("topic", 1);
-        other.setClient(otherClient);
+        MqttBenchmarkProducer other =
+                new MqttBenchmarkProducer("topic", 1, otherClient, new AtomicBoolean());
         CompletableFuture<Void> pending = other.sendAsync(Optional.empty(), new byte[] {1});
         RuntimeException brokerRejection = new RuntimeException("broker rejected");
         Mqtt5PublishResult rejected = mock(Mqtt5PublishResult.class);
@@ -103,8 +104,8 @@ class MqttBenchmarkProducerTest {
         when(client.publish(any(Mqtt5Publish.class))).thenReturn(new CompletableFuture<>());
         RuntimeException failure = new RuntimeException("disconnect failed");
         doThrow(failure).when(client).disconnect();
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         CompletableFuture<Void> pending = producer.sendAsync(Optional.empty(), new byte[] {1});
         assertThatThrownBy(producer::close).isSameAs(failure);
         assertThatThrownBy(pending::join)
@@ -118,8 +119,8 @@ class MqttBenchmarkProducerTest {
         when(client.publish(any(Mqtt5Publish.class))).thenReturn(new CompletableFuture<>());
         RuntimeException failure = new RuntimeException("disconnect failed");
         doThrow(failure).when(client).disconnect();
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
         CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
         AtomicReference<Throwable> rejected = new AtomicReference<>();
@@ -159,8 +160,8 @@ class MqttBenchmarkProducerTest {
                     }
                     return new CompletableFuture<Mqtt5PublishResult>();
                 });
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
             Future<CompletableFuture<Void>> send =
@@ -204,8 +205,8 @@ class MqttBenchmarkProducerTest {
                         })
                 .when(client)
                 .disconnect();
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         CompletableFuture<Void> pending = producer.sendAsync(Optional.empty(), new byte[] {1});
         RuntimeException failure = new RuntimeException("asynchronous disconnect failed");
         ExecutorService workers = Executors.newFixedThreadPool(2);
@@ -258,8 +259,8 @@ class MqttBenchmarkProducerTest {
                         })
                 .when(client)
                 .disconnect();
-        MqttBenchmarkProducer producer = new MqttBenchmarkProducer("topic", 1);
-        producer.setClient(client);
+        MqttBenchmarkProducer producer =
+                new MqttBenchmarkProducer("topic", 1, client, new AtomicBoolean());
         CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
 
         assertThatThrownBy(producer::close).isSameAs(failure);

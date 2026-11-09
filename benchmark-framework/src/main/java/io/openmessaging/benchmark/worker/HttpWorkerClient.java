@@ -62,6 +62,12 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 
 public final class HttpWorkerClient implements Worker {
+    /** The path of the Prometheus metrics of a benchmark worker or driver process. */
+    public static final String METRICS_PATH = "/metrics";
+
+    /** The request and read timeout of {@link #scrapeMetrics()}. */
+    public static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
+
     private static final Logger log = LoggerFactory.getLogger(HttpWorkerClient.class);
 
     private static final String CONTENT_TYPE = "Content-Type";
@@ -203,8 +209,18 @@ public final class HttpWorkerClient implements Worker {
     }
 
     /**
+     * Scrapes the Prometheus metrics at {@value #METRICS_PATH}, within {@link #SCRAPE_TIMEOUT}.
+     *
+     * @return the metrics in the Prometheus text format
+     * @throws IllegalStateException if the response status is not 200
+     */
+    public String scrapeMetrics() {
+        return getText(METRICS_PATH, SCRAPE_TIMEOUT);
+    }
+
+    /**
      * Sends an authorized GET to {@code path} and returns the response body as text, for example a
-     * Prometheus scrape of {@code /metrics}.
+     * Prometheus scrape of {@value #METRICS_PATH}.
      *
      * @param path the request path, starting with {@code /}
      * @param timeout the request and read timeout for this call
@@ -212,16 +228,7 @@ public final class HttpWorkerClient implements Worker {
      * @throws IllegalStateException if the response status is not 200
      */
     public String getText(String path, Duration timeout) {
-        return await(
-                authorized(httpClient.prepareGet(host + path))
-                        .setRequestTimeout(timeout)
-                        .setReadTimeout(timeout)
-                        .execute()
-                        .toCompletableFuture()
-                        .thenApply(response -> {
-                            checkResponse("get", path, response);
-                            return response.getResponseBody();
-                        }));
+        return await(fetchText(path, timeout));
     }
 
     @Override
@@ -304,15 +311,28 @@ public final class HttpWorkerClient implements Worker {
 
     private <T> T get(String path, Class<T> clazz) {
         return await(
-                authorized(httpClient.prepareGet(host + path))
-                        .execute()
-                        .toCompletableFuture()
-                        .thenApply(r -> {
-                            checkResponse("get", path, r);
-                            var value = mapper.readValue(r.getResponseBody(), clazz);
+                fetchText(path, null)
+                        .thenApply(body -> {
+                            var value = mapper.readValue(body, clazz);
                             log.debug("Received response: {}", value);
                             return value;
                         }));
+    }
+
+    // An authorized GET of path whose body is returned once the status is 200; a null timeout keeps
+    // the client's default
+    private CompletableFuture<String> fetchText(String path, @Nullable Duration timeout) {
+        BoundRequestBuilder request = authorized(httpClient.prepareGet(host + path));
+        if (timeout != null) {
+            request.setRequestTimeout(timeout).setReadTimeout(timeout);
+        }
+        return request
+                .execute()
+                .toCompletableFuture()
+                .thenApply(response -> {
+                    checkResponse("get", path, response);
+                    return response.getResponseBody();
+                });
     }
 
     private <T> T post(String path, byte[] body, Class<T> clazz) {

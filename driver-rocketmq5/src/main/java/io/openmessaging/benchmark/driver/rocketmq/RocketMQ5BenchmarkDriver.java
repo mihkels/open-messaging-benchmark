@@ -47,6 +47,7 @@ import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.common.attribute.TopicMessageType;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.exception.RemotingConnectException;
+import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.protocol.subscription.SubscriptionGroupConfig;
@@ -95,7 +96,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
     Map<String, Set<String>> cachedBrokerAddr = new ConcurrentHashMap<>();
 
-    private synchronized Set<String> fetchMasterAndSlaveAddrByClusterName(
+    private synchronized Set<String> fetchMasterAddrByClusterName(
             final MQAdminExt adminExt, final String clusterName)
             throws RemotingConnectException,
                     RemotingSendRequestException,
@@ -107,8 +108,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             return cached;
         }
         Set<String> brokerList =
-                CommandUtil.fetchMasterAndSlaveAddrByClusterName(
-                        adminExt, this.rmqClientConfig.clusterName);
+                CommandUtil.fetchMasterAddrByClusterName(adminExt, this.rmqClientConfig.clusterName);
         if (brokerList.isEmpty()) {
             throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
         }
@@ -119,6 +119,20 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     @Override
     public String getTopicNamePrefix() {
         return "Benchmark";
+    }
+
+    // Masters only: slaves sync topic config from their master.
+    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+            throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
+        for (int i = 0; i < Math.min(partitions, masters.length); i++) {
+            topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
+            topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
+            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+        }
+    }
+
+    static int queuesForMaster(int partitions, int masters, int index) {
+        return partitions / masters + (index < partitions % masters ? 1 : 0);
     }
 
     @Override
@@ -139,14 +153,10 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             topicConfig.setAttributes(properties);
 
             try {
-                Set<String> brokerList =
-                        fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
-                topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
-                topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
-
-                for (String brokerAddr : brokerList) {
-                    this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
-                }
+                String[] masters =
+                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
+                                .toArray(String[]::new);
+                createOnMasters(masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
@@ -196,7 +206,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     public void createSubscriptionGroup(String fullSubName) {
         try {
             Set<String> brokerList =
-                    fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+                    fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
             SubscriptionGroupConfig subscriptionGroupConfig = new SubscriptionGroupConfig();
             subscriptionGroupConfig.setGroupName(fullSubName);
 

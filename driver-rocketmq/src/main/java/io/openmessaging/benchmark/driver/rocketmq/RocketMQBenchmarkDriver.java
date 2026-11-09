@@ -43,6 +43,7 @@ import org.apache.rocketmq.common.TopicConfig;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.exception.RemotingConnectException;
+import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
@@ -106,7 +107,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
 
     int fetchCnt = 0;
 
-    private synchronized Set<String> fetchMasterAndSlaveAddrByClusterName(
+    private synchronized Set<String> fetchMasterAddrByClusterName(
             final MQAdminExt adminExt, final String clusterName)
             throws RemotingConnectException,
                     RemotingSendRequestException,
@@ -121,8 +122,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             return cached;
         }
         Set<String> brokerList =
-                CommandUtil.fetchMasterAndSlaveAddrByClusterName(
-                        adminExt, this.rmqClientConfig.clusterName);
+                CommandUtil.fetchMasterAddrByClusterName(adminExt, this.rmqClientConfig.clusterName);
         if (brokerList.isEmpty()) {
             throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
         }
@@ -146,14 +146,10 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             }
 
             try {
-                Set<String> brokerList =
-                        fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
-                topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
-                topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
-
-                for (String brokerAddr : brokerList) {
-                    this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
-                }
+                String[] masters =
+                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
+                                .toArray(String[]::new);
+                createOnMasters(masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
@@ -169,6 +165,20 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                         e);
             }
         });
+    }
+
+    static int queuesForMaster(int partitions, int masters, int index) {
+        return partitions / masters + (index < partitions % masters ? 1 : 0);
+    }
+
+    // Masters only: slaves sync topic config from their master.
+    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+            throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
+        for (int i = 0; i < Math.min(partitions, masters.length); i++) {
+            topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
+            topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
+            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+        }
     }
 
     @Override

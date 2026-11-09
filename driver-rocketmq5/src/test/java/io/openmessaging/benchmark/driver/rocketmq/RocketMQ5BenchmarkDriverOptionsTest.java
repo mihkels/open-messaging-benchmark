@@ -115,7 +115,7 @@ class RocketMQ5BenchmarkDriverOptionsTest {
     }
 
     @Test
-    void createsTopicOfTheConfiguredTypeOnEveryBroker() throws Exception {
+    void createsTopicOfTheConfiguredTypeOnMasters() throws Exception {
         TestDriver driver = new TestDriver();
         driver.initialize(config(BASE + "sendDelayMsg: true\n"), null);
         when(driver.admin.examineBrokerClusterInfo()).thenReturn(cluster("c1", "b1:1", "b2:1"));
@@ -123,10 +123,10 @@ class RocketMQ5BenchmarkDriverOptionsTest {
         driver.createTopic("other", 1).join();
 
         ArgumentCaptor<TopicConfig> topic = ArgumentCaptor.forClass(TopicConfig.class);
-        verify(driver.admin, times(4)).createAndUpdateTopicConfig(anyString(), topic.capture());
+        verify(driver.admin, times(3)).createAndUpdateTopicConfig(anyString(), topic.capture());
         assertThat(topic.getAllValues().get(0).getReadQueueNums()).isEqualTo(3);
         assertThat(topic.getAllValues().get(0).getAttributes()).containsEntry("+message.type", "DELAY");
-        assertThat(topic.getAllValues().get(3).getWriteQueueNums()).isEqualTo(1);
+        assertThat(topic.getAllValues().get(2).getWriteQueueNums()).isEqualTo(1);
         verify(driver.admin, times(1)).examineBrokerClusterInfo();
         driver.close();
 

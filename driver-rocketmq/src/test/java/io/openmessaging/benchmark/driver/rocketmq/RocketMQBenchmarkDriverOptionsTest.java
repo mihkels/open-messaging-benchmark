@@ -145,7 +145,7 @@ class RocketMQBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void createsBatchTopicOnEveryBrokerAndCachesTheBrokerList() throws Exception {
+    void createsBatchTopicOnMastersAndCachesTheBrokerList() throws Exception {
         TestDriver driver = new TestDriver();
         driver.initialize(
                 config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\nbatchCQ: true\n"), null);
@@ -155,11 +155,11 @@ class RocketMQBenchmarkDriverOptionsTest {
         driver.createTopic("other", 1).join();
 
         ArgumentCaptor<TopicConfig> topic = ArgumentCaptor.forClass(TopicConfig.class);
-        verify(driver.admin, times(4)).createAndUpdateTopicConfig(anyString(), topic.capture());
+        verify(driver.admin, times(3)).createAndUpdateTopicConfig(anyString(), topic.capture());
         TopicConfig first = topic.getAllValues().get(0);
         assertThat(first.getReadQueueNums()).isEqualTo(4);
         assertThat(first.getAttributes()).containsValue("BatchCQ");
-        assertThat(topic.getAllValues().get(3).getWriteQueueNums()).isEqualTo(1);
+        assertThat(topic.getAllValues().get(2).getWriteQueueNums()).isEqualTo(1);
         verify(driver.admin, times(1)).examineBrokerClusterInfo();
         driver.close();
     }

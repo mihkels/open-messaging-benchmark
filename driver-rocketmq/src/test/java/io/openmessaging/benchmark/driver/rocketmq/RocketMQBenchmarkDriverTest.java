@@ -30,14 +30,30 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class RocketMQBenchmarkDriverTest {
+    @ParameterizedTest
+    @CsvSource({"1, 1", "3, 1;1;1", "10, 4;3;3"})
+    void queuesForMasterCreatesExactlyPartitionsQueuesOverThreeMasters(
+            int partitions, String expected) {
+        String actual =
+                IntStream.range(0, Math.min(partitions, 3))
+                        .mapToObj(
+                                i -> String.valueOf(RocketMQBenchmarkDriver.queuesForMaster(partitions, 3, i)))
+                        .collect(Collectors.joining(";"));
+        assertThat(actual).isEqualTo(expected);
+    }
+
     @Test
     void adminStartupFailurePropagatesAndClosesPartialAdmin() throws Exception {
         TestDriver driver = new TestDriver();

@@ -34,6 +34,35 @@ created through KoP's Kafka Admin API.
 The plugin bundle contains both the Kafka and the Pulsar driver jars and clients, so it is
 self-contained; you do not need to install the `kafka` or `pulsar` plugins for it.
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks kop --cases kop-kafka-to-kafka --case-timeout 600
+```
+
+This starts Pulsar with its checksum-verified KoP handler and the benchmark containers, waits for
+readiness and runs the one-minute, 200 messages/s Kafka-to-Kafka contract. The broker image is
+amd64-only; Compose uses emulation on arm64, so startup and runs can be slow. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/kop-kafka-to-kafka/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+**Use an amd64 host.** The broker has no arm64 image and the kind runner refuses this stack on arm64
+rather than emulating it. Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run kop kop-kafka-to-kafka
+```
+
+The broker, workers and coordinator run in `omb-kop`; the broker downloads and verifies the KoP
+handler. Results and logs are saved in `e2e-tests/target/k8s/kop-kafka-to-kafka/`; the namespace is
+removed after the run. See [results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup)
+to inspect a retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The broker must be a Pulsar broker with the KoP protocol handler loaded and a Kafka listener that the

@@ -21,6 +21,9 @@ It is not the NATS Streaming (STAN) driver; for that deprecated product see [`dr
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/nats/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/nats.md#local-docker-compose) and
+[kind cluster](../docs/drivers/nats.md#local-kind-cluster).
+
 - Plugin ID: `nats`
 - `driverClass`: `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`
 - Shipped config: [`nats.yaml`](nats.yaml) (`localhost:4222`, `replicationFactor: 3`)

@@ -19,6 +19,9 @@ This plugin benchmarks [NSQ](https://nsq.io/). Producers publish to one `nsqd`, 
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/nsq/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/nsq.md#local-docker-compose) and
+[kind cluster](../docs/drivers/nsq.md#local-kind-cluster).
+
 - Plugin ID: `nsq`
 - `driverClass`: `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`
 - Shipped config: [`nsq.yaml`](nsq.yaml) (`localhost`)

@@ -44,6 +44,33 @@ and the brokers directly. For the classic remoting client, see [RocketMQ](rocket
 | Delay messages    | No                                                                  | `sendDelayMsg`, `delayTimeInSec`                             |
 | Credentials       | One key pair for admin and clients                                  | Separate admin and client key pairs                          |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks rocketmq5 --cases rocketmq5-contract
+```
+
+This starts the RocketMQ name server, broker, gRPC proxy and benchmark containers, waits for readiness
+and runs the one-minute, 200 messages/s contract. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/rocketmq5-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run rocketmq5 rocketmq5-contract
+```
+
+The name server, broker, proxy, workers and coordinator run in `omb-rocketmq5`. Results and logs are
+saved in `e2e-tests/target/k8s/rocketmq5-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster. This path includes the proxy required by the gRPC client.
+
 ## Prerequisites and broker setup
 
 The driver needs:

@@ -29,6 +29,32 @@ Redis endpoint.
 | Regression cases       | `redis-contract`, `redis-fanout`, `redis-random-payload`                                                                                                                          |
 | Known limitations      | Partitions are ignored (one stream per topic); keys are stored but not used; single node only, no Cluster, Sentinel or TLS; synchronous sends; streams are not trimmed or deleted |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks redis --cases redis-contract
+```
+
+This starts Redis and the benchmark containers, waits for readiness and runs the one-minute,
+200 messages/s Streams contract. Open `e2e-tests/target/e2e-reports/latest/index.html`; the result is
+in `cases/redis-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run redis redis-contract
+```
+
+The broker, workers and coordinator run in `omb-redis`. Results and logs are saved in
+`e2e-tests/target/k8s/redis-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs one Redis server with Streams support (Redis 5.0 or later; tested with 7.4) reachable on its TCP

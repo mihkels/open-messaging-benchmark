@@ -48,6 +48,33 @@ measure different client stacks:
 Use the native plugin to measure Artemis with the least client overhead; use the JMS plugin when the
 application under study uses JMS, or to compare Artemis with other JMS providers.
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks artemis --cases artemis-contract
+```
+
+This starts an anonymous-login Artemis broker and the benchmark containers, waits for readiness and
+runs the one-minute, 200 messages/s native-core contract (not JMS). Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/artemis-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run artemis artemis-contract
+```
+
+The broker, workers and coordinator run in `omb-artemis`. Results and logs are saved in
+`e2e-tests/target/k8s/artemis-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster. For the JMS client path, use the [JMS quickstart](jms.md#local-docker-compose).
+
 ## Prerequisites and broker setup
 
 You need an Artemis broker whose core protocol acceptor (port 61616 by default) is reachable from the

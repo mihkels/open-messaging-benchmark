@@ -29,6 +29,32 @@ work but are not tested here.
 | Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                  |
 | Known limitations      | No TLS or WebSocket; partitions and keys are ignored; latency uses the producer's clock |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks mqtt5 --cases mqtt5-contract
+```
+
+This starts Mosquitto with MQTT 5 support and the benchmark containers, waits for readiness and runs
+the one-minute, 200 messages/s contract. Open `e2e-tests/target/e2e-reports/latest/index.html`; the
+result is in `cases/mqtt5-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run mqtt5 mqtt5-contract
+```
+
+The broker, workers and coordinator run in `omb-mqtt5`. Results and logs are saved in
+`e2e-tests/target/k8s/mqtt5-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs an MQTT 5 broker reachable over plain TCP that supports shared subscriptions

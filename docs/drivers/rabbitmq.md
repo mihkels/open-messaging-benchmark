@@ -28,6 +28,32 @@ stream, selected with `queueType`.
 | Regression cases       | `rabbitmq-contract` (quorum), `rabbitmq-classic-fanout` (classic, persistent messages), `rabbitmq-stream` (stream)                                          |
 | Known limitations      | One partition per topic; keys do not affect routing; end-to-end latency has one-second resolution; no TLS or virtual host selection; no cleanup after a run |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks rabbitmq --cases rabbitmq-contract
+```
+
+This starts RabbitMQ and the benchmark containers, waits for readiness and runs the one-minute,
+200 messages/s quorum-queue contract. Open `e2e-tests/target/e2e-reports/latest/index.html`; the result
+is in `cases/rabbitmq-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run rabbitmq rabbitmq-contract
+```
+
+The broker, workers and coordinator run in `omb-rabbitmq`. Results and logs are saved in
+`e2e-tests/target/k8s/rabbitmq-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs:

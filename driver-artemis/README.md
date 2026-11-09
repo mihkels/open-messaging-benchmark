@@ -24,6 +24,9 @@ selectors and transactions, and measures the JMS client layer as well.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/artemis/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/artemis.md#local-docker-compose) and
+[kind cluster](../docs/drivers/artemis.md#local-kind-cluster).
+
 ## Plugin and configuration files
 
 - Plugin ID: `artemis`

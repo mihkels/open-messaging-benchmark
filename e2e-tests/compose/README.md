@@ -27,6 +27,10 @@ Each run produces a report that a person can review.
 
 ## Quick start
 
+For a short run of one driver, see the
+[per-driver Docker Compose quickstarts](../../docs/drivers/index.md#local-quickstarts).
+Each also has a kind alternative using the same contract case.
+
 ```bash
 e2e-tests/compose/run-e2e.sh                  # full suite, about 50 minutes
 e2e-tests/compose/run-e2e.sh --list           # show the stacks and cases

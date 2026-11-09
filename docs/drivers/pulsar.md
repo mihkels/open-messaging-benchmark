@@ -28,6 +28,32 @@ uses the Pulsar admin client to create a tenant, a namespace and partitioned top
 | Regression cases  | `pulsar-contract`, `pulsar-shared-no-batching`, `pulsar-key-shared-dedup`                                        |
 | Known limitations | No cleanup of topics or namespaces; no transactions; no client-side producer tuning beyond the keys listed below |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks pulsar --cases pulsar-contract
+```
+
+This starts Pulsar standalone and the benchmark containers, waits for readiness and runs the
+one-minute, 200 messages/s contract. Open `e2e-tests/target/e2e-reports/latest/index.html`; the result
+is in `cases/pulsar-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run pulsar pulsar-contract
+```
+
+The broker, workers and coordinator run in `omb-pulsar`. Results and logs are saved in
+`e2e-tests/target/k8s/pulsar-contract/`; the namespace is removed after the run. Pulsar can take a
+few minutes to become ready. See [results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup)
+to inspect a retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs two endpoints, reachable from every worker:

@@ -37,6 +37,34 @@ and each subscription is a queue group.
 > Update `driverClass` in existing driver YAML files to
 > `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`; the old name no longer resolves.
 
+## Local Docker Compose
+
+NATS Streaming is deprecated; use [NATS JetStream](nats.md) for new work. To check a legacy STAN
+application, follow the [shared local prerequisites](index.md#shared-prerequisites), then run:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks nats-streaming --cases nats-streaming-contract
+```
+
+This starts STAN and the benchmark containers, waits for readiness and runs the one-minute,
+200 messages/s contract. The supplied config matches the broker's cluster ID. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/nats-streaming-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run nats-streaming nats-streaming-contract
+```
+
+The broker, workers and coordinator run in `omb-nats-streaming`. Results and logs are saved in
+`e2e-tests/target/k8s/nats-streaming-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster.
+
 ## Prerequisites and broker setup
 
 The driver needs:

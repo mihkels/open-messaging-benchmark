@@ -29,6 +29,35 @@ is a reader group. Producers can write events directly or in transactions.
 | Regression cases  | `pravega-contract`, `pravega-transactions`                                                                                                          |
 | Known limitations | amd64-only image; `pravega-exactly-once.yaml` uses 100 events per transaction (typo in the file); transactional publish latency excludes the commit |
 
+## Local Docker Compose
+
+With the [shared local prerequisites](index.md#shared-prerequisites), run from the repository root:
+
+```bash
+e2e-tests/compose/run-e2e.sh --stacks pravega --cases pravega-contract --case-timeout 600
+```
+
+This starts Pravega standalone and the benchmark containers, waits for readiness and runs the
+one-minute, 200 messages/s non-transactional contract. The broker image is amd64-only; Compose uses
+emulation on arm64, so startup and runs can be slow. Open
+`e2e-tests/target/e2e-reports/latest/index.html`; the result is in
+`cases/pravega-contract/result.json`. Containers and volumes are removed afterward.
+
+## Local kind cluster
+
+**Use an amd64 host.** The broker has no arm64 image and the kind runner refuses this stack on arm64
+rather than emulating it. Complete the [kind setup](index.md#shared-prerequisites), then:
+
+```bash
+mise run k8s:cluster
+mise run k8s:run pravega pravega-contract
+```
+
+The broker, workers and coordinator run in `omb-pravega`. Results and logs are saved in
+`e2e-tests/target/k8s/pravega-contract/`; the namespace is removed after the run. See
+[results, troubleshooting and cleanup](index.md#results-troubleshooting-and-cleanup) to inspect a
+retained run or remove the cluster. Use the `pravega-transactions` case for a separate transaction check.
+
 ## Prerequisites and broker setup
 
 The driver needs a Pravega cluster where:

@@ -20,6 +20,9 @@ your checkout. Use it to try chart or image changes and to check a driver end to
 shares one machine between brokers, workers and the coordinator, so its numbers are not benchmark
 results.
 
+For copy-paste contract commands for a particular broker, use the
+[per-driver local quickstarts](../drivers/index.md#local-quickstarts), including the JMS provider lanes.
+
 It reuses the [Compose regression suite](../development/testing-a-driver.md) definitions: the stacks
 in `e2e-tests/compose/stacks.txt`, the cases in `cases.txt`, and the unchanged driver configurations
 and workloads. Each stack runs in its own namespace `omb-<stack>`, and its broker Services have the

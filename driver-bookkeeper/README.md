@@ -26,6 +26,9 @@ ledger API.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/bookkeeper/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/bookkeeper.md#local-docker-compose) and
+[kind cluster](../docs/drivers/bookkeeper.md#local-kind-cluster).
+
 ## Prerequisites
 
 - ZooKeeper and a BookKeeper cluster with initialized metadata and at least `bkcEnsembleSize`

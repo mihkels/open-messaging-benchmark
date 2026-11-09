@@ -26,6 +26,9 @@ server and brokers. It can also send delay messages.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/rocketmq5/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/rocketmq5.md#local-docker-compose) and
+[kind cluster](../docs/drivers/rocketmq5.md#local-kind-cluster).
+
 ## Differences from `driver-rocketmq`
 
 - gRPC to the proxy (`grpcEndpoint`) instead of the remoting protocol to brokers.

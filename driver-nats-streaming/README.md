@@ -23,6 +23,9 @@ topic is a channel and each subscription is a queue group.
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/nats-streaming/>
 
+Local quickstarts: [Docker Compose](../docs/drivers/nats-streaming.md#local-docker-compose) and
+[kind cluster](../docs/drivers/nats-streaming.md#local-kind-cluster).
+
 - Plugin ID: `nats-streaming`
 - `driverClass`: `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`
 - Shipped config: [`nats-streaming.yaml`](nats-streaming.yaml) (`nats://localhost:4222`, cluster ID `mycluster`)

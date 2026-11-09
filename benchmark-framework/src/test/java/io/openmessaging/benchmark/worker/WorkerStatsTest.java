@@ -46,8 +46,10 @@ class WorkerStatsTest {
 
             var period = stats.toPeriodStats();
             assertThat(period.publishLatency().getValueAtPercentile(99)).isEqualTo(1_000);
-            assertThat(period.publishDelayLatency().getValueAtPercentile(99)).isEqualTo(100_000);
-            assertThat(period.publishScheduleLatency().getValueAtPercentile(99)).isEqualTo(101_000);
+            assertThat(period.publishDelayLatency().getValueAtPercentile(99))
+                    .isEqualTo(period.publishDelayLatency().highestEquivalentValue(100_000));
+            assertThat(period.publishScheduleLatency().getValueAtPercentile(99))
+                    .isEqualTo(period.publishScheduleLatency().highestEquivalentValue(101_000));
             assertThat(period.publishScheduleLatency().getTotalCount()).isEqualTo(100);
             assertThat(stats.toPeriodStats().publishScheduleLatency().getTotalCount()).isZero();
             var cumulative = stats.toCumulativeLatencies();

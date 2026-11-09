@@ -20,10 +20,10 @@ import org.HdrHistogram.Histogram;
 
 public class CumulativeLatencies {
 
-    public Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram publishScheduleLatency = new Histogram(SECONDS.toMicros(60), 5);
-    public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 5);
+    public Histogram publishLatency = new Histogram(SECONDS.toMicros(60), 4);
+    public Histogram publishDelayLatency = new Histogram(SECONDS.toMicros(60), 4);
+    public Histogram publishScheduleLatency = new Histogram(SECONDS.toMicros(60), 4);
+    public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 4);
 
     public CumulativeLatencies plus(CumulativeLatencies toAdd) {
         CumulativeLatencies result = new CumulativeLatencies();

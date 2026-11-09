@@ -35,4 +35,14 @@ class BenchmarkArgumentsTest {
         arguments.output = null;
         assertThat(Benchmark.usageError(arguments)).isNull();
     }
+
+    @Test
+    void requiresWorkloadsAndDrivers() {
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        assertThat(Benchmark.usageError(arguments)).isEqualTo("At least one workload file is required");
+
+        arguments.workloads = List.of("w1.yaml");
+        assertThat(Benchmark.usageError(arguments))
+                .isEqualTo("At least one driver must be given with --drivers");
+    }
 }

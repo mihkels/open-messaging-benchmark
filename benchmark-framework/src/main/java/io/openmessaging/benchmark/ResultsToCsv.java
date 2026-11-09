@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -40,13 +41,15 @@ public class ResultsToCsv {
     private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
 
     public void writeAllResultFiles(String directory) {
+        writeAllResultFiles(directory, outputFile(System.getenv(Benchmark.RESULTS_DIR_ENV)));
+    }
+
+    // A generated name in the results directory, or in the working directory without one
+    static File outputFile(@Nullable String resultsDirectory) {
         String fileName = "results-" + Instant.now().getEpochSecond() + ".csv";
-        String resultsDirectory = System.getenv(Benchmark.RESULTS_DIR_ENV);
-        File outputFile =
-                resultsDirectory == null || resultsDirectory.isEmpty()
-                        ? new File(fileName)
-                        : Path.of(resultsDirectory, fileName).toFile();
-        writeAllResultFiles(directory, outputFile);
+        return resultsDirectory == null || resultsDirectory.isEmpty()
+                ? new File(fileName)
+                : Path.of(resultsDirectory, fileName).toFile();
     }
 
     void writeAllResultFiles(String directory, File outputFile) {

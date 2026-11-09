@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.File;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -62,6 +63,25 @@ class ResultsToCsvTest {
 
         assertThat(new ResultsToCsv().extractResults(result))
                 .isEqualTo("0,0,0,0,0,70000,6035000,5965000,12000000,,,,");
+    }
+
+    @Test
+    void placesGeneratedFileInResultsDirectory() {
+        assertThat(ResultsToCsv.outputFile("/results").toPath()).hasParentRaw(Path.of("/results"));
+        assertThat(ResultsToCsv.outputFile(null).getParent()).isNull();
+        assertThat(ResultsToCsv.outputFile("").getName()).matches("results-\\d+\\.csv");
+    }
+
+    @Test
+    void failsWhenTheCsvCannotBeWritten() throws Exception {
+        Path results = Files.createDirectory(tempDir.resolve("unwritable"));
+        File csv = tempDir.resolve("missing").resolve("results.csv").toFile();
+        ResultsToCsv resultsToCsv = new ResultsToCsv();
+        String resultsDirectory = results.toString();
+
+        assertThatThrownBy(() -> resultsToCsv.writeAllResultFiles(resultsDirectory, csv))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasMessageContaining("results.csv");
     }
 
     @Test

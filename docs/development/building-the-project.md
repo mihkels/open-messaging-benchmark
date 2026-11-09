@@ -89,6 +89,7 @@ Common variations:
 |                 Command                  |                      Effect                      |
 |------------------------------------------|--------------------------------------------------|
 | `mvn clean install -DskipTests`          | Skip unit tests                                  |
+| `mvn clean install -Dmaven.test.skip`    | Skip compiling and running tests                 |
 | `mvn clean verify -Djacoco.skip`         | Skip JaCoCo coverage                             |
 | `mvn clean verify -Dcheckstyle.skip`     | Skip Checkstyle                                  |
 | `mvn clean verify -Dspotless.check.skip` | Skip the Spotless format check                   |

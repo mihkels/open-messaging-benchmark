@@ -184,7 +184,7 @@ jobs:
       - name: Install upstream modules
         run: >-
           mvn --no-transfer-progress --batch-mode -pl driver-api,benchmark-framework -am install
-          -DskipTests -Djacoco.skip -Derrorprone.skip -Dcheckstyle.skip -Dspotbugs.skip
+          -Dmaven.test.skip=true -Djacoco.skip -Derrorprone.skip -Dcheckstyle.skip -Dspotbugs.skip
           -Dspotless.check.skip -Dlicense.skip
       # The build job never builds this module, so it keeps its tests, coverage check and Error Prone
       - name: Build and verify opt-in harness

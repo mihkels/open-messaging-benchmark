@@ -375,7 +375,7 @@ class PravegaBenchmarkProducerTest {
                         producer.sendAsync(Optional.empty(), new byte[] {3}));
 
         verify(transaction).abort();
-        assertThat(sends).allSatisfy(send -> assertThatThrownBy(send::join).hasCause(cause));
+        assertThat(sends).hasSize(3).allSatisfy(send -> assertThatThrownBy(send::join).hasCause(cause));
     }
 
     @Test

@@ -87,7 +87,7 @@ jobs:
           if [[ "$REF_TYPE" == "tag" ]]; then
             mvn --no-transfer-progress --batch-mode verify
           else
-            mvn --no-transfer-progress --batch-mode -DskipTests -Dlicense.skip -Dspotless.check.skip \
+            mvn --no-transfer-progress --batch-mode -Dmaven.test.skip=true -Dlicense.skip -Dspotless.check.skip \
               -Dcheckstyle.skip -Dspotbugs.skip -Djacoco.skip -Derrorprone.skip package
           fi
           mkdir dist

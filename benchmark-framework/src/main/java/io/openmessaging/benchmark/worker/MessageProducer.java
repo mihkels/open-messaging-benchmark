@@ -38,6 +38,15 @@ public class MessageProducer {
         this.callbacks = callbacks;
     }
 
+    /**
+     * Changes the publish rate. Sends already waiting for their slot keep it.
+     *
+     * @param publishRate the new rate in messages per second
+     */
+    public void setPublishRate(double publishRate) {
+        rateLimiter.setRate(publishRate);
+    }
+
     public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload)
             throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();

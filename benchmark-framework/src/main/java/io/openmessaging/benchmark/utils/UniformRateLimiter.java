@@ -21,35 +21,20 @@ import java.util.function.Supplier;
 
 /**
  * Provides a next operation time for rate limited operation streams.<br>
- * The rate limiter is thread safe and can be shared by all threads.
+ * The rate limiter is thread safe and can be shared by all threads. Its rate can be changed with
+ * {@link #setRate(double)} while other threads are in {@link #acquire()}.
  */
 public final class UniformRateLimiter {
 
-    private static final AtomicLongFieldUpdater<UniformRateLimiter> V_TIME_UPDATER =
-            AtomicLongFieldUpdater.newUpdater(UniformRateLimiter.class, "virtualTime");
-    private static final AtomicLongFieldUpdater<UniformRateLimiter> START_UPDATER =
-            AtomicLongFieldUpdater.newUpdater(UniformRateLimiter.class, "start");
     private static final double ONE_SEC_IN_NS = (double) SECONDS.toNanos(1);
-    private volatile long start = Long.MIN_VALUE;
+    private static final long NOT_STARTED = Long.MIN_VALUE;
 
-    // Updated only through V_TIME_UPDATER
-    @SuppressWarnings("java:S1068")
-    private volatile long virtualTime;
-
-    private final double opsPerSec;
-    private final long intervalNs;
     private final Supplier<Long> nanoClock;
+    private volatile Schedule schedule;
 
     UniformRateLimiter(final double opsPerSec, Supplier<Long> nanoClock) {
-        if (Double.isNaN(opsPerSec) || Double.isInfinite(opsPerSec)) {
-            throw new IllegalArgumentException("opsPerSec cannot be Nan or Infinite");
-        }
-        if (opsPerSec <= 0) {
-            throw new IllegalArgumentException("opsPerSec must be greater then 0");
-        }
-        this.opsPerSec = opsPerSec;
-        intervalNs = Math.round(ONE_SEC_IN_NS / opsPerSec);
         this.nanoClock = nanoClock;
+        this.schedule = new Schedule(opsPerSec, NOT_STARTED);
     }
 
     public UniformRateLimiter(final double opsPerSec) {
@@ -57,24 +42,27 @@ public final class UniformRateLimiter {
     }
 
     public double getOpsPerSec() {
-        return opsPerSec;
+        return schedule.opsPerSec;
     }
 
     public long getIntervalNs() {
-        return intervalNs;
+        return schedule.intervalNs;
+    }
+
+    /**
+     * Changes the rate. The schedule is re-based so that operation {@code n} after the change is due
+     * {@code n} new intervals after the change, or after the first {@link #acquire()} if none has
+     * happened yet. A thread that took its slot just before the change keeps that slot.
+     *
+     * @param opsPerSec the new rate, which must be finite and greater than 0
+     */
+    public void setRate(final double opsPerSec) {
+        long startNs = schedule.start == NOT_STARTED ? NOT_STARTED : nanoClock.get();
+        schedule = new Schedule(opsPerSec, startNs);
     }
 
     public long acquire() {
-        final long currOpIndex = V_TIME_UPDATER.getAndIncrement(this);
-        long startNs = this.start;
-        if (startNs == Long.MIN_VALUE) {
-            startNs = nanoClock.get();
-            if (!START_UPDATER.compareAndSet(this, Long.MIN_VALUE, startNs)) {
-                startNs = this.start;
-                assert startNs != Long.MIN_VALUE;
-            }
-        }
-        return startNs + currOpIndex * intervalNs;
+        return schedule.acquire(nanoClock);
     }
 
     public static void interruptibleSleepNs(final long intendedTime) throws InterruptedException {
@@ -87,6 +75,49 @@ public final class UniformRateLimiter {
         }
         if (Thread.interrupted()) {
             throw new InterruptedException("Interrupted while waiting for the next send");
+        }
+    }
+
+    /**
+     * One rate and the schedule that started with it. Swapping the whole object keeps the start,
+     * interval and operation index consistent with each other without a lock.
+     */
+    private static final class Schedule {
+        private static final AtomicLongFieldUpdater<Schedule> INDEX_UPDATER =
+                AtomicLongFieldUpdater.newUpdater(Schedule.class, "index");
+        private static final AtomicLongFieldUpdater<Schedule> START_UPDATER =
+                AtomicLongFieldUpdater.newUpdater(Schedule.class, "start");
+
+        private final double opsPerSec;
+        private final long intervalNs;
+        private volatile long start;
+
+        // Updated only through INDEX_UPDATER
+        @SuppressWarnings("java:S1068")
+        private volatile long index;
+
+        private Schedule(double opsPerSec, long start) {
+            if (Double.isNaN(opsPerSec) || Double.isInfinite(opsPerSec)) {
+                throw new IllegalArgumentException("opsPerSec cannot be Nan or Infinite");
+            }
+            if (opsPerSec <= 0) {
+                throw new IllegalArgumentException("opsPerSec must be greater then 0");
+            }
+            this.opsPerSec = opsPerSec;
+            this.intervalNs = Math.round(ONE_SEC_IN_NS / opsPerSec);
+            this.start = start;
+        }
+
+        private long acquire(Supplier<Long> nanoClock) {
+            final long currOpIndex = INDEX_UPDATER.getAndIncrement(this);
+            long startNs = this.start;
+            if (startNs == NOT_STARTED) {
+                startNs = nanoClock.get();
+                if (!START_UPDATER.compareAndSet(this, NOT_STARTED, startNs)) {
+                    startNs = this.start;
+                }
+            }
+            return startNs + currOpIndex * intervalNs;
         }
     }
 }

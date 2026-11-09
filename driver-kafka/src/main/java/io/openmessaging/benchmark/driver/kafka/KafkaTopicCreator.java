@@ -168,8 +168,7 @@ class KafkaTopicCreator {
             } catch (FatalTopicCreationException e) {
                 throw e;
             } catch (RuntimeException e) {
-                if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
-                    Thread.currentThread().interrupt();
+                if (interrupted(e)) {
                     throw e;
                 }
                 lastException = e;
@@ -194,6 +193,15 @@ class KafkaTopicCreator {
                         "Failed to create topics after %d attempts. Last error: %s",
                         MAX_CREATION_ATTEMPTS, lastException.getMessage()),
                 lastException);
+    }
+
+    // Whether this thread was interrupted or failure is an interruption; restores the interrupt flag.
+    private static boolean interrupted(Exception failure) {
+        if (Thread.currentThread().isInterrupted() || Failures.isInterruption(failure)) {
+            Thread.currentThread().interrupt();
+            return true;
+        }
+        return false;
     }
 
     private boolean allTopicsExist(List<TopicInfo> topicInfos) {
@@ -298,8 +306,7 @@ class KafkaTopicCreator {
         } catch (FatalTopicCreationException e) {
             throw e;
         } catch (Exception e) {
-            if (Thread.currentThread().isInterrupted() || Failures.isInterruption(e)) {
-                Thread.currentThread().interrupt();
+            if (interrupted(e)) {
                 throw (RuntimeException) e;
             }
             log.error(

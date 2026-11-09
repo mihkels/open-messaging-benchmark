@@ -203,10 +203,11 @@ class RedisBenchmarkDriverTest {
         JedisPool pool = mock();
         JedisPool consumerPool = mock();
         Jedis jedis = mock();
+        Jedis consumerJedis = mock();
         driver.jedisPool = pool;
         driver.consumerPool = consumerPool;
         when(pool.getResource()).thenReturn(jedis);
-        when(consumerPool.getResource()).thenReturn(mock(Jedis.class));
+        when(consumerPool.getResource()).thenReturn(consumerJedis);
 
         BenchmarkConsumer consumer =
                 driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join();

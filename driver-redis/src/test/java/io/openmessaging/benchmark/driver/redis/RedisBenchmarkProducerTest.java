@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.redis;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,7 +35,7 @@ class RedisBenchmarkProducerTest {
         JedisPool pool = mock();
         Jedis jedis = mock();
         when(pool.getResource()).thenReturn(jedis);
-        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic", 1000);
         producer.sendAsync(Optional.empty(), new byte[] {1}).join();
 
         producer.close();
@@ -50,7 +51,7 @@ class RedisBenchmarkProducerTest {
         JedisPool pool = mock();
         RuntimeException cause = new RuntimeException("connection failed");
         when(pool.getResource()).thenThrow(cause);
-        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic", 1000);
 
         assertThatThrownBy(() -> producer.sendAsync(Optional.empty(), new byte[] {1}).join())
                 .hasCause(cause);
@@ -61,7 +62,7 @@ class RedisBenchmarkProducerTest {
         JedisPool pool = mock();
         Jedis jedis = mock();
         when(pool.getResource()).thenReturn(jedis);
-        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic");
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic", 1000);
 
         producer.sendAsync(Optional.of("k"), new byte[] {1}).join();
 
@@ -81,5 +82,19 @@ class RedisBenchmarkProducerTest {
                 .map(e -> new String(e.getValue(), StandardCharsets.UTF_8))
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Test
+    void sendTrimsTheStreamToTheConfiguredMaxLen() {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic", 42);
+
+        producer.sendAsync(Optional.empty(), new byte[] {1}).join();
+
+        verify(jedis)
+                .xadd(
+                        any(byte[].class), any(), eq(XAddParams.xAddParams().maxLen(42).approximateTrimming()));
     }
 }

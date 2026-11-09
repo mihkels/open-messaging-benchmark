@@ -20,4 +20,6 @@ public class RedisClientConfig {
     public Integer redisPort;
     public Integer jedisPoolMaxTotal;
     public Integer jedisPoolMaxIdle;
+    // Approximate MAXLEN for each stream; bounds Redis memory on long runs
+    public long redisStreamMaxLen = 1_000_000;
 }

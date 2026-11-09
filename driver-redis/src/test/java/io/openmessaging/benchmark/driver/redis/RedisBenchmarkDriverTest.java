@@ -184,6 +184,7 @@ class RedisBenchmarkDriverTest {
         JedisPool pool = mock();
         Jedis jedis = mock();
         driver.jedisPool = pool;
+        driver.consumerPool = pool;
         when(pool.getResource()).thenReturn(jedis);
         doThrow(new JedisDataException("BUSYGROUP Consumer Group name already exists"))
                 .when(jedis)
@@ -197,17 +198,24 @@ class RedisBenchmarkDriverTest {
     }
 
     @Test
-    void missingConsumerGroupIsCreated() throws Exception {
+    void missingConsumerGroupIsCreatedAndTheConsumerReadsFromItsOwnPool() throws Exception {
         RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
         JedisPool pool = mock();
+        JedisPool consumerPool = mock();
         Jedis jedis = mock();
         driver.jedisPool = pool;
+        driver.consumerPool = consumerPool;
         when(pool.getResource()).thenReturn(jedis);
+        when(consumerPool.getResource()).thenReturn(mock(Jedis.class));
 
         BenchmarkConsumer consumer =
                 driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)).join();
 
         verify(jedis).xgroupCreate("topic", "subscription", null, true);
+        Field poolField = RedisBenchmarkConsumer.class.getDeclaredField("pool");
+        poolField.setAccessible(true);
+        // Blocking reads must not hold the producers' pool
+        assertThat(poolField.get(consumer)).isSameAs(consumerPool);
         consumer.close();
     }
 
@@ -244,6 +252,21 @@ class RedisBenchmarkDriverTest {
             BenchmarkProducer producer = driver.createProducer("topic").join();
             assertThat(driver.jedisPool).isNotNull();
             producer.close();
+        } finally {
+            driver.close();
+        }
+    }
+
+    @Test
+    void poolSizesAreOptional(@TempDir Path temp) throws Exception {
+        Path config = temp.resolve("redis.yaml");
+        Files.writeString(config, "redisHost: localhost\nredisPort: 6379\n");
+        RedisBenchmarkDriver driver = new RedisBenchmarkDriver();
+        driver.initialize(config, mock(MeterRegistry.class));
+        try {
+            driver.createProducer("topic").join().close();
+            assertThat(driver.jedisPool).isNotNull();
+            assertThat(driver.consumerPool).isNotNull();
         } finally {
             driver.close();
         }

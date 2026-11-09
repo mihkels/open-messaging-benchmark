@@ -33,6 +33,8 @@ import redis.clients.jedis.JedisPool;
 @SuppressWarnings("unused")
 public class RedisBenchmarkDriver implements BenchmarkDriver {
     JedisPool jedisPool;
+    // Consumers hold a connection inside XREADGROUP BLOCK, so they get their own unbounded pool
+    JedisPool consumerPool;
     private RedisClientConfig clientConfig;
     private boolean closed;
 
@@ -55,7 +57,8 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
         try {
-            return CompletableFuture.completedFuture(new RedisBenchmarkProducer(pool(), topic));
+            return CompletableFuture.completedFuture(
+                    new RedisBenchmarkProducer(pool(), topic, clientConfig.redisStreamMaxLen));
         } catch (RuntimeException e) {
             return CompletableFuture.failedFuture(e);
         }
@@ -66,13 +69,12 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
             final String topic, final String subscriptionName, final ConsumerCallback consumerCallback) {
         String consumerId = "consumer-" + ResourceNames.randomSuffix();
         try {
-            JedisPool sharedPool = pool();
-            try (Jedis jedis = sharedPool.getResource()) {
+            try (Jedis jedis = pool().getResource()) {
                 createGroup(jedis, topic, subscriptionName);
             }
             return CompletableFuture.completedFuture(
                     new RedisBenchmarkConsumer(
-                            consumerId, topic, subscriptionName, sharedPool, consumerCallback));
+                            consumerId, topic, subscriptionName, consumerPool(), consumerCallback));
         } catch (Exception e) {
             log.error(
                     "Failed to create consumer instance for topic '{}' and subscription '{}'",
@@ -111,48 +113,62 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
         return jedisPool;
     }
 
+    private synchronized JedisPool consumerPool() {
+        pool();
+        return consumerPool;
+    }
+
     private synchronized void setupJedisConn() {
         GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
-        poolConfig.setMaxTotal(this.clientConfig.jedisPoolMaxTotal);
-        poolConfig.setMaxIdle(this.clientConfig.jedisPoolMaxIdle);
-        if (this.clientConfig.redisPass != null) {
-            if (this.clientConfig.redisUser != null) {
-                jedisPool =
-                        new JedisPool(
-                                poolConfig,
-                                this.clientConfig.redisHost,
-                                this.clientConfig.redisPort,
-                                2000,
-                                this.clientConfig.redisUser,
-                                this.clientConfig.redisPass);
-            } else {
-                jedisPool =
-                        new JedisPool(
-                                poolConfig,
-                                this.clientConfig.redisHost,
-                                this.clientConfig.redisPort,
-                                2000,
-                                this.clientConfig.redisPass);
-            }
-        } else {
-            jedisPool =
-                    new JedisPool(poolConfig, this.clientConfig.redisHost, this.clientConfig.redisPort, 2000);
+        if (clientConfig.jedisPoolMaxTotal != null) {
+            poolConfig.setMaxTotal(clientConfig.jedisPoolMaxTotal);
         }
+        if (clientConfig.jedisPoolMaxIdle != null) {
+            poolConfig.setMaxIdle(clientConfig.jedisPoolMaxIdle);
+        }
+        GenericObjectPoolConfig<Jedis> consumerPoolConfig = new GenericObjectPoolConfig<>();
+        consumerPoolConfig.setMaxTotal(-1);
+        consumerPoolConfig.setMaxIdle(-1);
+        jedisPool = newPool(poolConfig);
+        consumerPool = newPool(consumerPoolConfig);
+    }
+
+    private JedisPool newPool(GenericObjectPoolConfig<Jedis> poolConfig) {
+        if (clientConfig.redisPass == null) {
+            return new JedisPool(poolConfig, clientConfig.redisHost, clientConfig.redisPort, 2000);
+        }
+        if (clientConfig.redisUser == null) {
+            return new JedisPool(
+                    poolConfig, clientConfig.redisHost, clientConfig.redisPort, 2000, clientConfig.redisPass);
+        }
+        return new JedisPool(
+                poolConfig,
+                clientConfig.redisHost,
+                clientConfig.redisPort,
+                2000,
+                clientConfig.redisUser,
+                clientConfig.redisPass);
     }
 
     @Override
     public void close() {
         JedisPool toClose;
+        JedisPool consumersToClose;
         synchronized (this) {
             if (closed) {
                 return;
             }
             closed = true;
             toClose = jedisPool;
+            consumersToClose = consumerPool;
             jedisPool = null;
+            consumerPool = null;
         }
         if (toClose != null) {
             toClose.close();
+        }
+        if (consumersToClose != null) {
+            consumersToClose.close();
         }
     }
 

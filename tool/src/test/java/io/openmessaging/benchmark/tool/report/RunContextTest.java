@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.tool.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.tool.report.RunContext.SettingDifference;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +47,30 @@ class RunContextTest {
                                 + " vs 20000 (mismatched-workload.json)",
                         "Workload messageSize differs: 1024 (baseline-1.json, baseline-2.json)"
                                 + " vs 2048 (mismatched-workload.json)");
+    }
+
+    @Test
+    void reportsMismatchedTopology() {
+        Run candidate = Fixtures.run("baseline-2.json");
+        candidate.result().metadata.workload().topics = 10;
+        assertThat(RunContext.workloadMismatches(List.of(Fixtures.run("baseline-1.json"), candidate)))
+                .containsExactly("Workload topics differs: 1 (baseline-1.json) vs 10 (baseline-2.json)");
+    }
+
+    @Test
+    void comparesSizeDistributionsRegardlessOfKeyOrder() {
+        Run baseline = Fixtures.run("baseline-1.json");
+        baseline.result().metadata.workload().messageSizeDistribution =
+                new LinkedHashMap<>(Map.of("1024", 1));
+        baseline.result().metadata.workload().messageSizeDistribution.put("512", 3);
+        Run candidate = Fixtures.run("baseline-2.json");
+        candidate.result().metadata.workload().messageSizeDistribution =
+                new LinkedHashMap<>(Map.of("512", 3));
+        candidate.result().metadata.workload().messageSizeDistribution.put("1024", 1);
+
+        assertThat(RunContext.workloadIdentity(baseline))
+                .containsEntry("messageSizeDistribution", "{1024=1, 512=3}");
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate))).isEmpty();
     }
 
     @Test

@@ -57,6 +57,18 @@ final class RunContext {
             identity.put("producerRate", String.valueOf(workload.producerRate));
             identity.put("messageSize", String.valueOf(workload.messageSize));
             identity.put("partitionsPerTopic", String.valueOf(workload.partitionsPerTopic));
+            // Settings missing from older files read as the Workload defaults, the same values a run had
+            identity.put("topics", String.valueOf(workload.topics));
+            identity.put("producersPerTopic", String.valueOf(workload.producersPerTopic));
+            identity.put("subscriptionsPerTopic", String.valueOf(workload.subscriptionsPerTopic));
+            identity.put("consumerPerSubscription", String.valueOf(workload.consumerPerSubscription));
+            identity.put("keyDistributor", String.valueOf(workload.keyDistributor));
+            Map<String, Integer> distribution = workload.messageSizeDistribution;
+            identity.put(
+                    "messageSizeDistribution",
+                    distribution == null || distribution.isEmpty()
+                            ? "none"
+                            : new TreeMap<>(distribution).toString());
         } else {
             identity.put("name", String.valueOf(result.workload));
             identity.put("messageSize", String.valueOf(result.messageSize));

@@ -38,7 +38,6 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
     private final Producer<String, byte[]> producer;
     private final String topic;
     private final PendingSendTracker pending = new PendingSendTracker("Kafka producer");
-    private final ThreadLocal<Boolean> closingOnThread = new ThreadLocal<>();
 
     public KafkaBenchmarkProducer(Producer<String, byte[]> producer, String topic) {
         this.producer = producer;
@@ -64,25 +63,6 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        if (Boolean.TRUE.equals(closingOnThread.get())) {
-            throw new IllegalStateException("Cannot close Kafka producer reentrantly");
-        }
-        boolean closeProducer = pending.beginClose();
-        closingOnThread.set(true);
-        Exception failure = null;
-        try {
-            if (closeProducer) {
-                producer.close();
-            }
-        } catch (Exception closeFailure) {
-            failure = closeFailure;
-            throw closeFailure;
-        } finally {
-            try {
-                pending.failRemaining(failure);
-            } finally {
-                closingOnThread.remove();
-            }
-        }
+        pending.close(producer);
     }
 }

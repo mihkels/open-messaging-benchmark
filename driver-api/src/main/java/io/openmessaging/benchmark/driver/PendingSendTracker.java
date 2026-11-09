@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -28,6 +29,10 @@ public final class PendingSendTracker {
     private final Set<CompletableFuture<Void>> pending =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final ThreadLocal<Boolean> inClientCallback = new ThreadLocal<>();
+    private final ThreadLocal<Boolean> closingOnThread = new ThreadLocal<>();
+    // Sends failRemaining has chosen to fail but not yet completed, guarded by pending
+    private final Map<CompletableFuture<Void>, Throwable> failing = new IdentityHashMap<>();
+    private volatile boolean failingStarted;
     private boolean closed;
 
     /**
@@ -69,10 +74,7 @@ public final class PendingSendTracker {
      */
     public boolean beginClose() {
         synchronized (pending) {
-            if (Boolean.TRUE.equals(inClientCallback.get())) {
-                throw new IllegalStateException(
-                        "Cannot close " + producerName + " from its client completion callback");
-            }
+            rejectCloseFromClientCallback();
             if (closed) {
                 return false;
             }
@@ -82,12 +84,40 @@ public final class PendingSendTracker {
     }
 
     /**
-     * Settles a send from a client acknowledgement without holding the tracker lock.
+     * Rejects a close invoked from this producer's own client callback.
+     *
+     * @throws IllegalStateException if called from a client completion callback
+     */
+    void rejectCloseFromClientCallback() {
+        if (Boolean.TRUE.equals(inClientCallback.get())) {
+            throw new IllegalStateException(
+                    "Cannot close " + producerName + " from its client completion callback");
+        }
+    }
+
+    /**
+     * Settles a send from a client acknowledgement without holding the tracker lock. Once {@link
+     * #failRemaining(Throwable)} has chosen to fail the send, the acknowledgement settles it with
+     * that close failure instead.
      *
      * @param send the registered future
      * @param failure the client failure, or null on success
      */
     public void completeFromClient(CompletableFuture<Void> send, @Nullable Throwable failure) {
+        settle(send, failingStarted ? closeFailureOf(send, failure) : failure);
+    }
+
+    // pending's lock guards failing; failing is an identity map of futures
+    @SuppressWarnings("UndefinedEquals")
+    private @Nullable Throwable closeFailureOf(
+            CompletableFuture<Void> send, @Nullable Throwable failure) {
+        synchronized (pending) {
+            Throwable closeFailure = failing.get(send);
+            return closeFailure == null ? failure : closeFailure;
+        }
+    }
+
+    private void settle(CompletableFuture<Void> send, @Nullable Throwable failure) {
         Boolean previous = inClientCallback.get();
         inClientCallback.set(true);
         try {
@@ -108,27 +138,38 @@ public final class PendingSendTracker {
     /**
      * Runs the whole close sequence of a producer whose client can be closed directly: begins
      * closing, closes the client only for the first caller, and then fails every send the client did
-     * not settle, attaching any close failure as their cause.
+     * not settle, attaching any close failure as their cause. A concurrent close does not wait for
+     * the first one, and fails the sends still pending at once.
      *
      * @param closeClient closes the underlying client
      * @throws Exception the client's close failure; an interruption also restores the interrupt
      *     status
+     * @throws IllegalStateException if called from a client completion callback, or re-entered on the
+     *     thread that is already closing this producer
      */
     public void close(AutoCloseable closeClient) throws Exception {
         boolean closeNow = beginClose();
-        Exception closeFailure = null;
+        if (Boolean.TRUE.equals(closingOnThread.get())) {
+            throw new IllegalStateException("Cannot close " + producerName + " reentrantly");
+        }
+        closingOnThread.set(true);
+        Throwable closeFailure = null;
         try {
             if (closeNow) {
                 closeClient.close();
             }
-        } catch (Exception e) {
+        } catch (Exception | Error e) {
             closeFailure = e;
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             throw e;
         } finally {
-            failRemaining(closeFailure);
+            try {
+                failRemaining(closeFailure);
+            } finally {
+                closingOnThread.remove();
+            }
         }
     }
 
@@ -142,20 +183,39 @@ public final class PendingSendTracker {
      *
      * @param closeFailure the client's close failure, or null if close returned normally
      */
+    // failing is an identity map of futures, so removing a future by reference is well defined
+    @SuppressWarnings("UndefinedEquals")
     public void failRemaining(@Nullable Throwable closeFailure) {
         List<CompletableFuture<Void>> sends;
+        // Choose every outcome before completing any, as completion runs callers' callbacks and a
+        // late acknowledgement must not win over a close that has already begun failing its send
         synchronized (pending) {
             sends = List.copyOf(pending);
+            for (CompletableFuture<Void> send : sends) {
+                failing.putIfAbsent(
+                        send, new IllegalStateException(producerName + " is closed", closeFailure));
+            }
+            failingStarted = true;
         }
         for (CompletableFuture<Void> send : sends) {
-            if (!send.isDone()) {
-                completeFromClient(
-                        send, new IllegalStateException(producerName + " is closed", closeFailure));
+            try {
+                if (!send.isDone()) {
+                    completeFromClient(send, null);
+                }
+            } finally {
+                synchronized (pending) {
+                    failing.remove(send);
+                }
             }
         }
     }
 
-    private IllegalStateException closedFailure() {
+    /**
+     * Creates the failure of a send rejected because this producer is closed.
+     *
+     * @return a new failure naming the producer
+     */
+    public IllegalStateException closedFailure() {
         return new IllegalStateException(producerName + " is closed");
     }
 }

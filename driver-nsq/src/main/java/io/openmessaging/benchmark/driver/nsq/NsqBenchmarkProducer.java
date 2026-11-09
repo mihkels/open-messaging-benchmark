@@ -15,9 +15,9 @@ package io.openmessaging.benchmark.driver.nsq;
 
 import com.github.brainlag.nsq.NSQProducer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.CloseOnce;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
-import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -27,16 +27,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NsqBenchmarkProducer implements BenchmarkProducer {
-    private static final String PRODUCER_NAME = "NSQ producer";
-    private static final String CLOSED_MESSAGE = PRODUCER_NAME + " is closed";
 
     private final NSQProducer nsqProducer;
     private final String topic;
     private final ExecutorService executor;
     private final Semaphore semaphore;
-    private final PendingSendTracker pending = new PendingSendTracker(PRODUCER_NAME);
-    private final PublicationLifecycle.OwnedClose<RuntimeException> lifecycle =
-            new PublicationLifecycle.OwnedClose<>();
+    private final PendingSendTracker pending = new PendingSendTracker("NSQ producer");
+    // The producer's closed state; its close action closes the tracker, which fails the sends
+    private final CloseOnce<RuntimeException> lifecycle = new CloseOnce<>();
 
     public NsqBenchmarkProducer(final NSQProducer nsqProducer, final String topic) {
         this(nsqProducer, topic, Executors.newCachedThreadPool(), 1000);
@@ -73,7 +71,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
             if (acquired) {
                 semaphore.release();
             }
-            return CompletableFuture.failedFuture(new IllegalStateException(CLOSED_MESSAGE));
+            return CompletableFuture.failedFuture(pending.closedFailure());
         }
 
         byte[] message;
@@ -107,8 +105,8 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
     private void shutdownResources() {
         Failures failures = new Failures();
         failures.close(executor::shutdownNow);
-        pending.beginClose();
-        pending.failRemaining();
+        // Fails the pending sends before the client shuts down, as the client owns no send
+        failures.close(() -> pending.close(() -> {}));
         failures.close(nsqProducer::shutdown);
         failures.throwIfAny(RuntimeException.class);
     }
@@ -130,10 +128,10 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
                 if (!future.isDone() && !lifecycle.isClosed()) {
                     nsqProducer.produce(topic, payload);
                     if (lifecycle.isClosed()) {
-                        failure = new IllegalStateException(CLOSED_MESSAGE);
+                        failure = pending.closedFailure();
                     }
                 } else if (!future.isDone()) {
-                    failure = new IllegalStateException(CLOSED_MESSAGE);
+                    failure = pending.closedFailure();
                 }
             } catch (Throwable cause) {
                 if (Failures.isInterruption(cause)) {

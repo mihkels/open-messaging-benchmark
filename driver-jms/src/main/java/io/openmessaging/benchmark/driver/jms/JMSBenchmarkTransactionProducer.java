@@ -14,8 +14,8 @@
 package io.openmessaging.benchmark.driver.jms;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.CloseOnce;
 import io.openmessaging.benchmark.driver.Failures;
-import io.openmessaging.benchmark.driver.PublicationLifecycle;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,11 +46,9 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
     private final boolean useAsyncSend;
     private final Connection connection;
     private final List<JMSConfig.AddProperty> properties;
-    private final Object lifecycleLock = new Object();
+    // Guarded by itself; a send registers only while closer is not closed
     private final Set<SendOperation> pending = new HashSet<>();
-    private final PublicationLifecycle.OwnedClose<Exception> closer =
-            new PublicationLifecycle.OwnedClose<>();
-    private boolean closed;
+    private final CloseOnce<Exception> closer = new CloseOnce<>();
 
     private JMSBenchmarkTransactionProducer(
             Connection connection,
@@ -87,8 +85,8 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
 
     private void closeOwned() throws Exception {
         List<SendOperation> operations;
-        synchronized (lifecycleLock) {
-            closed = true;
+        // The closer is already closed, so no send can register after this snapshot
+        synchronized (pending) {
             operations = new ArrayList<>(pending);
         }
         settle(operations).throwIfAny();
@@ -129,8 +127,8 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
         SendOperation operation = new SendOperation();
-        synchronized (lifecycleLock) {
-            if (closed) {
+        synchronized (pending) {
+            if (closer.isClosed()) {
                 return CompletableFuture.failedFuture(
                         new IllegalStateException("JMS transactional producer is closed"));
             }
@@ -287,7 +285,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
                     result.completeExceptionally(outcome);
                 }
             } finally {
-                synchronized (lifecycleLock) {
+                synchronized (pending) {
                     pending.remove(this);
                 }
             }

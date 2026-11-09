@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.kafka;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -25,11 +26,12 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,6 +119,20 @@ class KafkaTopicCreatorTest {
         assertThat(allValues).hasSize(2);
         assertNewTopics(allValues.get(0));
         assertNewTopics(allValues.get(1));
+    }
+
+    @Test
+    void nonRetriableErrorFailsWithoutRetrying() {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        InvalidReplicationFactorException fatal =
+                new InvalidReplicationFactorException(
+                        "Replication factor: 3 larger than available brokers: 1");
+        future.completeExceptionally(fatal);
+        when(createTopicsResult.values()).thenReturn(singletonMap(topic, future));
+
+        assertThatThrownBy(() -> topicCreator.create(singletonList(topicInfo)).join())
+                .hasRootCause(fatal);
+        verify(admin, times(1)).createTopics(captor.capture());
     }
 
     private void assertNewTopics(List<NewTopic> newTopics) {

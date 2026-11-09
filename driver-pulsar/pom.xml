@@ -31,7 +31,7 @@
         <jacoco.min.line>0.94</jacoco.min.line>
         <jacoco.min.branch>0.98</jacoco.min.branch>
         <!-- Pulsar 5's shaded client conflicts with the JMS 2 provider when both plugins are loaded. -->
-        <pulsar.version>5.0.1</pulsar.version>
+        <pulsar.version>4.2.5</pulsar.version>
     </properties>
 
     <dependencies>

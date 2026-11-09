@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.artemis;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.Failures;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
 import org.apache.activemq.artemis.api.core.ActiveMQQueueExistsException;
 import org.apache.activemq.artemis.api.core.QueueConfiguration;
@@ -71,8 +72,7 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             return new ArtemisBenchmarkConsumer(tempSession, tempConsumer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            ArtemisResources.closeAfterFailure(tempConsumer, e);
-            ArtemisResources.closeAfterFailure(tempSession, e);
+            Failures.closeAfterFailure(e, tempConsumer, tempSession);
             throw e;
         }
     }

@@ -175,21 +175,6 @@ public class MessageSizeDistribution {
         return weights;
     }
 
-    /**
-     * Returns cumulative weights array for O(log n) binary search selection.
-     *
-     * @return array of cumulative weights
-     */
-    public int[] getCumulativeWeights() {
-        int[] cumulative = new int[buckets.size()];
-        int sum = 0;
-        for (int i = 0; i < buckets.size(); i++) {
-            sum += buckets.get(i).weight;
-            cumulative[i] = sum;
-        }
-        return cumulative;
-    }
-
     public static int bucketIndexForTicket(int ticket, int @Nullable [] cumulativeWeights) {
         if (cumulativeWeights == null
                 || cumulativeWeights.length == 0
@@ -211,14 +196,6 @@ public class MessageSizeDistribution {
         return low;
     }
 
-    public int getTotalWeight() {
-        return totalWeight;
-    }
-
-    public int getMaxSize() {
-        return buckets.stream().mapToInt(b -> b.maxSize).max().orElse(0);
-    }
-
     /**
      * Returns weighted average size across all buckets.
      *
@@ -230,9 +207,5 @@ public class MessageSizeDistribution {
             weightedSum += (double) b.getRepresentativeSize() * b.weight;
         }
         return (int) (weightedSum / totalWeight);
-    }
-
-    public int getBucketCount() {
-        return buckets.size();
     }
 }

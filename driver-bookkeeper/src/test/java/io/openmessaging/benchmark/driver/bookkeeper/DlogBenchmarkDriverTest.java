@@ -19,7 +19,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -29,12 +31,18 @@ import dlshade.org.apache.distributedlog.DLSN;
 import dlshade.org.apache.distributedlog.api.AsyncLogWriter;
 import dlshade.org.apache.distributedlog.api.DistributedLogManager;
 import dlshade.org.apache.distributedlog.api.LogReader;
+import dlshade.org.apache.bookkeeper.stats.NullStatsLogger;
 import dlshade.org.apache.distributedlog.api.namespace.Namespace;
+import dlshade.org.apache.distributedlog.api.namespace.NamespaceBuilder;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
@@ -42,9 +50,37 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 class DlogBenchmarkDriverTest {
     private static final String TOPIC = "stream";
+
+    @Test
+    void initializeBuildsNamespaceWithoutExportingBookKeeperStats(@TempDir Path dir) throws Exception {
+        Path configFile = dir.resolve("bookkeeper.yaml");
+        Files.writeString(
+                configFile,
+                """
+                dlogUri: distributedlog://localhost:2181/streams
+                dlogConf: |
+                  outputBufferSize=0
+                """);
+        Namespace namespace = mock(Namespace.class);
+        NamespaceBuilder builder = mock(NamespaceBuilder.class, RETURNS_SELF);
+        when(builder.build()).thenReturn(namespace);
+
+        try (MockedStatic<NamespaceBuilder> builders = mockStatic(NamespaceBuilder.class)) {
+            builders.when(NamespaceBuilder::newBuilder).thenReturn(builder);
+            DlogBenchmarkDriver driver = new DlogBenchmarkDriver();
+            driver.initialize(configFile, mock(MeterRegistry.class));
+
+            verify(builder).uri(URI.create("distributedlog://localhost:2181/streams"));
+            verify(builder).statsLogger(NullStatsLogger.INSTANCE);
+            driver.close();
+            verify(namespace).close();
+        }
+    }
 
     @Test
     void createTopicRejectsMultiplePartitions() throws Exception {

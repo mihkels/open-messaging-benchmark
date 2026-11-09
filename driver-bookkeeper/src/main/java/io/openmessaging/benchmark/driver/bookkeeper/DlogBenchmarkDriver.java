@@ -13,7 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.bookkeeper;
 
-import dlshade.org.apache.bookkeeper.stats.CachingStatsLogger;
+import dlshade.org.apache.bookkeeper.stats.NullStatsLogger;
 import dlshade.org.apache.distributedlog.DLSN;
 import dlshade.org.apache.distributedlog.DistributedLogConfiguration;
 import dlshade.org.apache.distributedlog.api.AsyncLogWriter;
@@ -28,7 +28,6 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.ResourceCreator;
-import io.openmessaging.benchmark.driver.bookkeeper.stats.StatsLoggerAdaptor;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.URI;
@@ -76,13 +75,12 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         URI dlogUri = URI.create(config.dlogUri);
 
         // BookKeeper client metrics are not exported.
-        org.apache.bookkeeper.stats.StatsLogger noOpStatsLogger =
-                new org.apache.bookkeeper.stats.NullStatsLogger();
-        dlshade.org.apache.bookkeeper.stats.StatsLogger dlStatsLogger =
-                new CachingStatsLogger(new StatsLoggerAdaptor(noOpStatsLogger));
-
         namespace =
-                NamespaceBuilder.newBuilder().conf(conf).uri(dlogUri).statsLogger(dlStatsLogger).build();
+                NamespaceBuilder.newBuilder()
+                        .conf(conf)
+                        .uri(dlogUri)
+                        .statsLogger(NullStatsLogger.INSTANCE)
+                        .build();
 
         log.info("Initialized distributedlog namespace at {}", dlogUri);
     }

@@ -42,7 +42,7 @@ record PeriodReport(
         Histogram publishScheduleLatency,
         Histogram endToEndLatency) {
 
-    private static final double MEGABYTE = 1024.0 * 1024;
+    private static final double MEGABYTE = 1_000_000.0; // decimal MB, as in TestResult
 
     static PeriodReport of(PeriodStats stats, double elapsedSeconds, int subscriptionsPerTopic) {
         return new PeriodReport(

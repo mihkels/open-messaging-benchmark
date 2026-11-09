@@ -24,8 +24,10 @@ import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClient5Config;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -95,7 +97,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
     Map<String, Set<String>> cachedBrokerAddr = new ConcurrentHashMap<>();
 
-    private synchronized Set<String> fetchMasterAndSlaveAddrByClusterName(
+    private synchronized Set<String> fetchMasterAddrByClusterName(
             final MQAdminExt adminExt, final String clusterName)
             throws RemotingConnectException,
                     RemotingSendRequestException,
@@ -107,8 +109,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             return cached;
         }
         Set<String> brokerList =
-                CommandUtil.fetchMasterAndSlaveAddrByClusterName(
-                        adminExt, this.rmqClientConfig.clusterName);
+                CommandUtil.fetchMasterAddrByClusterName(adminExt, this.rmqClientConfig.clusterName);
         if (brokerList.isEmpty()) {
             throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
         }
@@ -119,6 +120,15 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     @Override
     public String getTopicNamePrefix() {
         return "Benchmark";
+    }
+
+    // Spreads partitions queues over at most masters brokers; slaves sync topic config from masters.
+    static int[] queuesPerMaster(int partitions, int masters) {
+        int[] queues = new int[Math.min(partitions, masters)];
+        for (int i = 0; i < queues.length; i++) {
+            queues[i] = partitions / masters + (i < partitions % masters ? 1 : 0);
+        }
+        return queues;
     }
 
     @Override
@@ -140,12 +150,13 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
             try {
                 Set<String> brokerList =
-                        fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
-                topicConfig.setReadQueueNums(Math.max(1, partitions / brokerList.size()));
-                topicConfig.setWriteQueueNums(Math.max(1, partitions / brokerList.size()));
-
-                for (String brokerAddr : brokerList) {
-                    this.rmqAdmin.createAndUpdateTopicConfig(brokerAddr, topicConfig);
+                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+                List<String> masters = new ArrayList<>(brokerList);
+                int[] queues = queuesPerMaster(partitions, masters.size());
+                for (int i = 0; i < queues.length; i++) {
+                    topicConfig.setReadQueueNums(queues[i]);
+                    topicConfig.setWriteQueueNums(queues[i]);
+                    this.rmqAdmin.createAndUpdateTopicConfig(masters.get(i), topicConfig);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -196,7 +207,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     public void createSubscriptionGroup(String fullSubName) {
         try {
             Set<String> brokerList =
-                    fetchMasterAndSlaveAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+                    fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
             SubscriptionGroupConfig subscriptionGroupConfig = new SubscriptionGroupConfig();
             subscriptionGroupConfig.setGroupName(fullSubName);
 

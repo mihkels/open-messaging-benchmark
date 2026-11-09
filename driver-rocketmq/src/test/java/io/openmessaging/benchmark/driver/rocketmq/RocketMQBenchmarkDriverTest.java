@@ -39,6 +39,13 @@ import org.junit.jupiter.api.Test;
 
 class RocketMQBenchmarkDriverTest {
     @Test
+    void queuesPerMasterCreatesExactlyPartitionsQueuesOnMastersOnly() {
+        assertThat(RocketMQBenchmarkDriver.queuesPerMaster(1, 3)).containsExactly(1);
+        assertThat(RocketMQBenchmarkDriver.queuesPerMaster(3, 3)).containsExactly(1, 1, 1);
+        assertThat(RocketMQBenchmarkDriver.queuesPerMaster(10, 3)).containsExactly(4, 3, 3);
+    }
+
+    @Test
     void adminStartupFailurePropagatesAndClosesPartialAdmin() throws Exception {
         TestDriver driver = new TestDriver();
         MQClientException startupFailure = new MQClientException("admin failed", null);

@@ -43,6 +43,13 @@ import org.mockito.ArgumentCaptor;
 
 class RocketMQ5BenchmarkDriverTest {
     @Test
+    void queuesPerMasterCreatesExactlyPartitionsQueuesOnMastersOnly() {
+        assertThat(RocketMQ5BenchmarkDriver.queuesPerMaster(1, 3)).containsExactly(1);
+        assertThat(RocketMQ5BenchmarkDriver.queuesPerMaster(3, 3)).containsExactly(1, 1, 1);
+        assertThat(RocketMQ5BenchmarkDriver.queuesPerMaster(10, 3)).containsExactly(4, 3, 3);
+    }
+
+    @Test
     void consumerCallbackReturnsSuccessAndConsumerHandleClosesClient() throws Exception {
         TestDriver driver = new TestDriver();
         driver.initialize(configPath(), null);

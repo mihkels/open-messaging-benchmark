@@ -30,7 +30,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.Producer;
@@ -163,39 +162,42 @@ class PulsarBenchmarkProducerTest {
     }
 
     @Test
-    void closeWaitsForAnInProgressSendBeforeClosingClient() throws Exception {
+    void blockedSendDoesNotStopClose() throws Exception {
         Producer<byte[]> client = mock();
         TypedMessageBuilder<byte[]> builder = mock();
         CountDownLatch publishing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(client.newMessage()).thenReturn(builder);
         when(builder.value(any(byte[].class))).thenReturn(builder);
+        // A full queue with blockIfQueueFull blocks sendAsync until the client is closed
         when(builder.sendAsync())
                 .thenAnswer(invocation -> {
                     publishing.countDown();
                     if (!release.await(5, TimeUnit.SECONDS)) {
                         throw new AssertionError("send was not released");
                     }
-                    return new CompletableFuture<MessageId>();
+                    return CompletableFuture.failedFuture(
+                            new PulsarClientException.AlreadyClosedException("closed"));
                 });
+        doAnswer(
+                        invocation -> {
+                            release.countDown();
+                            return null;
+                        })
+                .when(client)
+                .close();
         PulsarBenchmarkProducer producer = new PulsarBenchmarkProducer(client);
-        var executor = Executors.newFixedThreadPool(2);
+        var executor = Executors.newSingleThreadExecutor();
         try {
             var sending = executor.submit(() -> producer.sendAsync(Optional.empty(), new byte[] {1}));
             assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
-            var closing =
-                    executor.submit(() -> {
-                        producer.close();
-                        return null;
-                    });
-            assertThatThrownBy(() -> closing.get(100, TimeUnit.MILLISECONDS))
-                    .isInstanceOf(TimeoutException.class);
-            verify(client, never()).close();
-            release.countDown();
-            CompletableFuture<Void> send = sending.get(5, TimeUnit.SECONDS);
-            closing.get(5, TimeUnit.SECONDS);
-            assertThat(send).isCompletedExceptionally();
+
+            producer.close();
+
             verify(client).close();
+            CompletableFuture<Void> send = sending.get(5, TimeUnit.SECONDS);
+            assertThat(send).isCompletedExceptionally();
+            assertThatThrownBy(send::join).hasCauseInstanceOf(IllegalStateException.class);
         } finally {
             release.countDown();
             executor.shutdownNow();

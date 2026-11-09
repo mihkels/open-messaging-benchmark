@@ -55,7 +55,15 @@ class KafkaTopicCreatorTest {
     @BeforeEach
     void beforeEach() {
         int maxBatchSize = 1;
-        topicCreator = new KafkaTopicCreator(admin, topicConfigs, replicationFactor, maxBatchSize);
+        long retryBackoffMs = 1;
+        topicCreator =
+                new KafkaTopicCreator(
+                        admin,
+                        topicConfigs,
+                        replicationFactor,
+                        maxBatchSize,
+                        retryBackoffMs,
+                        System::currentTimeMillis);
 
         when(admin.createTopics(any())).thenAnswer(ignored -> createTopicsResult);
     }

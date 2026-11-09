@@ -106,7 +106,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     private final Settings settings;
     private final AtomicReference<Thread> connectorThread = new AtomicReference<>();
     private final AtomicReference<Thread> schedulerThread = new AtomicReference<>();
-    private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
+    // Per-thread callback depth; a reusable holder avoids set/remove churn per message
+    private final ThreadLocal<int[]> inCallback = ThreadLocal.withInitial(() -> new int[1]);
     private final ScheduledExecutorService scheduler;
     private final ExecutorService connector;
     private final ExecutorService callbacks;
@@ -586,17 +587,13 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     private void deliver(NSQMessage message) {
-        Boolean previous = inCallback.get();
-        inCallback.set(true);
+        int[] depth = inCallback.get();
+        depth[0]++;
         try {
             callback.messageReceived(message.getMessage(), message.getTimestamp().getTime());
             message.finished();
         } finally {
-            if (previous == null) {
-                inCallback.remove();
-            } else {
-                inCallback.set(previous);
-            }
+            depth[0]--;
         }
     }
 
@@ -730,10 +727,12 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
 
     @Override
     public void close() throws Exception {
-        if (Boolean.TRUE.equals(inCallback.get())) {
+        if (inCallback.get()[0] != 0) {
             throw new IllegalStateException(
                     "Cannot close an NSQ consumer from its own callback; retry from another thread");
         }
+        // Not in a callback on this thread; callbacks run on the consumer's own executor threads
+        inCallback.remove();
         IllegalStateException failure = new IllegalStateException("NSQ consumer is closed");
         Closing closing = beginClose(false, failure);
         if (closing == null) {

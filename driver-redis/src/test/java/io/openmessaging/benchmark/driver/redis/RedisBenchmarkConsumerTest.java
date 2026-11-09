@@ -225,6 +225,39 @@ class RedisBenchmarkConsumerTest {
     }
 
     @Test
+    void acknowledgesABatchInOneCall() throws Exception {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        StreamEntryBinary first =
+                new StreamEntryBinary(
+                        new StreamEntryID(1, 0), Map.of("payload".getBytes(UTF_8), new byte[] {1}));
+        StreamEntryBinary second =
+                new StreamEntryBinary(
+                        new StreamEntryID(2, 0), Map.of("payload".getBytes(UTF_8), new byte[] {2}));
+        CountDownLatch blocked = new CountDownLatch(1);
+        AtomicInteger reads = new AtomicInteger();
+        when(jedis.xreadGroupBinary(
+                        any(byte[].class), any(byte[].class), any(XReadGroupParams.class), anyMap()))
+                .thenAnswer(invocation -> {
+                    if (reads.getAndIncrement() == 0) {
+                        return List.of(Map.entry("topic".getBytes(UTF_8), List.of(first, second)));
+                    }
+                    blocked.countDown();
+                    new CountDownLatch(1).await();
+                    return List.of();
+                });
+        RedisBenchmarkConsumer consumer =
+                new RedisBenchmarkConsumer("consumer", "topic", "subscription", pool, mock());
+
+        assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
+        consumer.close();
+
+        verify(jedis).xack("topic", "subscription", new StreamEntryID(1, 0), new StreamEntryID(2, 0));
+        verify(jedis).xack(any(String.class), any(String.class), any(StreamEntryID[].class));
+    }
+
+    @Test
     void readFailuresDuringCloseAreIgnored() throws Exception {
         assertReadFailureDuringCloseIsIgnored(new JedisDataException("NOGROUP No such key"));
         assertReadFailureDuringCloseIsIgnored(new JedisDataException("ERR other"));

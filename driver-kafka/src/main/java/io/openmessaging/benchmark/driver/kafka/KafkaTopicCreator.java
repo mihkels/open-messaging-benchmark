@@ -250,8 +250,13 @@ class KafkaTopicCreator {
             while (batch.size() < maxBatchSize && !queue.isEmpty()) {
                 batch.add(queue.remove());
             }
-            succeeded += createBatch(batch, queue);
+            int created = createBatch(batch, queue);
             batch.clear();
+            succeeded += created;
+            if (created == 0) {
+                // The whole batch failed and was re-queued; back off rather than spin on the controller
+                sleepInterruptibly(retryBackoffMs);
+            }
         }
     }
 

@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -198,5 +199,27 @@ class PendingSendTrackerTest {
         tracker.completeFromClient(late, null);
         assertTrue(late.isDone());
         assertFalse(late.isCompletedExceptionally());
+    }
+
+    @Test
+    void settledSendsArePrunedWhileUnsettledOnesAreStillFailedOnClose() {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        List<CompletableFuture<Void>> unsettled = new ArrayList<>();
+        List<CompletableFuture<Void>> settled = new ArrayList<>();
+        // Enough sends to cross the prune threshold several times
+        for (int i = 0; i < 1_000; i++) {
+            CompletableFuture<Void> send = tracker.register();
+            if (i % 10 == 0) {
+                unsettled.add(send);
+            } else {
+                tracker.completeFromClient(send, null);
+                settled.add(send);
+            }
+        }
+
+        tracker.failRemaining();
+
+        unsettled.forEach(send -> assertThrows(CompletionException.class, send::join));
+        settled.forEach(CompletableFuture::join);
     }
 }

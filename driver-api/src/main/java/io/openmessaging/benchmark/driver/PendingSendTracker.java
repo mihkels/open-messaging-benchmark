@@ -24,16 +24,22 @@ import org.jspecify.annotations.Nullable;
 
 /** Tracks a producer's sends independently of the underlying client's close behavior. */
 public final class PendingSendTracker {
+    private static final int MIN_PRUNE_THRESHOLD = 64;
     private final String producerName;
     // Identity set: futures have no value equality
     private final Set<CompletableFuture<Void>> pending =
             Collections.newSetFromMap(new IdentityHashMap<>());
-    private final ThreadLocal<Boolean> inClientCallback = new ThreadLocal<>();
+    // Per-thread depth of client callbacks; a reusable holder avoids set/remove churn per send
+    private final ThreadLocal<int[]> inClientCallback = ThreadLocal.withInitial(() -> new int[1]);
     private final ThreadLocal<Boolean> closingOnThread = new ThreadLocal<>();
     // Sends failRemaining has chosen to fail but not yet completed, guarded by pending
     private final Map<CompletableFuture<Void>, Throwable> failing = new IdentityHashMap<>();
     private volatile boolean failingStarted;
     private boolean closed;
+    // Guarded by pending: publications of a PublicationLifecycle whose client call has not returned
+    private int activePublications;
+    // Guarded by pending: settled sends are pruned once pending reaches this size
+    private int pruneThreshold = MIN_PRUNE_THRESHOLD;
 
     /**
      * Creates a tracker for one producer.
@@ -49,22 +55,90 @@ public final class PendingSendTracker {
      *
      * @return the future for the send
      */
-    // pending is an identity set, so removing a future by reference is well defined
-    @SuppressWarnings("UndefinedEquals")
     public CompletableFuture<Void> register() {
+        return register(false);
+    }
+
+    /**
+     * Registers a send and counts its publication as active until {@link #endPublication()}.
+     *
+     * @return the future for the send, already failed and not counted once close has begun
+     */
+    CompletableFuture<Void> beginTrackedPublication() {
+        return register(true);
+    }
+
+    private CompletableFuture<Void> register(boolean countPublication) {
         CompletableFuture<Void> send = new CompletableFuture<>();
         synchronized (pending) {
             if (closed) {
                 return CompletableFuture.failedFuture(closedFailure());
             }
-            pending.add(send);
-        }
-        send.whenComplete((_, failure) -> {
-            synchronized (pending) {
-                pending.remove(send);
+            add(send);
+            if (countPublication) {
+                activePublications++;
             }
-        });
+        }
         return send;
+    }
+
+    /**
+     * Counts a publication as active until {@link #endPublication()} without registering a send.
+     *
+     * @return false, without counting it, once close has begun
+     */
+    boolean beginUntrackedPublication() {
+        synchronized (pending) {
+            if (closed) {
+                return false;
+            }
+            activePublications++;
+            return true;
+        }
+    }
+
+    /** Ends a publication counted by one of the begin methods. */
+    void endPublication() {
+        synchronized (pending) {
+            activePublications--;
+            // Only a closer waits on activePublications, and only once close has begun
+            if (closed && activePublications == 0) {
+                pending.notifyAll();
+            }
+        }
+    }
+
+    /**
+     * Begins closing like {@link #beginClose()}, then waits for the active publications to end. An
+     * interrupt while waiting is deferred so the wait still completes.
+     *
+     * @return whether the thread was interrupted while waiting
+     */
+    // The caller restores the deferred interrupt once close completes
+    @SuppressWarnings("java:S2142")
+    boolean beginCloseAndAwaitPublications() {
+        boolean interrupted = false;
+        synchronized (pending) {
+            beginClose();
+            while (activePublications != 0) {
+                try {
+                    pending.wait();
+                } catch (InterruptedException _) {
+                    interrupted = true;
+                }
+            }
+        }
+        return interrupted;
+    }
+
+    // Settled sends stay in pending until the next prune, which keeps the per-send path to one lock;
+    // failRemaining skips them. Doubling the threshold keeps pruning amortized O(1) per send.
+    private void add(CompletableFuture<Void> send) {
+        if (pending.size() >= pruneThreshold) {
+            pending.removeIf(CompletableFuture::isDone);
+            pruneThreshold = Math.max(MIN_PRUNE_THRESHOLD, 2 * pending.size());
+        }
+        pending.add(send);
     }
 
     /**
@@ -89,7 +163,7 @@ public final class PendingSendTracker {
      * @throws IllegalStateException if called from a client completion callback
      */
     void rejectCloseFromClientCallback() {
-        if (Boolean.TRUE.equals(inClientCallback.get())) {
+        if (inClientCallback.get()[0] != 0) {
             throw new IllegalStateException(
                     "Cannot close " + producerName + " from its client completion callback");
         }
@@ -118,8 +192,8 @@ public final class PendingSendTracker {
     }
 
     private void settle(CompletableFuture<Void> send, @Nullable Throwable failure) {
-        Boolean previous = inClientCallback.get();
-        inClientCallback.set(true);
+        int[] depth = inClientCallback.get();
+        depth[0]++;
         try {
             if (failure == null) {
                 send.complete(null);
@@ -127,11 +201,7 @@ public final class PendingSendTracker {
                 send.completeExceptionally(failure);
             }
         } finally {
-            if (previous == null) {
-                inClientCallback.remove();
-            } else {
-                inClientCallback.set(previous);
-            }
+            depth[0]--;
         }
     }
 
@@ -190,6 +260,7 @@ public final class PendingSendTracker {
         // Choose every outcome before completing any, as completion runs callers' callbacks and a
         // late acknowledgement must not win over a close that has already begun failing its send
         synchronized (pending) {
+            pending.removeIf(CompletableFuture::isDone);
             sends = List.copyOf(pending);
             for (CompletableFuture<Void> send : sends) {
                 failing.putIfAbsent(
@@ -207,6 +278,10 @@ public final class PendingSendTracker {
                     failing.remove(send);
                 }
             }
+        }
+        // Settling above ran on this thread; drop its counter unless a client callback is still active
+        if (inClientCallback.get()[0] == 0) {
+            inClientCallback.remove();
         }
     }
 

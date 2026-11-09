@@ -14,69 +14,126 @@
 package io.openmessaging.benchmark.utils.payload;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Content-based {@code equals}, {@code hashCode}, and {@code toString} helpers for lists of payload
- * templates, for records whose generated methods would otherwise use array identity.
+ * An immutable set of payload templates and their optional weights.
+ *
+ * <p>The templates are copied once, when the value is created, and never again: {@link
+ * #template(int)} and {@link #templates()} hand out the stored arrays, which callers must not
+ * modify. {@code equals} and {@code hashCode} compare array contents, and {@code toString} prints
+ * the template sizes and weights rather than the payload bytes, which can be megabytes long.
  */
 public final class PayloadTemplates {
 
-    private PayloadTemplates() {}
+    private final List<byte[]> templates;
+    private final int @Nullable [] weights;
+
+    private PayloadTemplates(List<byte[]> templates, int @Nullable [] weights) {
+        this.templates = templates;
+        this.weights = weights;
+    }
 
     /**
-     * Compares two template lists by content.
+     * Copies the templates and their weights.
      *
-     * @param first the first template list, or {@code null}
-     * @param second the second template list, or {@code null}
-     * @return whether both lists hold the same number of templates with equal contents
+     * @param templates the payload templates, or {@code null} for none
+     * @param weights the weight of each template, or {@code null} to pick them uniformly
+     * @return the templates
+     * @throws IllegalArgumentException if the weights don't match the templates one to one
+     * @throws NullPointerException if a template is {@code null}
      */
-    public static boolean equals(@Nullable List<byte[]> first, @Nullable List<byte[]> second) {
-        if (first == second) {
-            return true;
+    public static PayloadTemplates of(@Nullable List<byte[]> templates, int @Nullable [] weights) {
+        List<byte[]> copies =
+                templates == null
+                        ? List.of()
+                        : templates.stream().map(t -> Objects.requireNonNull(t, "template").clone()).toList();
+        if (weights != null && weights.length != copies.size()) {
+            throw new IllegalArgumentException("Payload weights must match the number of payloads");
         }
-        if (first == null || second == null || first.size() != second.size()) {
+        return new PayloadTemplates(copies, weights == null ? null : weights.clone());
+    }
+
+    /**
+     * Returns the number of templates.
+     *
+     * @return the template count
+     */
+    public int size() {
+        return templates.size();
+    }
+
+    /**
+     * Returns one template without copying it.
+     *
+     * @param index the template index
+     * @return the stored template, which must not be modified
+     */
+    public byte[] template(int index) {
+        return templates.get(index);
+    }
+
+    /**
+     * Returns an unmodifiable view of the templates without copying them.
+     *
+     * @return the stored templates, whose arrays must not be modified
+     */
+    public List<byte[]> templates() {
+        return Collections.unmodifiableList(templates);
+    }
+
+    /**
+     * Returns whether the templates carry weights.
+     *
+     * @return {@code true} if the templates are picked by weight, {@code false} if uniformly
+     */
+    public boolean weighted() {
+        return weights != null;
+    }
+
+    /**
+     * Returns a copy of the weights. The array holds one {@code int} per template, so the copy is
+     * cheap, unlike copying the templates.
+     *
+     * @return the weight of each template, or {@code null} to pick them uniformly
+     */
+    public int @Nullable [] weights() {
+        return weights == null ? null : weights.clone();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof PayloadTemplates that)
+                || templates.size() != that.templates.size()
+                || !Arrays.equals(weights, that.weights)) {
             return false;
         }
-        for (int i = 0; i < first.size(); i++) {
-            if (!Arrays.equals(first.get(i), second.get(i))) {
+        for (int i = 0; i < templates.size(); i++) {
+            if (!Arrays.equals(templates.get(i), that.templates.get(i))) {
                 return false;
             }
         }
         return true;
     }
 
-    /**
-     * Hashes a template list by content.
-     *
-     * @param templates the template list, or {@code null}
-     * @return a hash code consistent with {@link #equals(List, List)}
-     */
-    public static int hashCode(@Nullable List<byte[]> templates) {
-        if (templates == null) {
-            return 0;
-        }
+    @Override
+    public int hashCode() {
         int hash = 1;
         for (byte[] template : templates) {
             hash = 31 * hash + Arrays.hashCode(template);
         }
-        return hash;
+        return 31 * hash + Arrays.hashCode(weights);
     }
 
-    /**
-     * Describes the templates by their sizes. Payloads can be megabytes long, so their bytes are
-     * never printed.
-     *
-     * @param templates the template list, or {@code null}
-     * @return the template count and sizes
-     */
-    public static String describe(@Nullable List<byte[]> templates) {
-        if (templates == null) {
-            return "null";
-        }
+    @Override
+    public String toString() {
         return templates.size()
                 + " templates, sizes "
-                + templates.stream().map(t -> t == null ? "null" : Integer.toString(t.length)).toList();
+                + templates.stream().map(t -> t.length).toList()
+                + ", weights "
+                + Arrays.toString(weights);
     }
 }

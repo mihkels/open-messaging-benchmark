@@ -13,109 +13,71 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
  * A producer load command.
  *
- * <p>{@code equals} and {@code hashCode} compare array contents; {@code toString} prints the
- * template sizes and weights rather than the payload bytes.
+ * <p>On the wire the payloads are flattened into {@code payloadData} and {@code payloadWeights}.
  *
- * @param payloadData the payload templates
+ * @param payloads the payload templates and their optional weights
  * @param publishRate the assigned publish rate
  * @param keyDistributorType the message key distribution strategy
- * @param payloadWeights the weight of each template, or {@code null} to pick them uniformly
  */
+@JsonPropertyOrder({"payloadData", "publishRate", "keyDistributorType", "payloadWeights"})
 public record ProducerWorkAssignment(
-        List<byte[]> payloadData,
+        @JsonIgnore PayloadTemplates payloads,
         double publishRate,
-        KeyDistributorType keyDistributorType,
-        int @Nullable [] payloadWeights) {
+        KeyDistributorType keyDistributorType) {
 
     public ProducerWorkAssignment(
             List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
         this(payloadData, publishRate, keyDistributorType, null);
     }
 
+    @JsonCreator
     public ProducerWorkAssignment(
-            @Nullable List<byte[]> payloadData,
-            double publishRate,
-            KeyDistributorType keyDistributorType,
-            int @Nullable [] payloadWeights) {
-        this.payloadData =
-                payloadData != null
-                        ? new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList())
-                        : new ArrayList<>();
-        if (payloadWeights != null && payloadWeights.length != this.payloadData.size()) {
-            throw new IllegalArgumentException("Payload weights must match the number of payloads");
-        }
-        this.payloadWeights = payloadWeights == null ? null : payloadWeights.clone();
-        this.publishRate = publishRate;
-        this.keyDistributorType = keyDistributorType;
+            @JsonProperty("payloadData") @Nullable List<byte[]> payloadData,
+            @JsonProperty("publishRate") double publishRate,
+            @JsonProperty("keyDistributorType") KeyDistributorType keyDistributorType,
+            @JsonProperty("payloadWeights") int @Nullable [] payloadWeights) {
+        this(PayloadTemplates.of(payloadData, payloadWeights), publishRate, keyDistributorType);
     }
 
-    private static byte @Nullable [] getBytes(byte @Nullable [] bytes) {
-        return bytes != null ? bytes.clone() : null;
-    }
-
-    // Return defensive copy in getter
-    @Override
+    /**
+     * Returns the payload templates without copying them.
+     *
+     * @return the stored templates, whose arrays must not be modified
+     */
+    @JsonProperty("payloadData")
     public List<byte[]> payloadData() {
-        return new ArrayList<>(payloadData.stream().map(ProducerWorkAssignment::getBytes).toList());
+        return payloads.templates();
     }
 
-    /** Returns the number of payload templates without copying them. */
-    public int payloadCount() {
-        return payloadData.size();
-    }
-
-    @Override
+    /**
+     * Returns a copy of the payload weights.
+     *
+     * @return the weight of each template, or {@code null} to pick them uniformly
+     */
+    @JsonProperty("payloadWeights")
     public int @Nullable [] payloadWeights() {
-        return payloadWeights == null ? null : payloadWeights.clone();
+        return payloads.weights();
     }
 
+    /**
+     * Returns this assignment with another publish rate, sharing the payloads.
+     *
+     * @param publishRate the new publish rate
+     * @return the assignment
+     */
     public ProducerWorkAssignment withPublishRate(double publishRate) {
-        return new ProducerWorkAssignment(
-                this.payloadData, publishRate, this.keyDistributorType, this.payloadWeights);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-        return other instanceof ProducerWorkAssignment that && sameContent(this, that);
-    }
-
-    // Compares the fields rather than the accessors, which copy every payload template
-    private static boolean sameContent(ProducerWorkAssignment a, ProducerWorkAssignment b) {
-        return Double.compare(a.publishRate, b.publishRate) == 0
-                && a.keyDistributorType == b.keyDistributorType
-                && PayloadTemplates.equals(a.payloadData, b.payloadData)
-                && Arrays.equals(a.payloadWeights, b.payloadWeights);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = PayloadTemplates.hashCode(payloadData);
-        hash = 31 * hash + Double.hashCode(publishRate);
-        hash = 31 * hash + Objects.hashCode(keyDistributorType);
-        return 31 * hash + Arrays.hashCode(payloadWeights);
-    }
-
-    @Override
-    public String toString() {
-        return "ProducerWorkAssignment[payloadData="
-                + PayloadTemplates.describe(payloadData)
-                + ", publishRate="
-                + publishRate
-                + ", keyDistributorType="
-                + keyDistributorType
-                + ", payloadWeights="
-                + Arrays.toString(payloadWeights)
-                + "]";
+        return new ProducerWorkAssignment(payloads, publishRate, keyDistributorType);
     }
 }

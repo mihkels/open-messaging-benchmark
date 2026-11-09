@@ -295,7 +295,8 @@ public final class LocalWorker implements Worker {
         current.setPublishRate(producerWorkAssignment.publishRate());
         PayloadSampler payloads =
                 PayloadSampler.of(
-                        producerWorkAssignment.payloadData(), producerWorkAssignment.payloadWeights());
+                        producerWorkAssignment.payloads().templates(),
+                        producerWorkAssignment.payloads().weights());
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());

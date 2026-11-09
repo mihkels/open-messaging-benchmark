@@ -19,6 +19,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -154,13 +155,12 @@ public final class WorkloadGenerator implements WorkloadRun {
                     "sustainable rate", () -> findMaximumSustainableRate(targetPublishRate), () -> {});
         }
 
-        PayloadFactory.Payloads payloads = PayloadFactory.create(workload);
+        PayloadTemplates payloads = PayloadFactory.create(workload);
         var producerWorkAssignment =
-                new ProducerWorkAssignment(
-                        payloads.data(), targetPublishRate, workload.keyDistributor, payloads.weights());
+                new ProducerWorkAssignment(payloads, targetPublishRate, workload.keyDistributor);
         log.info(
                 "Prepared {} payloads from {} in {} ms",
-                producerWorkAssignment.payloadCount(),
+                payloads.size(),
                 workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile,
                 timer.elapsedMillis());
         worker.startLoad(producerWorkAssignment);

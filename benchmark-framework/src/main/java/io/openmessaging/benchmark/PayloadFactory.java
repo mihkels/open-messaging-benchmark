@@ -17,12 +17,10 @@ import io.openmessaging.benchmark.utils.payload.FilePayloadReader;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,42 +28,9 @@ import org.slf4j.LoggerFactory;
 final class PayloadFactory {
     private static final Logger log = LoggerFactory.getLogger(PayloadFactory.class);
 
-    /**
-     * The payloads to send.
-     *
-     * <p>{@code equals} and {@code hashCode} compare array contents; {@code toString} prints the
-     * template sizes and weights rather than the payload bytes.
-     *
-     * @param data the payload templates
-     * @param weights the weight of each template, or {@code null} to pick them uniformly
-     */
-    record Payloads(List<byte[]> data, int @Nullable [] weights) {
-
-        @Override
-        public boolean equals(Object other) {
-            return other instanceof Payloads(List<byte[]> otherData, int[] otherWeights)
-                    && PayloadTemplates.equals(data, otherData)
-                    && Arrays.equals(weights, otherWeights);
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * PayloadTemplates.hashCode(data) + Arrays.hashCode(weights);
-        }
-
-        @Override
-        public String toString() {
-            return "Payloads[data="
-                    + PayloadTemplates.describe(data)
-                    + ", weights="
-                    + Arrays.toString(weights)
-                    + "]";
-        }
-    }
-
     private PayloadFactory() {}
 
-    static Payloads create(Workload workload) {
+    static PayloadTemplates create(Workload workload) {
         Random random = ThreadLocalRandom.current();
         Map<String, Integer> sizes = workload.messageSizeDistribution;
         if (sizes != null && !sizes.isEmpty()) {
@@ -83,14 +48,14 @@ final class PayloadFactory {
                     payloads.size(),
                     distribution.getBucketSizes(),
                     distribution.getAvgSize());
-            return new Payloads(payloads, distribution.getWeights());
+            return PayloadTemplates.of(payloads, distribution.getWeights());
         }
         if (workload.useRandomizedPayloads) {
             List<byte[]> payloads = new ArrayList<>();
             for (int i = 0; i < workload.randomizedPayloadPoolSize; i++) {
                 payloads.add(randomized(workload.messageSize, workload.randomBytesRatio, random));
             }
-            return new Payloads(payloads, null);
+            return PayloadTemplates.of(payloads, null);
         }
         String payloadFile = workload.payloadFile;
         if (payloadFile == null) {
@@ -100,7 +65,7 @@ final class PayloadFactory {
                             + " must set payloadFile, useRandomizedPayloads or"
                             + " messageSizeDistribution");
         }
-        return new Payloads(
+        return PayloadTemplates.of(
                 List.of(new FilePayloadReader(workload.messageSize).load(payloadFile)), null);
     }
 

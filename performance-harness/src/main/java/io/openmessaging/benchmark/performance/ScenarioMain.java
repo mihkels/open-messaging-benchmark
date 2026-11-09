@@ -58,7 +58,6 @@ import tools.jackson.dataformat.yaml.YAMLMapper;
 /** One fresh-JVM experiment; orchestration, RSS sampling and comparison live in the Python CLI. */
 public final class ScenarioMain {
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern RESOURCE =
             Pattern.compile("omb_resource_(\\w++)\\{([^}]*+)}\\s++(\\S++).*");
     private static final Pattern ROLE_LABEL = Pattern.compile("role=\"([^\"]++)\"");
@@ -131,7 +130,7 @@ public final class ScenarioMain {
                                         config.startup.showJavalinBanner = false;
                                         handler.configure(config);
                                         config.routes.get(
-                                                "/metrics",
+                                                HttpWorkerClient.METRICS_PATH,
                                                 ctx -> {
                                                     ctx.result(registry.scrape() + worker.scrapeMetrics());
                                                 });
@@ -283,7 +282,7 @@ public final class ScenarioMain {
             HttpWorkerClient client = new HttpWorkerClient(endpoint);
             clients.add(client);
             handles.add(client);
-            scrapes.add(() -> client.getText("/metrics", SCRAPE_TIMEOUT));
+            scrapes.add(() -> client.scrapeMetrics());
         }
         if (count == 1) {
             return clients.getFirst();

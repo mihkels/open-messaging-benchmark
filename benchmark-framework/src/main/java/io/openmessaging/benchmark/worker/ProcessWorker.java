@@ -58,7 +58,6 @@ public class ProcessWorker implements Worker {
     public static final String STARTUP_TIMEOUT_PROPERTY = "omb.driver.startupTimeoutSeconds";
 
     private static final Duration CRASH_DETECTION_TIMEOUT = Duration.ofSeconds(2);
-    private static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
     private static final String DRIVER_CLASS = "driverClass";
 
     private static final ObjectMapper YAML = YAMLMapper.builder().build();
@@ -242,7 +241,7 @@ public class ProcessWorker implements Worker {
             }
             client = Objects.requireNonNull(running.client(), "driver client after start");
         }
-        return client.getText(DriverProcessServer.METRICS_PATH, SCRAPE_TIMEOUT);
+        return client.scrapeMetrics();
     }
 
     // Forwards a call to the driver process and reports a crash instead of the failed call.

@@ -33,11 +33,13 @@ class ThresholdsTest {
 
         Thresholds.Result evaluation = thresholds.evaluate(result);
 
-        assertThat(evaluation.status()).isEqualTo("FAIL");
+        assertThat(evaluation.status()).isEqualTo(Thresholds.Status.FAIL);
         assertThat(evaluation.checks.get("maxPublishLatency99Ms").observed).isEqualTo(25.0);
-        assertThat(evaluation.checks.get("maxPublishLatency99Ms").status()).isEqualTo("PASS");
+        assertThat(evaluation.checks.get("maxPublishLatency99Ms").status)
+                .isEqualTo(Thresholds.Status.PASS);
         assertThat(evaluation.checks.get("minThroughputRatio").observed).isEqualTo(0.8);
-        assertThat(evaluation.checks.get("minThroughputRatio").status()).isEqualTo("FAIL");
+        assertThat(evaluation.checks.get("minThroughputRatio").status)
+                .isEqualTo(Thresholds.Status.FAIL);
     }
 
     @Test
@@ -88,7 +90,8 @@ class ThresholdsTest {
         Thresholds.Result latency = thresholds.evaluate(result);
         assertThat(latency.passed()).isFalse();
         assertThat(latency.checks).containsOnlyKeys("maxPublishLatency99Ms");
-        assertThat(latency.checks.get("maxPublishLatency99Ms").status()).isEqualTo("FAIL");
+        assertThat(latency.checks.get("maxPublishLatency99Ms").status)
+                .isEqualTo(Thresholds.Status.FAIL);
 
         thresholds.maxPublishLatency99Ms = null;
         thresholds.minThroughputRatio = 0.1;

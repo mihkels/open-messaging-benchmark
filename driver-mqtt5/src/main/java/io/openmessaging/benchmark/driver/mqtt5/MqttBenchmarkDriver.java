@@ -50,6 +50,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -91,18 +93,20 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        MqttBenchmarkProducer producer;
+        AtomicBoolean closed = new AtomicBoolean();
+        AtomicReference<MqttCreationFuture<?>> creation = new AtomicReference<>();
+        MqttCreationFuture<BenchmarkProducer> future;
+        Mqtt5AsyncClient client;
         try {
-            producer = new MqttBenchmarkProducer(topic, config.client.qos);
+            client = createClient(clientId("pub"), stopReconnect(closed, creation));
+            future =
+                    new MqttCreationFuture<>(
+                            new MqttBenchmarkProducer(topic, config.client.qos, client, closed));
         } catch (Throwable failure) {
             return CompletableFuture.failedFuture(failure);
         }
-        MqttCreationFuture<BenchmarkProducer> future = new MqttCreationFuture<>(producer);
+        creation.set(future);
         try {
-            Mqtt5AsyncClient client =
-                    createClient(
-                            clientId("pub"), () -> producer.isClosed() || future.stopReconnectOnDisconnect());
-            producer.setClient(client);
             connect(future, client.connect(), future::succeed);
         } catch (Exception failure) {
             future.fail(failure);
@@ -115,11 +119,14 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        MqttBenchmarkConsumer consumer = new MqttBenchmarkConsumer();
-        MqttCreationFuture<BenchmarkConsumer> future = new MqttCreationFuture<>(consumer);
+        AtomicBoolean closed = new AtomicBoolean();
+        AtomicReference<MqttCreationFuture<?>> creation = new AtomicReference<>();
+        List<Mqtt5Subscription> subscriptions = new ArrayList<>();
+        Mqtt5AsyncClient client;
+        MqttBenchmarkConsumer consumer;
+        MqttCreationFuture<BenchmarkConsumer> future;
         try {
             MqttQos qos = intToQoS(config.client.qos);
-            List<Mqtt5Subscription> subscriptions = new ArrayList<>();
             Splitter.on(",")
                     .split(topic)
                     .forEach(topicFilter -> {
@@ -135,11 +142,14 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
             if (subscriptions.isEmpty()) {
                 throw new IllegalArgumentException("No MQTT topic filters in topic '" + topic + "'");
             }
-
-            Mqtt5AsyncClient client =
-                    createClient(
-                            clientId("sub"), () -> consumer.isClosed() || future.stopReconnectOnDisconnect());
-            consumer.setClient(client);
+            client = createClient(clientId("sub"), stopReconnect(closed, creation));
+            consumer = new MqttBenchmarkConsumer(client, closed);
+            future = new MqttCreationFuture<>(consumer);
+        } catch (Exception failure) {
+            return CompletableFuture.failedFuture(failure);
+        }
+        creation.set(future);
+        try {
             connect(
                     future,
                     connectConsumer(client),
@@ -160,6 +170,13 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         }
 
         return future;
+    }
+
+    // Stops a client's reconnects once its producer or consumer is closed, and on a disconnect while
+    // its creation is still in progress. The creation future is set before the client connects.
+    private static BooleanSupplier stopReconnect(
+            AtomicBoolean closed, AtomicReference<MqttCreationFuture<?>> creation) {
+        return () -> closed.get() || creation.get().stopReconnectOnDisconnect();
     }
 
     // Marks the future connected and runs onConnected once the CONNACK succeeds, otherwise fails

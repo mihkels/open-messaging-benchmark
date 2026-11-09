@@ -117,7 +117,7 @@ final class DiffCommand {
 
         DiffReport report;
         try {
-            report = DiffReport.of(baselineRuns, candidateRuns, allRuns, minChange, mismatches);
+            report = DiffReport.of(baselineRuns, candidateRuns, minChange, mismatches);
         } catch (IllegalArgumentException e) {
             err.println("Cannot compare: " + e.getMessage());
             return 1;

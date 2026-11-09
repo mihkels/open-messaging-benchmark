@@ -70,7 +70,7 @@ class AuthenticatedWorkerHttpTest {
                     config.routes.before(
                             ctx -> seenAuthorization.add(String.valueOf(ctx.header("Authorization"))));
                     handler.configure(config);
-                    config.routes.get(BenchmarkWorker.METRICS_PATH, ctx -> ctx.result("metric 1"));
+                    config.routes.get(HttpWorkerClient.METRICS_PATH, ctx -> ctx.result("metric 1"));
                 });
         app.start(LOOPBACK, 0);
         host = "http://" + LOOPBACK + ":" + app.port();
@@ -109,7 +109,7 @@ class AuthenticatedWorkerHttpTest {
     @Test
     void leavesMetricsOpenByDefault() throws Exception {
         start();
-        HttpResponse<String> response = send(get(BenchmarkWorker.METRICS_PATH), null);
+        HttpResponse<String> response = send(get(HttpWorkerClient.METRICS_PATH), null);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("metric 1");
     }
@@ -117,8 +117,8 @@ class AuthenticatedWorkerHttpTest {
     @Test
     void protectsMetricsWhenAsked() throws Exception {
         start("--protect-metrics");
-        assertThat(send(get(BenchmarkWorker.METRICS_PATH), null).statusCode()).isEqualTo(401);
-        assertThat(send(get(BenchmarkWorker.METRICS_PATH), "Bearer " + TOKEN).statusCode())
+        assertThat(send(get(HttpWorkerClient.METRICS_PATH), null).statusCode()).isEqualTo(401);
+        assertThat(send(get(HttpWorkerClient.METRICS_PATH), "Bearer " + TOKEN).statusCode())
                 .isEqualTo(200);
     }
 
@@ -126,15 +126,14 @@ class AuthenticatedWorkerHttpTest {
     void clientGetsTextWithItsTokenAndReportsFailedStatus() throws Exception {
         start("--protect-metrics");
         try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
-            assertThat(client.getText(BenchmarkWorker.METRICS_PATH, Duration.ofSeconds(10)))
-                    .isEqualTo("metric 1");
+            assertThat(client.scrapeMetrics()).isEqualTo("metric 1");
         }
         assertThat(seenAuthorization).containsExactly("Bearer " + TOKEN);
         try (HttpWorkerClient client = new HttpWorkerClient(host, "wrong")) {
             Duration timeout = Duration.ofSeconds(10);
-            assertThatThrownBy(() -> client.getText(BenchmarkWorker.METRICS_PATH, timeout))
+            assertThatThrownBy(() -> client.getText(HttpWorkerClient.METRICS_PATH, timeout))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("HTTP get " + host + BenchmarkWorker.METRICS_PATH)
+                    .hasMessageContaining("HTTP get " + host + HttpWorkerClient.METRICS_PATH)
                     .hasMessageContaining("failed with code 401");
         }
     }

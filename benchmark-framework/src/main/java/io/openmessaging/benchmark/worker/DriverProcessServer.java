@@ -34,14 +34,13 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The HTTP API of a driver process started by {@link DriverProcess}: the {@link WorkerHandler}
- * routes, {@code /metrics} and {@value DriverProcessMain#INITIALIZE_DRIVER_LOCAL}, all behind a
- * per-process bearer token.
+ * routes, {@value HttpWorkerClient#METRICS_PATH} and {@value
+ * DriverProcessMain#INITIALIZE_DRIVER_LOCAL}, all behind a per-process bearer token.
  *
  * <p>The supervisor hands over the token, and the one driver configuration path the process may
  * read, through files in its owner-only work directory, never through argv or the environment.
  */
 final class DriverProcessServer implements AutoCloseable {
-    static final String METRICS_PATH = "/metrics";
     static final String PORT_FILE = "port";
     static final String TOKEN_FILE = "token";
     static final String CONFIG_PATH_FILE = "driver-configuration.path";
@@ -91,15 +90,18 @@ final class DriverProcessServer implements AutoCloseable {
      * @throws IllegalArgumentException if the file is blank
      */
     static String readToken(Path tokenFile) {
-        String token;
+        boolean unreadable = false;
         try {
-            token = BearerTokenAuth.readTokenFile(tokenFile);
-        } catch (IllegalArgumentException blank) {
-            deleteTokenFile(tokenFile);
-            throw blank;
+            return BearerTokenAuth.readTokenFile(tokenFile);
+        } catch (UncheckedIOException e) {
+            // Leave a file that cannot be read in place; a blank one is deleted like a valid one
+            unreadable = true;
+            throw e;
+        } finally {
+            if (!unreadable) {
+                deleteTokenFile(tokenFile);
+            }
         }
-        deleteTokenFile(tokenFile);
-        return token;
     }
 
     private static void deleteTokenFile(Path tokenFile) {
@@ -132,7 +134,7 @@ final class DriverProcessServer implements AutoCloseable {
      */
     void configure(JavalinConfig config) {
         handler.configure(config);
-        config.routes.get(METRICS_PATH, ctx -> ctx.result(metrics.get()));
+        config.routes.get(HttpWorkerClient.METRICS_PATH, ctx -> ctx.result(metrics.get()));
         config.routes.post(DriverProcessMain.INITIALIZE_DRIVER_LOCAL, this::initializeFromLocalPath);
     }
 

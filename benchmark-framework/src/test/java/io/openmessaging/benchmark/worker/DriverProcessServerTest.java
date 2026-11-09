@@ -106,7 +106,7 @@ class DriverProcessServerTest {
     void rejectsRequestsWithoutTheProcessToken(String authorization) throws Exception {
         DriverProcessServer.authorizeConfig(workDir, config);
 
-        assertThat(send("GET", DriverProcessServer.METRICS_PATH, null, authorization).statusCode())
+        assertThat(send("GET", HttpWorkerClient.METRICS_PATH, null, authorization).statusCode())
                 .isEqualTo(401);
         assertThat(send("GET", WorkerHandler.PERIOD_STATS, null, authorization).statusCode())
                 .isEqualTo(401);
@@ -125,7 +125,7 @@ class DriverProcessServerTest {
         String bearer = BearerTokenAuth.BEARER_PREFIX + TOKEN;
         DriverProcessServer.authorizeConfig(workDir, config);
 
-        HttpResponse<String> metrics = send("GET", DriverProcessServer.METRICS_PATH, null, bearer);
+        HttpResponse<String> metrics = send("GET", HttpWorkerClient.METRICS_PATH, null, bearer);
         assertThat(metrics.statusCode()).isEqualTo(200);
         assertThat(metrics.body()).isEqualTo("metric 1\n");
 

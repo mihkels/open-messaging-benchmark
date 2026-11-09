@@ -61,6 +61,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
@@ -551,8 +552,7 @@ class MqttBenchmarkDriverTest {
                     disconnectStarted.countDown();
                     return disconnect;
                 });
-        MqttBenchmarkConsumer consumer = new MqttBenchmarkConsumer();
-        consumer.setClient(client);
+        MqttBenchmarkConsumer consumer = new MqttBenchmarkConsumer(client, new AtomicBoolean());
         ExecutorService executor = Executors.newSingleThreadExecutor();
         IOException failure = new IOException("disconnect failed");
         try {

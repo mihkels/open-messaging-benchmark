@@ -37,7 +37,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
     private final CloseOnce<RuntimeException> lifecycle = new CloseOnce<>();
 
     public NsqBenchmarkProducer(final NSQProducer nsqProducer, final String topic) {
-        this(nsqProducer, topic, Executors.newCachedThreadPool(), 1000);
+        this(nsqProducer, topic, Executors.newVirtualThreadPerTaskExecutor(), 1000);
     }
 
     NsqBenchmarkProducer(

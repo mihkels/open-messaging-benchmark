@@ -188,24 +188,26 @@ class FailuresTest {
         IllegalArgumentException unchecked = new IllegalArgumentException("unchecked");
         AssertionError error = new AssertionError("error");
         Exception checked = new Exception("checked");
+        Failures ioFailures = failuresOf(io);
+        Failures uncheckedFailures = failuresOf(unchecked);
+        Failures errorFailures = failuresOf(error);
+        Failures checkedFailures = failuresOf(checked);
 
-        assertSame(
-                io, assertThrows(IOException.class, () -> failuresOf(io).throwIfAny(IOException.class)));
+        assertSame(io, assertThrows(IOException.class, () -> ioFailures.throwIfAny(IOException.class)));
         assertSame(
                 unchecked,
                 assertThrows(
-                        IllegalArgumentException.class,
-                        () -> failuresOf(unchecked).throwIfAny(IOException.class)));
+                        IllegalArgumentException.class, () -> uncheckedFailures.throwIfAny(IOException.class)));
         assertSame(
                 error,
-                assertThrows(AssertionError.class, () -> failuresOf(error).throwIfAny(IOException.class)));
+                assertThrows(AssertionError.class, () -> errorFailures.throwIfAny(IOException.class)));
         assertSame(
                 checked,
                 assertThrows(
-                                IllegalStateException.class,
-                                () -> failuresOf(checked).throwIfAny(IOException.class))
+                                IllegalStateException.class, () -> checkedFailures.throwIfAny(IOException.class))
                         .getCause());
-        assertDoesNotThrow(() -> new Failures().throwIfAny(IOException.class));
+        Failures none = new Failures();
+        assertDoesNotThrow(() -> none.throwIfAny(IOException.class));
     }
 
     @Test

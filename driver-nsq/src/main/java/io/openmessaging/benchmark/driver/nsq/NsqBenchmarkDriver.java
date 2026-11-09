@@ -176,7 +176,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         IllegalStateException failure = new IllegalStateException(CLOSED_MESSAGE);
         BenchmarkConsumer handle = creation.getNow(null);
         Failures.closeAfterFailure(
-                failure, handle, handle != consumer ? consumer : null, scope::closeChannels);
+                failure, handle, handle == consumer ? null : consumer, scope::closeChannels);
         return CompletableFuture.failedFuture(failure);
     }
 

@@ -29,7 +29,7 @@ class ThresholdsTest {
         thresholds.minThroughputRatio = 0.9;
         TestResult result = new TestResult();
         result.aggregatedPublishLatency99pct = 25.0;
-        result.summary = new ResultSummary(80, 80, 0, 0, 0, 0, 100);
+        result.summary = new ResultSummary(80, 80, 0, 800, 0, 0, 100);
 
         Thresholds.Result evaluation = thresholds.evaluate(result);
 
@@ -49,9 +49,21 @@ class ThresholdsTest {
         thresholds.minThroughputRatio = 0.8;
         TestResult result = new TestResult();
         result.aggregatedPublishLatency99pct = 25.0;
-        result.summary = new ResultSummary(80, 80, 0, 0, 0, 0, 100);
+        result.summary = new ResultSummary(80, 80, 0, 800, 0, 0, 100);
 
         assertThat(thresholds.evaluate(result).passed()).isTrue();
+    }
+
+    @Test
+    void failsLatencyCheckWhenNothingWasSent() {
+        Thresholds thresholds = new Thresholds();
+        thresholds.maxPublishLatency99Ms = 25.0;
+        TestResult result = new TestResult();
+
+        Thresholds.Result evaluation = thresholds.evaluate(result);
+
+        assertThat(evaluation.checks.get("maxPublishLatency99Ms").status)
+                .isEqualTo(Thresholds.Status.FAIL);
     }
 
     @Test

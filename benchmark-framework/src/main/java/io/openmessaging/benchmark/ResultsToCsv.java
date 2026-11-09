@@ -19,15 +19,17 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.DoubleSummaryStatistics;
 import java.util.List;
-import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -38,7 +40,13 @@ public class ResultsToCsv {
     private static final ObjectMapper MAPPER = ObjectMappers.DEFAULT.mapper();
 
     public void writeAllResultFiles(String directory) {
-        writeAllResultFiles(directory, new File("results-" + Instant.now().getEpochSecond() + ".csv"));
+        String fileName = "results-" + Instant.now().getEpochSecond() + ".csv";
+        String resultsDirectory = System.getenv(Benchmark.RESULTS_DIR_ENV);
+        File outputFile =
+                resultsDirectory == null || resultsDirectory.isEmpty()
+                        ? new File(fileName)
+                        : Path.of(resultsDirectory, fileName).toFile();
+        writeAllResultFiles(directory, outputFile);
     }
 
     void writeAllResultFiles(String directory, File outputFile) {
@@ -54,7 +62,7 @@ public class ResultsToCsv {
             lines.add(
                     "topics,partitions,message-size,producers-per-topic,consumers-per-topic,"
                             + "prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,"
-                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,");
+                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max");
 
             List<TestResult> results = new ArrayList<>();
             for (File file : directoryListing) {
@@ -82,43 +90,38 @@ public class ResultsToCsv {
                 log.info("Results extracted into CSV {}", outputFile);
             }
         } catch (IOException e) {
-            log.error("Failed creating csv file.", e);
+            throw new UncheckedIOException("Failed creating csv file " + outputFile, e);
         }
     }
 
     public String extractResults(TestResult tr) {
-        try {
-            Histogram prodRateHistogram = new Histogram(10000000, 1);
-            Histogram conRateHistogram = new Histogram(10000000, 1);
+        return MessageFormat.format(
+                        "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},",
+                        tr.topics,
+                        tr.partitions,
+                        tr.messageSize,
+                        tr.producersPerTopic,
+                        tr.consumersPerTopic)
+                + rateStatistics(tr.publishRate)
+                + ","
+                + rateStatistics(tr.consumeRate);
+    }
 
-            for (Double rate : tr.publishRate) {
-                prodRateHistogram.recordValueWithCount(rate.longValue(), 2);
-            }
-
-            for (Double rate : tr.consumeRate) {
-                conRateHistogram.recordValueWithCount(rate.longValue(), 2);
-            }
-
-            return MessageFormat.format(
-                    "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},"
-                            + "{5,number,#},{6,number,#},{7,number,#.##},{8,number,#},"
-                            + "{9,number,#},{10,number,#},{11,number,#.##},{12,number,#}",
-                    tr.topics,
-                    tr.partitions,
-                    tr.messageSize,
-                    tr.producersPerTopic,
-                    tr.consumersPerTopic,
-                    prodRateHistogram.getMinNonZeroValue(),
-                    prodRateHistogram.getMean(),
-                    prodRateHistogram.getStdDeviation(),
-                    prodRateHistogram.getMaxValue(),
-                    conRateHistogram.getMinNonZeroValue(),
-                    conRateHistogram.getMean(),
-                    conRateHistogram.getStdDeviation(),
-                    conRateHistogram.getMaxValue());
-        } catch (Exception e) {
-            log.error("Error writing results csv", e);
-            throw new RuntimeException(e);
+    // min,avg,std-dev,max of the period rates; empty fields when there are no periods
+    private static String rateStatistics(List<Double> rates) {
+        DoubleSummaryStatistics stats =
+                rates.stream().mapToDouble(Double::doubleValue).summaryStatistics();
+        if (stats.getCount() == 0) {
+            return ",,,";
         }
+        double mean = stats.getAverage();
+        double squaredDeviations =
+                rates.stream().mapToDouble(rate -> (rate - mean) * (rate - mean)).sum();
+        return MessageFormat.format(
+                "{0,number,#},{1,number,#},{2,number,#.##},{3,number,#}",
+                stats.getMin(),
+                mean,
+                Math.sqrt(squaredDeviations / stats.getCount()),
+                stats.getMax());
     }
 }

@@ -49,6 +49,14 @@ class RunContextTest {
     }
 
     @Test
+    void reportsMismatchedTopology() {
+        Run candidate = Fixtures.run("baseline-2.json");
+        candidate.result().metadata.workload().topics = 10;
+        assertThat(RunContext.workloadMismatches(List.of(Fixtures.run("baseline-1.json"), candidate)))
+                .containsExactly("Workload topics differs: 1 (baseline-1.json) vs 10 (baseline-2.json)");
+    }
+
+    @Test
     void comparesTheStoredSettingsOfVersion1Files() {
         Run legacy = Fixtures.run("legacy-v1.json");
         assertThat(RunContext.workloadIdentity(legacy))

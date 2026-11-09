@@ -52,7 +52,8 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   directories collide; only one runs.
 - **Output.** Each workload and driver combination writes
   `<workload file name>-<driver name>-<yyyy-MM-dd-HH-mm-ss>.json` to the current directory, or the
-  `--output` path. With `--output`, every combination overwrites the same file.
+  `--output` path. `--output` is accepted only for a single workload and driver; with more
+  combinations the coordinator rejects it before running, because each would overwrite the file.
 - **Failures.** If a combination fails, the coordinator logs
   `Failed to run the workload '<name>' for driver '<config>'` with the cause and continues with the
   next combination when it is safe to do so. The process exits with a non-zero status if any

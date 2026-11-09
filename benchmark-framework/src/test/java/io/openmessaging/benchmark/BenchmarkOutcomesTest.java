@@ -279,7 +279,9 @@ class BenchmarkOutcomesTest {
         TestResult failed = result("first");
         failed.aggregatedPublishLatency99pct = 11;
         when(first.run()).thenReturn(failed);
-        when(second.run()).thenReturn(result("second"));
+        TestResult passed = result("second");
+        passed.summary = new ResultSummary(0, 0, 0, 1, 0, 0, 0);
+        when(second.run()).thenReturn(passed);
         Workload firstWorkload = workload("first");
         firstWorkload.thresholds = new Thresholds();
         firstWorkload.thresholds.maxPublishLatency99Ms = 10.0;

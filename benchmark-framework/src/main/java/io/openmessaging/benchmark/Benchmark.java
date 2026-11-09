@@ -161,18 +161,35 @@ public final class Benchmark {
             System.exit(0);
         }
 
-        // Not required by JCommander because --csv needs neither
-        if (arguments.workloads == null || arguments.workloads.isEmpty()) {
-            exitWithUsage(jc, "At least one workload file is required");
-        }
-        if (arguments.drivers == null || arguments.drivers.isEmpty()) {
-            exitWithUsage(jc, "At least one driver must be given with --drivers");
+        String usageError = usageError(arguments);
+        if (usageError != null) {
+            exitWithUsage(jc, usageError);
         }
         if (arguments.workers != null && arguments.workersFile != null) {
             log.error("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
         }
         return arguments;
+    }
+
+    // Checks JCommander cannot express; null when the arguments are usable
+    static @Nullable String usageError(Arguments arguments) {
+        // Not required by JCommander because --csv needs neither
+        if (arguments.workloads == null || arguments.workloads.isEmpty()) {
+            return "At least one workload file is required";
+        }
+        if (arguments.drivers == null || arguments.drivers.isEmpty()) {
+            return "At least one driver must be given with --drivers";
+        }
+        int combinations = arguments.workloads.size() * arguments.drivers.size();
+        if (arguments.output != null && !arguments.output.isEmpty() && combinations > 1) {
+            return "--output can only be used with a single workload and driver, but "
+                    + combinations
+                    + " combinations would overwrite it; omit --output or set "
+                    + RESULTS_DIR_ENV
+                    + " to choose the results directory";
+        }
+        return null;
     }
 
     private static void exitWithUsage(JCommander jc, @Nullable String message) {

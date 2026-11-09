@@ -52,7 +52,9 @@ public class Thresholds {
                     new Check(
                             maxPublishLatency99Ms,
                             result.aggregatedPublishLatency99pct,
-                            result.aggregatedPublishLatency99pct <= maxPublishLatency99Ms));
+                            // An empty publish histogram reports p99 = 0, so nothing sent must not pass
+                            result.summary.totalMessagesSent() > 0
+                                    && result.aggregatedPublishLatency99pct <= maxPublishLatency99Ms));
         }
         if (minThroughputRatio != null) {
             double ratio =

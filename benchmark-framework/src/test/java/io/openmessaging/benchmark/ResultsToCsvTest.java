@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -46,11 +47,21 @@ class ResultsToCsvTest {
                 .isEqualTo(
                         "topics,partitions,message-size,producers-per-topic,consumers-per-topic,"
                                 + "prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,"
-                                + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,");
+                                + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max");
         assertThat(lines.get(1)).startsWith("2,3,512,1,2,");
         assertThat(lines.get(1).split(",")).hasSize(13);
         assertThat(lines.get(2)).startsWith("2,3,1024,1,2,");
         assertThat(lines.get(2).split(",")).hasSize(13);
+    }
+
+    @Test
+    void reportsExactRateStatistics() {
+        TestResult result = new TestResult();
+        result.publishRate = List.of(70_000.0, 12_000_000.0);
+        result.consumeRate = List.of();
+
+        assertThat(new ResultsToCsv().extractResults(result))
+                .isEqualTo("0,0,0,0,0,70000,6035000,5965000,12000000,,,,");
     }
 
     @Test

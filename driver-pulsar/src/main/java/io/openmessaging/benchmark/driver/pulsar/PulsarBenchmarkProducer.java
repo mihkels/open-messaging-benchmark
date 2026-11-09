@@ -23,7 +23,6 @@ import org.apache.pulsar.client.api.TypedMessageBuilder;
 public class PulsarBenchmarkProducer implements BenchmarkProducer {
 
     private final Producer<byte[]> producer;
-    private final Object lifecycleLock = new Object();
     private final PendingSendTracker pending = new PendingSendTracker("Pulsar producer");
 
     public PulsarBenchmarkProducer(Producer<byte[]> producer) {
@@ -32,36 +31,28 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public void close() throws Exception {
-        pending.close(() -> {
-            Producer<byte[]> producerToClose;
-            synchronized (lifecycleLock) {
-                // Wait for a send that started before close to finish using the producer.
-                producerToClose = producer;
-            }
-            producerToClose.close();
-        });
+        // No lock with sendAsync: a send blocked on a full queue must not stop close, and the
+        // tracker fails any send registered before close began
+        pending.close(producer::close);
     }
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        CompletableFuture<Void> send;
-        synchronized (lifecycleLock) {
-            send = pending.register();
-            if (send.isDone()) {
-                return send;
+        CompletableFuture<Void> send = pending.register();
+        if (send.isDone()) {
+            return send;
+        }
+        try {
+            TypedMessageBuilder<byte[]> msgBuilder = producer.newMessage().value(payload.clone());
+            if (key.isPresent()) {
+                msgBuilder.key(key.get());
             }
-            try {
-                TypedMessageBuilder<byte[]> msgBuilder = producer.newMessage().value(payload.clone());
-                if (key.isPresent()) {
-                    msgBuilder.key(key.get());
-                }
-                msgBuilder
-                        .sendAsync()
-                        .thenApply(msgId -> null)
-                        .whenComplete((_, failure) -> pending.completeFromClient(send, failure));
-            } catch (RuntimeException e) {
-                send.completeExceptionally(e);
-            }
+            msgBuilder
+                    .sendAsync()
+                    .thenApply(msgId -> null)
+                    .whenComplete((_, failure) -> pending.completeFromClient(send, failure));
+        } catch (RuntimeException e) {
+            send.completeExceptionally(e);
         }
         return send;
     }

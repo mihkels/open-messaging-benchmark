@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -35,11 +36,11 @@ class PayloadFactoryTest {
         workload.randomBytesRatio = 0.5;
         workload.randomizedPayloadPoolSize = 3;
 
-        PayloadFactory.Payloads payloads = PayloadFactory.create(workload);
+        PayloadTemplates payloads = PayloadFactory.create(workload);
 
         assertThat(payloads.weights()).isNull();
-        assertThat(payloads.data()).hasSize(3);
-        assertThat(payloads.data())
+        assertThat(payloads.templates()).hasSize(3);
+        assertThat(payloads.templates())
                 .allSatisfy(payload -> {
                     assertThat(payload).hasSize(10);
                     assertThat(Arrays.copyOf(payload, 5)).isNotEqualTo(new byte[5]);
@@ -54,12 +55,13 @@ class PayloadFactoryTest {
         workload.useRandomizedPayloads = true;
         workload.randomBytesRatio = 0;
 
-        PayloadFactory.Payloads payloads = PayloadFactory.create(workload);
+        PayloadTemplates payloads = PayloadFactory.create(workload);
 
-        assertThat(payloads.data())
+        assertThat(payloads.templates())
                 .extracting(payload -> payload.length)
                 .containsExactlyInAnyOrder(5, 15);
-        assertThat(payloads.data()).allSatisfy(payload -> assertThat(payload).containsOnly((byte) 0));
+        assertThat(payloads.templates())
+                .allSatisfy(payload -> assertThat(payload).containsOnly((byte) 0));
         assertThat(payloads.weights()).containsExactlyInAnyOrder(1, 2);
     }
 
@@ -72,24 +74,7 @@ class PayloadFactoryTest {
         workload.messageSize = expected.length;
         workload.payloadFile = payloadFile.toString();
 
-        assertThat(PayloadFactory.create(workload).data()).containsExactly(expected);
-    }
-
-    @Test
-    void payloadsCompareByContentAndPrintSizes() {
-        PayloadFactory.Payloads payloads =
-                new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), new int[] {5});
-        PayloadFactory.Payloads same =
-                new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), new int[] {5});
-
-        assertThat(payloads)
-                .isEqualTo(same)
-                .hasSameHashCodeAs(same)
-                .isNotEqualTo("other")
-                .isNotEqualTo(
-                        new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 3}), new int[] {5}))
-                .isNotEqualTo(new PayloadFactory.Payloads(java.util.List.of(new byte[] {1, 2}), null))
-                .hasToString("Payloads[data=1 templates, sizes [2], weights=[5]]");
+        assertThat(PayloadFactory.create(workload).templates()).containsExactly(expected);
     }
 
     @Test

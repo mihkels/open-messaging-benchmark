@@ -17,8 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class ProducerWorkAssignmentTest {
 
@@ -31,7 +33,7 @@ class ProducerWorkAssignmentTest {
         weights[0] = 9;
 
         assertThat(assignment.payloadWeights()).containsExactly(1, 3);
-        assertThat(assignment.payloadCount()).isEqualTo(2);
+        assertThat(assignment.payloads().size()).isEqualTo(2);
 
         int[] returnedWeights = assignment.payloadWeights();
         returnedWeights[0] = 8;
@@ -88,6 +90,18 @@ class ProducerWorkAssignmentTest {
     }
 
     @Test
+    void withPublishRateSharesThePayloadsWithoutCopying() {
+        ProducerWorkAssignment assignment =
+                new ProducerWorkAssignment(List.of(new byte[] {1}), 10, KeyDistributorType.NO_KEY);
+
+        ProducerWorkAssignment changed = assignment.withPublishRate(20);
+
+        assertThat(changed.publishRate()).isEqualTo(20);
+        assertThat(changed.payloads()).isSameAs(assignment.payloads());
+        assertThat(changed.payloadData().getFirst()).isSameAs(assignment.payloadData().getFirst());
+    }
+
+    @Test
     void toStringDescribesPayloadSizesInsteadOfArrayIdentities() {
         ProducerWorkAssignment assignment =
                 new ProducerWorkAssignment(
@@ -95,7 +109,31 @@ class ProducerWorkAssignmentTest {
 
         assertThat(assignment)
                 .hasToString(
-                        "ProducerWorkAssignment[payloadData=1 templates, sizes [3], publishRate=10.0, "
-                                + "keyDistributorType=NO_KEY, payloadWeights=[7]]");
+                        "ProducerWorkAssignment[payloads=1 templates, sizes [3], weights [7], publishRate=10.0, "
+                                + "keyDistributorType=NO_KEY]");
+    }
+
+    @Test
+    void keepsTheWireFormat() {
+        ProducerWorkAssignment weighted =
+                new ProducerWorkAssignment(
+                        List.of(new byte[] {0, 1, -1}, new byte[] {2, 3}),
+                        123.5,
+                        KeyDistributorType.NO_KEY,
+                        new int[] {3, 1});
+        ProducerWorkAssignment uniform =
+                new ProducerWorkAssignment(List.of(new byte[] {7}), 10, KeyDistributorType.RANDOM_NANO);
+        ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+
+        String weightedJson =
+                "{\"payloadData\":[\"AAH/\",\"AgM=\"],\"publishRate\":123.5,"
+                        + "\"keyDistributorType\":\"NO_KEY\",\"payloadWeights\":[3,1]}";
+        String uniformJson =
+                "{\"payloadData\":[\"Bw==\"],\"publishRate\":10.0,"
+                        + "\"keyDistributorType\":\"RANDOM_NANO\",\"payloadWeights\":null}";
+        assertThat(mapper.writeValueAsString(weighted)).isEqualTo(weightedJson);
+        assertThat(mapper.writeValueAsString(uniform)).isEqualTo(uniformJson);
+        assertThat(mapper.readValue(weightedJson, ProducerWorkAssignment.class)).isEqualTo(weighted);
+        assertThat(mapper.readValue(uniformJson, ProducerWorkAssignment.class)).isEqualTo(uniform);
     }
 }

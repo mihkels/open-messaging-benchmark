@@ -242,7 +242,7 @@ public class WorkerHandler implements AutoCloseable {
         log.info(
                 "Start load publish-rate: {} msg/s -- payloads: {}",
                 producerWorkAssignment.publishRate(),
-                producerWorkAssignment.payloadCount());
+                producerWorkAssignment.payloads().size());
 
         worker.startLoad(producerWorkAssignment);
     }

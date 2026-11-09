@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.artemis;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -62,8 +63,7 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
             return new ArtemisBenchmarkProducer(tempSession, tempProducer);
 
         } catch (ActiveMQException | RuntimeException e) {
-            ArtemisResources.closeAfterFailure(tempProducer, e);
-            ArtemisResources.closeAfterFailure(tempSession, e);
+            Failures.closeAfterFailure(e, tempProducer, tempSession);
             throw e;
         }
     }

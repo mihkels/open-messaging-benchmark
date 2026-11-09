@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.jms;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.Collections;
@@ -78,17 +79,7 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
             return new JMSBenchmarkProducer(session, tempProducer, useAsyncSend, properties);
 
         } catch (Exception e) {
-            // Clean up resources if initialization fails
-            if (tempProducer != null) {
-                try {
-                    tempProducer.close();
-                } catch (Exception closeException) {
-                    if (closeException != e) {
-                        e.addSuppressed(closeException);
-                    }
-                    log.warn("Failed to close producer during cleanup", closeException);
-                }
-            }
+            Failures.closeAfterFailure(e, tempProducer);
             throw e;
         }
     }

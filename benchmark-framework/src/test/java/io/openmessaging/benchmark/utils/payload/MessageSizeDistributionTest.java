@@ -33,8 +33,8 @@ class MessageSizeDistributionTest {
 
         MessageSizeDistribution dist = new MessageSizeDistribution(config);
 
-        assertThat(dist.getBucketCount()).isEqualTo(3);
-        assertThat(dist.getTotalWeight()).isEqualTo(600);
+        assertThat(dist.getWeights()).containsExactly(100, 200, 300);
+        assertThat(dist.getBucketSizes()).containsExactly(128, 640, 2560);
     }
 
     @Test
@@ -95,19 +95,6 @@ class MessageSizeDistributionTest {
     }
 
     @Test
-    void calculatesCumulativeWeights() {
-        Map<String, Integer> config = new LinkedHashMap<>();
-        config.put("0-256", 100);
-        config.put("256-1024", 200);
-        config.put("1024-4096", 300);
-
-        MessageSizeDistribution dist = new MessageSizeDistribution(config);
-        int[] cumulative = dist.getCumulativeWeights();
-
-        assertThat(cumulative).containsExactly(100, 300, 600);
-    }
-
-    @Test
     void calculatesAverageSize() {
         Map<String, Integer> config = new LinkedHashMap<>();
         config.put("0-100", 1); // midpoint 50, weight 1
@@ -117,18 +104,6 @@ class MessageSizeDistributionTest {
 
         // (50 * 1 + 150 * 1) / 2 = 100
         assertThat(dist.getAvgSize()).isEqualTo(100);
-    }
-
-    @Test
-    void calculatesMaxSize() {
-        Map<String, Integer> config = new LinkedHashMap<>();
-        config.put("0-256", 100);
-        config.put("256-1024", 200);
-        config.put("1024-5000", 300);
-
-        MessageSizeDistribution dist = new MessageSizeDistribution(config);
-
-        assertThat(dist.getMaxSize()).isEqualTo(5000);
     }
 
     @Test
@@ -146,11 +121,8 @@ class MessageSizeDistributionTest {
 
         MessageSizeDistribution dist = new MessageSizeDistribution(config);
 
-        assertThat(dist.getBucketCount()).isEqualTo(8);
-        assertThat(dist.getTotalWeight()).isEqualTo(1847);
-        assertThat(dist.getMaxSize()).isEqualTo(5242880); // 5MB
-        assertThat(dist.getBucketSizes()).hasSize(8);
-        assertThat(dist.getWeights()).hasSize(8);
+        assertThat(dist.getWeights()).containsExactly(234, 456, 678, 312, 98, 45, 18, 6);
+        assertThat(dist.getBucketSizes()).hasSize(8).last().isEqualTo(3145728); // midpoint of 1MB-5MB
     }
 
     @Test
@@ -209,8 +181,9 @@ class MessageSizeDistributionTest {
         config.put("100-200", 100); // 50% weight
 
         MessageSizeDistribution dist = new MessageSizeDistribution(config);
-        int[] cumulative = dist.getCumulativeWeights();
-        int totalWeight = dist.getTotalWeight();
+        assertThat(dist.getWeights()).containsExactly(100, 100);
+        int[] cumulative = {100, 200};
+        int totalWeight = 200;
 
         // Simulate weighted selection like LocalWorker does
         int[] counts = new int[2];
@@ -236,7 +209,8 @@ class MessageSizeDistributionTest {
         config.put("0-10", 0);
         config.put("10-20", 1);
         config.put("20-30", 0);
-        int[] cumulative = new MessageSizeDistribution(config).getCumulativeWeights();
+        assertThat(new MessageSizeDistribution(config).getWeights()).containsExactly(0, 1, 0);
+        int[] cumulative = {0, 1, 1};
 
         assertThat(MessageSizeDistribution.bucketIndexForTicket(0, cumulative)).isEqualTo(1);
     }
@@ -253,7 +227,6 @@ class MessageSizeDistributionTest {
     void parsesByteSuffix() {
         MessageSizeDistribution distribution = new MessageSizeDistribution(Map.of("10B-20b", 1));
 
-        assertThat(distribution.getMaxSize()).isEqualTo(20);
         assertThat(distribution.getBucketSizes()).containsExactly(15);
     }
 

@@ -150,15 +150,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                     "JetStream subscription");
             return CompletableFuture.completedFuture(new NatsBenchmarkConsumer(connection, dispatcher));
         } catch (Exception e) {
-            if (dispatcher != null) {
-                try {
-                    connection.closeDispatcher(dispatcher);
-                } catch (RuntimeException closeFailure) {
-                    if (closeFailure != e) {
-                        e.addSuppressed(closeFailure);
-                    }
-                }
-            }
+            Dispatcher created = dispatcher;
+            Failures.closeAfterFailure(
+                    e, created == null ? null : () -> connection.closeDispatcher(created));
             return CompletableFuture.failedFuture(e);
         }
     }

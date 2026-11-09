@@ -20,10 +20,6 @@ import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Expands a {@link WorkloadSetTemplate} into a set of {@link Workload Workloads}. */
 final class WorkloadSetGenerator {
@@ -82,24 +78,5 @@ final class WorkloadSetGenerator {
             selected[index] = value;
             generateCombinations(values, selected, index + 1, workloads);
         }
-    }
-
-    /**
-     * Creates a deep copy of the given workload.
-     *
-     * @param workload the workload to copy
-     * @return a new workload instance with the same values
-     */
-    @SuppressWarnings("unused")
-    private Workload copyOf(Workload workload) {
-        Objects.requireNonNull(workload, "Workload cannot be null");
-
-        // Use Jackson for deep copying
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-        ObjectReader reader =
-                mapper.readerFor(Workload.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
-        String serialized = mapper.writeValueAsString(workload);
-        return reader.readValue(serialized);
     }
 }

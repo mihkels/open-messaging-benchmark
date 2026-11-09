@@ -95,10 +95,6 @@
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.bookkeeper.stats.StatsLoggerAdaptor" />
-    <Bug pattern="EI_EXPOSE_REP2" />
-  </Match>
-  <Match>
     <Class name="io.openmessaging.benchmark.driver.nsq.NsqBenchmarkProducer" />
     <Bug pattern="NP_NONNULL_PARAM_VIOLATION" />
   </Match>

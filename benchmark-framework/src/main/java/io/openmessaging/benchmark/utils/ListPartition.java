@@ -35,18 +35,6 @@ public final class ListPartition {
         if (null == originList || originList.isEmpty() || size <= 0) {
             return resultList;
         }
-        if (originList.size() <= size) {
-            for (T item : originList) {
-                List<T> resultItemList = new ArrayList<>();
-                resultItemList.add(item);
-                resultList.add(resultItemList);
-            }
-            for (int i = 0; i < (size - originList.size()); i++) {
-                resultList.add(new ArrayList<>());
-            }
-            return resultList;
-        }
-
         for (int i = 0; i < size; i++) {
             resultList.add(new ArrayList<>());
         }

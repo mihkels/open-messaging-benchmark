@@ -59,11 +59,25 @@ class DlogBenchmarkDriverTest {
     }
 
     @Test
+    void createTopicCreatesOneLogAndPropagatesCreationFailure() throws Exception {
+        Namespace namespace = mock(Namespace.class);
+        IOException failure = new IOException("cannot create log");
+        doThrow(failure).when(namespace).createLog("broken");
+        DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
+
+        driver.createTopic(TOPIC, 1).get(5, TimeUnit.SECONDS);
+        verify(namespace).createLog(TOPIC);
+
+        assertThatThrownBy(driver.createTopic("broken", 1)::join).hasRootCause(failure);
+    }
+
+    @Test
     void createConsumerRejectsASecondConsumerOnTheSameSubscription() throws Exception {
         Namespace namespace = mock(Namespace.class);
         DistributedLogManager manager = mock(DistributedLogManager.class);
         when(namespace.openLog(TOPIC)).thenReturn(manager);
-        when(manager.openLogReader(DLSN.InitialDLSN)).thenReturn(mock(LogReader.class));
+        LogReader reader = mock(LogReader.class);
+        when(manager.openLogReader(DLSN.InitialDLSN)).thenReturn(reader);
         DlogBenchmarkDriver driver = new DlogBenchmarkDriver(namespace);
         ConsumerCallback callback = mock(ConsumerCallback.class);
 

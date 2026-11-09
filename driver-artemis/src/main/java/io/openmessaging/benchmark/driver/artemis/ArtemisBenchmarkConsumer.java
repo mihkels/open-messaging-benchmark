@@ -61,15 +61,7 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
 
         try {
             tempSession = sessionFactory.createSession();
-            try {
-                tempSession.createQueue(
-                        QueueConfiguration.of(SimpleString.of(queueName))
-                                .setAddress(SimpleString.of(topic))
-                                .setRoutingType(RoutingType.MULTICAST)
-                                .setDurable(true));
-            } catch (ActiveMQQueueExistsException e) {
-                // Another consumer on this subscription created the shared queue first.
-            }
+            createSubscriptionQueue(tempSession, topic, queueName);
             tempConsumer = tempSession.createConsumer(queueName);
             tempConsumer.setMessageHandler(message -> handleMessage(message, callback));
 
@@ -82,6 +74,19 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
             ArtemisResources.closeAfterFailure(tempConsumer, e);
             ArtemisResources.closeAfterFailure(tempSession, e);
             throw e;
+        }
+    }
+
+    private static void createSubscriptionQueue(ClientSession session, String topic, String queueName)
+            throws ActiveMQException {
+        try {
+            session.createQueue(
+                    QueueConfiguration.of(SimpleString.of(queueName))
+                            .setAddress(SimpleString.of(topic))
+                            .setRoutingType(RoutingType.MULTICAST)
+                            .setDurable(true));
+        } catch (ActiveMQQueueExistsException _) {
+            // Another consumer on this subscription created the shared queue first.
         }
     }
 

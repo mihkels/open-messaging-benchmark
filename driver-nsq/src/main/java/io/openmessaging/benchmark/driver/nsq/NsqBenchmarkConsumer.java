@@ -731,6 +731,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             throw new IllegalStateException(
                     "Cannot close an NSQ consumer from its own callback; retry from another thread");
         }
+        // Not in a callback on this thread; callbacks run on the consumer's own executor threads
+        inCallback.remove();
         IllegalStateException failure = new IllegalStateException("NSQ consumer is closed");
         Closing closing = beginClose(false, failure);
         if (closing == null) {

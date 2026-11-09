@@ -279,6 +279,10 @@ public final class PendingSendTracker {
                 }
             }
         }
+        // Settling above ran on this thread; drop its counter unless a client callback is still active
+        if (inClientCallback.get()[0] == 0) {
+            inClientCallback.remove();
+        }
     }
 
     /**

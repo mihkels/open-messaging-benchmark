@@ -69,10 +69,7 @@ public final class PublicationLifecycle {
         try {
             send.publish(failure -> pending.completeFromClient(future, failure));
         } catch (Exception failure) {
-            if (failure instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            future.completeExceptionally(failure);
+            future.completeExceptionally(restoringInterrupt(failure));
         } finally {
             depth[0]--;
             pending.endPublication();
@@ -103,14 +100,19 @@ public final class PublicationLifecycle {
             send.publish();
             return CompletableFuture.completedFuture(null);
         } catch (Exception failure) {
-            if (failure instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            return CompletableFuture.failedFuture(failure);
+            return CompletableFuture.failedFuture(restoringInterrupt(failure));
         } finally {
             depth[0]--;
             pending.endPublication();
         }
+    }
+
+    // A generic client call cannot be caught as InterruptedException, so restore it here
+    private static Exception restoringInterrupt(Exception failure) {
+        if (failure instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        return failure;
     }
 
     /**
@@ -149,6 +151,8 @@ public final class PublicationLifecycle {
                             + producerName
                             + " while publishing on the same thread; retry after sendAsync returns");
         }
+        // Not publishing on this thread, and publish never reaches the counter once closed
+        publishingDepth.remove();
         pending.rejectCloseFromClientCallback();
         // Only the owner sees the client's close failure; concurrent closers just wait for it
         AtomicReference<@Nullable Throwable> clientFailure = new AtomicReference<>();

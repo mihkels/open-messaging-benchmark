@@ -73,7 +73,8 @@ the send returns or schedule close on another thread without waiting in the call
 - `sendDelayMsg: true` without `delayTimeInSec` fails the send with a `NullPointerException`. Delays
   count in end-to-end latency, and a delay near 60 seconds makes the readiness probe time out.
 - Message keys are set as RocketMQ keys (indexed), not used to choose queues.
-- Queues per broker are `max(1, partitionsPerTopic / number of broker addresses)`, slaves included.
+- Exactly `partitionsPerTopic` queues are distributed across masters, including the remainder.
+  Masters assigned zero queues are skipped; slaves synchronize from masters.
 - Topics and consumer groups are not deleted.
 
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),

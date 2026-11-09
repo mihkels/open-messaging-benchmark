@@ -144,7 +144,7 @@ response other than HTTP 200. Creating the topic up front makes `nsqd` register 
 look it up; otherwise consumers would only find it at their next periodic lookup. NSQ has no partitions;
 `partitionsPerTopic` is accepted, logged as ignored, and has no effect.
 
-**Producers.** Each producer has its own NSQ producer connected to `nsqdHost:4150`. A send is handed to a thread pool
+**Producers.** Each producer has its own NSQ producer connected to `nsqdHost:4150`. A send is handed to a virtual-thread executor
 that performs a blocking publish; up to 1000 sends per producer can be outstanding, after which `sendAsync` waits.
 The send completes after the publish call returns. The driver owns a copy of the message bytes, so caller buffers may
 be reused after completion or cancellation. Keys are ignored.

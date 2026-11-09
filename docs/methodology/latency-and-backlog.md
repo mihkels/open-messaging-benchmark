@@ -71,15 +71,14 @@ Consequences:
   machines. Any clock offset between them is added to or subtracted from every value. Synchronize
   clocks with NTP or chrony and check the offset before trusting sub-10 ms results.
 - **Millisecond resolution.** Values are whole milliseconds. Messages delivered within the same
-  millisecond have a latency of 0 and are **not recorded**, and negative values from clock skew are
-  dropped too. On fast local setups this biases the end-to-end distribution upward. Compare
-  end-to-end numbers only between runs with similar latency ranges, and use publish latency for
+  millisecond have a latency of 0 and are recorded. Negative values from clock skew are dropped.
+  A zero sample cannot distinguish sub-millisecond delivery times; use publish latency for
   sub-millisecond comparisons.
 - **Driver differences.** Some drivers use a broker-assigned timestamp, some use the producer's,
   and some have coarser resolution. See the "Semantics" section of each
   [driver page](../drivers/index.md).
-- **Range.** End-to-end values up to 12 hours can be recorded, so backlog drains are measured; a
-  larger value fails the run. All three producer latency metrics are capped at 60 seconds.
+- **Range.** End-to-end values are capped at 12 hours, so backlog drains are measured without an
+  oversized value failing the run. All three producer latency metrics are capped at 60 seconds.
 
 ## Backlog
 

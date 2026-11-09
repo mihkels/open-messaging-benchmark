@@ -150,8 +150,9 @@ Unknown keys are ignored.
 ## Semantics
 
 - **Topics.** The leader worker creates topics named `Benchmark-<index>-<random>` with the admin
-  API, on every broker address in `clusterName` (masters and slaves), with permission 6 and
-  `max(1, partitionsPerTopic / number of broker addresses)` read and write queues per broker. The
+  API, distributing exactly `partitionsPerTopic` read and write queues across the masters in
+  `clusterName`, with permission 6. The remainder is spread across masters; masters assigned zero
+  queues are skipped, and slaves are not configured directly. The
   topic attribute `+message.type` is `NORMAL`, or `DELAY` with `sendDelayMsg: true`.
 - **Producers.** Each benchmark producer is its own gRPC producer bound to its topic. Sends are
   asynchronous and complete when the proxy returns a send receipt. The driver owns the message
@@ -162,7 +163,7 @@ Unknown keys are ignored.
   time plus `delayTimeInSec`. The born timestamp stays the send time, so end-to-end latency includes
   the full delay.
 - **Subscriptions and consumers.** For each consumer the driver creates (or updates) the consumer
-  group `<topic>_<subscription>` on every broker, then starts a push consumer in that group
+  group `<topic>_<subscription>` on each master, then starts a push consumer in that group
   subscribed to all tags (`*`). Including the topic in the group name keeps groups for different
   topics apart. Consumers in one group share messages; separate subscriptions each receive every
   message.

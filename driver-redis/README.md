@@ -31,7 +31,8 @@ Local quickstarts: [Docker Compose](../docs/drivers/redis.md#local-docker-compos
 ## Prerequisites
 
 - One Redis server with Streams support, reachable from the coordinator (local mode) or every worker.
-- `redisHost`, `redisPort`, `jedisPoolMaxTotal` and `jedisPoolMaxIdle` set in the driver file (no defaults).
+- `redisHost` and `redisPort` set in the driver file. `jedisPoolMaxTotal` and `jedisPoolMaxIdle`
+  are optional and otherwise use the pool defaults.
   Set `redisPass`, and optionally `redisUser`, if the server requires authentication.
 - The `redis` plugin bundle installed on the coordinator (local mode) and on every worker.
 
@@ -63,9 +64,10 @@ e2e-tests/compose/run-e2e.sh --stacks redis
 - Single endpoint only: no Redis Cluster, Sentinel or TLS.
 - Sends are synchronous: each producer has one `XADD` in flight at a time.
 - End-to-end latency uses the stream entry ID, which Redis takes from the server clock.
-- The pool (`jedisPoolMaxTotal`) is shared by producers and consumers of a worker; each consumer holds a connection
-  while blocked in `XREADGROUP`, so size it above the number of consumers per worker.
-- Streams and consumer groups are neither trimmed nor deleted after a run.
+- `jedisPoolMaxTotal` bounds the producer/admin pool; consumers use a separate unbounded pool.
+- Appends apply approximate `MAXLEN ~ redisStreamMaxLen` trimming (default 1,000,000 entries).
+  Size it above the largest expected backlog per stream: unread entries can be trimmed.
+- Streams and consumer groups are not deleted after a run.
 
 ## Further reading
 

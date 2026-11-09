@@ -67,9 +67,9 @@ a performance result.
 ## Limitations
 
 - The `pravega/pravega:0.13.0` image is amd64-only.
-- With transactions, publish latency does not include the commit, events become visible only at
-  commit, and the open transaction is aborted at close (up to `eventsPerTransaction - 1` events are
-  dropped).
+- With transactions, send futures complete after `commit()` returns, so publish latency includes
+  waiting for the batch and commit. Events become visible at commit. An open transaction is aborted
+  at close and its pending sends fail (up to `eventsPerTransaction - 1` events).
 - `eventsPerSecond` and `kbytesPerSecond` only apply with `enableStreamAutoScaling: true`.
 - With `includeTimestampInEvent: false`, end-to-end latency is meaningless.
 - Streams are sealed and deleted at the end (`deleteStreams`); reader groups and the scope remain.

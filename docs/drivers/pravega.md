@@ -171,12 +171,14 @@ de-duplicate on the consumer side.
 - **Transactional producers.** With `enableTransaction: true`:
   - the producer begins a transaction, writes events to it and commits after every
     `eventsPerTransaction` events. The commit is called synchronously in the send path;
-  - each send returns an already completed future, so **publish latency does not include the
-    commit**. Commit time slows the send loop and shows up in end-to-end latency instead;
+  - send futures complete only after `commit()` returns successfully, so **publish latency includes
+    waiting for the transaction to fill and commit**. A write or commit failure fails every pending
+    send in that transaction;
   - readers see events only after their transaction commits, so end-to-end latency grows with
     `eventsPerTransaction` divided by the publish rate;
   - when the producer closes, an open transaction is aborted. Up to `eventsPerTransaction - 1`
-    events written at the end of the run are dropped;
+    events written at the end of the run are discarded and their pending sends fail instead of
+    being counted as successfully published;
   - the readiness probe message (key `key`) is padded with copies to a full transaction, so it is
     committed and reaches the consumers.
 - **Subscriptions and consumers.** Each subscription is a reader group named after the subscription
@@ -217,8 +219,8 @@ Measure latency and throughput together and read
   `false` gives each writer its own connections, which costs more connections and can change
   latency with many producers.
 - **Transactions.** `eventsPerTransaction` trades commit overhead against how long events stay
-  invisible. Small values commit often; large values add end-to-end latency and lose more events
-  when the run ends.
+  invisible. Small values commit often; large values add publish and end-to-end latency and leave
+  more uncommitted sends to fail when the run ends.
 
 ## Troubleshooting and verification
 
@@ -241,8 +243,9 @@ Common problems:
   60 seconds: the reader group could not be created, the segment store is unreachable, or (for
   transactions) the commit did not complete.
 - **End-to-end latency is meaningless.** `includeTimestampInEvent` is false.
-- **Consumed count is lower than published with transactions.** Events in the last open transaction
-  are aborted at close.
+- **Pending transactional sends fail at close.** The final partial transaction is aborted, not
+  committed. Its sends are not successful publications; lower `eventsPerTransaction` to reduce
+  the number left open at shutdown.
 - **Very slow start on Apple Silicon.** The image runs under amd64 emulation; increase the case
   timeout.
 

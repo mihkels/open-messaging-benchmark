@@ -66,8 +66,8 @@ the send returns or schedule close on another thread without waiting in the call
 
 - Message keys are set as RocketMQ keys (indexed), not used to choose queues; per-key order is not
   kept.
-- Queues per broker are `max(1, partitionsPerTopic / number of broker addresses)`, and slave
-  addresses count in that division.
+- Exactly `partitionsPerTopic` queues are distributed across masters, including the remainder.
+  Masters assigned zero queues are skipped; slaves synchronize from masters.
 - Topics and consumer groups are not deleted after the run.
 
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),

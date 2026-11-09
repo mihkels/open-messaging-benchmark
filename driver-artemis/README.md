@@ -78,8 +78,7 @@ performance result.
 ## Limitations
 
 - `partitionsPerTopic` must be 1.
-- Use one consumer per subscription: each consumer creates the subscription queue, so a second consumer
-  on the same subscription is expected to fail.
+- Consumers in one subscription share its durable queue and compete for messages.
 - Message keys are ignored; no transactions, selectors or credentials.
 - Addresses and queues are not deleted after a run.
 

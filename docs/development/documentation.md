@@ -29,12 +29,26 @@ Install with `--require-hashes --only-binary :all:` so pip rejects unhashed pack
 source distribution's build script. Dependabot keeps both files up to date.
 `mise install` provides Python (see [Building the project](building-the-project.md#tools)). CI builds
 the site with Python 3.13 (`docs.yml`); any Python 3 that installs `docs/requirements.txt` works
-locally. From the repository root:
+locally. To preview or validate docs, use a virtual environment outside the checkout and install
+dependencies only when missing.
+
+From the repository root, set `DOCS_VENV` to that environment's absolute path:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install --require-hashes --only-binary :all: -r docs/requirements.txt
-.venv/bin/mkdocs serve
+DOCS_VENV="/absolute/path/outside-checkout/docs-venv"
+```
+
+If the documentation dependencies are missing:
+
+```bash
+python3 -m venv "$DOCS_VENV"
+"$DOCS_VENV/bin/pip" install --require-hashes --only-binary :all: -r docs/requirements.txt
+```
+
+To preview:
+
+```bash
+"$DOCS_VENV/bin/mkdocs" serve
 ```
 
 `mkdocs serve` serves the site at `http://127.0.0.1:8000/` and reloads it when files change.
@@ -42,7 +56,7 @@ python3 -m venv .venv
 Before opening a pull request, build the site the way CI does:
 
 ```bash
-.venv/bin/mkdocs build --strict
+"$DOCS_VENV/bin/mkdocs" build --strict
 ```
 
 `mkdocs.yml` also sets `strict: true`, so any warning fails the build: a missing page, a broken relative

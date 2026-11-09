@@ -292,7 +292,7 @@ public final class LocalWorker implements Worker {
                 producers.size(),
                 producerWorkAssignment.publishRate());
 
-        current.replaceMessageProducer(producerWorkAssignment.publishRate());
+        current.setPublishRate(producerWorkAssignment.publishRate());
         PayloadSampler payloads =
                 PayloadSampler.of(
                         producerWorkAssignment.payloadData(), producerWorkAssignment.payloadWeights());
@@ -391,10 +391,10 @@ public final class LocalWorker implements Worker {
                 () -> {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
+                        MessageProducer messageProducer = current.messageProducer;
                         while (!current.stopping) {
                             Optional<String> key = Optional.ofNullable(keyDistributor.next());
-                            // Read on every send: adjustPublishRate installs a new producer
-                            current.requireMessageProducer().sendMessage(producer, key, payloads.next(random));
+                            messageProducer.sendMessage(producer, key, payloads.next(random));
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -410,7 +410,7 @@ public final class LocalWorker implements Worker {
 
     @Override
     public void adjustPublishRate(double publishRate) {
-        requireRun().replaceMessageProducer(Math.max(publishRate, 1.0));
+        requireRun().setPublishRate(Math.max(publishRate, 1.0));
     }
 
     @Override
@@ -843,7 +843,9 @@ public final class LocalWorker implements Worker {
         private final List<BenchmarkConsumer> consumers = new ArrayList<>();
         private final RunCallbacks callbacks = new RunCallbacks(stats, this::recordFailure);
         private volatile boolean stopping;
-        private volatile @Nullable MessageProducer messageProducer;
+        // startLoad sets the real rate before any producer task sends
+        private final MessageProducer messageProducer =
+                new MessageProducer(new UniformRateLimiter(1.0), callbacks);
         private @Nullable BenchmarkDriver driver;
         private boolean initialized;
         private boolean loadStarted;
@@ -955,10 +957,10 @@ public final class LocalWorker implements Worker {
             }
         }
 
-        private void replaceMessageProducer(double publishRate) {
+        private void setPublishRate(double publishRate) {
             synchronized (monitor) {
                 checkRunning();
-                messageProducer = new MessageProducer(new UniformRateLimiter(publishRate), callbacks);
+                messageProducer.setPublishRate(publishRate);
             }
         }
 
@@ -976,14 +978,6 @@ public final class LocalWorker implements Worker {
                 throw new IllegalStateException("No driver is initialized");
             }
             return attached;
-        }
-
-        private MessageProducer requireMessageProducer() {
-            MessageProducer producer = messageProducer;
-            if (producer == null) {
-                throw new IllegalStateException("No message producer is initialized");
-            }
-            return producer;
         }
 
         // Takes ownership of the producer and consumer handles and the driver away from this run.

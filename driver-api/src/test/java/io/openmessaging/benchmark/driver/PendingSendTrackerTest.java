@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import org.junit.jupiter.api.Test;
@@ -136,5 +137,66 @@ class PendingSendTrackerTest {
         callback.join();
         assertThrows(CompletionException.class, first::join);
         assertThrows(CompletionException.class, second::join);
+    }
+
+    @Test
+    void rejectsACloseReenteredOnTheClosingThreadAndThenFailsTheRemainingSends() throws Exception {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        CompletableFuture<Void> unresolved = tracker.register();
+        int[] closes = new int[1];
+
+        tracker.close(() -> {
+            closes[0]++;
+            IllegalStateException rejected =
+                    assertThrows(IllegalStateException.class, () -> tracker.close(() -> closes[0]++));
+            assertEquals("Cannot close test producer reentrantly", rejected.getMessage());
+            assertFalse(unresolved.isDone());
+        });
+
+        assertEquals(1, closes[0]);
+        assertThrows(CompletionException.class, unresolved::join);
+        tracker.close(() -> closes[0]++);
+        assertEquals(1, closes[0]);
+    }
+
+    @Test
+    void attachesAnErrorFromTheClientCloseAsTheCause() {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        CompletableFuture<Void> unresolved = tracker.register();
+        AssertionError failure = new AssertionError("close failed");
+
+        assertSame(
+                failure,
+                assertThrows(
+                        AssertionError.class,
+                        () ->
+                                tracker.close(() -> {
+                                    throw failure;
+                                })));
+
+        CompletionException completion = assertThrows(CompletionException.class, unresolved::join);
+        assertSame(failure, completion.getCause().getCause());
+    }
+
+    @Test
+    void anAcknowledgementRacingFailRemainingSettlesTheSendWithTheCloseFailure() {
+        PendingSendTracker tracker = new PendingSendTracker("test producer");
+        CompletableFuture<Void> first = tracker.register();
+        CompletableFuture<Void> second = tracker.register();
+        // Whichever send fails first acknowledges the other one successfully
+        first.whenComplete((_, _) -> tracker.completeFromClient(second, null));
+        second.whenComplete((_, _) -> tracker.completeFromClient(first, null));
+
+        assertTrue(tracker.beginClose());
+        tracker.failRemaining();
+
+        for (CompletableFuture<Void> send : List.of(first, second)) {
+            CompletionException failure = assertThrows(CompletionException.class, send::join);
+            assertEquals("test producer is closed", failure.getCause().getMessage());
+        }
+        CompletableFuture<Void> late = new CompletableFuture<>();
+        tracker.completeFromClient(late, null);
+        assertTrue(late.isDone());
+        assertFalse(late.isCompletedExceptionally());
     }
 }

@@ -14,27 +14,17 @@
 package io.openmessaging.benchmark.driver.nats;
 
 import io.nats.client.JetStream;
-import io.nats.client.api.PublishAck;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 
 public class NatsBenchmarkProducer implements BenchmarkProducer {
     private final String topic;
 
     private final JetStream jetStream;
 
-    private final Object lifecycleLock = new Object();
-    private final Set<PendingSend> pendingSends = new HashSet<>();
-    // Only guards close against re-entry from a completion callback; pendingSends tracks the sends
-    private final PendingSendTracker callbacks = new PendingSendTracker("NATS producer");
-    private volatile boolean closed;
+    private final PendingSendTracker pending = new PendingSendTracker("NATS producer");
 
     public NatsBenchmarkProducer(JetStream jetStream, final String topic) {
         this.jetStream = jetStream;
@@ -43,115 +33,47 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        if (closed) {
-            return closedFuture();
-        }
-        if (payload.length < Long.BYTES) {
-            return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("NATS payload must be at least 8 bytes"));
-        }
-
         // Close may settle the send immediately after registration, so copy the caller's data first.
-        byte[] message = payload.clone();
-        PendingSend send = new PendingSend(this);
-        send.future.whenComplete((ignored, failure) -> removePending(send));
-        synchronized (lifecycleLock) {
-            if (closed) {
-                return closedFuture();
-            }
-            pendingSends.add(send);
+        byte[] message = payload.length < Long.BYTES ? null : payload.clone();
+        CompletableFuture<Void> send = pending.register();
+        if (send.isDone()) {
+            return send;
+        }
+        if (message == null) {
+            send.completeExceptionally(
+                    new IllegalArgumentException("NATS payload must be at least 8 bytes"));
+            return send;
         }
 
+        // The acknowledgement callback holds only the tracker and the send, not this producer,
+        // since a shared JetStream acknowledgement may never complete.
+        PendingSendTracker tracker = pending;
         try {
-            if (send.outcomeSelected) {
-                complete(send);
-                return send.future;
-            }
             writeLongToBytes(System.currentTimeMillis(), message);
-            CompletableFuture<PublishAck> acknowledgement = jetStream.publishAsync(topic, message);
-            if (send.outcomeSelected) {
-                complete(send);
-            } else {
-                acknowledgement.<Void>thenApply(ack -> null).whenComplete(send);
-            }
+            jetStream
+                    .publishAsync(topic, message)
+                    .<Void>thenApply(_ -> null)
+                    .whenComplete((_, failure) -> tracker.completeFromClient(send, failure));
         } catch (RuntimeException failure) {
-            settle(send, failure);
+            tracker.completeFromClient(send, failure);
         } catch (Error failure) {
-            settle(send, failure);
+            tracker.completeFromClient(send, failure);
             throw failure;
         }
-        return send.future;
+        return send;
     }
 
     @Override
     public void close() {
         // Rejects a close from a completion callback; every other close settles the sends again
-        callbacks.beginClose();
-        List<PendingSend> sends;
-        IllegalStateException failure = new IllegalStateException("NATS producer is closed");
-        synchronized (lifecycleLock) {
-            closed = true;
-            sends = new ArrayList<>(pendingSends);
-            for (PendingSend send : sends) {
-                if (!send.outcomeSelected) {
-                    send.failure = failure;
-                    send.outcomeSelected = true;
-                }
-            }
-        }
-        // Complete outside the lock because completion can run caller callbacks.
-        sends.forEach(this::complete);
-    }
-
-    private void settle(PendingSend send, Throwable failure) {
-        synchronized (lifecycleLock) {
-            if (!send.outcomeSelected) {
-                send.failure = failure;
-                send.outcomeSelected = true;
-            }
-        }
-        complete(send);
-    }
-
-    private void removePending(PendingSend send) {
-        synchronized (lifecycleLock) {
-            pendingSends.remove(send);
-            // A shared JetStream acknowledgement may never complete.
-            send.owner = null;
-        }
-    }
-
-    private void complete(PendingSend send) {
-        callbacks.completeFromClient(send.future, send.failure);
-    }
-
-    private static CompletableFuture<Void> closedFuture() {
-        return CompletableFuture.failedFuture(new IllegalStateException("NATS producer is closed"));
+        pending.beginClose();
+        pending.failRemaining();
     }
 
     public static void writeLongToBytes(long l, byte[] dst) {
         for (int i = 7; i >= 0; i--) {
             dst[i] = (byte) (l & 0xFF);
             l >>= 8;
-        }
-    }
-
-    private static final class PendingSend implements BiConsumer<Void, Throwable> {
-        private final CompletableFuture<Void> future = new CompletableFuture<>();
-        private volatile NatsBenchmarkProducer owner;
-        private volatile boolean outcomeSelected;
-        private Throwable failure;
-
-        private PendingSend(NatsBenchmarkProducer owner) {
-            this.owner = owner;
-        }
-
-        @Override
-        public void accept(Void ignored, Throwable failure) {
-            NatsBenchmarkProducer producer = owner;
-            if (producer != null) {
-                producer.settle(this, failure);
-            }
         }
     }
 }

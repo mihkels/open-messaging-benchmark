@@ -16,7 +16,6 @@ package io.openmessaging.benchmark.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 
@@ -37,16 +36,20 @@ class LatencyMetricTest {
     }
 
     @Test
-    void positiveOnlyMetricSkipsValuesSkewedToZeroOrBelow() {
-        LatencyMetric metric = LatencyMetric.positiveOnly(1_000, "skewed", "test", registry);
+    void skewTolerantMetricRecordsZeroSkipsNegativesAndClampsAboveTheMaximum() {
+        LatencyMetric metric = LatencyMetric.skewTolerant(1_000, "skewed", "test", registry);
 
         metric.record(0);
         metric.record(-3);
         metric.record(7);
+        metric.record(50_000);
 
-        assertThat(metric.takeInterval().getTotalCount()).isEqualTo(1);
-        assertThat(metric.takeCumulative().getTotalCount()).isEqualTo(1);
-        assertThat(registry.get("skewed").timer().totalTime(TimeUnit.MICROSECONDS)).isEqualTo(7);
+        Histogram interval = metric.takeInterval();
+        assertThat(interval.getTotalCount()).isEqualTo(3);
+        assertThat(interval.getCountAtValue(0)).isEqualTo(1);
+        assertThat(interval.getMaxValue()).isEqualTo(interval.highestEquivalentValue(1_000));
+        assertThat(metric.takeCumulative().getTotalCount()).isEqualTo(3);
+        assertThat(registry.get("skewed").timer().count()).isEqualTo(3);
     }
 
     @Test

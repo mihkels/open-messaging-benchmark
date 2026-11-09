@@ -96,7 +96,13 @@ class RabbitMqBenchmarkProducerTest {
         assertThat(firstPublish.exchange()).isEqualTo("exchange");
         assertThat(firstPublish.routingKey()).isEqualTo("routing-key");
         assertThat(firstPublish.payload()).isSameAs(payload);
-        assertThat(firstPublish.properties().getTimestamp().getTime()).isBetween(before, after);
+        assertThat(
+                        (Long)
+                                firstPublish
+                                        .properties()
+                                        .getHeaders()
+                                        .get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER))
+                .isBetween(before, after);
         assertThat(firstPublish.properties().getDeliveryMode()).isNull();
         assertThat(channel.published.get(1).routingKey()).isEmpty();
 

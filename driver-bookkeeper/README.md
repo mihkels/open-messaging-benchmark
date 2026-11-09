@@ -64,11 +64,11 @@ check, not a performance result.
 
 ## Limitations
 
-- Subscription names are ignored: every consumer reads the whole stream from the beginning, so
-  several consumers in one subscription each receive every message.
+- Each subscription reads the whole stream from the beginning; a second consumer on the same
+  topic and subscription is rejected. Set `consumerPerSubscription: 1`.
 - A consumer is ready only after its initial reader opens. Later read failures reopen at the last
   read position, which can replay a record.
-- With more than one partition, extra `<topic>/NNNNNN` logs are created but never used.
+- More than one partition is rejected. Set `partitionsPerTopic: 1`.
 - Message keys are ignored.
 - The end-to-end timestamp is the producer's wall-clock time (record transaction ID).
 - No DistributedLog or BookKeeper client metrics are exported.

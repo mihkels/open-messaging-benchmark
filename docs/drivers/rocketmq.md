@@ -130,10 +130,10 @@ leaves the client default unchanged. `namesrvAddr` and `clusterName` are needed 
 ## Semantics
 
 - **Topics.** The leader worker creates topics named `RocketMQ-Benchmark-<index>-<random>` with the
-  admin API. It looks up every broker address in `clusterName` (masters and slaves) and creates the
-  topic on each with permission 6 (read and write) and the same number of read and write queues:
-  `max(1, partitionsPerTopic / number of broker addresses)`. The total number of queues can
-  therefore differ from `partitionsPerTopic`, and slave addresses also count in the division.
+  admin API. It looks up the master addresses in `clusterName` and distributes exactly
+  `partitionsPerTopic` read and write queues across them, with permission 6 (read and write).
+  The remainder is spread across masters, and masters assigned zero queues are skipped. Slaves
+  synchronize topic configuration from their masters and are not configured directly.
 - **Producers.** One `DefaultMQProducer` (with a random producer group) is shared by all benchmark
   producers of a worker. Each send is asynchronous and completes when the broker acknowledges it.
   The driver owns the message bytes even if the send is canceled.
@@ -172,7 +172,7 @@ Measure latency and throughput together and read
 - **Back-pressure.** `backpressureConcurrency` caps in-flight sends. A low cap limits the producer's
   rate; a high cap uses more memory and lets queues build up in the client.
 - **Queues.** Raise `partitionsPerTopic` so each broker gets more queues and more consumers can read
-  in parallel. Remember the division by the number of broker addresses.
+  in parallel. Queues are distributed across masters; a master with no assigned queue is skipped.
 - **Queue type.** `batchCQ: false` creates topics with the default queue type, for brokers that do
   not support topic attributes.
 

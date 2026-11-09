@@ -223,8 +223,10 @@ Kafka 4.x producers enable idempotence by default when the other settings allow 
 
 **Topic creation.** Topics are created with `AdminClient.createTopics` in batches of up to 500, with
 `replicationFactor` and `topicConfig` applied to every topic. A topic that already exists counts as
-created. Each attempt is limited to 60 seconds; creation is attempted up to 6 times (5 retries) with
-an increasing back-off of 2 s × attempt, and before each retry the driver checks whether all topics already exist.
+created. Each attempt is limited to 60 seconds; retriable failures allow up to 6 attempts (5 retries)
+with an increasing back-off of 2 s × attempt. Before each retry the driver checks whether all topics
+already exist. Non-retriable errors, such as an invalid replication factor or an ACL denial, fail
+creation immediately.
 
 **Producing.** `sendAsync` calls `KafkaProducer.send` with a callback. The benchmark counts a message
 as published when the callback reports success, so what "published" means for durability is decided by

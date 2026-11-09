@@ -27,7 +27,7 @@ Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/
 ## Prerequisites
 
 - A RabbitMQ broker reachable on its AMQP port (5672) from the coordinator (local mode) or every worker.
-- A user allowed to declare exchanges and queues in the virtual host `/`. Credentials go in the URI,
+- A user allowed to declare exchanges and queues in the selected virtual host (default `/`). Credentials go in the URI,
   `amqp://user:password@host:5672`; without them the client uses `guest`/`guest`.
 - The `rabbitmq` plugin bundle installed on the coordinator (local mode) and on every worker.
 
@@ -56,10 +56,11 @@ e2e-tests/compose/run-e2e.sh --stacks rabbitmq
 
 - `partitionsPerTopic` must be 1; other values fail topic creation.
 - Message keys are sent as routing keys but ignored by the fanout exchange.
-- End-to-end latency uses the AMQP `timestamp` property, which has one-second resolution.
+- End-to-end latency uses the producer's millisecond wall clock in the `omb-ts` message header.
 - Stream queues use manual acknowledgements with a fixed prefetch of 1000; classic and quorum queues use automatic
   acknowledgements.
-- The URI path (virtual host) and TLS are not supported; only host, port, user and password are used.
+- URI credentials, virtual host and `amqps` are parsed by the RabbitMQ client; custom TLS settings
+  are not exposed.
 - Exchanges and queues are not deleted after a run.
 
 ## Further reading

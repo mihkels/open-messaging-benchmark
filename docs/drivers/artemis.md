@@ -18,32 +18,32 @@ The Artemis driver benchmarks Apache ActiveMQ Artemis with the native Artemis co
 (`artemis-core-client`), without JMS. A benchmark topic is a multicast address, and each benchmark
 subscription is a durable multicast queue bound to that address.
 
-|       Item        |                                                                   Value                                                                    |
-|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID         | `artemis`                                                                                                                                  |
-| Module            | `driver-artemis`                                                                                                                           |
-| `driverClass`     | `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`                                                                         |
-| Example config    | `driver-artemis/artemis.yaml`                                                                                                              |
-| Client library    | `org.apache.artemis:artemis-core-client` 2.57.0                                                                                            |
-| Tested broker     | `apache/artemis:2.57.0` (Compose stack `artemis`)                                                                                          |
-| Regression cases  | `artemis-contract`, `artemis-fanout`                                                                                                       |
-| Known limitations | One partition per topic; no authentication settings; keys are ignored; one consumer per subscription; addresses and queues are not deleted |
+|       Item        |                                                    Value                                                    |
+|-------------------|-------------------------------------------------------------------------------------------------------------|
+| Plugin ID         | `artemis`                                                                                                   |
+| Module            | `driver-artemis`                                                                                            |
+| `driverClass`     | `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`                                          |
+| Example config    | `driver-artemis/artemis.yaml`                                                                               |
+| Client library    | `org.apache.artemis:artemis-core-client` 2.57.0                                                             |
+| Tested broker     | `apache/artemis:2.57.0` (Compose stack `artemis`)                                                           |
+| Regression cases  | `artemis-contract`, `artemis-fanout`                                                                        |
+| Known limitations | One partition per topic; no authentication settings; keys are ignored; addresses and queues are not deleted |
 
 ## Artemis native or Artemis via JMS
 
 Artemis can also be benchmarked through the [JMS driver](jms.md#apache-activemq-artemis). The two
 measure different client stacks:
 
-|     Aspect     |                   `artemis` plugin (this page)                   |                              `jms` plugin with the Artemis provider                               |
-|----------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
-| Client         | Artemis core client API, bundled with the plugin                 | JMS API over `artemis-jms-client-all`, which you put in the JMS `ext/` directory                  |
-| Configuration  | `brokerAddress` only                                             | Connection factory URL with any Artemis client URL parameters                                     |
-| Topic creation | Address created explicitly as multicast                          | Created by the broker on first use                                                                |
-| Subscriptions  | Durable multicast queue `<topic>-<subscription>`, one consumer   | JMS 2.0 shared durable subscription (several consumers), or non-durable consumers in JMS 1.1 mode |
-| Keys           | Ignored                                                          | Sent as `JMSXGroupID` (message groups)                                                            |
-| Transactions   | Not supported                                                    | `sendWithTransactions` (one message per transaction)                                              |
-| Selectors      | Not supported                                                    | `messageSelector` and `properties`                                                                |
-| Producer flow  | Asynchronous sends confirmed through a 1 MiB confirmation window | JMS 2.0 asynchronous send or JMS 1.1 synchronous send                                             |
+|     Aspect     |                     `artemis` plugin (this page)                      |                              `jms` plugin with the Artemis provider                               |
+|----------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| Client         | Artemis core client API, bundled with the plugin                      | JMS API over `artemis-jms-client-all`, which you put in the JMS `ext/` directory                  |
+| Configuration  | `brokerAddress` only                                                  | Connection factory URL with any Artemis client URL parameters                                     |
+| Topic creation | Address created explicitly as multicast                               | Created by the broker on first use                                                                |
+| Subscriptions  | Durable multicast queue `<topic>-<subscription>`, shared by consumers | JMS 2.0 shared durable subscription (several consumers), or non-durable consumers in JMS 1.1 mode |
+| Keys           | Ignored                                                               | Sent as `JMSXGroupID` (message groups)                                                            |
+| Transactions   | Not supported                                                         | `sendWithTransactions` (one message per transaction)                                              |
+| Selectors      | Not supported                                                         | `messageSelector` and `properties`                                                                |
+| Producer flow  | Asynchronous sends confirmed through a 1 MiB confirmation window      | JMS 2.0 asynchronous send or JMS 1.1 synchronous send                                             |
 
 Use the native plugin to measure Artemis with the least client overhead; use the JMS plugin when the
 application under study uses JMS, or to compare Artemis with other JMS providers.
@@ -154,9 +154,9 @@ client session. Delivery is at-least-once. Every subscription queue receives a c
 its address, so several subscriptions give fan-out, as tested by the `artemis-fanout` case (2 addresses,
 2 subscriptions each).
 
-**Consumers per subscription.** Each benchmark consumer creates its subscription queue before consuming.
-The regression suite uses one consumer per subscription only; with `consumerPerSubscription` greater than
-1, the second consumer tries to create a queue that already exists, so expect that configuration to fail.
+**Consumers per subscription.** Each benchmark consumer creates its subscription queue if it does not
+already exist, then attaches to it. Several consumers on the same subscription share that queue and
+compete for messages; separate subscriptions still each receive every message.
 
 **End-to-end latency.** The producer sets the core message timestamp to its wall clock; the consumer
 reports latency as its wall clock minus the message timestamp. Cross-host latency depends on clock
@@ -200,7 +200,6 @@ A passing case is a functional check at a low rate, not a performance result. Se
 | `Partitions are not supported in Artemis`           | Set `partitionsPerTopic: 1` in the workload.                                                         |
 | Security exception when creating the session        | The broker requires credentials; enable anonymous login for the benchmark user or use a test broker. |
 | Permission errors when creating addresses or queues | The user lacks `createAddress`, `createDurableQueue`, `send` or `consume` permissions.               |
-| Queue already exists when creating consumers        | `consumerPerSubscription` is greater than 1; use 1.                                                  |
 | Connection refused or timeout                       | `brokerAddress` is not reachable from the driver; in a container, do not use `localhost`.            |
 
 See also [Troubleshooting](../guides/troubleshooting.md).

@@ -18,23 +18,23 @@ The RabbitMQ driver publishes through one durable fanout exchange per benchmark 
 durable queue per subscription, using the RabbitMQ Java AMQP 0-9-1 client. The queue type is classic, quorum or
 stream, selected with `queueType`.
 
-|          Item          |                                                                            Value                                                                            |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `rabbitmq`                                                                                                                                                  |
-| Module                 | `driver-rabbitmq`                                                                                                                                           |
-| `driverClass`          | `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`                                                                                        |
-| Example config shipped | `driver-rabbitmq/rabbitmq.yaml` (quorum queues, `amqp://localhost`)                                                                                         |
-| Tested broker          | `rabbitmq:4.1-management` (Compose stack `rabbitmq`, RabbitMQ 4.1)                                                                                          |
-| Regression cases       | `rabbitmq-contract` (quorum), `rabbitmq-classic-fanout` (classic, persistent messages), `rabbitmq-stream` (stream)                                          |
-| Known limitations      | One partition per topic; keys do not affect routing; end-to-end latency has one-second resolution; no TLS or virtual host selection; no cleanup after a run |
+|          Item          |                                                       Value                                                        |
+|------------------------|--------------------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `rabbitmq`                                                                                                         |
+| Module                 | `driver-rabbitmq`                                                                                                  |
+| `driverClass`          | `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`                                               |
+| Example config shipped | `driver-rabbitmq/rabbitmq.yaml` (quorum queues, `amqp://localhost`)                                                |
+| Tested broker          | `rabbitmq:4.1-management` (Compose stack `rabbitmq`, RabbitMQ 4.1)                                                 |
+| Regression cases       | `rabbitmq-contract` (quorum), `rabbitmq-classic-fanout` (classic, persistent messages), `rabbitmq-stream` (stream) |
+| Known limitations      | One partition per topic; keys do not affect routing; no custom TLS settings; no cleanup after a run                |
 
 ## Prerequisites and broker setup
 
 The driver needs:
 
 - AMQP 0-9-1 access (port 5672 by default) to every broker in `amqpUris`.
-- A user that may declare exchanges and queues, bind them, publish and consume in the virtual host `/`. The driver
-  does not select a virtual host: the URI path is ignored and the client default `/` is used.
+- A user that may declare exchanges and queues, bind them, publish and consume in the virtual host
+  selected by the URI path (the client default is `/`).
 - For `queueType: QUORUM` or `STREAM`, a RabbitMQ version with quorum or stream queues. The tested 4.1 image has both.
 
 Nothing has to be created in advance. The driver declares exchanges, queues and bindings itself.
@@ -98,20 +98,21 @@ The plugin bundle must be installed on every worker, see [Runtime and plugins](.
 
 All keys are read by `RabbitMqConfig`. Unknown keys are ignored.
 
-|             Key              |      Type       |  Default   |                                                                Description                                                                 |
-|------------------------------|-----------------|------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `amqpUris`                   | list of strings | empty list | Required. AMQP URIs `amqp://[user:password@]host[:port]`. Only host, port, user and password are used; path, query and scheme are ignored. |
-| `queueType`                  | enum            | `CLASSIC`  | `CLASSIC`, `QUORUM` or `STREAM`, upper case. Sets the `x-queue-type` queue argument (none for `CLASSIC`).                                  |
-| `messagePersistence`         | boolean         | `false`    | When `true`, messages are published with delivery mode 2 (persistent).                                                                     |
-| `producerCreationBatchSize`  | int             | `5`        | Producers created per batch. Must be positive.                                                                                             |
-| `producerCreationDelay`      | long            | `100`      | Delay between producer creation batches, in milliseconds. Must not be negative.                                                            |
-| `consumerCreationBatchSize`  | int             | `5`        | Consumers created per batch. Must be positive.                                                                                             |
-| `consumerCreationDelay`      | long            | `100`      | Delay between consumer creation batches, in milliseconds. Must not be negative.                                                            |
-| `resourceCreationMaxRetries` | int             | `10`       | Retries per failed producer or consumer after the initial attempt; `0` disables retries. Negative values are invalid.                      |
+|             Key              |      Type       |  Default   |                                                                  Description                                                                  |
+|------------------------------|-----------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `amqpUris`                   | list of strings | empty list | Required. AMQP URIs `amqp://[user:password@]host[:port][/vhost]`; credentials and virtual host are parsed by the client. `amqps` selects TLS. |
+| `queueType`                  | enum            | `CLASSIC`  | `CLASSIC`, `QUORUM` or `STREAM`, upper case. Sets the `x-queue-type` queue argument (none for `CLASSIC`).                                     |
+| `messagePersistence`         | boolean         | `false`    | When `true`, messages are published with delivery mode 2 (persistent).                                                                        |
+| `producerCreationBatchSize`  | int             | `5`        | Producers created per batch. Must be positive.                                                                                                |
+| `producerCreationDelay`      | long            | `100`      | Delay between producer creation batches, in milliseconds. Must not be negative.                                                               |
+| `consumerCreationBatchSize`  | int             | `5`        | Consumers created per batch. Must be positive.                                                                                                |
+| `consumerCreationDelay`      | long            | `100`      | Delay between consumer creation batches, in milliseconds. Must not be negative.                                                               |
+| `resourceCreationMaxRetries` | int             | `10`       | Retries per failed producer or consumer after the initial attempt; `0` disables retries. Negative values are invalid.                         |
 
-There are no pass-through client properties. Other connection settings (heartbeat, TLS, virtual host, frame size)
-are defaults of the [RabbitMQ Java client](https://www.rabbitmq.com/client-libraries/java-api-guide). Automatic
-connection recovery is enabled.
+There are no pass-through client properties or custom TLS settings. Other connection settings use
+the defaults of the [RabbitMQ Java client](https://www.rabbitmq.com/client-libraries/java-api-guide).
+Automatic connection recovery is enabled. Credentials are removed from generated topic names;
+connection setup uses the matching configured URI.
 
 ## Semantics
 
@@ -151,9 +152,9 @@ not set a stream offset, so they read messages published after they subscribed.
 **Durability.** Exchanges and queues are declared durable. `messagePersistence` only sets the per-message delivery
 mode; quorum and stream queues store messages durably regardless of it.
 
-**End-to-end latency.** The producer sets the AMQP `timestamp` property to the current time and the consumer uses it
-as the publish time. The AMQP timestamp property is encoded in whole seconds, so end-to-end latency from this driver
-has one-second resolution. Publish latency (until the confirm) is measured by the framework and is not affected. See
+**End-to-end latency.** The producer carries its wall-clock time in milliseconds in the `omb-ts`
+message header, which the consumer uses as the publish time. This avoids the whole-second precision
+of the AMQP `timestamp` property. Publish latency (until the confirm) is measured by the framework. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Cleanup.** Exchanges and queues are not deleted after a run. Names contain random suffixes, so every run adds

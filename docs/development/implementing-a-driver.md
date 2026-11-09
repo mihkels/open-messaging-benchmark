@@ -261,8 +261,8 @@ void messageReceived(ByteBuffer payload, long publishTimestamp);
   does not work. Use a broker-assigned publish/append time when the system provides one, or put the
   send time in a message header or property. For example, the Kafka driver passes the record
   timestamp, and the JMS driver passes a long property set by the producer.
-- Values that produce a latency of zero or less are counted as received but are not recorded in the
-  latency histograms.
+- Zero-latency samples are recorded. Negative values from clock skew are counted as received but
+  omitted from the latency histogram; values above its 12-hour range are capped.
 - Call the callback once per message, with the payload or a `ByteBuffer` view of it. The payload
   length is recorded as received bytes.
 

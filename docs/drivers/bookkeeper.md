@@ -19,16 +19,16 @@ with BookKeeper. Each benchmark topic is a DistributedLog log stream; DL writes 
 BookKeeper ledgers and stores its metadata in ZooKeeper. The driver does not use the raw BookKeeper
 ledger API, so results include the DistributedLog writer and reader layers.
 
-|       Item        |                                                                      Value                                                                      |
-|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID         | `bookkeeper`                                                                                                                                    |
-| Module            | `driver-bookkeeper`                                                                                                                             |
-| `driverClass`     | `io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver`                                                                              |
-| Shipped config    | `driver-bookkeeper/bookkeeper.yaml`                                                                                                             |
-| Client library    | `distributedlog-core-shaded` 4.18.2 (BookKeeper version from the root `pom.xml`)                                                                |
-| Tested cluster    | ZooKeeper and one bookie from `apachepulsar/pulsar:4.0.6`, plus a bound DL namespace (Compose stack `bookkeeper`)                               |
-| Regression cases  | `bookkeeper-contract`                                                                                                                           |
-| Known limitations | One reader per consumer reads the whole stream; subscriptions are not shared; partitions are created but not used; keys are ignored; no cleanup |
+|       Item        |                                                                 Value                                                                  |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID         | `bookkeeper`                                                                                                                           |
+| Module            | `driver-bookkeeper`                                                                                                                    |
+| `driverClass`     | `io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver`                                                                     |
+| Shipped config    | `driver-bookkeeper/bookkeeper.yaml`                                                                                                    |
+| Client library    | `distributedlog-core-shaded` 4.18.2 (BookKeeper version from the root `pom.xml`)                                                       |
+| Tested cluster    | ZooKeeper and one bookie from `apachepulsar/pulsar:4.0.6`, plus a bound DL namespace (Compose stack `bookkeeper`)                      |
+| Regression cases  | `bookkeeper-contract`                                                                                                                  |
+| Known limitations | One partition and one consumer per subscription only; each subscription reads the whole stream; keys are ignored; logs are not deleted |
 
 ## Prerequisites and broker setup
 
@@ -160,9 +160,8 @@ For all properties and their defaults, see the
 
 - **Topics.** Each benchmark topic is a DL log stream named `test-stream-<index>-<random>` in the
   namespace. `createTopic` creates that log.
-- **Partitions.** With `partitionsPerTopic` greater than 1, the driver also creates the logs
-  `<topic>/000000`, `<topic>/000001`, and so on, but producers and consumers only open the base log
-  `<topic>`. The extra logs stay empty, so partitioned workloads do not add parallelism.
+- **Partitions.** Each topic is one log. The driver rejects `partitionsPerTopic` greater than 1
+  during topic creation; set `partitionsPerTopic: 1`.
 - **Producers.** Each producer opens an asynchronous log writer on the stream. Every message becomes
   one DL log record whose transaction ID comes from a time-based sequencer (the current time in
   milliseconds, kept monotonic per writer). A send completes when DistributedLog acknowledges the
@@ -173,13 +172,14 @@ For all properties and their defaults, see the
   configuration disables the write lock (`writeLockEnabled=false`), but the regression suite only
   tests one producer per topic.
 - **Keys.** Message keys are ignored.
-- **Consumers and subscriptions.** The subscription name is ignored. Every benchmark consumer
+- **Consumers and subscriptions.** The subscription name identifies a reader within the driver,
+  not a stored DistributedLog cursor. Every benchmark consumer
   starts its own reader at the beginning of the log (`DLSN.InitialDLSN`) and reads every record.
   Consumer creation succeeds only after that initial reader opens; an initial open failure fails
   creation.
   - Several subscriptions per topic work as independent full readers.
-  - Several consumers in one subscription each receive every message, so the consumed count is
-    multiplied by `consumerPerSubscription`. Use `consumerPerSubscription: 1`.
+  - A second consumer for the same topic and subscription is rejected during creation. Use
+    `consumerPerSubscription: 1`.
   - Consumers do not acknowledge or store a read position; a reader that fails is reopened from the
     last record it read.
 - **End-to-end timestamp.** The consumer reports the record's transaction ID, which is the
@@ -239,8 +239,8 @@ Common problems:
   without enough racks, or bookies that advertise addresses the workers cannot reach.
 - **`ClassNotFoundException` for a placement policy.** The class name is not the shaded
   `dlshade.org.apache.bookkeeper...` name.
-- **Consumed count is a multiple of the published count.** The workload has more than one consumer
-  per subscription; every consumer reads the whole stream.
+- **Unsupported partitions or shared subscription error.** Set `partitionsPerTopic: 1` and
+  `consumerPerSubscription: 1`; the driver rejects layouts it cannot implement.
 - **`Timed out waiting for consumers to be ready`.** The readers could not open the log or reach the
   bookies within 60 seconds.
 

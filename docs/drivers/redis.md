@@ -19,21 +19,21 @@ topic is one stream, written with `XADD`, and each subscription is a consumer gr
 acknowledged with `XACK`. It uses the [Jedis](https://github.com/redis/jedis) client (8.0.2) against a single
 Redis endpoint.
 
-|          Item          |                                                                                       Value                                                                                       |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `redis`                                                                                                                                                                           |
-| Module                 | `driver-redis`                                                                                                                                                                    |
-| `driverClass`          | `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`                                                                                                                    |
-| Example config shipped | `driver-redis/redis.yaml` (`127.0.0.1:6379`)                                                                                                                                      |
-| Tested broker          | `redis:7.4-alpine` (Compose stack `redis`, Redis 7.4)                                                                                                                             |
-| Regression cases       | `redis-contract`, `redis-fanout`, `redis-random-payload`                                                                                                                          |
-| Known limitations      | Partitions are ignored (one stream per topic); keys are stored but not used; single node only, no Cluster, Sentinel or TLS; synchronous sends; streams are not trimmed or deleted |
+|          Item          |                                                                                                    Value                                                                                                    |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `redis`                                                                                                                                                                                                     |
+| Module                 | `driver-redis`                                                                                                                                                                                              |
+| `driverClass`          | `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`                                                                                                                                              |
+| Example config shipped | `driver-redis/redis.yaml` (`127.0.0.1:6379`)                                                                                                                                                                |
+| Tested broker          | `redis:7.4-alpine` (Compose stack `redis`, Redis 7.4)                                                                                                                                                       |
+| Regression cases       | `redis-contract`, `redis-fanout`, `redis-random-payload`                                                                                                                                                    |
+| Known limitations      | Partitions are ignored (one stream per topic); keys are stored but not used; single node only, no Cluster, Sentinel or TLS; synchronous sends; trimming can discard unread entries; streams are not deleted |
 
 ## Prerequisites and broker setup
 
 The driver needs one Redis server with Streams support (Redis 5.0 or later; tested with 7.4) reachable on its TCP
-port. If the server requires authentication, set `redisPass`. ACL user authentication with `redisUser` currently
-fails (see below), so use password-only (`requirepass`) authentication. The user needs the stream commands `XADD`,
+port. If the server requires authentication, set `redisPass` and, for ACL authentication, `redisUser`.
+The user needs the stream commands `XADD`,
 `XGROUP`, `XREADGROUP` and `XACK`. Nothing has to be created in advance: the driver creates streams and consumer
 groups on demand.
 
@@ -46,7 +46,8 @@ docker run -d --name redis -p 6379:6379 redis:7.4-alpine
 ```
 
 The image is multi-arch and runs natively on Apple Silicon. Streams live in memory, so size `maxmemory` and the host
-memory for the total data a run writes (see [Cleanup](#semantics) below).
+memory for the retained entries across all streams. Approximate entry-count trimming is not a byte
+limit (see [Tuning examples](#tuning-examples) below).
 
 ## Minimal configuration and benchmark command
 
@@ -86,14 +87,15 @@ Install the plugin bundle on every worker, see [Runtime and plugins](../referenc
 
 All keys are read by `RedisClientConfig`. Unknown keys are ignored.
 
-|         Key         |  Type   | Default  |                                                      Description                                                       |
-|---------------------|---------|----------|------------------------------------------------------------------------------------------------------------------------|
-| `redisHost`         | string  | required | Redis host name or IP address.                                                                                         |
-| `redisPort`         | integer | required | Redis TCP port.                                                                                                        |
-| `jedisPoolMaxTotal` | integer | required | Maximum connections in the Jedis pool of one driver instance (one per worker), shared by producers and consumers.      |
-| `jedisPoolMaxIdle`  | integer | required | Maximum idle connections kept in the pool.                                                                             |
-| `redisPass`         | string  | none     | Password. When unset, no authentication is sent.                                                                       |
-| `redisUser`         | string  | none     | ACL user name, used only with `redisPass`. Currently not working: the code passes the two to Jedis in the wrong order. |
+|         Key         |  Type   |   Default    |                                                           Description                                                            |
+|---------------------|---------|--------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `redisHost`         | string  | required     | Redis host name or IP address.                                                                                                   |
+| `redisPort`         | integer | required     | Redis TCP port.                                                                                                                  |
+| `jedisPoolMaxTotal` | integer | pool default | Maximum connections in the producer/admin pool of one driver instance (one per worker). Consumers use a separate unbounded pool. |
+| `jedisPoolMaxIdle`  | integer | pool default | Maximum idle connections kept in the producer/admin pool.                                                                        |
+| `redisStreamMaxLen` | long    | `1000000`    | Approximate maximum entries per stream, applied with `XADD MAXLEN ~ N`.                                                          |
+| `redisPass`         | string  | none         | Password. When unset, no authentication is sent.                                                                                 |
+| `redisUser`         | string  | none         | ACL user name, used only with `redisPass`.                                                                                       |
 
 The connection and socket timeout is fixed at 2000 ms. Other pool settings are the Apache Commons Pool defaults;
 in particular a caller waits without a time limit when the pool is exhausted. There are no pass-through client
@@ -108,9 +110,9 @@ group creation (`MKSTREAM`) or the first `XADD`. `partitionsPerTopic` is accepte
 
 **Producers.** A send runs `XADD <stream> * payload <bytes>` on a pooled connection and completes when Redis
 replies. The call is synchronous: `sendAsync` returns only after the command has completed, so a producer has at most
-one send in flight. No `MAXLEN` trimming is applied. If the workload provides a key, a `key` field is added to the
-entry; it is not used for routing, ordering or consumption. (The field currently contains the Java `Optional`
-representation of the key, for example `Optional[key-1]`.)
+one send in flight. Each append applies approximate `MAXLEN ~ redisStreamMaxLen` trimming (default
+1,000,000 entries). If the workload provides a key, its plain value is stored in a `key` field; it
+is not used for routing, ordering or consumption.
 
 **Subscriptions and consumers.** Each subscription is a consumer group named after the benchmark subscription,
 created with `XGROUP CREATE <stream> <group> 0-0 MKSTREAM`; if it already exists (`BUSYGROUP`) it is reused. Each
@@ -133,9 +135,9 @@ directly to the reported value. See [Latency and backlog](../methodology/latency
 driver does not wait for replication (`WAIT`) or persistence.
 
 **Cleanup.** Producer close waits for its synchronous sends, and consumer close waits for its reader
-thread with a bounded timeout. The driver owns the shared pool; handles do not close it. Streams and
-consumer groups are not deleted after a run, and streams are not trimmed. Data written in a run
-stays in Redis memory until you delete the keys (for example
+thread with a bounded timeout. The driver owns both connection pools; handles do not close them.
+Streams are trimmed during appends, but streams and consumer groups are not deleted after a run.
+Remaining data stays in Redis memory until you delete the keys (for example
 `redis-cli --scan --pattern 'redis-openmessaging-benchmark*'` and `DEL`, or `FLUSHDB` on a dedicated
 server).
 
@@ -153,10 +155,20 @@ jedisPoolMaxTotal: 64
 jedisPoolMaxIdle: 64
 ```
 
-Every consumer holds a pool connection for up to one second per `XREADGROUP BLOCK 1000`, and every in-progress
-`XADD` holds one too. If a worker runs at least as many consumers as `jedisPoolMaxTotal`, producers wait for a free
-connection without a time limit. Size the pool above the number of consumers per worker plus the producers per
-worker. Larger pools mean more client connections on the Redis server.
+These settings bound the producer/admin pool only. Blocking `XREADGROUP` calls use a separate pool
+with no connection-count limit, so consumers cannot exhaust producer connections. Size the producer
+pool for concurrent sends and account for consumer connections when sizing Redis client limits.
+
+Stream retention:
+
+```yaml
+redisStreamMaxLen: 1000000
+```
+
+Trimming is approximate and can retain more entries than the configured length. It does not wait
+for every consumer group to read or acknowledge entries. For backlog workloads, set the length
+above the largest expected backlog per stream plus a safety margin; otherwise unread entries can
+be trimmed and consumers cannot drain the expected backlog.
 
 Password-only authentication (`requirepass`):
 
@@ -164,8 +176,7 @@ Password-only authentication (`requirepass`):
 redisPass: secret
 ```
 
-> **Note:** Do not set `redisUser`. The current code passes `redisPass` and `redisUser` to Jedis in the
-> wrong order, so ACL user authentication fails.
+For ACL authentication, also set `redisUser` to a user allowed to run the stream commands.
 
 Producer concurrency is controlled by the workload (`producersPerTopic`, topics) rather than by a driver setting,
 because each producer sends one command at a time. Because Redis is single-node here, partitions do not add
@@ -190,9 +201,12 @@ Common problems:
   `jedisPoolMaxIdle` is missing from the driver file.
 - `Failed to create consumer group ...`: the consumer group could not be created, for example because the key exists
   and is not a stream, or the user lacks permission for `XGROUP`.
-- `NOAUTH` or `WRONGPASS`: set `redisPass`. If `redisUser` is set, remove it; ACL user authentication currently fails.
-- Publishing stalls while consumers run: the pool is exhausted, see the pool size example above.
-- `OOM command not allowed when used memory > 'maxmemory'`: streams are never trimmed; delete old benchmark keys or
+- `NOAUTH` or `WRONGPASS`: check `redisPass` and, for ACL authentication, `redisUser` and the
+  user's stream-command permissions.
+- Publishing stalls: check the producer pool capacity, Redis client limits and server load;
+  consumers use a separate pool.
+- `OOM command not allowed when used memory > 'maxmemory'`: approximate trimming is not a byte limit;
+  reduce `redisStreamMaxLen`, delete old benchmark keys or
   raise `maxmemory`.
 - High or negative-looking end-to-end latency: clock offset between the Redis server and the workers.
 

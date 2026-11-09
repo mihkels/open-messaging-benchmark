@@ -70,8 +70,8 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
             propsConf.read(new StringReader(config.dlogConf));
             conf.loadConf(propsConf);
         } catch (ConfigurationException e) {
-            log.error("Failed to load dlog configuration : \n{}\n", config.dlogConf, e);
-            throw new IOException("Failed to load configuration : \n" + config.dlogConf + "\n", e);
+            // dlogConf may hold bkDigestPW, so never log or echo it.
+            throw new IOException("Failed to load dlog configuration", e);
         }
         URI dlogUri = URI.create(config.dlogUri);
 

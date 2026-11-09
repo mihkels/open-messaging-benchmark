@@ -33,7 +33,8 @@ final class RunCallbacks implements ConsumerCallback {
     private final ReentrantReadWriteLock gate = new ReentrantReadWriteLock();
     private final AtomicInteger sends = new AtomicInteger();
     private final AtomicInteger receives = new AtomicInteger();
-    // State is atomic or volatile; checking and signalling under this lock prevents lost wakeups.
+    // State is atomic or volatile and written before signalling; waiters re-check it under this
+    // lock, so a signal is only needed once a waiter can exist: while paused or after seal().
     private final ReentrantLock progress = new ReentrantLock();
     private final Condition progressChanged = progress.newCondition();
     private volatile boolean accepting = true;
@@ -106,7 +107,7 @@ final class RunCallbacks implements ConsumerCallback {
 
     void abortSend() {
         sends.decrementAndGet();
-        signalProgress();
+        signalIfObserved();
     }
 
     @Override
@@ -141,19 +142,21 @@ final class RunCallbacks implements ConsumerCallback {
         }
 
         try {
-            progress.lock();
-            try {
-                while (paused && accepting) {
-                    progressChanged.await();
+            if (paused) {
+                progress.lock();
+                try {
+                    while (paused && accepting) {
+                        progressChanged.await();
+                    }
+                } finally {
+                    progress.unlock();
                 }
-            } finally {
-                progress.unlock();
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } finally {
             receives.decrementAndGet();
-            signalProgress();
+            signalIfObserved();
         }
     }
 
@@ -195,6 +198,14 @@ final class RunCallbacks implements ConsumerCallback {
             return true;
         } finally {
             progress.unlock();
+        }
+    }
+
+    // The counter is written before this read and a waiter's flag before its counter check, so a
+    // waiter that missed the decrement is seen here.
+    private void signalIfObserved() {
+        if (!accepting || paused) {
+            signalProgress();
         }
     }
 

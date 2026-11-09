@@ -168,8 +168,10 @@ class LocalWorkerLifecycleTest {
         try (LocalWorker worker = worker(new Scenario(producers), Duration.ofSeconds(2))) {
             worker.createProducers(java.util.Collections.nCopies(producerCount, "topic"));
             worker.startLoad(
+                    // A rate the producers can keep lets them park between sends; a saturating rate never
+                    // parks, so producers holding a carrier thread can starve the others past the deadline.
                     new ProducerWorkAssignment(
-                            List.of(new byte[8]), 1_000_000, KeyDistributorType.KEY_ROUND_ROBIN));
+                            List.of(new byte[8]), 20_000, KeyDistributorType.KEY_ROUND_ROBIN));
             waitUntil(() -> keys.stream().allMatch(k -> k.size() >= keysPerProducer));
             worker.stopAll();
         }

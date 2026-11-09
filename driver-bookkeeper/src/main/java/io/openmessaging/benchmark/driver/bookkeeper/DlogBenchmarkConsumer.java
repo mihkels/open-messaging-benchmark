@@ -20,6 +20,7 @@ import dlshade.org.apache.distributedlog.api.DistributedLogManager;
 import dlshade.org.apache.distributedlog.api.LogReader;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
@@ -102,7 +103,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
             }
         } catch (Exception | Error failure) {
             failures.add(failure);
-            if (DlogFailures.isInterrupted(failure)) {
+            if (Failures.isInterruption(failure)) {
                 Thread.currentThread().interrupt();
             }
             throw failure;
@@ -224,7 +225,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
             owned.close();
         } catch (Throwable failure) {
             failures.add(failure);
-            if (DlogFailures.isInterrupted(failure)) {
+            if (Failures.isInterruption(failure)) {
                 Thread.currentThread().interrupt();
             }
             log.warn("Failed to close a DistributedLog {}", name, failure);

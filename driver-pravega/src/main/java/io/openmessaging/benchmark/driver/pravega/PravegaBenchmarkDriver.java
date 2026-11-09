@@ -60,11 +60,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
             clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
         } catch (Exception failure) {
-            Failures cleanup = new Failures();
-            cleanup.add(failure);
-            closeResource(clientFactory, cleanup);
-            closeResource(readerGroupManager, cleanup);
-            closeResource(streamManager, cleanup);
+            Failures.closeAfterFailure(failure, clientFactory, readerGroupManager, streamManager);
             clientFactory = null;
             readerGroupManager = null;
             streamManager = null;
@@ -208,12 +204,12 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         if (interrupted != null) {
             failures.addInterruption(interrupted);
         }
-        closeResource(factoryToClose, failures);
-        closeResource(readerManagerToClose, failures);
+        failures.closeRestoringInterruptNow(factoryToClose);
+        failures.closeRestoringInterruptNow(readerManagerToClose);
         if (streamManagerToClose != null) {
             sealAndDeleteTopics(streamManagerToClose, topics, failures);
         }
-        closeResource(streamManagerToClose, failures);
+        failures.closeRestoringInterruptNow(streamManagerToClose);
         failures.throwIfAny();
     }
 
@@ -256,19 +252,5 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             Thread.currentThread().interrupt();
         }
         return CompletableFuture.failedFuture(failure);
-    }
-
-    // Restores an interrupt at once instead of deferring it like Failures.close.
-    private static void closeResource(AutoCloseable resource, Failures failures) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (InterruptedException closeFailure) {
-                Thread.currentThread().interrupt();
-                failures.add(closeFailure);
-            } catch (Exception closeFailure) {
-                failures.add(closeFailure);
-            }
-        }
     }
 }

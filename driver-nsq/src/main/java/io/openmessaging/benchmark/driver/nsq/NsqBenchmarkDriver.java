@@ -23,6 +23,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -113,7 +114,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
             return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
         } catch (Exception failure) {
             if (nsqProducer != null) {
-                shutdownAfterFailure(nsqProducer::shutdown, failure);
+                Failures.closeAfterFailure(failure, nsqProducer::shutdown);
             }
             return CompletableFuture.failedFuture(failure);
         }
@@ -158,12 +159,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
             });
             return creation;
         } catch (Exception failure) {
-            if (consumer != null) {
-                closeAfterFailure(consumer, failure);
-            }
-            if (scope != null) {
-                shutdownAfterFailure(scope::closeChannels, failure);
-            }
+            Failures.closeAfterFailure(failure, consumer, scope == null ? null : scope::closeChannels);
             return CompletableFuture.failedFuture(failure);
         }
     }
@@ -179,13 +175,8 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         }
         IllegalStateException failure = new IllegalStateException(CLOSED_MESSAGE);
         BenchmarkConsumer handle = creation.getNow(null);
-        if (handle != null) {
-            closeAfterFailure(handle, failure);
-        }
-        if (handle != consumer) {
-            closeAfterFailure(consumer, failure);
-        }
-        shutdownAfterFailure(scope::closeChannels, failure);
+        Failures.closeAfterFailure(
+                failure, handle, handle != consumer ? consumer : null, scope::closeChannels);
         return CompletableFuture.failedFuture(failure);
     }
 
@@ -215,26 +206,6 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
                             NioIoHandler.newFactory());
         }
         return consumerEventLoops;
-    }
-
-    private static void shutdownAfterFailure(Runnable shutdown, Throwable failure) {
-        try {
-            shutdown.run();
-        } catch (RuntimeException closeFailure) {
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
-    }
-
-    private static void closeAfterFailure(AutoCloseable resource, Throwable failure) {
-        try {
-            resource.close();
-        } catch (Exception closeFailure) {
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
     }
 
     @Override

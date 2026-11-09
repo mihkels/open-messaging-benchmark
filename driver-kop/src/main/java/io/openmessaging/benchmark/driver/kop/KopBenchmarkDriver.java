@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkConsumer;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkProducer;
@@ -146,10 +147,10 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                 producer = new KafkaProducer<>(producerProperties);
                 return CompletableFuture.completedFuture(new KafkaBenchmarkProducer(producer, topic));
             } catch (RuntimeException error) {
-                closeAfterFailure(producer, error);
+                Failures.closeAfterFailure(error, producer);
                 return CompletableFuture.failedFuture(error);
             }
-        } else if (config.producerType().equals(ClientType.PULSAR)) {
+        } else {
             try {
                 return ResourceCreator.compose(
                         CompletableFuture.completedFuture(List.of(topic)),
@@ -158,8 +159,6 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
             } catch (RuntimeException error) {
                 return CompletableFuture.failedFuture(error);
             }
-        } else {
-            throw new IllegalArgumentException("producerType " + config.producerType() + " is invalid");
         }
     }
 
@@ -178,10 +177,10 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
                 return KafkaBenchmarkConsumer.create(
                         kafkaConsumer, topic, properties, consumerCallback, config.pollTimeoutMs());
             } catch (RuntimeException error) {
-                closeAfterFailure(kafkaConsumer, error);
+                Failures.closeAfterFailure(error, kafkaConsumer);
                 return CompletableFuture.failedFuture(error);
             }
-        } else if (config.consumerType().equals(ClientType.PULSAR)) {
+        } else {
             try {
                 return ResourceCreator.compose(
                         client.getPartitionsForTopic(topic, true),
@@ -191,8 +190,6 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
             } catch (RuntimeException error) {
                 return CompletableFuture.failedFuture(error);
             }
-        } else {
-            throw new IllegalArgumentException("consumerType " + config.consumerType() + " is invalid");
         }
     }
 
@@ -203,34 +200,10 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         admin = null;
         client = null;
 
-        Exception failure = closeResource(ownedAdmin, null);
-        failure = closeResource(ownedClient, failure);
-        if (failure != null) {
-            throw failure;
-        }
-    }
-
-    private static void closeAfterFailure(AutoCloseable resource, Exception failure) {
-        closeResource(resource, failure);
-    }
-
-    private static Exception closeResource(AutoCloseable resource, Exception failure) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (Exception closeFailure) {
-                if (closeFailure instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                if (failure == null) {
-                    return closeFailure;
-                }
-                if (failure != closeFailure) {
-                    failure.addSuppressed(closeFailure);
-                }
-            }
-        }
-        return failure;
+        Failures failures = new Failures();
+        failures.closeRestoringInterruptNow(ownedAdmin);
+        failures.closeRestoringInterruptNow(ownedClient);
+        failures.throwIfAny();
     }
 
     private PulsarClient getPulsarClient(String serviceUrl) throws PulsarClientException {

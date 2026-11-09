@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -160,34 +161,13 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
             serverLocator = null;
         }
 
-        Exception failure = closeResource(sessionToClose, null);
-        failure = closeResource(factoryToClose, failure);
-        failure = closeResource(locatorToClose, failure);
-        if (failure != null) {
-            throw failure;
-        }
+        Failures failures = new Failures();
+        failures.closeRestoringInterruptNow(sessionToClose);
+        failures.closeRestoringInterruptNow(factoryToClose);
+        failures.closeRestoringInterruptNow(locatorToClose);
+        failures.throwIfAny();
 
         log.info("ActiveMQ Artemis benchmark driver successfully shut down");
-    }
-
-    private static Exception closeResource(AutoCloseable resource, Exception failure) {
-        if (resource == null) {
-            return failure;
-        }
-        try {
-            resource.close();
-        } catch (Exception closeFailure) {
-            if (closeFailure instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            if (failure == null) {
-                return closeFailure;
-            }
-            if (failure != closeFailure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
-        return failure;
     }
 
     private static ArtemisConfig readConfig(Path configurationFile) throws IOException {

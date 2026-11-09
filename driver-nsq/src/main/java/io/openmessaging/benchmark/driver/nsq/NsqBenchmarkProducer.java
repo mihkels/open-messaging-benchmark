@@ -106,22 +106,11 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
 
     private void shutdownResources() {
         Failures failures = new Failures();
-        try {
-            executor.shutdownNow();
-        } catch (RuntimeException e) {
-            failures.add(e);
-        }
+        failures.close(executor::shutdownNow);
         pending.beginClose();
         pending.failRemaining();
-        try {
-            nsqProducer.shutdown();
-        } catch (RuntimeException e) {
-            failures.add(e);
-        }
-        // Only runtime exceptions are recorded.
-        if (failures.failure() instanceof RuntimeException failure) {
-            throw failure;
-        }
+        failures.close(nsqProducer::shutdown);
+        failures.throwIfAny(RuntimeException.class);
     }
 
     private final class SendTask implements Runnable {
@@ -147,8 +136,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
                     failure = new IllegalStateException(CLOSED_MESSAGE);
                 }
             } catch (Throwable cause) {
-                if (cause instanceof InterruptedException
-                        || cause.getCause() instanceof InterruptedException) {
+                if (Failures.isInterruption(cause)) {
                     Thread.currentThread().interrupt();
                 }
                 failure = cause;

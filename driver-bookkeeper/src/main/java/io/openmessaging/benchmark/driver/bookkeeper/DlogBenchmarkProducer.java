@@ -18,6 +18,7 @@ import dlshade.org.apache.distributedlog.api.AsyncLogWriter;
 import dlshade.org.apache.distributedlog.api.DistributedLogManager;
 import dlshade.org.apache.distributedlog.util.TimeSequencer;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Objects;
 import java.util.Optional;
@@ -87,7 +88,7 @@ public final class DlogBenchmarkProducer implements BenchmarkProducer {
                         .whenComplete((_, failure) -> pending.completeFromClient(send, failure));
             } catch (Exception e) {
                 send.completeExceptionally(e);
-                if (DlogFailures.isInterrupted(e)) {
+                if (Failures.isInterruption(e)) {
                     Thread.currentThread().interrupt();
                 }
             }

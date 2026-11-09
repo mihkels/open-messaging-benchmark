@@ -20,6 +20,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.io.IOException;
 import java.io.StringReader;
@@ -149,7 +150,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                         JMSBenchmarkProducer.create(session, destination, config.use20api, config.properties));
             }
         } catch (Exception err) {
-            closeAfterFailure(session, err);
+            Failures.closeAfterFailure(err, session);
             return CompletableFuture.failedFuture(err);
         }
     }
@@ -180,9 +181,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                     JMSBenchmarkConsumer.create(
                             consumerConnection, durableConsumer, consumerCallback, config.use20api));
         } catch (Exception err) {
-            closeAfterFailure(durableConsumer, err);
-            closeAfterFailure(session, err);
-            closeAfterFailure(consumerConnection, err);
+            Failures.closeAfterFailure(err, durableConsumer, session, consumerConnection);
             return CompletableFuture.failedFuture(err);
         }
     }
@@ -197,39 +196,14 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         connectionFactory = null;
         delegateForAdminOperations = null;
 
-        Exception failure = closeResource(producerConnection, null);
+        Failures failures = new Failures();
+        failures.closeRestoringInterruptNow(producerConnection);
         if (factory instanceof AutoCloseable closeable) {
-            failure = closeResource(closeable, failure);
+            failures.closeRestoringInterruptNow(closeable);
         }
-        failure = closeResource(delegate, failure);
-
-        if (failure != null) {
-            throw failure;
-        }
+        failures.closeRestoringInterruptNow(delegate);
+        failures.throwIfAny();
         log.info("JMS benchmark driver successfully shut down");
-    }
-
-    private static void closeAfterFailure(AutoCloseable resource, Exception failure) {
-        closeResource(resource, failure);
-    }
-
-    private static Exception closeResource(AutoCloseable resource, Exception failure) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (Exception closeFailure) {
-                if (closeFailure instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                if (failure == null) {
-                    return closeFailure;
-                }
-                if (failure != closeFailure) {
-                    failure.addSuppressed(closeFailure);
-                }
-            }
-        }
-        return failure;
     }
 
     private static JMSConfig readConfig(Path configurationFile) throws IOException {

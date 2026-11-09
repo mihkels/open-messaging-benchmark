@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClientConfig;
 import java.io.IOException;
@@ -73,10 +74,10 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             admin.setInstanceName("AdminInstance-" + ResourceNames.randomSuffix());
             admin.start();
         } catch (MQClientException e) {
-            shutdownAfterFailure(admin::shutdown, e);
+            Failures.closeAfterFailure(e, admin::shutdown);
             throw new IOException("Failed to start the RocketMQ admin tool", e);
         } catch (RuntimeException e) {
-            shutdownAfterFailure(admin::shutdown, e);
+            Failures.closeAfterFailure(e, admin::shutdown);
             throw e;
         }
         this.rmqAdmin = admin;
@@ -184,7 +185,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
                 rmqProducer = producer;
             } catch (Exception e) {
                 if (producer != null) {
-                    shutdownAfterFailure(producer::shutdown, e);
+                    Failures.closeAfterFailure(e, producer::shutdown);
                 }
                 return CompletableFuture.failedFuture(e);
             }
@@ -249,7 +250,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             rmqConsumer.start();
         } catch (Exception e) {
             if (rmqConsumer != null) {
-                shutdownAfterFailure(rmqConsumer::shutdown, e);
+                Failures.closeAfterFailure(e, rmqConsumer::shutdown);
             }
             return CompletableFuture.failedFuture(e);
         }
@@ -272,38 +273,14 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         DefaultMQAdminExt admin = rmqAdmin;
         rmqProducer = null;
         rmqAdmin = null;
-        RuntimeException failure = null;
+        Failures failures = new Failures();
         if (producer != null) {
-            try {
-                producer.shutdown();
-            } catch (RuntimeException e) {
-                failure = e;
-            }
+            failures.close(producer::shutdown);
         }
         if (admin != null) {
-            try {
-                admin.shutdown();
-            } catch (RuntimeException e) {
-                if (failure == null) {
-                    failure = e;
-                } else if (failure != e) {
-                    failure.addSuppressed(e);
-                }
-            }
+            failures.close(admin::shutdown);
         }
-        if (failure != null) {
-            throw failure;
-        }
-    }
-
-    private static void shutdownAfterFailure(Runnable shutdown, Throwable failure) {
-        try {
-            shutdown.run();
-        } catch (RuntimeException closeFailure) {
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
+        failures.throwIfAny(RuntimeException.class);
     }
 
     private static RocketMQClientConfig readConfig(Path configurationFile) throws IOException {

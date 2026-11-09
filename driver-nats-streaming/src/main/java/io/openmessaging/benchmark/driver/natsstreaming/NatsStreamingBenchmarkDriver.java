@@ -23,6 +23,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceNames;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -132,28 +133,12 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            closeAfterFailure(streamingConnection, e);
+            Failures.closeAfterFailure(e, streamingConnection);
             log.warn("nats streaming create consumer exception", e);
             return CompletableFuture.failedFuture(e);
         }
         return CompletableFuture.completedFuture(
                 new NatsStreamingBenchmarkConsumer(streamingConnection));
-    }
-
-    private static void closeAfterFailure(StreamingConnection connection, Exception failure) {
-        if (connection == null) {
-            return;
-        }
-        try {
-            connection.close();
-        } catch (Exception closeFailure) {
-            if (closeFailure instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
     }
 
     @Override

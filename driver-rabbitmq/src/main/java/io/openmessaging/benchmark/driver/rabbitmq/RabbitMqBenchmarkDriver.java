@@ -26,6 +26,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import java.io.IOException;
 import java.net.URI;
@@ -64,26 +65,21 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void close() throws Exception {
         closed.set(true);
-        Exception failure = null;
+        Failures failures = new Failures();
         for (Map.Entry<String, Connection> entry : connections.entrySet()) {
             Connection connection = entry.getValue();
-            if (!connections.remove(entry.getKey(), connection)) {
-                continue;
-            }
-            try {
-                connection.close();
-            } catch (AlreadyClosedException e) {
-                log.warn("Connection already closed", e);
-            } catch (Exception e) {
-                if (failure == null) {
-                    failure = e;
-                } else if (failure != e) {
-                    failure.addSuppressed(e);
-                }
+            if (connections.remove(entry.getKey(), connection)) {
+                failures.close(() -> closeUnlessAlreadyClosed(connection));
             }
         }
-        if (failure != null) {
-            throw failure;
+        failures.throwIfAny();
+    }
+
+    private static void closeUnlessAlreadyClosed(Connection connection) throws IOException {
+        try {
+            connection.close();
+        } catch (AlreadyClosedException e) {
+            log.warn("Connection already closed", e);
         }
     }
 
@@ -127,7 +123,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                                 closeDiscarded(producer);
                             }
                         } catch (Throwable error) {
-                            closeAfterFailure(channel, error);
+                            Failures.closeAfterFailure(error, channel);
                             future.completeExceptionally(error);
                         }
                     });
@@ -192,7 +188,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                                 closeDiscarded(consumer);
                             }
                         } catch (Throwable error) {
-                            closeAfterFailure(channel, error);
+                            Failures.closeAfterFailure(error, channel);
                             future.completeExceptionally(error);
                         }
                     });
@@ -249,19 +245,6 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
             throw new IllegalStateException("RabbitMQ driver is closed");
         }
         return connection;
-    }
-
-    private static void closeAfterFailure(AutoCloseable resource, Throwable failure) {
-        if (resource == null) {
-            return;
-        }
-        try {
-            resource.close();
-        } catch (Throwable closeFailure) {
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
-        }
     }
 
     private static void closeDiscarded(AutoCloseable resource) {

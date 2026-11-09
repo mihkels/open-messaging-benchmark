@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClient5Config;
 import java.io.IOException;
@@ -75,10 +76,10 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             admin.setInstanceName("AdminInstance-" + ResourceNames.randomSuffix());
             admin.start();
         } catch (MQClientException e) {
-            shutdownAfterFailure(admin, e);
+            Failures.closeAfterFailure(e, admin::shutdown);
             throw new IOException("Failed to start the RocketMQ admin tool", e);
         } catch (RuntimeException e) {
-            shutdownAfterFailure(admin, e);
+            Failures.closeAfterFailure(e, admin::shutdown);
             throw e;
         }
         this.rmqAdmin = admin;
@@ -281,16 +282,6 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             DefaultMQAdminExt admin = rmqAdmin;
             rmqAdmin = null;
             admin.shutdown();
-        }
-    }
-
-    private static void shutdownAfterFailure(DefaultMQAdminExt admin, Throwable failure) {
-        try {
-            admin.shutdown();
-        } catch (RuntimeException closeFailure) {
-            if (closeFailure != failure) {
-                failure.addSuppressed(closeFailure);
-            }
         }
     }
 

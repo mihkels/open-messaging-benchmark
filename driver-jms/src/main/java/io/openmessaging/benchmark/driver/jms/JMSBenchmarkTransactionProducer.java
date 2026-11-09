@@ -99,18 +99,18 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             operation.finish(new IllegalStateException("JMS transactional producer is closed"), false);
         }
 
-        Failures cleanup = new Failures();
+        List<Exception> cleanupFailures = new ArrayList<>();
         boolean interrupted = false;
         for (SendOperation operation : operations) {
             interrupted = awaitSettled(operation) || interrupted;
-            operation.cleanupFailures().forEach(cleanup::add);
+            cleanupFailures.addAll(operation.cleanupFailures());
         }
-        if (!interrupted) {
-            return cleanup;
-        }
+        // The interruption is the primary failure, so it is recorded before the cleanup failures.
         Failures failures = new Failures();
-        failures.addInterruption(new InterruptedException("Interrupted while closing JMS producer"));
-        failures.add(cleanup.failure());
+        if (interrupted) {
+            failures.addInterruption(new InterruptedException("Interrupted while closing JMS producer"));
+        }
+        cleanupFailures.forEach(failures::add);
         return failures;
     }
 

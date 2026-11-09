@@ -768,37 +768,28 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
 
     private void closeReady(Closing closing, Thread initiator) throws Exception {
         Failures failures = new Failures();
-        runCollecting(failures, eventLoopGroup::stopConnecting);
-        runCollecting(failures, () -> stopConnector(initiator));
-        closeConnections(closing.connecting(), failures::addDistinct);
-        runCollecting(failures, () -> closeGracefully(closing, initiator));
+        failures.close(eventLoopGroup::stopConnecting);
+        failures.close(() -> stopConnector(initiator));
+        closeConnections(closing.connecting(), failures::add);
+        closeGracefully(closing, initiator, failures);
         Failures.rethrow(failures.failure());
     }
 
-    private void closeGracefully(Closing closing, Thread initiator) throws Exception {
-        Failures failures = new Failures();
-        failures.add(requestStartClose(closing.active()));
-        try {
-            drainCallbacks(failures);
-        } finally {
-            finishClose(closing, failures, initiator);
-        }
-        Failures.rethrow(failures.failure());
+    private void closeGracefully(Closing closing, Thread initiator, Failures failures) {
+        requestStartClose(closing.active(), failures);
+        drainCallbacks(failures);
+        finishClose(closing, failures, initiator);
     }
 
     // Asks each connected connection to stop delivering; stops at the first interruption.
-    private static Throwable requestStartClose(List<Connection> active) {
-        Throwable failure = null;
+    private static void requestStartClose(List<Connection> active, Failures failures) {
         for (Connection connection : active) {
             Throwable closeFailure = startClose(connection);
-            if (closeFailure != null) {
-                failure = Failures.appendDistinct(failure, closeFailure);
-                if (closeFailure instanceof InterruptedException) {
-                    break;
-                }
+            failures.add(closeFailure);
+            if (closeFailure instanceof InterruptedException) {
+                break;
             }
         }
-        return failure;
     }
 
     private static Throwable startClose(Connection connection) {
@@ -828,22 +819,21 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             callbacks.shutdown();
             if (!callbacks.awaitTermination(CALLBACK_DRAIN_SECONDS, TimeUnit.SECONDS)) {
                 callbacks.shutdownNow();
-                failures.addDistinct(
-                        new TimeoutException("NSQ consumer callbacks did not finish during close"));
+                failures.add(new TimeoutException("NSQ consumer callbacks did not finish during close"));
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             callbacks.shutdownNow();
-            failures.addDistinct(interrupted);
+            failures.add(interrupted);
         } catch (Throwable closeFailure) {
-            failures.addDistinct(closeFailure);
+            failures.add(closeFailure);
         }
     }
 
     private void finishClose(Closing closing, Failures failures, Thread initiator) {
-        closeConnections(closing.active(), failures::addDistinct);
-        runCollecting(failures, eventLoopGroup::closeChannels);
-        runCollecting(failures, () -> stopScheduler(initiator));
+        closeConnections(closing.active(), failures::add);
+        failures.close(eventLoopGroup::closeChannels);
+        failures.close(() -> stopScheduler(initiator));
     }
 
     private void stopConnector(Thread initiator) {
@@ -874,21 +864,6 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    // Runs one cleanup step, recording its failure as distinct so that every step runs.
-    private static void runCollecting(Failures failures, CleanupStep step) {
-        try {
-            step.run();
-        } catch (Throwable closeFailure) {
-            failures.addDistinct(closeFailure);
-        }
-    }
-
-    @FunctionalInterface
-    private interface CleanupStep {
-        @SuppressWarnings("java:S112") // A cleanup step may throw any failure; it is collected
-        void run() throws Exception;
-    }
-
     private void cleanup(Runnable action, Throwable failure) {
         try {
             action.run();
@@ -912,23 +887,18 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             if (recordedFailures.add(failure)) {
                 cleanupFailures.add(failure);
             }
-            Failures.appendDistinct(primary, failure);
+            Failures.suppress(primary, failure);
             if (startupFailure != primary) {
-                Failures.appendDistinct(startupFailure, failure);
+                Failures.suppress(startupFailure, failure);
             }
         }
     }
 
     private Throwable cleanupOutcome() {
         synchronized (cleanupLock) {
-            if (cleanupFailures.isEmpty()) {
-                return null;
-            }
-            Throwable first = cleanupFailures.getFirst();
-            for (int i = 1; i < cleanupFailures.size(); i++) {
-                Failures.appendDistinct(first, cleanupFailures.get(i));
-            }
-            return first;
+            Failures outcome = new Failures();
+            cleanupFailures.forEach(outcome::add);
+            return outcome.failure();
         }
     }
 

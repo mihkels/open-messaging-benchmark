@@ -77,7 +77,7 @@
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
         <maven.site.plugin.version>3.22.0</maven.site.plugin.version>
-        <flatten.plugin.version>1.8.0</flatten.plugin.version>
+        <flatten.plugin.version>1.9.0</flatten.plugin.version>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
         <spotless.plugin.version>3.11.0</spotless.plugin.version>
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->

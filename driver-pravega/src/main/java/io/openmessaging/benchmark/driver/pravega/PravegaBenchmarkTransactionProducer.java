@@ -23,6 +23,8 @@ import io.pravega.client.stream.TransactionalEventStreamWriter;
 import io.pravega.client.stream.TxnFailedException;
 import io.pravega.client.stream.impl.ByteBufferSerializer;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +42,10 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
     // If null, a transaction has not been started.
     @GuardedBy("this")
     private Transaction<ByteBuffer> transaction;
+
+    // Sends written to the open transaction; they settle only when it commits or fails.
+    @GuardedBy("this")
+    private List<CompletableFuture<Void>> pending = new ArrayList<>();
 
     private final int eventsPerTransaction;
     private int eventCount = 0;
@@ -69,13 +75,15 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         if (closed) {
             return CompletableFuture.failedFuture(new IllegalStateException("Producer is closed"));
         }
+        CompletableFuture<Void> send = new CompletableFuture<>();
+        pending.add(send);
         try {
             writeToTransaction(key, payload);
         } catch (Exception e) {
             // Pravega can propagate checked controller failures from beginTxn without declaring them.
-            return failTransaction(e);
+            failTransaction(e);
         }
-        return CompletableFuture.completedFuture(null);
+        return send;
     }
 
     @GuardedBy("this")
@@ -96,11 +104,12 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
             eventCount = 0;
             transaction.commit();
             transaction = null;
+            takePending().forEach(committed -> committed.complete(null));
         }
     }
 
     @GuardedBy("this")
-    private CompletableFuture<Void> failTransaction(Exception e) {
+    private void failTransaction(Exception e) {
         if (e instanceof InterruptedException) {
             Thread.currentThread().interrupt();
         }
@@ -110,7 +119,15 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         if (failed != null) {
             abortAfterFailure(failed, e);
         }
-        return CompletableFuture.failedFuture(e);
+        takePending().forEach(send -> send.completeExceptionally(e));
+    }
+
+    // Swap the list before settling so callbacks that send again start a fresh transaction batch.
+    @GuardedBy("this")
+    private List<CompletableFuture<Void>> takePending() {
+        List<CompletableFuture<Void>> taken = pending;
+        pending = new ArrayList<>();
+        return taken;
     }
 
     private static void abortAfterFailure(Transaction<ByteBuffer> failed, Exception e) {
@@ -145,6 +162,10 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
                 transaction = null;
                 open.abort();
             }
+        } finally {
+            IllegalStateException uncommitted =
+                    new IllegalStateException("Producer closed before the transaction committed");
+            takePending().forEach(send -> send.completeExceptionally(uncommitted));
         }
     }
 

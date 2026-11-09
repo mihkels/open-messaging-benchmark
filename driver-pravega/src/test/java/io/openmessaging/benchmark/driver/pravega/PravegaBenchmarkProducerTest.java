@@ -328,12 +328,77 @@ class PravegaBenchmarkProducerTest {
 
         assertThatThrownBy(result::join).hasCause(cause);
         verify(failed).abort();
-        assertThat(producer.sendAsync(Optional.empty(), new byte[] {2})).isCompleted();
+        assertThat(producer.sendAsync(Optional.empty(), new byte[] {2})).isNotDone();
         verify(next).writeEvent(any(ByteBuffer.class));
     }
 
     @Test
-    void transactionCreationFailureCompletesExceptionallyAndAllowsRetry() {
+    void sendsCompleteOnlyAfterTheirTransactionCommits() throws Exception {
+        EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
+        TransactionalEventStreamWriter<ByteBuffer> writer = mock();
+        Transaction<ByteBuffer> transaction = mock();
+        when(factory.<ByteBuffer>createTransactionalEventWriter(
+                        anyString(), eq("stream"), any(), any()))
+                .thenReturn(writer);
+        when(writer.beginTxn()).thenReturn(transaction);
+        PravegaBenchmarkTransactionProducer producer =
+                new PravegaBenchmarkTransactionProducer("stream", factory, false, true, 3);
+
+        CompletableFuture<Void> first = producer.sendAsync(Optional.empty(), new byte[] {1});
+        CompletableFuture<Void> second = producer.sendAsync(Optional.empty(), new byte[] {2});
+        assertThat(first).isNotDone();
+        assertThat(second).isNotDone();
+        CompletableFuture<Void> third = producer.sendAsync(Optional.empty(), new byte[] {3});
+
+        verify(transaction).commit();
+        assertThat(List.of(first, second, third)).allSatisfy(send -> assertThat(send).isCompleted());
+    }
+
+    @Test
+    void commitFailureFailsEverySendOfTheTransaction() throws Exception {
+        EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
+        TransactionalEventStreamWriter<ByteBuffer> writer = mock();
+        Transaction<ByteBuffer> transaction = mock();
+        when(factory.<ByteBuffer>createTransactionalEventWriter(
+                        anyString(), eq("stream"), any(), any()))
+                .thenReturn(writer);
+        when(writer.beginTxn()).thenReturn(transaction);
+        TxnFailedException cause = new TxnFailedException("commit failed");
+        doThrow(cause).when(transaction).commit();
+        PravegaBenchmarkTransactionProducer producer =
+                new PravegaBenchmarkTransactionProducer("stream", factory, false, true, 3);
+
+        List<CompletableFuture<Void>> sends =
+                List.of(
+                        producer.sendAsync(Optional.empty(), new byte[] {1}),
+                        producer.sendAsync(Optional.empty(), new byte[] {2}),
+                        producer.sendAsync(Optional.empty(), new byte[] {3}));
+
+        verify(transaction).abort();
+        assertThat(sends).allSatisfy(send -> assertThatThrownBy(send::join).hasCause(cause));
+    }
+
+    @Test
+    void closeFailsSendsOfTheOpenTransaction() throws Exception {
+        EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
+        TransactionalEventStreamWriter<ByteBuffer> writer = mock();
+        Transaction<ByteBuffer> transaction = mock();
+        when(factory.<ByteBuffer>createTransactionalEventWriter(
+                        anyString(), eq("stream"), any(), any()))
+                .thenReturn(writer);
+        when(writer.beginTxn()).thenReturn(transaction);
+        PravegaBenchmarkTransactionProducer producer =
+                new PravegaBenchmarkTransactionProducer("stream", factory, false, true, 3);
+        CompletableFuture<Void> send = producer.sendAsync(Optional.empty(), new byte[] {1});
+
+        producer.close();
+
+        verify(transaction).abort();
+        assertThat(send).isCompletedExceptionally();
+    }
+
+    @Test
+    void transactionCreationFailureCompletesExceptionallyAndAllowsRetry() throws Exception {
         EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
         TransactionalEventStreamWriter<ByteBuffer> writer = mock();
         Transaction<ByteBuffer> next = mock();
@@ -347,7 +412,8 @@ class PravegaBenchmarkProducerTest {
 
         assertThatThrownBy(() -> producer.sendAsync(Optional.empty(), new byte[] {1}).join())
                 .hasCause(cause);
-        assertThat(producer.sendAsync(Optional.empty(), new byte[] {2})).isCompleted();
+        assertThat(producer.sendAsync(Optional.empty(), new byte[] {2})).isNotDone();
+        verify(next).writeEvent(any(ByteBuffer.class));
     }
 
     @Test

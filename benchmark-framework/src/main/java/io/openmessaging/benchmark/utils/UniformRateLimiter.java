@@ -15,9 +15,11 @@ package io.openmessaging.benchmark.utils;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 
 /**
  * Provides a next operation time for rate limited operation streams.<br>
@@ -29,12 +31,12 @@ public final class UniformRateLimiter {
     private static final double ONE_SEC_IN_NS = (double) SECONDS.toNanos(1);
     private static final long NOT_STARTED = Long.MIN_VALUE;
 
-    private final Supplier<Long> nanoClock;
-    private volatile Schedule schedule;
+    private final LongSupplier nanoClock;
+    private final AtomicReference<Schedule> schedule;
 
-    UniformRateLimiter(final double opsPerSec, Supplier<Long> nanoClock) {
+    UniformRateLimiter(final double opsPerSec, LongSupplier nanoClock) {
         this.nanoClock = nanoClock;
-        this.schedule = new Schedule(opsPerSec, NOT_STARTED);
+        this.schedule = new AtomicReference<>(new Schedule(opsPerSec, NOT_STARTED));
     }
 
     public UniformRateLimiter(final double opsPerSec) {
@@ -42,11 +44,11 @@ public final class UniformRateLimiter {
     }
 
     public double getOpsPerSec() {
-        return schedule.opsPerSec;
+        return current().opsPerSec;
     }
 
     public long getIntervalNs() {
-        return schedule.intervalNs;
+        return current().intervalNs;
     }
 
     /**
@@ -57,12 +59,16 @@ public final class UniformRateLimiter {
      * @param opsPerSec the new rate, which must be finite and greater than 0
      */
     public void setRate(final double opsPerSec) {
-        long startNs = schedule.start == NOT_STARTED ? NOT_STARTED : nanoClock.get();
-        schedule = new Schedule(opsPerSec, startNs);
+        long startNs = current().start == NOT_STARTED ? NOT_STARTED : nanoClock.getAsLong();
+        schedule.set(new Schedule(opsPerSec, startNs));
     }
 
     public long acquire() {
-        return schedule.acquire(nanoClock);
+        return current().acquire(nanoClock);
+    }
+
+    private Schedule current() {
+        return Objects.requireNonNull(schedule.get());
     }
 
     public static void interruptibleSleepNs(final long intendedTime) throws InterruptedException {
@@ -108,11 +114,11 @@ public final class UniformRateLimiter {
             this.start = start;
         }
 
-        private long acquire(Supplier<Long> nanoClock) {
+        private long acquire(LongSupplier nanoClock) {
             final long currOpIndex = INDEX_UPDATER.getAndIncrement(this);
             long startNs = this.start;
             if (startNs == NOT_STARTED) {
-                startNs = nanoClock.get();
+                startNs = nanoClock.getAsLong();
                 if (!START_UPDATER.compareAndSet(this, NOT_STARTED, startNs)) {
                     startNs = this.start;
                 }

@@ -25,7 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 
 class UniformRateLimiterTest {
@@ -42,8 +42,8 @@ class UniformRateLimiterTest {
 
     @Test
     void acquireSlowSingleThread() {
-        Supplier<Long> mockClock = mock(Supplier.class);
-        when(mockClock.get()).thenReturn(SECONDS.toNanos(2));
+        LongSupplier mockClock = mock(LongSupplier.class);
+        when(mockClock.getAsLong()).thenReturn(SECONDS.toNanos(2));
         UniformRateLimiter rateLimiter = new UniformRateLimiter(1000, mockClock);
         assertThat(rateLimiter.acquire()).isEqualTo(2000000000L);
         assertThat(rateLimiter.acquire()).isEqualTo(2001000000L);

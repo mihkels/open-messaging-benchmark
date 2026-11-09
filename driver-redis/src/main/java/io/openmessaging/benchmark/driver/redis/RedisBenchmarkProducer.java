@@ -26,30 +26,33 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.params.XAddParams;
 
 public class RedisBenchmarkProducer implements BenchmarkProducer {
+    private static final byte[] PAYLOAD_FIELD = "payload".getBytes(UTF_8);
+    private static final byte[] KEY_FIELD = "key".getBytes(UTF_8);
+
     private final JedisPool pool;
-    private final String rmqTopic;
+    private final byte[] topic;
     private final XAddParams xaddParams;
     private final PublicationLifecycle lifecycle = new PublicationLifecycle("Redis producer");
 
     public RedisBenchmarkProducer(final JedisPool pool, final String rmqTopic) {
         this.pool = pool;
-        this.rmqTopic = rmqTopic;
+        this.topic = rmqTopic.getBytes(UTF_8);
         this.xaddParams = redis.clients.jedis.params.XAddParams.xAddParams();
     }
 
     @Override
     public CompletableFuture<Void> sendAsync(final Optional<String> key, final byte[] payload) {
-        return lifecycle.publish(settle -> {
+        // xadd returns once Redis has acknowledged the entry
+        return lifecycle.publishSync(() -> {
             // byte[] keys have identity equality; the two field names are distinct arrays
             Map<byte[], byte[]> map1 = new IdentityHashMap<>();
-            map1.put("payload".getBytes(UTF_8), payload);
+            map1.put(PAYLOAD_FIELD, payload);
             if (key.isPresent()) {
-                map1.put("key".getBytes(UTF_8), key.get().getBytes(UTF_8));
+                map1.put(KEY_FIELD, key.get().getBytes(UTF_8));
             }
             try (Jedis jedis = this.pool.getResource()) {
-                jedis.xadd(this.rmqTopic.getBytes(UTF_8), map1, this.xaddParams);
+                jedis.xadd(this.topic, map1, this.xaddParams);
             }
-            settle.complete(null);
         });
     }
 

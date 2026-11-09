@@ -19,6 +19,7 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.Failures;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -47,6 +48,10 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private final byte[] groupName;
     private final byte[] consumerName;
     private final Map<byte[], StreamEntryID> streamQuery;
+    // Read up to 100 messages at a time; block(1000) rather than block(0) wakes the loop every
+    // second so it can check the closing flag
+    private final XReadGroupParams readParams =
+            XReadGroupParams.xReadGroupParams().count(100).block(1000);
     private final ConsumerCallback consumerCallback;
     private final ExecutorService executor;
     private final Future<?> consumerTask;
@@ -100,17 +105,8 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private boolean pollOnce() {
         // Get a fresh Jedis connection from the pool for each iteration
         try (Jedis jedis = pool.getResource()) {
-            // Use block(1000) for 1 second timeout instead of block(0) which blocks
-            // indefinitely
-            // This allows the loop to check the closing flag periodically
             List<Map.Entry<byte[], List<StreamEntryBinary>>> range =
-                    jedis.xreadGroupBinary(
-                            groupName,
-                            consumerName,
-                            XReadGroupParams.xReadGroupParams()
-                                    .count(100) // Read up to 100 messages at a time
-                                    .block(1000), // 1 second timeout
-                            streamQuery);
+                    jedis.xreadGroupBinary(groupName, consumerName, readParams, streamQuery);
             deliver(jedis, range);
         } catch (redis.clients.jedis.exceptions.JedisDataException e) {
             // Ignore NOGROUP errors during shutdown - the stream/group may have been deleted
@@ -132,17 +128,23 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         if (range == null) {
             return;
         }
-        for (var streamEntries : range) {
-            for (StreamEntryBinary entry : streamEntries.getValue()) {
-                if (closing) {
-                    return;
+        // The only stream read is topic; its delivered entries are acknowledged in one call
+        List<StreamEntryID> delivered = new ArrayList<>();
+        try {
+            for (var streamEntries : range) {
+                for (StreamEntryBinary entry : streamEntries.getValue()) {
+                    if (closing) {
+                        return;
+                    }
+                    long timestamp = entry.getID().getTime();
+                    byte[] payload = readPayload(entry);
+                    consumerCallback.messageReceived(payload, timestamp);
+                    delivered.add(entry.getID());
                 }
-                long timestamp = entry.getID().getTime();
-                byte[] payload = readPayload(entry);
-                consumerCallback.messageReceived(payload, timestamp);
-
-                // Acknowledge the message
-                jedis.xack(topic, subscriptionName, entry.getID());
+            }
+        } finally {
+            if (!delivered.isEmpty()) {
+                jedis.xack(topic, subscriptionName, delivered.toArray(StreamEntryID[]::new));
             }
         }
     }

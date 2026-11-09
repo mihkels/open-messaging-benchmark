@@ -24,15 +24,15 @@ import org.jspecify.annotations.Nullable;
  * <p>A send goes through {@link #publish(Send)}, which registers it, hands the client call a
  * callback that settles it, and counts the publication as active until the client call returns.
  * {@link #close()} waits for publications in progress, fails the sends still pending, and makes
- * concurrent closers wait for the first one.
+ * concurrent closers wait for the first one. A client that settles every send before its call
+ * returns can use {@link #publishSync(SyncSend)} instead, which skips the pending-send tracking.
  */
 public final class PublicationLifecycle {
     private final String producerName;
     private final PendingSendTracker pending;
-    private final Object lock = new Object();
-    private final ThreadLocal<Integer> publishingDepth = new ThreadLocal<>();
+    // Per-thread depth of publications; a reusable holder avoids set/remove churn per send
+    private final ThreadLocal<int[]> publishingDepth = ThreadLocal.withInitial(() -> new int[1]);
     private final CloseOnce<RuntimeException> closer = new CloseOnce<>();
-    private int activePublications;
 
     /**
      * Creates the lifecycle of one producer.
@@ -59,10 +59,13 @@ public final class PublicationLifecycle {
     // The interrupt is restored before the failure is recorded on the future
     @SuppressWarnings("java:S2142")
     public <E extends Exception> CompletableFuture<Void> publish(Send<E> send) {
-        CompletableFuture<Void> future = begin();
+        // One tracker lock both registers the send and counts the publication as active
+        CompletableFuture<Void> future = pending.beginTrackedPublication();
         if (future.isDone()) {
             return future;
         }
+        int[] depth = publishingDepth.get();
+        depth[0]++;
         try {
             send.publish(failure -> pending.completeFromClient(future, failure));
         } catch (Exception failure) {
@@ -71,37 +74,42 @@ public final class PublicationLifecycle {
             }
             future.completeExceptionally(failure);
         } finally {
-            end();
+            depth[0]--;
+            pending.endPublication();
         }
         return future;
     }
 
-    private CompletableFuture<Void> begin() {
-        synchronized (lock) {
-            CompletableFuture<Void> future = pending.register();
-            if (future.isDone()) {
-                return future;
-            }
-            activePublications++;
-            Integer depth = publishingDepth.get();
-            publishingDepth.set(depth == null ? 1 : depth + 1);
-            return future;
+    /**
+     * Publishes one send through a client call that settles it before returning. Once close has begun
+     * the send fails without calling the client. Otherwise the publication counts as active until
+     * {@code send} returns, so {@link #close()} waits for it; the send succeeds when {@code send}
+     * returns and fails with what it throws. An {@link InterruptedException} also restores the
+     * interrupt status.
+     *
+     * @param <E> the checked exception the client call may throw
+     * @param send makes the client call, returning once the client has acknowledged the send
+     * @return the already settled future for the send
+     */
+    // The interrupt is restored before the failure is recorded on the future
+    @SuppressWarnings("java:S2142")
+    public <E extends Exception> CompletableFuture<Void> publishSync(SyncSend<E> send) {
+        if (!pending.beginUntrackedPublication()) {
+            return CompletableFuture.failedFuture(pending.closedFailure());
         }
-    }
-
-    private void end() {
-        int depth = publishingDepth.get() - 1;
-        if (depth == 0) {
-            publishingDepth.remove();
-        } else {
-            publishingDepth.set(depth);
-        }
-        synchronized (lock) {
-            activePublications--;
-            // Only the close owner waits on activePublications, and only once close has begun
-            if (closer.isClosed() && activePublications == 0) {
-                lock.notifyAll();
+        int[] depth = publishingDepth.get();
+        depth[0]++;
+        try {
+            send.publish();
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception failure) {
+            if (failure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
             }
+            return CompletableFuture.failedFuture(failure);
+        } finally {
+            depth[0]--;
+            pending.endPublication();
         }
     }
 
@@ -135,7 +143,7 @@ public final class PublicationLifecycle {
      * @throws IllegalStateException if called from a publication on the same thread
      */
     public <E extends Exception> void close(ClientCloser<E> closeClient) throws E {
-        if (publishingDepth.get() != null) {
+        if (publishingDepth.get()[0] != 0) {
             throw new IllegalStateException(
                     "Cannot close "
                             + producerName
@@ -149,19 +157,8 @@ public final class PublicationLifecycle {
     }
 
     // An interrupt while waiting is deferred so close still completes, then restored in finally
-    @SuppressWarnings("java:S2142")
     private <E extends Exception> @Nullable Throwable closeOwned(ClientCloser<E> closeClient) {
-        boolean interrupted = false;
-        synchronized (lock) {
-            pending.beginClose();
-            while (activePublications != 0) {
-                try {
-                    lock.wait();
-                } catch (InterruptedException _) {
-                    interrupted = true;
-                }
-            }
-        }
+        boolean interrupted = pending.beginCloseAndAwaitPublications();
         Throwable closeFailure = null;
         try {
             closeClient.close();
@@ -194,6 +191,21 @@ public final class PublicationLifecycle {
          * @throws E if the client rejects the send synchronously
          */
         void publish(Settle settle) throws E;
+    }
+
+    /**
+     * Makes the client call of one send that the client settles before the call returns.
+     *
+     * @param <E> the checked exception the client call may throw
+     */
+    @FunctionalInterface
+    public interface SyncSend<E extends Exception> {
+        /**
+         * Hands the send to the client and returns once the client has acknowledged it.
+         *
+         * @throws E if the client rejects the send
+         */
+        void publish() throws E;
     }
 
     /** Settles one send from the client's acknowledgement. */

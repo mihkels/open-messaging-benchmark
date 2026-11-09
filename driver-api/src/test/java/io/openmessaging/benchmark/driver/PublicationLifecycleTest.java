@@ -102,6 +102,71 @@ class PublicationLifecycleTest {
     }
 
     @Test
+    void synchronousSendSettlesWhenTheClientCallReturns() {
+        PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
+        Exception rejection = new Exception("send rejected");
+
+        CompletableFuture<Void> sent = lifecycle.publishSync(() -> {});
+        CompletableFuture<Void> rejected =
+                lifecycle.publishSync(() -> {
+                    throw rejection;
+                });
+
+        assertNull(sent.join());
+        assertSame(rejection, assertThrows(CompletionException.class, rejected::join).getCause());
+        assertFalse(Thread.currentThread().isInterrupted());
+        lifecycle.close();
+        AtomicInteger clientCalls = new AtomicInteger();
+        CompletableFuture<Void> late = lifecycle.publishSync(clientCalls::incrementAndGet);
+        assertTrue(late.isCompletedExceptionally());
+        assertEquals(0, clientCalls.get());
+    }
+
+    @Test
+    void interruptedSynchronousSendFailsAndRestoresTheInterrupt() {
+        PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
+        InterruptedException interrupted = new InterruptedException("interrupted");
+        try {
+            CompletableFuture<Void> send =
+                    lifecycle.publishSync(() -> {
+                        throw interrupted;
+                    });
+
+            assertTrue(Thread.currentThread().isInterrupted());
+            assertSame(interrupted, assertThrows(CompletionException.class, send::join).getCause());
+        } finally {
+            Thread.interrupted();
+        }
+        lifecycle.close();
+    }
+
+    @Test
+    void closeDuringASynchronousSendIsRejectedOnTheSameThreadAndWaitedForOnOthers() throws Exception {
+        PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
+        AtomicReference<IllegalStateException> rejected = new AtomicReference<>();
+        lifecycle.publishSync(
+                () -> rejected.set(assertThrows(IllegalStateException.class, lifecycle::close)));
+        assertTrue(rejected.get().getMessage().contains("test producer"));
+        assertFalse(lifecycle.isClosed());
+
+        CompletableFuture<Void> started = new CompletableFuture<>();
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<CompletableFuture<Void>> publication =
+                CompletableFuture.supplyAsync(() ->
+                        lifecycle.publishSync(() -> {
+                            started.complete(null);
+                            release.join();
+                        }));
+        started.get(5, TimeUnit.SECONDS);
+        CompletableFuture<Void> close = CompletableFuture.runAsync(lifecycle::close);
+        assertThrows(TimeoutException.class, () -> close.get(100, TimeUnit.MILLISECONDS));
+
+        release.complete(null);
+        assertNull(publication.get(5, TimeUnit.SECONDS).join());
+        close.get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
     void closeDuringAPublicationOnTheSameThreadIsRejected() {
         PublicationLifecycle lifecycle = new PublicationLifecycle("test producer");
         AtomicReference<IllegalStateException> rejected = new AtomicReference<>();

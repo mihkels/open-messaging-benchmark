@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.driver.kafka;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,18 +34,21 @@ import org.junit.jupiter.api.Test;
 
 class KafkaTopicCreatorBatchFailureTest {
     @Test
-    void failedBatchRequestIsRequeuedAndRetried() {
+    void failedBatchRequestIsRequeuedAndRetriedAfterTheBackoff() {
         AdminClient admin = mock(AdminClient.class);
         CreateTopicsResult created = mock(CreateTopicsResult.class);
         when(created.values()).thenReturn(Map.of("topic", KafkaFuture.completedFuture(null)));
         when(admin.createTopics(any()))
                 .thenThrow(new IllegalStateException("broker unavailable"))
                 .thenReturn(created);
+        long backoffMs = 50;
 
+        long start = System.nanoTime();
         CompletableFuture<Void> result =
-                new KafkaTopicCreator(admin, Map.of(), (short) 1)
+                new KafkaTopicCreator(admin, Map.of(), (short) 1, 500, backoffMs, System::currentTimeMillis)
                         .create(List.of(new TopicInfo("topic", 1)));
         result.join();
+        assertThat(System.nanoTime() - start).isGreaterThanOrEqualTo(MILLISECONDS.toNanos(backoffMs));
         verify(admin, times(2)).createTopics(any());
         assertThat(result.cancel(true)).isFalse();
     }

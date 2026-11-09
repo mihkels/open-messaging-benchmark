@@ -17,7 +17,7 @@
 <FindBugsFilter>
     <!-- JMH generates padding fields and execution scaffolding, not application logic. -->
     <Match>
-        <Class name="~io\.openmessaging\.benchmark\.worker\.jmh_generated\..*" />
+        <Class name="~io\.openmessaging\.benchmark\.(worker|driver)\.jmh_generated\..*" />
     </Match>
     <!--
         This harness-only producer returns an already-completed future solely to MessageProducer,

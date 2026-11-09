@@ -89,14 +89,28 @@ class RabbitMqBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void unreachableBrokersFailConnectionWithAndWithoutCredentials() throws Exception {
+    void credentialsStayOutOfTopicNamesAndConnectErrors() throws Exception {
         RabbitMqBenchmarkDriver driver =
-                driver("amqpUris: [amqp://user:pw@127.0.0.1:1, amqp://127.0.0.1:2]\n");
-        assertThatThrownBy(() -> driver.createProducer("amqp://user:pw@127.0.0.1:1?exchange=e").join())
-                .hasMessageContaining("Couldn't establish connection to: amqp://user:pw@127.0.0.1:1");
-        assertThatThrownBy(
-                        () -> driver.createConsumer("amqp://127.0.0.1:2?exchange=e", "s", null).join())
-                .hasMessageContaining("Couldn't establish connection to: amqp://127.0.0.1:2");
+                driver("amqpUris: [amqp://user:p%40ss@127.0.0.1:1, amqp://user@127.0.0.1:2]\n");
+        String withPassword = driver.getTopicNamePrefix();
+        String withoutPassword = driver.getTopicNamePrefix();
+        assertThat(withPassword).isEqualTo("amqp://127.0.0.1:1?exchange=test-exchange");
+        assertThat(withoutPassword).isEqualTo("amqp://127.0.0.1:2?exchange=test-exchange");
+
+        Throwable producerFailure =
+                org.assertj.core.api.Assertions.catchThrowable(
+                        () -> driver.createProducer(withPassword).join());
+        assertThat(producerFailure)
+                .hasMessageContaining("Couldn't establish connection to: amqp://127.0.0.1:1")
+                .hasRootCauseInstanceOf(IOException.class);
+        java.io.StringWriter trace = new java.io.StringWriter();
+        producerFailure.printStackTrace(new java.io.PrintWriter(trace));
+        assertThat(trace.toString()).doesNotContain("p%40ss", "p@ss");
+
+        // A user without a password parses and reaches the connect attempt.
+        assertThatThrownBy(() -> driver.createConsumer(withoutPassword, "s", null).join())
+                .hasMessageContaining("Couldn't establish connection to: amqp://127.0.0.1:2")
+                .hasRootCauseInstanceOf(IOException.class);
         driver.close();
     }
 

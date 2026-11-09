@@ -88,7 +88,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         // Distribute topics by performing a round-robin on AMQP URIs
         String primaryBrokerUri =
                 config.amqpUris.get(uriIndex.getAndIncrement() % config.amqpUris.size());
-        URI configUri = URI.create(primaryBrokerUri);
+        URI configUri = newURI(withoutUserInfo(primaryBrokerUri));
         URI topicUri = configUri.resolve(configUri.getRawPath() + "?exchange=test-exchange");
         return topicUri.toString();
     }
@@ -208,7 +208,9 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         return parameters.get("exchange").get(0);
     }
 
-    private Connection getOrCreateConnection(String primaryBrokerUri) {
+    private Connection getOrCreateConnection(String topicUri) {
+        // Topic names carry no credentials, so key connections by the redacted URI.
+        String primaryBrokerUri = withoutUserInfo(topicUri);
         if (closed.get()) {
             throw new IllegalStateException("RabbitMQ driver is closed");
         }
@@ -216,26 +218,27 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                 connections.computeIfAbsent(
                         primaryBrokerUri,
                         p -> {
+                            String configured =
+                                    config.amqpUris.stream()
+                                            .filter(s -> withoutUserInfo(s).equals(p))
+                                            .findFirst()
+                                            .orElse(topicUri);
                             // RabbitMQ will pick the first available address from the list. Future reconnection
                             // attempts will pick a random accessible address from the provided list.
                             List<Address> addresses =
-                                    Stream.concat(Stream.of(p), config.amqpUris.stream().filter(s -> !s.equals(p)))
+                                    Stream.concat(
+                                                    Stream.of(configured),
+                                                    config.amqpUris.stream().filter(s -> !s.equals(configured)))
                                             .map(s -> newURI(s))
                                             .map(u -> new Address(u.getHost(), u.getPort()))
                                             .toList();
                             try {
                                 ConnectionFactory connectionFactory = new ConnectionFactory();
                                 connectionFactory.setAutomaticRecoveryEnabled(true);
-                                String userInfo = newURI(primaryBrokerUri).getUserInfo();
-                                if (userInfo != null) {
-                                    String[] userInfoElems = userInfo.split(":");
-                                    connectionFactory.setUsername(userInfoElems[0]);
-                                    connectionFactory.setPassword(userInfoElems[1]);
-                                }
+                                connectionFactory.setUri(configured);
                                 return connectionFactory.newConnection(addresses);
                             } catch (Exception e) {
-                                throw new RuntimeException(
-                                        "Couldn't establish connection to: " + primaryBrokerUri, e);
+                                throw new RuntimeException("Couldn't establish connection to: " + p, e);
                             }
                         });
         if (closed.get()) {
@@ -261,7 +264,13 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         try {
             return new URI(uri);
         } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
+            // The exception message echoes the URI, credentials included.
+            throw new IllegalArgumentException("Invalid AMQP URI: " + e.getReason());
         }
+    }
+
+    private static String withoutUserInfo(String uri) {
+        String userInfo = newURI(uri).getRawUserInfo();
+        return userInfo == null ? uri : uri.replace(userInfo + "@", "");
     }
 }

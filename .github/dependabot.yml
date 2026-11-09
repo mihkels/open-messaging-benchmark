@@ -20,6 +20,8 @@ updates:
       # Pulsar 5's shaded client clashes with pulsar-jms-all in the shared JMS driver process (#325)
       - dependency-name: org.apache.pulsar:pulsar-client-all
         update-types: ['version-update:semver-major']
+      # NATS Streaming is deprecated upstream (support ended June 2023); keep the driver frozen (#332)
+      - dependency-name: io.nats:java-nats-streaming
     commit-message:
       prefix: deps
 

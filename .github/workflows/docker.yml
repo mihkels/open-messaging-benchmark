@@ -247,7 +247,18 @@ jobs:
         run: |
           digest=$(jq -r '.release["containerimage.digest"]' <<< "$METADATA")
           [[ "$digest" == sha256:* ]] || { echo "no image digest in bake metadata" >&2; exit 1; }
-          mise exec "cosign@$COSIGN_VERSION" -- cosign sign --yes "$IMAGE_REPOSITORY@$digest"
+          for attempt in 1 2 3 4; do
+            if mise exec "cosign@$COSIGN_VERSION" -- cosign sign --yes "$IMAGE_REPOSITORY@$digest"; then
+              break
+            fi
+            if [[ "$attempt" -eq 4 ]]; then
+              echo "::error::Image signing failed after $attempt attempts"
+              exit 1
+            fi
+            delay=$((attempt * 15))
+            echo "::warning::Image signing attempt $attempt failed; retrying in ${delay}s"
+            sleep "$delay"
+          done
           echo "Signed $IMAGE_REPOSITORY@$digest" >> "$GITHUB_STEP_SUMMARY"
 
   # Keeps code scanning current between releases without building: new advisories against the

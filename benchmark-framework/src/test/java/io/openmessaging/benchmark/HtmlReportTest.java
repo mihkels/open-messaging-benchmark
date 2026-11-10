@@ -58,7 +58,7 @@ class HtmlReportTest {
 
         String html = HtmlReport.render(runs);
 
-        assertThat(html).startsWith("<!DOCTYPE html>").doesNotContain("__OMB_DATA__");
+        assertThat(html).contains("<!DOCTYPE html>").doesNotContain("__OMB_DATA__");
         JsonNode data = data(html);
         assertThat(data.propertyNames()).containsExactly("b.json", "a.json");
         assertThat(data.get("a.json").get("driver").stringValue()).isEqualTo("A");

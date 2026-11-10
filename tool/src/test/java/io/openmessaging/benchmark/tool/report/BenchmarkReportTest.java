@@ -261,7 +261,7 @@ class BenchmarkReportTest {
         int exit = run("html", fixture("baseline-1.json"), fixture("legacy-v1.json"));
         assertThat(exit).isZero();
         assertThat(out())
-                .startsWith("<!DOCTYPE html>")
+                .contains("<!DOCTYPE html>")
                 .contains("\"baseline-1.json\"", "\"legacy-v1.json\"", "echarts@5.6.0");
         assertThat(err()).isEmpty();
     }

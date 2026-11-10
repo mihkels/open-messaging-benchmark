@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -67,6 +68,9 @@ public class TestResult {
     public List<Double> publishErrorRate = new ArrayList<>();
     public List<Double> consumeRate = new ArrayList<>();
     public List<Long> backlog = new ArrayList<>();
+
+    /** The run phase of each period; warm-up periods come first and are left out of the summary. */
+    public List<RunPhase> phase = new ArrayList<>();
 
     public List<Double> publishLatencyAvg = new ArrayList<>();
     public List<Double> publishLatency50pct = new ArrayList<>();
@@ -154,8 +158,10 @@ public class TestResult {
      * Appends the values of one report interval.
      *
      * @param period the report interval, with latencies in microseconds
+     * @param periodPhase the run phase the interval was recorded in
      */
-    void recordPeriod(PeriodReport period) {
+    void recordPeriod(PeriodReport period, RunPhase periodPhase) {
+        phase.add(periodPhase);
         publishRate.add(period.publishRate());
         publishErrorRate.add(period.publishErrorRate());
         consumeRate.add(period.consumeRate());
@@ -270,8 +276,8 @@ public class TestResult {
     }
 
     void recordSummary(CountersStats counters, double targetRate, long maxBacklog) {
-        double publishRateAvg = average(publishRate);
-        double consumeRateAvg = average(consumeRate);
+        double publishRateAvg = average(measured(phase, publishRate));
+        double consumeRateAvg = average(measured(phase, consumeRate));
         summary =
                 new ResultSummary(
                         publishRateAvg,
@@ -299,6 +305,20 @@ public class TestResult {
      */
     public static double average(List<Double> values) {
         return values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    }
+
+    /**
+     * The measured part of a per-period series: the periods after the warm-up. Results written before
+     * phases were recorded have no {@link #phase} and are measured throughout.
+     *
+     * @param <T> the series element type
+     * @param phases the {@link #phase} series
+     * @param values a per-period series of the same result
+     * @return the values recorded after the warm-up
+     */
+    public static <T> List<T> measured(List<RunPhase> phases, List<T> values) {
+        int warmup = (int) phases.stream().takeWhile(RunPhase.WARMUP::equals).count();
+        return values.subList(Math.min(warmup, values.size()), values.size());
     }
 
     /**

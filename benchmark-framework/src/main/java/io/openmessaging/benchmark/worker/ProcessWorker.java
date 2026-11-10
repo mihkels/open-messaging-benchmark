@@ -23,6 +23,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -71,6 +72,7 @@ public class ProcessWorker implements Worker {
     private volatile boolean unusable;
     private volatile boolean initializing;
     private volatile @Nullable String runId;
+    private volatile @Nullable RunPhase phase;
     // The current driver process, kept until it is fully stopped so that termination can be retried
     private volatile @Nullable DriverProcess current;
 
@@ -145,6 +147,10 @@ public class ProcessWorker implements Worker {
             if (id != null) {
                 client.setRunId(id);
             }
+            RunPhase currentPhase = phase;
+            if (currentPhase != null) {
+                client.setPhase(currentPhase);
+            }
             starting.authorizeConfig(driverConfigFile);
             client.initializeDriverFromLocalPath(driverConfigFile);
         } catch (Exception e) {
@@ -201,6 +207,16 @@ public class ProcessWorker implements Worker {
         HttpWorkerClient client = running == null ? null : running.client();
         if (client != null) {
             client.setRunId(runId);
+        }
+    }
+
+    @Override
+    public synchronized void setPhase(RunPhase phase) {
+        this.phase = phase;
+        DriverProcess running = current;
+        HttpWorkerClient client = running == null ? null : running.client();
+        if (client != null) {
+            client.setPhase(phase);
         }
     }
 

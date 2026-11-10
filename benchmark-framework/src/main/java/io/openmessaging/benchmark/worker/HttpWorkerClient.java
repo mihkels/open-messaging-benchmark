@@ -26,6 +26,7 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.PERIOD_STATS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.PROBE_PRODUCERS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.RESET_STATS;
 import static io.openmessaging.benchmark.worker.WorkerHandler.RESUME_CONSUMERS;
+import static io.openmessaging.benchmark.worker.WorkerHandler.SET_PHASE;
 import static io.openmessaging.benchmark.worker.WorkerHandler.SET_RUN_ID;
 import static io.openmessaging.benchmark.worker.WorkerHandler.START_LOAD;
 import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
@@ -37,6 +38,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
@@ -138,6 +140,11 @@ public final class HttpWorkerClient implements Worker {
     @Override
     public void setRunId(String runId) {
         sendPost(SET_RUN_ID, writer.writeValueAsBytes(runId));
+    }
+
+    @Override
+    public void setPhase(RunPhase phase) {
+        sendPost(SET_PHASE, writer.writeValueAsBytes(phase));
     }
 
     void initializeDriverFromLocalPath(Path configurationFile) {

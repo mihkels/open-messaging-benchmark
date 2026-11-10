@@ -93,12 +93,15 @@ internally, while the existing result fields retain their documented units.
 
 ## Period series
 
-These lists have one entry per 10-second sampling period of the measured phase. Warm-up is not
-included. For backlog workloads the measured phase includes the build-up and drain; see
-[Latency and backlog](../methodology/latency-and-backlog.md).
+These lists have one entry per 10-second sampling period. Warm-up periods come first, tagged
+`WARMUP` in `phase`; `summary` and the `aggregated*` values leave them out. For backlog workloads
+the measured window includes the build-up and drain, tagged `BACKLOG_BUILD` and `BACKLOG_DRAIN`;
+see [Latency and backlog](../methodology/latency-and-backlog.md). Files written before `phase`
+existed have no warm-up periods.
 
 |                                  Field                                   |     Type     |                                                                      Description                                                                      |
 |--------------------------------------------------------------------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `phase`                                                                  | string list  | Run phase of the period: `WARMUP`, `BACKLOG_BUILD`, `BACKLOG_DRAIN` or `MEASURE`                                                                      |
 | `publishRate`                                                            | number list  | Messages published per second                                                                                                                         |
 | `publishErrorRate`                                                       | number list  | Failed publishes per second                                                                                                                           |
 | `consumeRate`                                                            | number list  | Messages received per second, across all subscriptions                                                                                                |
@@ -147,6 +150,7 @@ comparing two results.
   "publishRate": [493.9, 505.6, 500.0],
   "consumeRate": [494.0, 505.4, 500.2],
   "backlog": [0, 2, 0],
+  "phase": ["MEASURE", "MEASURE", "MEASURE"],
   "publishLatency99pct": [6.952, 3.971, 5.751],
   "publishDelayLatency99pct": [3050, 2073, 6428],
   "endToEndLatency99pct": [10.0, 5.0, 6.0],

@@ -14,6 +14,7 @@
     limitations under the License.
 
 -->
+<!-- OMB_LOG_FORMAT=json (or -Domb.log.format=json) switches every appender to ECS JSON -->
 <Configuration status="INFO" name="messaging-benchmark">
     <Properties>
         <Property name="logName">${sys:omb.log.name:-benchmark-worker}</Property>
@@ -21,11 +22,31 @@
     </Properties>
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout pattern="${pattern}"/>
+            <Select>
+                <SystemPropertyArbiter propertyName="omb.log.format" propertyValue="json">
+                    <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
+                </SystemPropertyArbiter>
+                <EnvironmentArbiter propertyName="OMB_LOG_FORMAT" propertyValue="json">
+                    <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
+                </EnvironmentArbiter>
+                <DefaultArbiter>
+                    <PatternLayout pattern="${pattern}"/>
+                </DefaultArbiter>
+            </Select>
         </Console>
         <RollingFile name="RollingFile" fileName="${logName}.log"
                      filePattern="${logName}.log.%d{yyyy-MM-dd-hh-mm-ss}.gz">
-            <PatternLayout pattern="${pattern}"/>
+            <Select>
+                <SystemPropertyArbiter propertyName="omb.log.format" propertyValue="json">
+                    <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
+                </SystemPropertyArbiter>
+                <EnvironmentArbiter propertyName="OMB_LOG_FORMAT" propertyValue="json">
+                    <JsonTemplateLayout eventTemplateUri="classpath:EcsLayout.json"/>
+                </EnvironmentArbiter>
+                <DefaultArbiter>
+                    <PatternLayout pattern="${pattern}"/>
+                </DefaultArbiter>
+            </Select>
             <Policies>
                 <SizeBasedTriggeringPolicy size="100MB"/>
             </Policies>

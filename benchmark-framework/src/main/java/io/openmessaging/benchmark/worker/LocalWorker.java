@@ -39,6 +39,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -194,6 +195,12 @@ public final class LocalWorker implements Worker {
     @Override
     public void setRunId(String runId) {
         stats.setRunId(runId);
+    }
+
+    @Override
+    public void setPhase(RunPhase phase) {
+        log.info("Run phase: {}", phase);
+        stats.setPhase(phase);
     }
 
     @Override

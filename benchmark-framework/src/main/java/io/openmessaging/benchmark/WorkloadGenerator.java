@@ -26,6 +26,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
@@ -33,6 +34,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -44,6 +47,8 @@ import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.slf4j.spi.LoggingEventBuilder;
 
 public final class WorkloadGenerator implements WorkloadRun {
 
@@ -73,6 +78,10 @@ public final class WorkloadGenerator implements WorkloadRun {
     private boolean controllerFailureReported;
 
     private volatile double targetPublishRate;
+    private volatile RunPhase phase = RunPhase.MEASURE;
+    // The creator's MDC (run id, workload, driver), repeated on phase events from controller threads
+    private final Map<String, String> logContext =
+            Objects.requireNonNullElse(MDC.getCopyOfContextMap(), Map.of());
 
     public WorkloadGenerator(String driverName, Workload workload, Worker worker) {
         this(
@@ -166,11 +175,15 @@ public final class WorkloadGenerator implements WorkloadRun {
         worker.startLoad(producerWorkAssignment);
         checkControllerFailure();
 
+        TestResult result = newResult();
         if (workload.warmupDurationMinutes > 0) {
+            enterPhase(RunPhase.WARMUP);
             log.info("----- Starting warm-up traffic ({}m) ------", workload.warmupDurationMinutes);
-            printAndCollectStats(workload.warmupDurationMinutes, TimeUnit.MINUTES);
+            collect(result, workload.warmupDurationMinutes, TimeUnit.MINUTES, false);
         }
 
+        // Set before the backlog controller starts, so it cannot be overwritten by a stale MEASURE
+        enterPhase(workload.consumerBacklogSizeGB > 0 ? RunPhase.BACKLOG_BUILD : RunPhase.MEASURE);
         if (workload.consumerBacklogSizeGB > 0) {
             needToWaitForBacklogDraining = true;
             startController(
@@ -182,7 +195,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         worker.resetStats();
         log.info("----- Starting benchmark traffic ({}m)------", workload.testDurationMinutes);
 
-        var result = printAndCollectStats(workload.testDurationMinutes, TimeUnit.MINUTES);
+        collect(result, workload.testDurationMinutes, TimeUnit.MINUTES, true);
         checkControllerFailure();
         return result;
     }
@@ -427,6 +440,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         log.info("--- Completed backlog build in {} s ---", timer.elapsedSeconds());
         timer = new Timer();
+        enterPhase(RunPhase.BACKLOG_DRAIN);
         log.info("--- Start draining backlog ---");
 
         worker.resumeConsumers();
@@ -439,6 +453,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             CountersStats stats = worker.getCountersStats();
             if (backlog(stats) <= minBacklog) {
                 log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
+                enterPhase(RunPhase.MEASURE);
 
                 Thread.sleep(MINUTES.toMillis(testDurationMinutes));
 
@@ -454,12 +469,26 @@ public final class WorkloadGenerator implements WorkloadRun {
         return workload.subscriptionsPerTopic * stats.messagesSent() - stats.messagesReceived();
     }
 
+    // Moves the run to a phase: later periods are tagged with it, workers are told, and one
+    // structured phase event is logged
+    void enterPhase(RunPhase next) {
+        phase = next;
+        worker.setPhase(next);
+        LoggingEventBuilder event = log.atInfo().setMessage("Run phase: {}").addArgument(next);
+        for (Map.Entry<String, String> entry : logContext.entrySet()) {
+            event = event.addKeyValue(entry.getKey(), entry.getValue());
+        }
+        event.addKeyValue("event", "phase").addKeyValue("phase", next.name()).log();
+    }
+
     TestResult printAndCollectStats(long testDurations, TimeUnit unit)
             throws IOException, InterruptedException {
-        long startTime = System.nanoTime();
-        long oldTime = startTime;
-        long testEndTime = testDurations > 0 ? startTime + unit.toNanos(testDurations) : Long.MAX_VALUE;
+        TestResult result = newResult();
+        collect(result, testDurations, unit, true);
+        return result;
+    }
 
+    private TestResult newResult() {
         TestResult result = new TestResult();
         result.workload = workload.name;
         result.driver = driverName;
@@ -468,6 +497,16 @@ public final class WorkloadGenerator implements WorkloadRun {
         result.messageSize = workload.effectiveMessageSize();
         result.producersPerTopic = workload.producersPerTopic;
         result.consumersPerTopic = workload.consumerPerSubscription;
+        return result;
+    }
+
+    // Records report intervals into the result until the duration ends. The measured window also
+    // waits for any backlog to drain and then adds the aggregate and summary.
+    void collect(TestResult result, long duration, TimeUnit unit, boolean measured)
+            throws IOException, InterruptedException {
+        long startTime = System.nanoTime();
+        long oldTime = startTime;
+        long endTime = duration > 0 ? startTime + unit.toNanos(duration) : Long.MAX_VALUE;
 
         while (true) {
             waitForReportInterval();
@@ -476,25 +515,37 @@ public final class WorkloadGenerator implements WorkloadRun {
             long now = System.nanoTime();
             PeriodReport period =
                     PeriodReport.of(stats, (now - oldTime) / 1e9, workload.subscriptionsPerTopic);
-            ResultLog.period(period);
-            result.recordPeriod(period);
+            RunPhase current = phase;
+            try (var ignored = MDC.putCloseable("phase", current.name())) {
+                ResultLog.period(period);
+            }
+            result.recordPeriod(period, current);
 
-            if (now >= testEndTime && !needToWaitForBacklogDraining) {
-                CumulativeLatencies aggregate = worker.getCumulativeLatencies();
-                ResultLog.aggregate(aggregate);
-                result.recordAggregate(aggregate);
-                var counters = worker.getCountersStats();
-                result.recordSummary(
-                        counters,
-                        targetPublishRate,
-                        result.backlog.stream().mapToLong(Long::longValue).max().orElse(0));
-                if (includeHistograms) {
-                    result.recordHistogramData(aggregate);
+            if (now >= endTime && !(measured && needToWaitForBacklogDraining)) {
+                if (measured) {
+                    finish(result);
                 }
-                return result;
+                return;
             }
 
             oldTime = now;
+        }
+    }
+
+    private void finish(TestResult result) {
+        CumulativeLatencies aggregate = worker.getCumulativeLatencies();
+        ResultLog.aggregate(aggregate);
+        result.recordAggregate(aggregate);
+        var counters = worker.getCountersStats();
+        result.recordSummary(
+                counters,
+                targetPublishRate,
+                TestResult.measured(result.phase, result.backlog).stream()
+                        .mapToLong(Long::longValue)
+                        .max()
+                        .orElse(0));
+        if (includeHistograms) {
+            result.recordHistogramData(aggregate);
         }
     }
 

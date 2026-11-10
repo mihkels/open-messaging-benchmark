@@ -31,6 +31,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
@@ -98,10 +99,12 @@ class WorkerHttpRoundTripTest {
         when(worker.createTopics(any())).thenReturn(topics);
         assertThat(remote.id()).isEqualTo(host);
         remote.setRunId("018f0000-0000-7000-8000-000000000001");
+        remote.setPhase(RunPhase.BACKLOG_DRAIN);
         assertThat(remote.createTopics(info)).containsExactlyElementsOf(topics);
         ArgumentCaptor<TopicsInfo> capturedInfo = ArgumentCaptor.forClass(TopicsInfo.class);
         verify(worker).createTopics(capturedInfo.capture());
         verify(worker).setRunId("018f0000-0000-7000-8000-000000000001");
+        verify(worker).setPhase(RunPhase.BACKLOG_DRAIN);
         assertThat(capturedInfo.getValue()).usingRecursiveComparison().isEqualTo(info);
 
         ConsumerAssignment consumers = new ConsumerAssignment();

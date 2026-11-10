@@ -105,9 +105,9 @@ public class ResultsToCsv {
                         tr.messageSize,
                         tr.producersPerTopic,
                         tr.consumersPerTopic)
-                + rateStatistics(tr.publishRate)
+                + rateStatistics(TestResult.measured(tr.phase, tr.publishRate))
                 + ","
-                + rateStatistics(tr.consumeRate);
+                + rateStatistics(TestResult.measured(tr.phase, tr.consumeRate));
     }
 
     // min,avg,std-dev,max of the period rates; empty fields when there are no periods

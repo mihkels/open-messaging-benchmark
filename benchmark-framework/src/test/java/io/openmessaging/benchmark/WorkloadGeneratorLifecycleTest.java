@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -31,6 +32,7 @@ import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -199,6 +201,49 @@ class WorkloadGeneratorLifecycleTest {
         histogram.recordValue(first);
         histogram.recordValue(second);
         return histogram;
+    }
+
+    @Test
+    void tagsWarmupAndMeasuredPeriodsAndSummarizesOnlyTheMeasuredOnes() throws Exception {
+        Histogram empty = histogram(1_000, 1_000);
+        Worker worker = mock(Worker.class);
+        // 10 messages per period in warm-up, then 40; both periods last at least 10 ms
+        when(worker.getPeriodStats())
+                .thenReturn(
+                        new PeriodStats(10, 0, 10, 10, 10, 10, 0, 10, empty, empty, empty),
+                        new PeriodStats(40, 0, 40, 40, 40, 50, 0, 50, empty, empty, empty));
+        CumulativeLatencies cumulative = new CumulativeLatencies();
+        cumulative.publishLatency = empty.copy();
+        cumulative.publishDelayLatency = empty.copy();
+        cumulative.publishScheduleLatency = empty.copy();
+        cumulative.endToEndLatency = empty.copy();
+        when(worker.getCumulativeLatencies()).thenReturn(cumulative);
+        when(worker.getCountersStats()).thenReturn(new CountersStats(40, 0, 40));
+        Workload workload = workload();
+        workload.subscriptionsPerTopic = 1;
+        TestResult result = new TestResult();
+        try (WorkloadGenerator generator =
+                new WorkloadGenerator(
+                        "driver",
+                        workload,
+                        worker,
+                        Duration.ofMillis(10),
+                        Duration.ofMillis(10),
+                        Duration.ofSeconds(2))) {
+            generator.enterPhase(RunPhase.WARMUP);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+            generator.enterPhase(RunPhase.MEASURE);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+        }
+
+        assertThat(result.phase).containsExactly(RunPhase.WARMUP, RunPhase.MEASURE);
+        assertThat(result.publishRate).hasSize(2);
+        assertThat(result.summary.publishRateAvg()).isEqualTo(result.publishRate.get(1));
+        assertThat(TestResult.measured(result.phase, result.publishRate))
+                .containsExactly(result.publishRate.get(1));
+        var order = inOrder(worker);
+        order.verify(worker).setPhase(RunPhase.WARMUP);
+        order.verify(worker).setPhase(RunPhase.MEASURE);
     }
 
     @Test

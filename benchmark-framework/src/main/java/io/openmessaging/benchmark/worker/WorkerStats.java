@@ -14,12 +14,16 @@
 package io.openmessaging.benchmark.worker;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import org.jspecify.annotations.Nullable;
 
 public class WorkerStats {
 
@@ -50,8 +54,16 @@ public class WorkerStats {
     private final LongAdder totalMessageSendErrors = new LongAdder();
     private final LongAdder totalMessagesReceived = new LongAdder();
 
+    private volatile @Nullable RunPhase phase;
+
     WorkerStats(PrometheusMeterRegistry registry) {
         this.registry = registry;
+        for (RunPhase p : RunPhase.values()) {
+            Gauge.builder("benchmark_phase", () -> phase == p ? 1 : 0)
+                    .description("1 while the run is in this phase, else 0")
+                    .tag("phase", p.name().toLowerCase(Locale.ROOT))
+                    .register(registry);
+        }
 
         // Counters
         this.messagesSentCounter =
@@ -95,6 +107,10 @@ public class WorkerStats {
 
     public void setRunId(String runId) {
         registry.config().commonTags("run_id", runId);
+    }
+
+    public void setPhase(RunPhase phase) {
+        this.phase = phase;
     }
 
     public void recordMessageSent() {

@@ -17,11 +17,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class WorkerStatsTest {
+
+    @Test
+    void phaseGaugeMarksOnlyTheCurrentPhase() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            assertThat(registry.get("benchmark_phase").gauges())
+                    .allSatisfy(gauge -> assertThat(gauge.value()).isZero());
+            stats.setPhase(RunPhase.BACKLOG_BUILD);
+            assertThat(registry.get("benchmark_phase").tag("phase", "backlog_build").gauge().value())
+                    .isEqualTo(1);
+            assertThat(registry.get("benchmark_phase").tag("phase", "measure").gauge().value()).isZero();
+        } finally {
+            registry.close();
+        }
+    }
 
     @Test
     void stalledScheduleAppearsInCorrectedTailButNotServiceTime() {

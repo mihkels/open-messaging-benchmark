@@ -42,6 +42,7 @@ import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -409,6 +410,9 @@ public final class Benchmark {
             String runId = RunId.create();
             Instant startedAt = Instant.now();
             worker.setRunId(runId);
+            MDC.put(MDC_RUN_ID, runId);
+            MDC.put(MDC_WORKLOAD, workload.name);
+            MDC.put(MDC_DRIVER, driverName);
             log.info(
                     "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
                     workload.name,
@@ -464,6 +468,9 @@ public final class Benchmark {
                     combination.driverConfig(),
                     failure);
         }
+        MDC.remove(MDC_RUN_ID);
+        MDC.remove(MDC_WORKLOAD);
+        MDC.remove(MDC_DRIVER);
         return new Outcome(failure, safeToContinue, thresholdFailed);
     }
 
@@ -520,6 +527,11 @@ public final class Benchmark {
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();
 
     private static final Logger log = LoggerFactory.getLogger(Benchmark.class);
+
+    // Log context keys of a workload run, top-level fields in JSON logs
+    private static final String MDC_RUN_ID = "run_id";
+    private static final String MDC_WORKLOAD = "workload";
+    private static final String MDC_DRIVER = "driver";
 
     private static final DateTimeFormatter RESULT_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");

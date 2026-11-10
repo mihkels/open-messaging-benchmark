@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.javalin.Javalin;
 import io.openmessaging.benchmark.plugin.HostRuntime;
 import io.openmessaging.benchmark.plugin.PluginRegistry;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
 import java.net.URI;
@@ -148,6 +149,7 @@ class ProcessWorkerTest {
         try (ProcessWorker worker = newWorker()) {
             // A run id set before a driver process exists is passed to the next one that starts
             worker.setRunId("run-before-start");
+            worker.setPhase(RunPhase.WARMUP);
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
             worker.setRunId("run-alpha");
             long alphaPid = worker.pid();
@@ -156,7 +158,8 @@ class ProcessWorkerTest {
                     .asString()
                     .startsWith("alpha-v1-isolated-");
             assertThat(worker.scrapeMetrics())
-                    .contains("messages_sent_total", "fixture_driver_initialized_total");
+                    .contains("messages_sent_total", "fixture_driver_initialized_total")
+                    .containsPattern("benchmark_phase\\{phase=\"warmup\"[^}]*} 1\\.0");
             worker.stopAll();
             assertThat(worker.pid()).isEqualTo(alphaPid);
 

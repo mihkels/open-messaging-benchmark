@@ -29,17 +29,18 @@ curl http://worker-1:8080/metrics
 The response combines the worker supervisor's registry with the metrics of its current driver
 process. Once a driver is initialized, it includes:
 
-|               Metric               |  Type   |                                   Meaning                                   |
-|------------------------------------|---------|-----------------------------------------------------------------------------|
-| `messages_sent_total`              | Counter | Sends completed successfully by the driver                                  |
-| `message_send_errors_total`        | Counter | Failed sends                                                                |
-| `bytes_sent_total`                 | Counter | Payload bytes sent                                                          |
-| `messages_recv_total`              | Counter | Messages received by consumers                                              |
-| `bytes_recv_total`                 | Counter | Payload bytes received                                                      |
-| `produce_latency_seconds`          | Timer   | Publish latency                                                             |
-| `producer_delay_latency_seconds`   | Timer   | Delay between the scheduled and actual send                                 |
-| `produce_schedule_latency_seconds` | Timer   | Intended send to successful completion (schedule-corrected publish latency) |
-| `e2e_latency_seconds`              | Timer   | End-to-end latency                                                          |
+|               Metric               |  Type   |                                                  Meaning                                                   |
+|------------------------------------|---------|------------------------------------------------------------------------------------------------------------|
+| `messages_sent_total`              | Counter | Sends completed successfully by the driver                                                                 |
+| `message_send_errors_total`        | Counter | Failed sends                                                                                               |
+| `bytes_sent_total`                 | Counter | Payload bytes sent                                                                                         |
+| `messages_recv_total`              | Counter | Messages received by consumers                                                                             |
+| `bytes_recv_total`                 | Counter | Payload bytes received                                                                                     |
+| `produce_latency_seconds`          | Timer   | Publish latency                                                                                            |
+| `producer_delay_latency_seconds`   | Timer   | Delay between the scheduled and actual send                                                                |
+| `produce_schedule_latency_seconds` | Timer   | Intended send to successful completion (schedule-corrected publish latency)                                |
+| `e2e_latency_seconds`              | Timer   | End-to-end latency                                                                                         |
+| `benchmark_phase`                  | Gauge   | 1 for the current run phase (`phase` label: `warmup`, `backlog_build`, `backlog_drain`, `measure`), else 0 |
 
 The driver's send-completion point depends on its broker and configuration; it is not always a
 broker acknowledgement. See [Publish latency](../methodology/latency-and-backlog.md#publish-latency).
@@ -80,6 +81,23 @@ Processes log to the console and to rolling files of up to 100 MB in their worki
 Driver process output is also forwarded to the parent's console. Useful messages include
 `Starting driver process for ...`, `All consumers are ready`, `Workers list - producers: ...`,
 `Failed to run the workload ...` and client library warnings about timeouts or disconnects.
+
+### JSON logs
+
+Set `OMB_LOG_FORMAT=json` (or `-Domb.log.format=json`) to write every appender as one
+[ECS](https://www.elastic.co/guide/en/ecs/current/index.html) JSON object per line instead of text.
+Driver processes inherit the setting. Coordinator lines of a workload run carry `run_id`,
+`workload` and `driver` fields; period lines also carry `phase`.
+
+Each phase change logs one event with `"event": "phase"`, the new `phase`, the run context and
+`@timestamp`:
+
+```json
+{"@timestamp":"2026-01-01T10:00:00.000Z","log.level":"INFO","message":"Run phase: MEASURE","log.logger":"io.openmessaging.benchmark.WorkloadGenerator","event":"phase","phase":"MEASURE","run_id":"018f...","workload":"quick","driver":"Kafka"}
+```
+
+Workers log `Run phase: ...` too and expose the current phase as the `benchmark_phase` gauge, so a
+dashboard can shade warm-up and backlog phases.
 
 ## JVM and garbage collection
 

@@ -92,6 +92,11 @@ mode.
 | Results overwritten                                   | `-o` used with several workloads or drivers                                                 |
 | Coordinator exits non-zero or a result is missing     | Check the first coordinator error and the worker logs; other successful results may exist   |
 
+To find which phase a problem started in, run with `OMB_LOG_FORMAT=json` and filter by the
+`run_id` and `phase` fields, for example
+`jq -c 'select(.event == "phase" or .["log.level"] == "WARN")' benchmark-worker.log`; the `phase`
+list in the result tags every period the same way. See [JSON logs](monitoring.md#json-logs).
+
 ## Resource problems
 
 - **Out of memory or a killed container.** The driver JVM uses a 4 GiB heap by default, plus the

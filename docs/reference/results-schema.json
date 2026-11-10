@@ -190,6 +190,13 @@
       "items": {
         "type": "integer"
       }
+    },
+    "phase": {
+      "description": "Run phase of each period. Warm-up periods come first and are excluded from summary and aggregates. Absent in files written before phases were recorded.",
+      "type": "array",
+      "items": {
+        "enum": ["WARMUP", "BACKLOG_BUILD", "BACKLOG_DRAIN", "MEASURE"]
+      }
     }
   },
   "$defs": {

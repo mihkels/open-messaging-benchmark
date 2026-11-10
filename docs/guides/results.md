@@ -35,14 +35,16 @@ combination overwrites the same file.
 
 ## Inspecting a result
 
-Per-sample arrays have one value per 10-second sample of the measured period; `aggregated*` values
-cover the whole period.
+Per-sample arrays have one value per 10-second sample, warm-up first; `phase` tags each sample
+(`WARMUP`, `BACKLOG_BUILD`, `BACKLOG_DRAIN`, `MEASURE`). `summary` and `aggregated*` values cover
+the measured period only, so skip the warm-up samples when you compute your own:
 
 ```bash
-jq '{driver, workload,
-     avgPublishRate: ((.publishRate | add) / (.publishRate | length)),
-     maxBacklog: (.backlog | max),
-     maxPublishErrorRate: (.publishErrorRate | max),
+jq '((.phase // []) | map(select(. == "WARMUP")) | length) as $w
+    | {driver, workload,
+     avgPublishRate: (.publishRate[$w:] | add / length),
+     maxBacklog: (.backlog[$w:] | max),
+     maxPublishErrorRate: (.publishErrorRate[$w:] | max),
      pubP99: .aggregatedPublishLatency99pct,
      pubP999: .aggregatedPublishLatency999pct,
      e2eP99: .aggregatedEndToEndLatency99pct}' result.json

@@ -44,7 +44,7 @@ final class DriverProcess {
     private static final Logger log = LoggerFactory.getLogger(DriverProcess.class);
 
     private static final List<String> FORWARDED_PROPERTIES =
-            List.of("log4j.configurationFile", "log4j2.configurationFile", "zone.id");
+            List.of("log4j.configurationFile", "log4j2.configurationFile", "omb.log.format", "zone.id");
     private static final String LOG_NAME_PROPERTY = "omb.log.name";
     private static final String DRIVER_PROCESS = "Driver process ";
     private static final String DRIVER_LOG_NAME = "benchmark-driver";

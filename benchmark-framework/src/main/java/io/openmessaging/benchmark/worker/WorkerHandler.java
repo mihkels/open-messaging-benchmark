@@ -22,6 +22,7 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.utils.SecureTempFiles;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.nio.file.Files;
@@ -47,6 +48,7 @@ public class WorkerHandler implements AutoCloseable {
 
     public static final String INITIALIZE_DRIVER = "/initialize-driver";
     public static final String SET_RUN_ID = "/set-run-id";
+    public static final String SET_PHASE = "/set-phase";
     public static final String CREATE_TOPICS = "/create-topics";
     public static final String CREATE_PRODUCERS = "/create-producers";
     public static final String PROBE_PRODUCERS = "/probe-producers";
@@ -118,6 +120,7 @@ public class WorkerHandler implements AutoCloseable {
 
         routes.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
         routes.post(SET_RUN_ID, this::handleSetRunId);
+        routes.post(SET_PHASE, this::handleSetPhase);
         routes.post(CREATE_TOPICS, this::handleCreateTopics);
         routes.post(CREATE_PRODUCERS, this::handleCreateProducers);
         routes.post(PROBE_PRODUCERS, this::handleProbeProducers);
@@ -196,6 +199,10 @@ public class WorkerHandler implements AutoCloseable {
 
     private void handleSetRunId(Context ctx) {
         worker.setRunId(mapper.readValue(ctx.body(), String.class));
+    }
+
+    private void handleSetPhase(Context ctx) {
+        worker.setPhase(mapper.readValue(ctx.body(), RunPhase.class));
     }
 
     private void handleCreateTopics(Context ctx) {

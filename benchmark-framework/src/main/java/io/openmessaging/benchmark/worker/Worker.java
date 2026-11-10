@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Path;
 import java.util.List;
@@ -25,6 +26,8 @@ import java.util.List;
 public interface Worker extends AutoCloseable {
 
     default void setRunId(String runId) {}
+
+    default void setPhase(RunPhase phase) {}
 
     /**
      * Initializes the driver selected by a driver configuration file. Where the driver is loaded from

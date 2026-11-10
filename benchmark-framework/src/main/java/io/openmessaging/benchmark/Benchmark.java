@@ -25,12 +25,16 @@ import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -110,6 +114,11 @@ public final class Benchmark {
                 names = "--include-histograms",
                 description = "Include compressed latency histograms")
         public boolean includeHistograms;
+
+        @Parameter(
+                names = "--report-html",
+                description = "Also write an HTML report with charts of all runs to this file")
+        public @Nullable String reportHtml;
     }
 
     private Benchmark() {
@@ -273,6 +282,7 @@ public final class Benchmark {
             throws Exception {
         Throwable failures = null;
         boolean thresholdFailed = false;
+        Map<String, TestResult> written = new LinkedHashMap<>();
         try {
             Outcome initialStop = stopPreviousWorkload(worker);
             failures = initialStop.failure();
@@ -290,11 +300,13 @@ public final class Benchmark {
                                 arguments.output,
                                 arguments.includeHistograms,
                                 worker,
-                                generatorFactory);
+                                generatorFactory,
+                                written);
                 failures = append(failures, outcome.failure());
                 thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
             }
+            writeHtmlReport(arguments.reportHtml, written);
         } catch (Throwable e) {
             failures = append(failures, e);
             log.error("Failed to execute benchmark workloads", e);
@@ -306,6 +318,16 @@ public final class Benchmark {
                     "One or more workloads or required cleanup operations failed", failures);
         }
         return !thresholdFailed;
+    }
+
+    // Writes the HTML report of the results written so far, when --report-html is given
+    static void writeHtmlReport(@Nullable String reportHtml, Map<String, TestResult> written)
+            throws IOException {
+        if (reportHtml == null || reportHtml.isEmpty() || written.isEmpty()) {
+            return;
+        }
+        log.info("Writing HTML report into {}", reportHtml);
+        Files.writeString(Path.of(reportHtml), HtmlReport.render(written), StandardCharsets.UTF_8);
     }
 
     // Stops anything a previous run left on the worker
@@ -367,7 +389,8 @@ public final class Benchmark {
             @Nullable String output,
             boolean includeHistograms,
             Worker worker,
-            GeneratorFactory generatorFactory) {
+            GeneratorFactory generatorFactory,
+            Map<String, TestResult> written) {
         Workload workload = combination.workload();
         WorkloadRun generator = null;
         Throwable failure = null;
@@ -413,6 +436,7 @@ public final class Benchmark {
                             output, combination.workloadFileName(), driverName, System.getenv(RESULTS_DIR_ENV));
             log.info("Writing test result into {}", fileName);
             writer.writeValue(new File(fileName), result);
+            written.put(new File(fileName).getName(), result);
         } catch (Throwable e) {
             failure = e;
             if (e instanceof Error) {

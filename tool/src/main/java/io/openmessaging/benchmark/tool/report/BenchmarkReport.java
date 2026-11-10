@@ -40,8 +40,14 @@ public final class BenchmarkReport {
     static int run(String[] args, PrintStream out, PrintStream err) {
         Options options = new Options();
         DiffCommand diff = new DiffCommand();
+        HtmlCommand html = new HtmlCommand();
         JCommander jc =
-                JCommander.newBuilder().programName(PROGRAM).addObject(options).addCommand(diff).build();
+                JCommander.newBuilder()
+                        .programName(PROGRAM)
+                        .addObject(options)
+                        .addCommand(diff)
+                        .addCommand(html)
+                        .build();
         try {
             jc.parse(args);
         } catch (ParameterException e) {
@@ -55,12 +61,13 @@ public final class BenchmarkReport {
             (options.help ? out : err).print(usage(jc));
             return options.help ? 0 : 1;
         }
-        if (diff.help) {
+        boolean isHtml = "html".equals(command);
+        if (isHtml ? html.help : diff.help) {
             out.print(usage(jc, command));
             return 0;
         }
         try {
-            return diff.execute(out, err);
+            return isHtml ? html.execute(out, err) : diff.execute(out, err);
         } catch (ParameterException e) {
             err.println("Error: " + e.getMessage());
             err.print(usage(jc, command));

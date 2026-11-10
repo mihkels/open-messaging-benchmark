@@ -1,0 +1,307 @@
+<!--
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmark report</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"
+        integrity="sha384-pPi0zxBAoDu6+JXW/C68UZLvBUUtU+7zonhif43rqj7pxsGyqyqzcian2Rj37Rss"
+        crossorigin="anonymous"></script>
+<style>
+  :root { --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --card: #f6f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --card: #151b23; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  h2 { font-size: 17px; margin: 32px 0 8px; }
+  p.note { color: var(--muted); margin: 4px 0 12px; }
+  .runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  .run { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; }
+  .run h3 { font-size: 14px; margin: 0 0 8px; word-break: break-all; }
+  .run table { border-collapse: collapse; width: 100%; }
+  .run th { text-align: left; color: var(--muted); font-weight: normal; padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; }
+  .run td { padding: 2px 0; word-break: break-word; }
+  .run pre { margin: 0; font-size: 12px; white-space: pre-wrap; }
+  .chart { width: 100%; height: 420px; }
+  .chart.tall { height: 620px; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Benchmark report</h1>
+  <noscript>This report needs JavaScript and network access to load its charting library.</noscript>
+  <section id="runs" class="runs"></section>
+
+  <h2>Latency percentile spectrum</h2>
+  <p class="note">Aggregated over the whole run. The x axis stretches the tail: each step is one more nine.</p>
+  <div id="spectrum-publish" class="chart"></div>
+  <div id="spectrum-delay" class="chart"></div>
+  <div id="spectrum-e2e" class="chart"></div>
+
+  <h2>Throughput and backlog over time</h2>
+  <div id="throughput" class="chart tall"></div>
+
+  <h2>Latency over time</h2>
+  <p class="note">Per reporting period. Schedule-corrected latency counts from when the message was due, so it includes coordinated omission.</p>
+  <div id="latency" class="chart"></div>
+
+  <h2 id="capacity-title">Throughput vs p99 latency</h2>
+  <p class="note" id="capacity-note">One point per run, ordered by throughput, to show where latency bends upward.</p>
+  <div id="capacity" class="chart"></div>
+</main>
+<script type="application/json" id="omb-data">__OMB_DATA__</script>
+<script>
+"use strict";
+(function () {
+  var runs = Object.entries(JSON.parse(document.getElementById("omb-data").textContent));
+  var PERIOD_SECONDS = 10; // WorkloadGenerator reports every 10 seconds
+  var dark = window.matchMedia("(prefers-color-scheme: dark)");
+  var charts = [];
+
+  function has(list) { return Array.isArray(list) && list.length > 0; }
+  function mean(list) { return has(list) ? list.reduce(function (a, b) { return a + b; }, 0) / list.length : null; }
+  function positive(v) { return typeof v === "number" && v > 0 ? v : null; }
+  function overTime(list, scale) {
+    return list.map(function (v, i) { return [(i + 1) * PERIOD_SECONDS, v == null ? null : v * (scale || 1)]; });
+  }
+
+  // ---- Run metadata ----
+  function cell(value) {
+    if (value === null || value === undefined) { return null; }
+    if (typeof value === "object") {
+      var pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(value, null, 2);
+      return pre;
+    }
+    return document.createTextNode(String(value));
+  }
+  runs.forEach(function (entry) {
+    var name = entry[0], r = entry[1], m = r.metadata || {};
+    var rows = [
+      ["Workload", r.workload], ["Driver", r.driver],
+      ["Message size", r.messageSize == null ? null : r.messageSize + " B"],
+      ["Topics / partitions", r.topics == null ? null : r.topics + " / " + r.partitions],
+      ["Producers / consumers per topic", r.producersPerTopic == null ? null : r.producersPerTopic + " / " + r.consumersPerTopic],
+      ["Target rate", r.summary ? positive(r.summary.targetRate) : null],
+      ["Run ID", m.runId], ["Started (UTC)", m.startedAtUtc], ["Finished (UTC)", m.finishedAtUtc],
+      ["OMB version", m.ombVersion], ["Git commit", m.gitCommit], ["JDK", m.jdk],
+      ["JVM options", m.jvmOptions], ["Workers", m.workerCount], ["Driver config", m.driverConfig]
+    ];
+    var card = document.createElement("div");
+    card.className = "run";
+    var title = document.createElement("h3");
+    title.textContent = name;
+    card.appendChild(title);
+    var table = document.createElement("table");
+    rows.forEach(function (row) {
+      var value = cell(row[1]);
+      if (!value) { return; }
+      var tr = table.insertRow(), th = document.createElement("th"), td = tr.insertCell();
+      th.textContent = row[0];
+      tr.insertBefore(th, td);
+      td.appendChild(value);
+    });
+    card.appendChild(table);
+    if (!r.metadata) {
+      var note = document.createElement("p");
+      note.className = "note";
+      note.textContent = "No run metadata: written by an older version.";
+      card.appendChild(note);
+    }
+    document.getElementById("runs").appendChild(card);
+  });
+
+  // ---- Chart plumbing ----
+  function base(title) {
+    return {
+      backgroundColor: "transparent",
+      title: { text: title, left: 0, textStyle: { fontSize: 14 } },
+      legend: { type: "scroll", top: 24, left: 0, right: 0 },
+      tooltip: { trigger: "axis", confine: true },
+      toolbox: { right: 0, feature: { dataZoom: {}, restore: {}, saveAsImage: {} } },
+      grid: { left: 70, right: 70, top: 90, bottom: 60 }
+    };
+  }
+  function draw(id, build) {
+    var el = document.getElementById(id);
+    var option = build();
+    if (!option) {
+      el.className = "empty";
+      el.textContent = "No data in these result files.";
+      return;
+    }
+    charts.push({ el: el, option: option });
+  }
+  function render() {
+    charts.forEach(function (c) {
+      if (c.chart) { c.chart.dispose(); }
+      c.chart = echarts.init(c.el, dark.matches ? "dark" : null);
+      c.chart.setOption(c.option);
+    });
+  }
+  function line(name, data, extra) {
+    return Object.assign({ name: name, type: "line", showSymbol: false, connectNulls: false, data: data }, extra || {});
+  }
+  function label(name, suffix) { return runs.length > 1 ? name + " · " + suffix : suffix; }
+
+  // ---- 1. Percentile spectrum ----
+  var NINES = function (x) { return x === 0 ? "0" : String(+(100 * (1 - Math.pow(10, -x))).toPrecision(8)); };
+  function spectrum(id, field, title, unit) {
+    draw(id, function () {
+      var series = runs.filter(function (e) { return e[1][field]; }).map(function (e) {
+        var points = Object.entries(e[1][field])
+          .map(function (kv) { return [Number(kv[0]), kv[1]]; })
+          .filter(function (p) { return p[0] < 100 && positive(p[1]); })
+          .sort(function (a, b) { return a[0] - b[0]; })
+          .map(function (p) { return { value: [-Math.log10(1 - p[0] / 100), p[1]], percentile: p[0] }; });
+        return line(e[0], points);
+      }).filter(function (s) { return s.data.length > 0; });
+      if (!series.length) { return null; }
+      var option = base(title);
+      option.tooltip = { trigger: "item", confine: true, formatter: function (p) {
+        return p.seriesName + "<br>p" + (+p.data.percentile.toPrecision(8)) + ": " + p.data.value[1] + " " + unit;
+      } };
+      option.xAxis = { type: "value", name: "percentile", nameLocation: "middle", nameGap: 30, min: 0, interval: 1,
+                       axisLabel: { formatter: NINES } };
+      option.yAxis = { type: "log", name: unit };
+      option.series = series;
+      return option;
+    });
+  }
+  spectrum("spectrum-publish", "aggregatedPublishLatencyQuantiles", "Publish latency", "ms");
+  spectrum("spectrum-delay", "aggregatedPublishDelayLatencyQuantiles", "Publish delay", "µs");
+  spectrum("spectrum-e2e", "aggregatedEndToEndLatencyQuantiles", "End-to-end latency", "ms");
+
+  // ---- 2. Throughput and backlog ----
+  draw("throughput", function () {
+    var series = [], selected = {};
+    runs.forEach(function (e) {
+      var name = e[0], r = e[1], mb = r.messageSize ? r.messageSize / (1024 * 1024) : null;
+      var target = r.summary && r.summary.targetRate > 0 ? r.summary.targetRate : null;
+      if (has(r.publishRate)) {
+        series.push(line(label(name, "publish msg/s"), overTime(r.publishRate), target ? {
+          markLine: { symbol: "none", label: { formatter: "target {c}" }, lineStyle: { type: "dashed" }, data: [{ yAxis: target }] }
+        } : {}));
+        if (mb) {
+          var pubMb = label(name, "publish MB/s");
+          series.push(line(pubMb, overTime(r.publishRate, mb), { yAxisIndex: 1 }));
+          selected[pubMb] = false;
+        }
+      }
+      if (has(r.consumeRate)) {
+        series.push(line(label(name, "consume msg/s"), overTime(r.consumeRate)));
+        if (mb) {
+          var conMb = label(name, "consume MB/s");
+          series.push(line(conMb, overTime(r.consumeRate, mb), { yAxisIndex: 1 }));
+          selected[conMb] = false;
+        }
+      }
+      if (has(r.backlog)) {
+        series.push(line(label(name, "backlog"), overTime(r.backlog), { xAxisIndex: 1, yAxisIndex: 2 }));
+      }
+      if (has(r.publishErrorRate)) {
+        series.push(line(label(name, "publish errors/s"), overTime(r.publishErrorRate), { xAxisIndex: 1, yAxisIndex: 3 }));
+      }
+    });
+    if (!series.length) { return null; }
+    var option = base("Throughput (top), backlog and publish errors (bottom)");
+    option.legend.selected = selected;
+    option.grid = [{ left: 70, right: 70, top: 90, height: "42%" }, { left: 70, right: 70, top: "66%", bottom: 60 }];
+    option.xAxis = [{ type: "value", gridIndex: 0, axisLabel: { show: false } },
+                    { type: "value", gridIndex: 1, name: "seconds", nameLocation: "middle", nameGap: 30 }];
+    option.yAxis = [{ type: "value", gridIndex: 0, name: "msg/s" }, { type: "value", gridIndex: 0, name: "MB/s", splitLine: { show: false } },
+                    { type: "value", gridIndex: 1, name: "messages" }, { type: "value", gridIndex: 1, name: "errors/s", splitLine: { show: false } }];
+    option.dataZoom = [{ type: "inside", xAxisIndex: [0, 1] }, { type: "slider", xAxisIndex: [0, 1], bottom: 8, height: 18 }];
+    option.axisPointer = { link: [{ xAxisIndex: "all" }] };
+    option.series = series;
+    return option;
+  });
+
+  // ---- 3. Latency over time ----
+  var LATENCY = [
+    ["publishLatency50pct", "publish p50", 0, true], ["publishLatency99pct", "publish p99", 0, true],
+    ["publishLatency999pct", "publish p99.9", 0, true], ["publishLatencyMax", "publish max", 0, true],
+    ["publishScheduleLatency99pct", "corrected p99", 0, true], ["publishScheduleLatency999pct", "corrected p99.9", 0, false],
+    ["publishScheduleLatencyMax", "corrected max", 0, false],
+    ["publishDelayLatency99pct", "publish delay p99 (µs)", 1, true], ["publishDelayLatency999pct", "publish delay p99.9 (µs)", 1, false]
+  ];
+  draw("latency", function () {
+    var series = [], selected = {};
+    runs.forEach(function (e) {
+      LATENCY.forEach(function (spec) {
+        var list = e[1][spec[0]];
+        if (!has(list)) { return; }
+        var name = label(e[0], spec[1]);
+        series.push(line(name, overTime(list.map(positive)), { yAxisIndex: spec[2] }));
+        selected[name] = spec[3];
+      });
+    });
+    if (!series.length) { return null; }
+    var option = base("Latency per period");
+    option.legend.selected = selected;
+    option.xAxis = { type: "value", name: "seconds", nameLocation: "middle", nameGap: 30 };
+    option.yAxis = [{ type: "log", name: "ms" }, { type: "log", name: "µs", splitLine: { show: false } }];
+    option.dataZoom = [{ type: "inside" }, { type: "slider", bottom: 8, height: 18 }];
+    option.series = series;
+    return option;
+  });
+
+  // ---- 4. Capacity curve ----
+  if (runs.length > 1) {
+    draw("capacity", function () {
+      var points = runs.map(function (e) {
+        var r = e[1];
+        // Older files read back with a zeroed summary, so zero means unknown
+        var rate = (r.summary && positive(r.summary.publishRateAvg)) || mean(r.publishRate);
+        return { name: e[0], rate: rate, publish: positive(r.aggregatedPublishLatency99pct), e2e: positive(r.aggregatedEndToEndLatency99pct) };
+      }).filter(function (p) { return p.rate != null; }).sort(function (a, b) { return a.rate - b.rate; });
+      function curve(name, key) {
+        return line(name, points.filter(function (p) { return p[key] != null; })
+          .map(function (p) { return { name: p.name, value: [p.rate, p[key]] }; }), { showSymbol: true, symbolSize: 8 });
+      }
+      var series = [curve("publish p99", "publish"), curve("end-to-end p99", "e2e")].filter(function (s) { return s.data.length; });
+      if (!series.length) { return null; }
+      var option = base("Throughput vs p99 latency");
+      option.tooltip = { trigger: "item", confine: true, formatter: function (p) {
+        return p.data.name + "<br>" + p.seriesName + ": " + p.data.value[1] + " ms at " + Math.round(p.data.value[0]) + " msg/s";
+      } };
+      option.xAxis = { type: "value", name: "publish msg/s", nameLocation: "middle", nameGap: 30, scale: true };
+      option.yAxis = { type: "log", name: "ms" };
+      option.series = series;
+      return option;
+    });
+  } else {
+    ["capacity-title", "capacity-note", "capacity"].forEach(function (id) { document.getElementById(id).hidden = true; });
+  }
+
+  if (typeof echarts === "undefined") {
+    charts.forEach(function (c) { c.el.className = "empty"; c.el.textContent = "Charts need network access to load ECharts from cdn.jsdelivr.net."; });
+    return;
+  }
+  render();
+  dark.addEventListener("change", render);
+  window.addEventListener("resize", function () { charts.forEach(function (c) { c.chart.resize(); }); });
+})();
+</script>
+</body>
+</html>

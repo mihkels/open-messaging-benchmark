@@ -135,6 +135,7 @@ nav:
       - Payloads and keys: guides/payloads-and-keys.md
       - Workload generation: guides/workload-generation.md
       - Results: guides/results.md
+      - HTML report: guides/html-report.md
       - CI performance gates: guides/ci-gating.md
       - Comparing runs: guides/comparing-runs.md
       - Monitoring: guides/monitoring.md

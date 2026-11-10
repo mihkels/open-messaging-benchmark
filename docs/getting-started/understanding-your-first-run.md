@@ -99,6 +99,9 @@ The full file has more fields: per-sample arrays hold one value per 10-second sa
 `aggregated*` values cover the whole measured period. The
 [Results schema](../reference/results-schema.md) lists every field and unit.
 
+To look at the run as charts, render it with `bin/benchmark-report html <result.json> -o report.html`,
+or pass `--report-html report.html` to `bin/benchmark`. See [HTML report](../guides/html-report.md).
+
 ## Is the run valid?
 
 Check these before using any number:

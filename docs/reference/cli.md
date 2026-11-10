@@ -34,6 +34,7 @@ bin/benchmark [options] <workload.yaml>...
 | `--worker-token-file`   | Path                  | File with the bearer token to send to remote workers; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication)                                  |
 | `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                         |
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                  |
+| `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                          |
 | `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                        |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                           |
 | `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                        |
@@ -159,7 +160,10 @@ process on `127.0.0.1` does not use this token, and the driver process does not 
 ```text
 bin/benchmark-report diff [options] BASELINE CANDIDATE
 bin/benchmark-report diff [options] --baseline <file>... --candidate <file>...
+bin/benchmark-report html [-o <file>] <result.json>...
 ```
+
+### diff
 
 Compares baseline result files with candidate result files. See
 [Comparing runs](../guides/comparing-runs.md).
@@ -178,11 +182,14 @@ Exit status `0` means the comparison passed, `1` means bad arguments, an unreada
 workload mismatch, and `2` means a regression past `--fail-on-regression`. `HEAP_OPTS` overrides
 the default `-Xmx512m`.
 
-## bin/create_charts.py
+### html
 
-```text
-python3 bin/create_charts.py <result.json>...
-```
+Renders one or more result files as one HTML page with charts; each file is one run. See
+[HTML report](../guides/html-report.md).
 
-Requires the `pygal` Python package. Writes SVG charts to the current directory. See
-[Results](../guides/results.md).
+|         Option          | Default |        Description         |
+|-------------------------|---------|----------------------------|
+| `-o`, `--output <file>` | stdout  | Write the report to a file |
+
+Exit status `0` means the report was written, `1` means bad arguments, an unreadable file or a
+failed write.

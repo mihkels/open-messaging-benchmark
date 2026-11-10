@@ -273,6 +273,7 @@ class BenchmarkOutcomesTest {
     @Test
     void thresholdFailureContinuesOtherWorkloadsAndClosesWorker() throws Exception {
         Benchmark.Arguments arguments = arguments();
+        arguments.reportHtml = directory.resolve("report.html").toString();
         Worker worker = mock(Worker.class);
         WorkloadRun first = mock(WorkloadRun.class);
         WorkloadRun second = mock(WorkloadRun.class);
@@ -300,6 +301,9 @@ class BenchmarkOutcomesTest {
                                 (driver, workload, ignored) -> workload.name.equals("first") ? first : second))
                 .isFalse();
         assertThat(Files.readString(Path.of(arguments.output))).contains("second", "PASS");
+        // Both runs went to the same --output file, so the report keeps the last under its name
+        assertThat(Files.readString(Path.of(arguments.reportHtml)))
+                .contains("\"result.json\"", "second");
         verify(worker, times(2)).initializeDriver(any());
         verify(first).close();
         verify(second).close();

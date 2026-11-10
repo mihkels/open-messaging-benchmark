@@ -255,4 +255,48 @@ class BenchmarkReportTest {
                         "baseline", "candidate-noise", "--format", "markdown", "--output", report.toString()));
         assertThat(Files.readString(report, StandardCharsets.UTF_8)).contains("Δ%");
     }
+
+    @Test
+    void rendersAnHtmlReportToStdout() {
+        int exit = run("html", fixture("baseline-1.json"), fixture("legacy-v1.json"));
+        assertThat(exit).isZero();
+        assertThat(out())
+                .startsWith("<!DOCTYPE html>")
+                .contains("\"baseline-1.json\"", "\"legacy-v1.json\"", "echarts@5.6.0");
+        assertThat(err()).isEmpty();
+    }
+
+    @Test
+    void writesTheHtmlReportToAFileAndLabelsDuplicateNamesByPath() throws IOException {
+        Path copy = Files.createDirectory(tempDir.resolve("other")).resolve("baseline-1.json");
+        Files.copy(Fixtures.path("baseline-1.json"), copy);
+        Path report = tempDir.resolve("report.html");
+
+        int exit = run("html", "-o", report.toString(), fixture("baseline-1.json"), copy.toString());
+
+        assertThat(exit).isZero();
+        assertThat(out()).isEmpty();
+        assertThat(Files.readString(report, StandardCharsets.UTF_8))
+                .contains("\"baseline-1.json\"", "\"" + copy + "\"");
+    }
+
+    @Test
+    void htmlReportsUnreadableAndUnwritableFiles() {
+        assertThat(run("html", tempDir.resolve("missing.json").toString())).isEqualTo(1);
+        assertThat(err()).startsWith("Cannot read result file: ").contains("missing.json");
+
+        err.reset();
+        assertThat(run("html", "--output", tempDir.toString(), fixture("baseline-1.json")))
+                .isEqualTo(1);
+        assertThat(err()).startsWith("Cannot write " + tempDir);
+    }
+
+    @Test
+    void htmlNeedsAResultFileAndPrintsItsUsage() {
+        assertThat(run("html")).isEqualTo(1);
+        assertThat(err()).contains("Expected at least one result file");
+
+        assertThat(run("html", "--help")).isZero();
+        assertThat(out()).contains("Usage: html", "--output");
+    }
 }

@@ -75,31 +75,13 @@ files smaller. See the [results schema](../reference/results-schema.md) for fiel
 
 ## Charts
 
-`bin/create_charts.py` draws SVG charts with [pygal](https://www.pygal.org/):
+`bin/benchmark-report html` turns one or more result files into an HTML page with interactive
+charts: latency percentile spectrum, throughput and backlog over time, latency over time, and a
+throughput-vs-latency curve across runs. See [HTML report](html-report.md).
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install pygal
-python3 bin/create_charts.py results/*.json
+bin/benchmark-report html results/*.json -o report.html
 ```
-
-Results are grouped by their `workload` field, which is the `name` in the workload file, and each
-driver `name` becomes one series. For every workload the script writes these files to the current
-directory:
-
-|                         File suffix                          |                   Content                   |
-|--------------------------------------------------------------|---------------------------------------------|
-| `Publish latency 99pct.svg`                                  | Publish p99 per sample, ms                  |
-| `Publish Delay latency 99pct.svg`                            | Publish delay p99 per sample, µs            |
-| `Publish rate.svg`, `Consume rate.svg`                       | Rates per sample, msg/s                     |
-| `Publish Error rate.svg`                                     | Publish errors per second, per sample       |
-| `End To End Latency 95pct.svg`, `End To End Latency Avg.svg` | End-to-end latency per sample, ms           |
-| `Publish Latency Quantiles.svg`                              | Aggregated publish latency by percentile    |
-| `Publish Delay Latency Quantiles.svg`                        | Aggregated publish delay by percentile      |
-| `End To End Latency Quantiles.svg`                           | Aggregated end-to-end latency by percentile |
-
-Each file name starts with `<workload name> - `, with `/` replaced by `-`. To compare drivers on one
-chart, pass their results for the same workload together.
 
 ## Comparing two setups
 

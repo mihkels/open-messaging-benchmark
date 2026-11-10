@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.4.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.3.0...v0.4.0) (2026-11-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* the edge, edge-<driver> and sha-<commit> image tags are no longer updated. Use latest, latest-<driver> or a version tag. Existing edge tags stay on Docker Hub until removed by hand.
+* workers reject POSTs without an application/json or application/yaml Content-Type, and /set-run-id and /initialize-driver-local take a JSON string body. Coordinators and workers from earlier releases do not interoperate with this one; upgrade every node of a cluster together.
+
+### Features
+
+* add benchmark-report diff command for A/B run comparison, ref: [#40](https://github.com/mihkels/open-messaging-benchmark/issues/40) ([#245](https://github.com/mihkels/open-messaging-benchmark/issues/245)) ([a068b45](https://github.com/mihkels/open-messaging-benchmark/commit/a068b45caa1040918db7d3255071f3801c40e78a))
+* add worker --bind option and publish local-test ports on loopback ([#200](https://github.com/mihkels/open-messaging-benchmark/issues/200)) ([a2fc320](https://github.com/mihkels/open-messaging-benchmark/commit/a2fc32038911d002d8c0791c4c30a2bb995ebeae))
+* interactive HTML benchmark report replacing create_charts.py ([#334](https://github.com/mihkels/open-messaging-benchmark/issues/334)) ([18214cb](https://github.com/mihkels/open-messaging-benchmark/commit/18214cbcbe9cccd4cf6788d4227ded5aa1bd1335))
+* optional bearer token authentication for the worker HTTP API ([#203](https://github.com/mihkels/open-messaging-benchmark/issues/203)) ([5ee9b2b](https://github.com/mihkels/open-messaging-benchmark/commit/5ee9b2bce228825f763a71e221c68d7f1b715611))
+* optional JSON logging and explicit run phases ([#48](https://github.com/mihkels/open-messaging-benchmark/issues/48)) ([#335](https://github.com/mihkels/open-messaging-benchmark/issues/335)) ([5507558](https://github.com/mihkels/open-messaging-benchmark/commit/55075582cb3e7303cee62d4a6d88e03a39157b22))
+
+
+### Bug Fixes
+
+* apply publish-rate changes to running producer tasks, ref: [#266](https://github.com/mihkels/open-messaging-benchmark/issues/266) ([#267](https://github.com/mihkels/open-messaging-benchmark/issues/267)) ([180e4cc](https://github.com/mihkels/open-messaging-benchmark/commit/180e4cc0bca44d8754247fabf5aa83fba661ad33))
+* authenticate the supervisor-to-driver-process channel ([#208](https://github.com/mihkels/open-messaging-benchmark/issues/208)) ([a0c05b4](https://github.com/mihkels/open-messaging-benchmark/commit/a0c05b48175594db5d9e91a3444ef521439c56e9))
+* complete Pravega transactional sends only after commit ([#308](https://github.com/mihkels/open-messaging-benchmark/issues/308)) ([c5ce052](https://github.com/mihkels/open-messaging-benchmark/commit/c5ce052e437fc3c4d86e7d5dc347915e5aea5f6d))
+* create exactly the requested number of RocketMQ queues, on masters only ([#312](https://github.com/mihkels/open-messaging-benchmark/issues/312)) ([c94c2ad](https://github.com/mihkels/open-messaging-benchmark/commit/c94c2add125d240b287a3b713259196cbc38e3fb))
+* keep broker credentials out of RabbitMQ topic names and DistributedLog errors ([#316](https://github.com/mihkels/open-messaging-benchmark/issues/316)) ([8f2c8f0](https://github.com/mihkels/open-messaging-benchmark/commit/8f2c8f0e5699ac09c461a149c8d1c587a5192bd5)), closes [#303](https://github.com/mihkels/open-messaging-benchmark/issues/303)
+* keep results safe on empty publishes, --output, CSV export and diff identity ([#313](https://github.com/mihkels/open-messaging-benchmark/issues/313)) ([ca3ece4](https://github.com/mihkels/open-messaging-benchmark/commit/ca3ece4b380cedeb3a8722526f766c3332af8733))
+* let Artemis consumers share a subscription and reject unsupported DistributedLog layouts ([#314](https://github.com/mihkels/open-messaging-benchmark/issues/314)) ([d86d83b](https://github.com/mihkels/open-messaging-benchmark/commit/d86d83b86e87c6c55830c4ad2ab5120d9838e3c5))
+* long-run driver stability for Redis, NSQ, MQTT and Kafka ([#311](https://github.com/mihkels/open-messaging-benchmark/issues/311)) ([5532020](https://github.com/mihkels/open-messaging-benchmark/commit/5532020d1658c78040875139f071fff0e1d4a6b0))
+* pin Pulsar client to 4.2.5 so JMS on Pulsar starts again ([#327](https://github.com/mihkels/open-messaging-benchmark/issues/327)) ([d5de56e](https://github.com/mihkels/open-messaging-benchmark/commit/d5de56edb8c3459af6d54ef0e8c214f968e7168c)), closes [#325](https://github.com/mihkels/open-messaging-benchmark/issues/325)
+* record RabbitMQ latency in milliseconds and keep 0 ms end-to-end samples ([#310](https://github.com/mihkels/open-messaging-benchmark/issues/310)) ([5eedc5b](https://github.com/mihkels/open-messaging-benchmark/commit/5eedc5b0d3b08cafc1379278638dd7415f13c5f1))
+* record worker latency histograms with 4 significant digits ([#328](https://github.com/mihkels/open-messaging-benchmark/issues/328)) ([932b0eb](https://github.com/mihkels/open-messaging-benchmark/commit/932b0ebb8be9fcb173d67a21dadff15b43f9c742)), closes [#326](https://github.com/mihkels/open-messaging-benchmark/issues/326)
+* redact config keys that end in pass or pwd, such as redisPass ([#265](https://github.com/mihkels/open-messaging-benchmark/issues/265)) ([6db0e08](https://github.com/mihkels/open-messaging-benchmark/commit/6db0e080348318de57c4e37c425c8742cd3fc4a3)), closes [#254](https://github.com/mihkels/open-messaging-benchmark/issues/254)
+* redact credentials in driver config logs and result files ([#202](https://github.com/mihkels/open-messaging-benchmark/issues/202)) ([ac50649](https://github.com/mihkels/open-messaging-benchmark/commit/ac506492712fb9673967579625bcced42b0edf6d))
+* reject cross-site simple POSTs to the worker HTTP API ([#199](https://github.com/mihkels/open-messaging-benchmark/issues/199)) ([3d5a13e](https://github.com/mihkels/open-messaging-benchmark/commit/3d5a13e1ae08294db015e8790fdc09eeee27e6f2)), closes [#189](https://github.com/mihkels/open-messaging-benchmark/issues/189)
+* stop a blocked Pulsar send from hanging producer close ([#309](https://github.com/mihkels/open-messaging-benchmark/issues/309)) ([ec86d9c](https://github.com/mihkels/open-messaging-benchmark/commit/ec86d9c513ec14679356b205dcbd9e821ddff59a))
+* type-check config-supplied class names before loading them ([#197](https://github.com/mihkels/open-messaging-benchmark/issues/197)) ([8e41310](https://github.com/mihkels/open-messaging-benchmark/commit/8e4131014e98d5b9d151b179eadb8cf3bb4951ad)), closes [#191](https://github.com/mihkels/open-messaging-benchmark/issues/191)
+* write the Redis message key without the Optional wrapper ([#223](https://github.com/mihkels/open-messaging-benchmark/issues/223)) ([aff5adf](https://github.com/mihkels/open-messaging-benchmark/commit/aff5adfe5e3c437f45012a9f38bd5d937f4b6813)), closes [#206](https://github.com/mihkels/open-messaging-benchmark/issues/206)
+
+
+### Performance
+
+* cut per-send overhead in PublicationLifecycle and the Redis, NSQ and Kafka hot paths ([#307](https://github.com/mihkels/open-messaging-benchmark/issues/307)) ([909cd37](https://github.com/mihkels/open-messaging-benchmark/commit/909cd37a54bb529ad29f22f3fb35e3fb3a607a61))
+* skip the progress lock on the RunCallbacks hot path unless a waiter can exist ([#315](https://github.com/mihkels/open-messaging-benchmark/issues/315)) ([4199f0e](https://github.com/mihkels/open-messaging-benchmark/commit/4199f0ee1f8841e462e02d6c92c9be7a2d31bfc2))
+
+
+### Refactoring
+
+* add PublicationLifecycle.publish and share producer lifecycle tests ([#271](https://github.com/mihkels/open-messaging-benchmark/issues/271)) ([c713204](https://github.com/mihkels/open-messaging-benchmark/commit/c713204914b5bb6a20d18cd6f003c44df6296adb)), closes [#256](https://github.com/mihkels/open-messaging-benchmark/issues/256)
+* change the publish rate in the rate limiter instead of replacing MessageProducer ([#291](https://github.com/mihkels/open-messaging-benchmark/issues/291)) ([5a48148](https://github.com/mihkels/open-messaging-benchmark/commit/5a481488fd053923476e5f8f81405f01b6bfded0))
+* consolidate driver-api close primitives and finish the producer close migrations ([#295](https://github.com/mihkels/open-messaging-benchmark/issues/295)) ([180a90e](https://github.com/mihkels/open-messaging-benchmark/commit/180a90eec719e2c8305e03d41804ec85204d76d5)), closes [#283](https://github.com/mihkels/open-messaging-benchmark/issues/283)
+* drop BookKeeper stats adaptors, closeAfterFailure copies and unused helpers ([#318](https://github.com/mihkels/open-messaging-benchmark/issues/318)) ([b98826b](https://github.com/mihkels/open-messaging-benchmark/commit/b98826bffeac04630ab01b5726ddfb08adcf6d4a))
+* finish the Failures migration in driver close paths ([#293](https://github.com/mihkels/open-messaging-benchmark/issues/293)) ([60041ce](https://github.com/mihkels/open-messaging-benchmark/commit/60041cee4c97d5327708832ac4566b8e64e604ef))
+* log redacted driver config once in LocalWorker ([#275](https://github.com/mihkels/open-messaging-benchmark/issues/275)) ([11aaf5e](https://github.com/mihkels/open-messaging-benchmark/commit/11aaf5e77203457fffa4ae01f121626a799ca0f5)), closes [#258](https://github.com/mihkels/open-messaging-benchmark/issues/258)
+* log ResultLog and PayloadFactory under their own class names ([#279](https://github.com/mihkels/open-messaging-benchmark/issues/279)) ([c2e80d8](https://github.com/mihkels/open-messaging-benchmark/commit/c2e80d8897dd5798eac1b520681f012c6db2e4f1)), closes [#278](https://github.com/mihkels/open-messaging-benchmark/issues/278)
+* move Redis, NSQ, JMS-transaction and NATS producers onto PublicationLifecycle ([#276](https://github.com/mihkels/open-messaging-benchmark/issues/276)) ([653ccca](https://github.com/mihkels/open-messaging-benchmark/commit/653cccab6677064c3c54a5e45bca56d7fe664fc3)), closes [#257](https://github.com/mihkels/open-messaging-benchmark/issues/257)
+* redact ResultMetadata driver config once and reuse SecretRedaction ([#270](https://github.com/mihkels/open-messaging-benchmark/issues/270)) ([3c72c41](https://github.com/mihkels/open-messaging-benchmark/commit/3c72c411c13ec457ef6758079076fbfe48186583)), closes [#259](https://github.com/mihkels/open-messaging-benchmark/issues/259)
+* resolve SonarCloud findings left by [#311](https://github.com/mihkels/open-messaging-benchmark/issues/311) ([#320](https://github.com/mihkels/open-messaging-benchmark/issues/320)) ([344106e](https://github.com/mihkels/open-messaging-benchmark/commit/344106e9894cc07187b84c8d38ec62cfdb0f173e)), closes [#319](https://github.com/mihkels/open-messaging-benchmark/issues/319)
+* resolve the open SonarCloud reliability and maintainability findings ([#281](https://github.com/mihkels/open-messaging-benchmark/issues/281)) ([eeea22c](https://github.com/mihkels/open-messaging-benchmark/commit/eeea22c01b4a49867677d0e427142796a10ae2c9))
+* return threshold outcome instead of throwing and store pass as boolean ([#268](https://github.com/mihkels/open-messaging-benchmark/issues/268)) ([b3ac254](https://github.com/mihkels/open-messaging-benchmark/commit/b3ac2542502b4dcf6017321cd716e2e91a8dcdb6)), closes [#263](https://github.com/mihkels/open-messaging-benchmark/issues/263)
+* reuse TestResult histogram codec and ObjectMappers in benchmark-report ([#272](https://github.com/mihkels/open-messaging-benchmark/issues/272)) ([320f288](https://github.com/mihkels/open-messaging-benchmark/commit/320f288c4c3ccdee651efb69d681d993a7b3e06e)), closes [#260](https://github.com/mihkels/open-messaging-benchmark/issues/260)
+* scrape worker metrics through HttpWorkerClient and share token-file reading ([#274](https://github.com/mihkels/open-messaging-benchmark/issues/274)) ([cef78e5](https://github.com/mihkels/open-messaging-benchmark/commit/cef78e55e915f0786aa7b717364721b4fc2a9a48)), closes [#261](https://github.com/mihkels/open-messaging-benchmark/issues/261)
+* share an immutable payload value between ProducerWorkAssignment and PayloadFactory ([#294](https://github.com/mihkels/open-messaging-benchmark/issues/294)) ([8ca627c](https://github.com/mihkels/open-messaging-benchmark/commit/8ca627c5ba557aa380833b72820216bcd732bf27)), closes [#286](https://github.com/mihkels/open-messaging-benchmark/issues/286)
+* simplify NSQ consumer, Kafka topic creator, MQTT 5 driver and Redis consumer ([#277](https://github.com/mihkels/open-messaging-benchmark/issues/277)) ([238cf36](https://github.com/mihkels/open-messaging-benchmark/commit/238cf3613c66861f91dba354d42d1c39437c089f))
+* small framework, tool and MQTT 5 simplifications ([#292](https://github.com/mihkels/open-messaging-benchmark/issues/292)) ([407c657](https://github.com/mihkels/open-messaging-benchmark/commit/407c65703ef11dcdab789493e98020af0f608ef7)), closes [#287](https://github.com/mihkels/open-messaging-benchmark/issues/287)
+* use driver-api Failures instead of local failure aggregators ([#273](https://github.com/mihkels/open-messaging-benchmark/issues/273)) ([68eafc7](https://github.com/mihkels/open-messaging-benchmark/commit/68eafc7bbbc4db589fb488d6f582a212ba2c123c))
+
+
+### Documentation
+
+* add code of conduct and support guide, ref: [#212](https://github.com/mihkels/open-messaging-benchmark/issues/212) ([#243](https://github.com/mihkels/open-messaging-benchmark/issues/243)) ([d3054f9](https://github.com/mihkels/open-messaging-benchmark/commit/d3054f994185a3509768b81e83f1c4133567bcfa))
+* add local quickstarts for every driver ([#324](https://github.com/mihkels/open-messaging-benchmark/issues/324)) ([977fa0c](https://github.com/mihkels/open-messaging-benchmark/commit/977fa0cb8fc62cbcc4d4649233be2aacb88339de))
+* Avoid dependency formatting and repeat verification ([#289](https://github.com/mihkels/open-messaging-benchmark/issues/289)) ([0c6d897](https://github.com/mihkels/open-messaging-benchmark/commit/0c6d89715d7b0d99ec19217e2736d2e353f25048))
+* refresh driver semantics and latency guidance ([#323](https://github.com/mihkels/open-messaging-benchmark/issues/323)) ([3c49f65](https://github.com/mihkels/open-messaging-benchmark/commit/3c49f652b6a9585eb77ea2cd08e856ac9e92293e))
+
+
+### Dependencies
+
+* Bump com.rabbitmq:amqp-client from 5.37.0 to 5.37.1 ([#330](https://github.com/mihkels/open-messaging-benchmark/issues/330)) ([fe22a56](https://github.com/mihkels/open-messaging-benchmark/commit/fe22a56061a5fc14d5ce725f410745cbaaad9895))
+* Bump org.codehaus.mojo:flatten-maven-plugin from 1.8.0 to 1.9.0 ([#329](https://github.com/mihkels/open-messaging-benchmark/issues/329)) ([7313e5e](https://github.com/mihkels/open-messaging-benchmark/commit/7313e5e6f38c63afafd48415369dee786ea8406c))
+
+
+### CI
+
+* publish Docker images only on release tags ([#242](https://github.com/mihkels/open-messaging-benchmark/issues/242)) ([c8877df](https://github.com/mihkels/open-messaging-benchmark/commit/c8877df140a1355a4627ac81c73eccf1da600452))
+
 ## [0.3.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.2.0...v0.3.0) (2026-11-08)
 
 

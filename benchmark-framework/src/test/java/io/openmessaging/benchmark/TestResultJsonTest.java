@@ -103,6 +103,16 @@ class TestResultJsonTest {
     }
 
     @Test
+    void consumerPauseSurvivesARoundTrip() throws Exception {
+        TestResult result = new TestResult();
+        result.consumerPause = new TestResult.ConsumerPauseResult(2, 5, 40_000, null);
+
+        TestResult read = mapper.treeToValue(toTree(result), TestResult.class);
+
+        assertThat(read.consumerPause).isEqualTo(result.consumerPause);
+    }
+
+    @Test
     void readsLegacyResultWithoutVersionedBlocks() throws Exception {
         TestResult result = mapper.treeToValue(golden(GOLDEN_V1), TestResult.class);
 

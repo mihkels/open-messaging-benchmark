@@ -50,7 +50,12 @@ class WorkloadSetGeneratorTest {
                 .containsExactlyInAnyOrderElementsOf(
                         Stream.concat(
                                         supportedFields.stream(),
-                                        Stream.of("name", "messageSizeDistribution", "backlogDrainRatio", "thresholds"))
+                                        Stream.of(
+                                                "name",
+                                                "messageSizeDistribution",
+                                                "backlogDrainRatio",
+                                                "thresholds",
+                                                "consumerPause"))
                                 .toList());
     }
 

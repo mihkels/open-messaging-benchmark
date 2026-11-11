@@ -124,6 +124,36 @@ drain and then `testDurationMinutes` after the backlog has drained to the level 
 `backlogDrainRatio`. The run lasts longer than `testDurationMinutes`. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
+## Consumer pause
+
+`consumerPause` stops consumers in the middle of the measured run while producers keep publishing,
+then resumes them and times the catch-up. Use it to see how a system serves reads that fall behind:
+cold reads, page-cache misses and tiered-storage fetches.
+
+```yaml
+producerRate: 100000
+testDurationMinutes: 15
+consumerPause:
+  afterMinutes: 5      # into the measured run
+  durationMinutes: 3
+backlogDrainRatio: 1.0
+```
+
+1. The run measures normally for `afterMinutes`.
+2. Consumers pause for `durationMinutes`; periods are tagged `BACKLOG_BUILD`.
+3. Consumers resume; periods are tagged `BACKLOG_DRAIN` until the backlog falls to
+   `max(backlog before the pause, 1000, (1 − backlogDrainRatio) × peak backlog)`.
+4. The rest of the run is tagged `MEASURE` again.
+
+The run ends after `testDurationMinutes` as usual. The pause must end before then, so leave enough
+time for the drain. The result's `consumerPause` object has the paused period indexes, the peak
+backlog and `drainSeconds`, which is `null` if the backlog had not drained by the end. See
+[Results schema](../reference/results-schema.md#consumer-pause).
+
+`consumerPause` works with a fixed `producerRate` or with [`stages`](rate-profiles.md), where the
+window counts from the start of the first stage. It cannot be combined with
+`consumerBacklogSizeGB` or rate discovery (`producerRate: 0`).
+
 ## Bundled workloads
 
 The `workloads/` directory has about 130 files. Their names encode the shape:

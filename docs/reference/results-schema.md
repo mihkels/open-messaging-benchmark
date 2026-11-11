@@ -61,6 +61,18 @@ the overall `status` (`PASS` or `FAIL`) and one entry per configured check with 
 `observed` value and individual `status`. The latency check uses aggregated publish p99 in
 milliseconds; the throughput ratio is measured average publish rate divided by target rate.
 
+## Consumer pause
+
+`consumerPause` is present when the workload has a [`consumerPause`](../guides/workloads.md#consumer-pause)
+and the run reached it.
+
+|     Field      |      Type      |                                      Description                                       |
+|----------------|----------------|----------------------------------------------------------------------------------------|
+| `startPeriod`  | integer        | Index in the period series of the first period recorded while consumers were paused    |
+| `endPeriod`    | integer        | Index of the last period recorded while consumers were paused                          |
+| `peakBacklog`  | integer        | Backlog in messages when consumers resumed                                             |
+| `drainSeconds` | number or null | Seconds from resume until the backlog drained; `null` if it had not drained by the end |
+
 ## Optional histograms
 
 `histograms` is omitted unless the coordinator is run with `--include-histograms`. When present, it
@@ -96,7 +108,8 @@ internally, while the existing result fields retain their documented units.
 These lists have one entry per 10-second sampling period. Warm-up periods come first, tagged
 `WARMUP` in `phase`; `summary` and the `aggregated*` values leave them out. For backlog workloads
 the measured window includes the build-up and drain, tagged `BACKLOG_BUILD` and `BACKLOG_DRAIN`;
-see [Latency and backlog](../methodology/latency-and-backlog.md). Files written before `phase`
+see [Latency and backlog](../methodology/latency-and-backlog.md). A mid-run consumer pause uses the
+same two tags between `MEASURE` periods. Files written before `phase`
 existed have no warm-up periods.
 
 |                                  Field                                   |     Type     |                                                                      Description                                                                      |

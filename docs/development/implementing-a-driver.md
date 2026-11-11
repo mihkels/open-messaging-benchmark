@@ -287,8 +287,8 @@ The consequences for a driver:
 
 ## Pausing consumers
 
-The SPI has no pause or resume method. For backlog workloads (`consumerBacklogSizeGB`), the benchmark
-pauses consumption by blocking inside `ConsumerCallback.messageReceived`: while consumers are paused,
+The SPI has no pause or resume method. For backlog workloads (`consumerBacklogSizeGB`) and mid-run
+pauses (`consumerPause`), the benchmark pauses consumption by blocking inside `ConsumerCallback.messageReceived`: while consumers are paused,
 the call blocks on a condition and returns when `resumeConsumers` is called or the run stops. The
 message being delivered has already been counted at that point.
 

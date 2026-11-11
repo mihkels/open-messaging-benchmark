@@ -37,6 +37,7 @@ import org.openjdk.jmh.annotations.Warmup;
 public class KeyDistributorBenchmark {
     @Param({"KEY_ROUND_ROBIN", "ZIPFIAN"})
     public KeyDistributorType type;
+
     private KeyDistributor distributor;
 
     @Setup

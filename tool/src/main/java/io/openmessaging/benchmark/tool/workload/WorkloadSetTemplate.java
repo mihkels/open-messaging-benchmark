@@ -193,10 +193,23 @@ public record WorkloadSetTemplate(
             int testDurationMinutes,
             int warmupDurationMinutes) {
         this(
-                nameFormat, topics, partitionsPerTopic, messageSize, subscriptionsPerTopic,
-                producersPerTopic, consumerPerSubscription, producerRate, keyDistributor, null,
-                payloadFile, useRandomizedPayloads, randomBytesRatio, randomizedPayloadPoolSize,
-                consumerBacklogSizeGB, testDurationMinutes, warmupDurationMinutes);
+                nameFormat,
+                topics,
+                partitionsPerTopic,
+                messageSize,
+                subscriptionsPerTopic,
+                producersPerTopic,
+                consumerPerSubscription,
+                producerRate,
+                keyDistributor,
+                null,
+                payloadFile,
+                useRandomizedPayloads,
+                randomBytesRatio,
+                randomizedPayloadPoolSize,
+                consumerBacklogSizeGB,
+                testDurationMinutes,
+                warmupDurationMinutes);
     }
 
     // Defensive copy getters for mutable List fields

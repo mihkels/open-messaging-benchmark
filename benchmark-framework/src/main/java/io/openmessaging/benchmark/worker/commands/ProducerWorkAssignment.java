@@ -18,8 +18,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -34,7 +34,13 @@ import org.jspecify.annotations.Nullable;
  * @param keyDistributorType the message key distribution strategy
  * @param keyDistribution optional Zipfian distribution parameters
  */
-@JsonPropertyOrder({"payloadData", "publishRate", "keyDistributorType", "payloadWeights", "keyDistribution"})
+@JsonPropertyOrder({
+    "payloadData",
+    "publishRate",
+    "keyDistributorType",
+    "payloadWeights",
+    "keyDistribution"
+})
 public record ProducerWorkAssignment(
         @JsonIgnore PayloadTemplates payloads,
         double publishRate,
@@ -66,7 +72,11 @@ public record ProducerWorkAssignment(
             @JsonProperty("keyDistributorType") KeyDistributorType keyDistributorType,
             @JsonProperty("payloadWeights") int @Nullable [] payloadWeights,
             @JsonProperty("keyDistribution") @Nullable KeyDistribution keyDistribution) {
-        this(PayloadTemplates.of(payloadData, payloadWeights), publishRate, keyDistributorType, keyDistribution);
+        this(
+                PayloadTemplates.of(payloadData, payloadWeights),
+                publishRate,
+                keyDistributorType,
+                keyDistribution);
     }
 
     /**

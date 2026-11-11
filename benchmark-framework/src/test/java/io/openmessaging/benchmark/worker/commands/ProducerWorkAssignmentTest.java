@@ -16,8 +16,8 @@ package io.openmessaging.benchmark.worker.commands;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -141,9 +141,13 @@ class ProducerWorkAssignmentTest {
     @Test
     void preservesZipfianParametersOnWireAndRateChange() {
         var config = new KeyDistribution(37, 1.2);
-        var assignment = new ProducerWorkAssignment(
-                io.openmessaging.benchmark.utils.payload.PayloadTemplates.of(List.of(new byte[] {1}), null),
-                10, KeyDistributorType.ZIPFIAN, config);
+        var assignment =
+                new ProducerWorkAssignment(
+                        io.openmessaging.benchmark.utils.payload.PayloadTemplates.of(
+                                List.of(new byte[] {1}), null),
+                        10,
+                        KeyDistributorType.ZIPFIAN,
+                        config);
         ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
         String json = mapper.writeValueAsString(assignment);
         assertThat(json).contains("\"keyDistribution\":{\"keys\":37,\"exponent\":1.2}");

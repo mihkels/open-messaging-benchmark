@@ -308,10 +308,10 @@ public final class LocalWorker implements Worker {
 
         log.info("Submitting {} producers to executor", producers.size());
         KeyDistributor zipfian =
-                producerWorkAssignment.keyDistributorType()
-                                == KeyDistributorType.ZIPFIAN
+                producerWorkAssignment.keyDistributorType() == KeyDistributorType.ZIPFIAN
                         ? KeyDistributor.build(
-                                producerWorkAssignment.keyDistributorType(), producerWorkAssignment.keyDistribution())
+                                producerWorkAssignment.keyDistributorType(),
+                                producerWorkAssignment.keyDistribution())
                         : null;
         for (BenchmarkProducer producer : producers) {
             KeyDistributor keyDistributor =

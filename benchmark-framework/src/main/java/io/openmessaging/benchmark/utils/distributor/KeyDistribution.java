@@ -13,6 +13,10 @@
  */
 package io.openmessaging.benchmark.utils.distributor;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.jspecify.annotations.Nullable;
+
 /**
  * Parameters for a Zipfian key distribution.
  *
@@ -30,5 +34,15 @@ public record KeyDistribution(int keys, double exponent) {
         if (!Double.isFinite(exponent) || exponent < 0) {
             throw new IllegalArgumentException("Zipfian exponent must be finite and non-negative");
         }
+    }
+
+    @JsonCreator
+    public static KeyDistribution fromJson(
+            @JsonProperty("keys") @Nullable Integer keys,
+            @JsonProperty("exponent") @Nullable Double exponent) {
+        if (keys == null || exponent == null) {
+            throw new IllegalArgumentException("Zipfian keyDistribution requires keys and exponent");
+        }
+        return new KeyDistribution(keys, exponent);
     }
 }

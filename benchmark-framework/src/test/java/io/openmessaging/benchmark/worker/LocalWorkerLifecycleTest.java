@@ -33,7 +33,9 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.ResourceCreator;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
@@ -165,6 +167,7 @@ class LocalWorkerLifecycleTest {
                     });
             producers.add(producer);
         }
+
         try (LocalWorker worker = worker(new Scenario(producers), Duration.ofSeconds(2))) {
             worker.createProducers(java.util.Collections.nCopies(producerCount, "topic"));
             worker.startLoad(
@@ -180,6 +183,30 @@ class LocalWorkerLifecycleTest {
         for (List<String> producerKeys : keys) {
             assertThat(producerKeys.subList(0, keysPerProducer)).containsExactlyElementsOf(expected);
         }
+    }
+
+    @Test
+    void producersUseConfiguredZipfianKeys() throws Exception {
+        List<String> keys = java.util.Collections.synchronizedList(new ArrayList<>());
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsync(any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.Optional<String> key = invocation.getArgument(0);
+                    keys.add(key.orElseThrow());
+                    return CompletableFuture.completedFuture(null);
+                });
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            worker.startLoad(
+                    new ProducerWorkAssignment(
+                            PayloadTemplates.of(List.of(new byte[8]), null),
+                            10_000,
+                            KeyDistributorType.ZIPFIAN,
+                            new KeyDistribution(1, 0.99)));
+            waitUntil(() -> keys.size() >= 20);
+            worker.stopAll();
+        }
+        assertThat(keys).containsOnly("zipf-0");
     }
 
     @Test

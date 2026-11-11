@@ -16,6 +16,8 @@ package io.openmessaging.benchmark.tool.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.tool.report.RunContext.SettingDifference;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,19 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class RunContextTest {
+
+    @Test
+    void comparesEffectiveZipfianSettings() {
+        Run baseline = Fixtures.run("baseline-1.json");
+        Run candidate = Fixtures.run("baseline-1.json");
+        baseline.result().metadata.workload().keyDistributor = KeyDistributorType.ZIPFIAN;
+        candidate.result().metadata.workload().keyDistributor = KeyDistributorType.ZIPFIAN;
+        candidate.result().metadata.workload().keyDistribution = KeyDistribution.DEFAULT;
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate))).isEmpty();
+        candidate.result().metadata.workload().keyDistribution = new KeyDistribution(2, 1.0);
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate)))
+                .anyMatch(mismatch -> mismatch.contains("keyDistribution differs"));
+    }
 
     @Test
     void runsOfTheSameWorkloadMatch() {

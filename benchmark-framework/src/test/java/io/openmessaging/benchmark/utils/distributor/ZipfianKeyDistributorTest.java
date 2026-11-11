@@ -16,6 +16,8 @@ package io.openmessaging.benchmark.utils.distributor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import org.junit.jupiter.api.Test;
 
 class ZipfianKeyDistributorTest {
@@ -44,14 +46,17 @@ class ZipfianKeyDistributorTest {
                 observed += counts[i];
             }
         }
-        assertThat((double) observed / samples).isCloseTo(top / total, org.assertj.core.data.Offset.offset(0.005));
+        assertThat((double) observed / samples)
+                .isCloseTo(top / total, org.assertj.core.data.Offset.offset(0.005));
     }
 
     @Test
     void supportsUniformAndSingleKeyDistributions() {
-        KeyDistributor single = KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(1, 1));
+        KeyDistributor single =
+                KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(1, 1));
         assertThat(single.next()).isEqualTo("zipf-0");
-        KeyDistributor uniform = KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(2, 0));
+        KeyDistributor uniform =
+                KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(2, 0));
         int first = 0;
         for (int i = 0; i < 100_000; i++) {
             if (uniform.next().equals("zipf-0")) {
@@ -63,12 +68,28 @@ class ZipfianKeyDistributorTest {
 
     @Test
     void rejectsInvalidParameters() {
-        assertThatThrownBy(() -> new KeyDistribution(0, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new KeyDistribution(0, 1))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new KeyDistribution(KeyDistribution.MAX_KEYS + 1, 1))
                 .isInstanceOf(IllegalArgumentException.class);
         for (double exponent : new double[] {-1, Double.NaN, Double.POSITIVE_INFINITY}) {
             assertThatThrownBy(() -> new KeyDistribution(10, exponent))
                     .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void rejectsIncompleteConfiguration() {
+        var mapper = ObjectMappers.DEFAULT.mapper();
+        for (String json :
+                new String[] {
+                    "{\"keyDistribution\":{\"keys\":10}}",
+                    "{\"keyDistribution\":{\"exponent\":0.9}}",
+                    "{\"keyDistribution\":{\"keys\":10,\"exponent\":null}}"
+                }) {
+            assertThatThrownBy(() -> mapper.readValue(json, Workload.class))
+                    .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                    .hasRootCauseMessage("Zipfian keyDistribution requires keys and exponent");
         }
     }
 }

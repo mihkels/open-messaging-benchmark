@@ -79,7 +79,7 @@ Synchronous and asynchronous fixture overhead is included in whole-framework mea
 Start with a small matrix: low and demanding fixed rates, 128-byte and 1024-byte payloads,
 one and multiple producers, synchronous and asynchronous completion. Add `--weighted` for
 3:1 payload buckets of the selected size and twice that size, and `--key KEY_ROUND_ROBIN` or
-`--key RANDOM_NANO` to exercise key generation. For distributed scaling, set `--workers` and
+`--key RANDOM_NANO` or `--key ZIPFIAN` to exercise key generation. For distributed scaling, set `--workers` and
 enough `--topics` to assign meaningful work to producer workers.
 
 Saturation experiments are separate from fixed-load comparisons: run a series of increasing
@@ -158,6 +158,10 @@ gates. The manually dispatched **Framework performance** workflow uploads full-r
 bin/framework-performance micro --output /tmp/omb-resource-jmh -- \
   '.*Worker.*Benchmark.*' -prof gc -f 3
 ```
+
+To compare per-message key generation against round-robin, run
+`bin/framework-performance micro --output /tmp/omb-key-jmh -- '.*KeyDistributorBenchmark.*' -prof gc`.
+The Zipfian case uses the default 10,000 keys and exponent 0.99; initialization is outside measurement.
 
 Use `-l` to list benchmarks, then select a narrow expression. JMH owns warm-up, measurement,
 forks, result consumption, and concurrency controls. `-prof gc` provides normalized allocation

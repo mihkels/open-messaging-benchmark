@@ -71,10 +71,7 @@ final class SupportedWorkloadFields {
                             WorkloadSetTemplate::producerRate,
                             10000,
                             (workload, value) -> workload.producerRate = value,
-                            workload ->
-                                    workload.producerRate >= MAX_PRODUCER_RATE
-                                            ? "max-rate"
-                                            : countToDisplaySize(workload.producerRate)));
+                            SupportedWorkloadFields::producerRateName));
 
     private static final List<FixedField> FIXED_FIELDS =
             List.of(
@@ -117,7 +114,18 @@ final class SupportedWorkloadFields {
                             "warmupDurationMinutes",
                             (template, workload) ->
                                     workload.warmupDurationMinutes = template.warmupDurationMinutes(),
-                            workload -> workload.warmupDurationMinutes));
+                            workload -> workload.warmupDurationMinutes),
+                    // Last, so a profile overrides the producerRate sweep and testDurationMinutes
+                    new FixedField(
+                            "stages",
+                            (template, workload) -> {
+                                workload.stages = template.stages();
+                                if (workload.usesStages()) {
+                                    workload.producerRate = 0;
+                                    workload.testDurationMinutes = 0;
+                                }
+                            },
+                            workload -> workload.stages != null ? workload.stages.size() : 0));
 
     private SupportedWorkloadFields() {}
 
@@ -163,6 +171,15 @@ final class SupportedWorkloadFields {
         }
         KeyDistribution distribution = KeyDistribution.orDefault(workload.keyDistribution);
         return countToDisplaySize(distribution.keys()) + "-" + distribution.exponent();
+    }
+
+    private static String producerRateName(Workload workload) {
+        if (workload.usesStages()) {
+            return "stages";
+        }
+        return workload.producerRate >= MAX_PRODUCER_RATE
+                ? "max-rate"
+                : countToDisplaySize(workload.producerRate);
     }
 
     private static String countToDisplaySize(long size) {

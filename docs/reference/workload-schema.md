@@ -42,6 +42,7 @@ for explanations and examples.
 | `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                              |
 | `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                  |
 | `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                              |
+| `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                            |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -98,6 +99,12 @@ messageSizeDistribution:
 | Invalid distribution range or weight                                                                | An error naming the range or weight                            |
 | `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                |
 | `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`          |
+| `stages` with `producerRate` other than `0`                                                         | `stages and producerRate are mutually exclusive`               |
+| `stages` with `testDurationMinutes` other than `0`                                                  | `stages and testDurationMinutes are mutually exclusive`        |
+| `stages` with `consumerBacklogSizeGB > 0`                                                           | `stages cannot be combined with a consumer backlog`            |
+| A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                            |
+| A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                   |
+| Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                |
 
 ## Thresholds
 

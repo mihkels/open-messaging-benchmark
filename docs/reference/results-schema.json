@@ -191,6 +191,18 @@
         "type": "integer"
       }
     },
+    "targetRate": {
+      "description": "Target publish rate in msg/s at the end of each period. Absent in files written before it was recorded.",
+      "$ref": "#/$defs/numberSeries"
+    },
+    "stage": {
+      "description": "Index of the running workload stage in each period. Present only for workloads with stages.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
     "phase": {
       "description": "Run phase of each period. Warm-up periods come first and are excluded from summary and aggregates. Absent in files written before phases were recorded.",
       "type": "array",

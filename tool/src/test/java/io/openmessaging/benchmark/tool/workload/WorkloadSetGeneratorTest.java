@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.tool.workload;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
@@ -102,7 +103,8 @@ class WorkloadSetGeneratorTest {
                         0,
                         0,
                         0,
-                        0);
+                        0,
+                        null);
 
         assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
@@ -143,7 +145,8 @@ class WorkloadSetGeneratorTest {
                         1234,
                         2345,
                         67,
-                        89);
+                        89,
+                        null);
 
         List<Workload> workloads = new WorkloadSetGenerator(template).generate();
 
@@ -189,5 +192,52 @@ class WorkloadSetGeneratorTest {
                                     consumers,
                                     rate / 1000));
         }
+    }
+
+    @Test
+    void stagesReplaceTheProducerRateAndTestDuration() throws Exception {
+        List<Workload.Stage> stages = List.of(new Workload.Stage(1, 1000), new Workload.Stage(2, 3000));
+        WorkloadSetTemplate template = staged(stages, null);
+
+        assertThat(new WorkloadSetGenerator(template).generate())
+                .singleElement()
+                .satisfies(workload -> {
+                    assertThat(workload.stages).isEqualTo(stages);
+                    assertThat(workload.producerRate).isZero();
+                    assertThat(workload.testDurationMinutes).isZero();
+                    assertThat(workload.name).endsWith("-stages");
+                    workload.validate();
+                });
+    }
+
+    @Test
+    void rejectsStagesWithAProducerRateSweep() {
+        WorkloadSetTemplate template = staged(List.of(new Workload.Stage(1, 1000)), List.of(5000));
+
+        assertThatThrownBy(() -> new WorkloadSetGenerator(template))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutually exclusive");
+    }
+
+    private static WorkloadSetTemplate staged(List<Workload.Stage> stages, List<Integer> rates) {
+        return new WorkloadSetTemplate(
+                WorkloadSetTemplate.DEFAULT_NAME_TEMPLATE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                rates,
+                KeyDistributorType.NO_KEY,
+                null,
+                null,
+                true,
+                1.0,
+                1,
+                0,
+                WorkloadSetTemplate.DEFAULT_TEST_DURATION_MINUTES,
+                0,
+                stages);
     }
 }

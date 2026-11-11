@@ -198,6 +198,11 @@
     runs.forEach(function (e) {
       var name = e[0], r = e[1], mb = r.messageSize ? r.messageSize / (1024 * 1024) : null;
       var target = r.summary && r.summary.targetRate > 0 ? r.summary.targetRate : null;
+      // A staged run's target moves, so it is drawn per period instead of as one flat line
+      if (has(r.stage) && has(r.targetRate)) {
+        series.push(line(label(name, "target msg/s"), overTime(r.targetRate), { lineStyle: { type: "dashed" } }));
+        target = null;
+      }
       if (has(r.publishRate)) {
         series.push(line(label(name, "publish msg/s"), overTime(r.publishRate), target ? {
           markLine: { symbol: "none", label: { formatter: "target {c}" }, lineStyle: { type: "dashed" }, data: [{ yAxis: target }] }

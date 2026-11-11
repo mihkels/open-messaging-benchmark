@@ -110,6 +110,7 @@
     "totalErrors" : 2,
     "totalMessagesSent" : 4
   },
+  "targetRate" : [ 0.0 ],
   "topics" : 2,
   "workload" : "golden"
 }

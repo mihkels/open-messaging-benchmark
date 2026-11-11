@@ -32,6 +32,7 @@ import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
+import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
@@ -244,6 +246,90 @@ class WorkloadGeneratorLifecycleTest {
         var order = inOrder(worker);
         order.verify(worker).setPhase(RunPhase.WARMUP);
         order.verify(worker).setPhase(RunPhase.MEASURE);
+    }
+
+    @Test
+    void stagesRampHoldAndStepTheRateSentToWorkers() throws Exception {
+        Worker worker = worker();
+        List<Double> sentRates = Collections.synchronizedList(new ArrayList<>());
+        doAnswer(
+                        invocation -> {
+                            sentRates.add(invocation.getArgument(0));
+                            return null;
+                        })
+                .when(worker)
+                .adjustPublishRate(anyDouble());
+        Workload workload = workload();
+        workload.producerRate = 0;
+        workload.testDurationMinutes = 0;
+        workload.stages =
+                List.of(
+                        new Workload.Stage(2, 100),
+                        new Workload.Stage(2, 300),
+                        new Workload.Stage(0, 50),
+                        new Workload.Stage(1, 50));
+        // Every clock read is one minute later: elapsed 1..5 minutes, one tick each
+        AtomicLong minutes = new AtomicLong();
+        TestResult result = new TestResult();
+        try (WorkloadGenerator generator =
+                new WorkloadGenerator(
+                        "driver",
+                        workload,
+                        worker,
+                        Duration.ofMillis(10),
+                        Duration.ofMillis(10),
+                        Duration.ofSeconds(2))) {
+            generator.driveStages(() -> TimeUnit.MINUTES.toNanos(minutes.getAndIncrement()), 1);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+        }
+
+        // Called without run(), so no load was started: 1m sends stage 0's 100, 2m starts the ramp
+        // at 100 (unchanged, not sent), 3m is half-way, 4m steps to 50 and 5m ends the profile
+        assertThat(sentRates).containsExactly(100.0, 200.0, 50.0);
+        assertThat(result.stage).containsExactly(3);
+        assertThat(result.targetRate).containsExactly(50.0);
+        assertThat(result.summary.targetRate()).isEqualTo(50.0);
+    }
+
+    @Test
+    void stagedRunStartsLoadAtTheFirstStageRate() throws Exception {
+        Worker worker = worker();
+        AtomicReference<ProducerWorkAssignment> assignment = new AtomicReference<>();
+        CountDownLatch started = new CountDownLatch(1);
+        doAnswer(
+                        invocation -> {
+                            assignment.set(invocation.getArgument(0));
+                            started.countDown();
+                            return null;
+                        })
+                .when(worker)
+                .startLoad(any());
+        Workload workload = workload();
+        workload.producerRate = 0;
+        workload.testDurationMinutes = 0;
+        workload.stages = List.of(new Workload.Stage(1, 700), new Workload.Stage(1, 900));
+        WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2));
+        AtomicReference<Throwable> runFailure = new AtomicReference<>();
+        Thread run =
+                Thread.ofVirtual()
+                        .start(() -> {
+                            try {
+                                generator.run();
+                            } catch (Throwable t) {
+                                runFailure.set(t);
+                            }
+                        });
+        try {
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            generator.close();
+            run.join(2000);
+        }
+        assertThat(run.isAlive()).isFalse();
+        // close() may land before or after the stage controller starts
+        assertThat(runFailure.get())
+                .isInstanceOfAny(InterruptedException.class, IllegalStateException.class);
+        assertThat(assignment.get().publishRate()).isEqualTo(700.0);
     }
 
     @Test

@@ -296,7 +296,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                 long length = MINUTES.toNanos(s.durationMinutes());
                 if (elapsed < stageStart + length) {
                     index = i;
-                    rate = from + (s.targetRate() - from) * (double) (elapsed - stageStart) / length;
+                    rate = from + (s.targetRate() - from) * (elapsed - stageStart) / length;
                     break;
                 }
                 stageStart += length;

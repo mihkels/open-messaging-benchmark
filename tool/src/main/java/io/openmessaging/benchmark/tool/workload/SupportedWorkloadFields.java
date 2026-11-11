@@ -71,12 +71,7 @@ final class SupportedWorkloadFields {
                             WorkloadSetTemplate::producerRate,
                             10000,
                             (workload, value) -> workload.producerRate = value,
-                            workload ->
-                                    workload.usesStages()
-                                            ? "stages"
-                                            : workload.producerRate >= MAX_PRODUCER_RATE
-                                                    ? "max-rate"
-                                                    : countToDisplaySize(workload.producerRate)));
+                            SupportedWorkloadFields::producerRateName));
 
     private static final List<FixedField> FIXED_FIELDS =
             List.of(
@@ -176,6 +171,15 @@ final class SupportedWorkloadFields {
         }
         KeyDistribution distribution = KeyDistribution.orDefault(workload.keyDistribution);
         return countToDisplaySize(distribution.keys()) + "-" + distribution.exponent();
+    }
+
+    private static String producerRateName(Workload workload) {
+        if (workload.usesStages()) {
+            return "stages";
+        }
+        return workload.producerRate >= MAX_PRODUCER_RATE
+                ? "max-rate"
+                : countToDisplaySize(workload.producerRate);
     }
 
     private static String countToDisplaySize(long size) {

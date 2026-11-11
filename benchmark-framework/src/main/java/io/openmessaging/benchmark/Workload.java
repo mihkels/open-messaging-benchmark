@@ -144,35 +144,43 @@ public class Workload {
         }
         List<Stage> profile = stages;
         if (profile != null && !profile.isEmpty()) {
-            if (producerRate != 0) {
-                throw new IllegalArgumentException("stages and producerRate are mutually exclusive");
-            }
-            if (testDurationMinutes != 0) {
-                throw new IllegalArgumentException("stages and testDurationMinutes are mutually exclusive");
-            }
-            if (consumerBacklogSizeGB > 0) {
-                throw new IllegalArgumentException("stages cannot be combined with a consumer backlog");
-            }
-            for (Stage stage : profile) {
-                if (stage.targetRate() <= 0) {
-                    throw new IllegalArgumentException("Stage targetRate must be positive");
-                }
-                if (stage.durationMinutes() < 0) {
-                    throw new IllegalArgumentException("Stage durationMinutes must not be negative");
-                }
-            }
-            if (measuredMinutes() <= 0) {
-                throw new IllegalArgumentException("stages must last at least one minute in total");
-            }
+            validateStages(profile);
         }
         if (consumerBacklogSizeGB > 0) {
-            if (producerRate == 0) {
-                throw new IllegalArgumentException(
-                        "Cannot probe producer sustainable rate when building backlog");
+            validateBacklog();
+        }
+    }
+
+    private void validateStages(List<Stage> profile) {
+        if (producerRate != 0) {
+            throw new IllegalArgumentException("stages and producerRate are mutually exclusive");
+        }
+        if (testDurationMinutes != 0) {
+            throw new IllegalArgumentException("stages and testDurationMinutes are mutually exclusive");
+        }
+        if (consumerBacklogSizeGB > 0) {
+            throw new IllegalArgumentException("stages cannot be combined with a consumer backlog");
+        }
+        for (Stage stage : profile) {
+            if (stage.targetRate() <= 0) {
+                throw new IllegalArgumentException("Stage targetRate must be positive");
             }
-            if (effectiveMessageSize() <= 0) {
-                throw new IllegalArgumentException("Message size must be positive when building a backlog");
+            if (stage.durationMinutes() < 0) {
+                throw new IllegalArgumentException("Stage durationMinutes must not be negative");
             }
+        }
+        if (measuredMinutes() <= 0) {
+            throw new IllegalArgumentException("stages must last at least one minute in total");
+        }
+    }
+
+    private void validateBacklog() {
+        if (producerRate == 0) {
+            throw new IllegalArgumentException(
+                    "Cannot probe producer sustainable rate when building backlog");
+        }
+        if (effectiveMessageSize() <= 0) {
+            throw new IllegalArgumentException("Message size must be positive when building a backlog");
         }
     }
 }

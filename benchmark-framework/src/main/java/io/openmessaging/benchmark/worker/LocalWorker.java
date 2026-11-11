@@ -307,8 +307,18 @@ public final class LocalWorker implements Worker {
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());
+        KeyDistributor zipfian =
+                producerWorkAssignment.keyDistributorType()
+                                == KeyDistributorType.ZIPFIAN
+                        ? KeyDistributor.build(
+                                producerWorkAssignment.keyDistributorType(), producerWorkAssignment.keyDistribution())
+                        : null;
         for (BenchmarkProducer producer : producers) {
-            startProducer(current, producer, producerWorkAssignment.keyDistributorType(), payloads);
+            KeyDistributor keyDistributor =
+                    zipfian != null
+                            ? zipfian
+                            : KeyDistributor.build(producerWorkAssignment.keyDistributorType());
+            startProducer(current, producer, keyDistributor, payloads);
         }
     }
 
@@ -389,10 +399,8 @@ public final class LocalWorker implements Worker {
     private void startProducer(
             Run current,
             BenchmarkProducer producer,
-            KeyDistributorType keyDistributorType,
+            KeyDistributor keyDistributor,
             PayloadSampler payloads) {
-        // Each producer runs on its own thread, and distributors are not thread-safe
-        KeyDistributor keyDistributor = KeyDistributor.build(keyDistributorType);
         submit(
                 current,
                 "producer task",

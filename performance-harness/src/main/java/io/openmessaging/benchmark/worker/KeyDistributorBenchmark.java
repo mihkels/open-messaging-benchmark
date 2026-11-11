@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -36,7 +37,7 @@ import org.openjdk.jmh.annotations.Warmup;
 @State(Scope.Thread)
 public class KeyDistributorBenchmark {
     @Param({"KEY_ROUND_ROBIN", "ZIPFIAN"})
-    public KeyDistributorType type;
+    public KeyDistributorType type = KeyDistributorType.KEY_ROUND_ROBIN;
 
     private KeyDistributor distributor;
 
@@ -46,7 +47,7 @@ public class KeyDistributorBenchmark {
     }
 
     @Benchmark
-    public String next() {
+    public @Nullable String next() {
         return distributor.next();
     }
 }

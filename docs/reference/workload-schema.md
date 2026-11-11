@@ -43,6 +43,7 @@ for explanations and examples.
 | `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                  |
 | `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                              |
 | `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                            |
+| `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                   |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -105,6 +106,11 @@ messageSizeDistribution:
 | A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                            |
 | A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                   |
 | Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                |
+| `consumerPause` with `consumerBacklogSizeGB > 0`                                                    | `consumerPause cannot be combined with a consumer backlog`     |
+| `consumerPause` with `producerRate: 0` and no `stages`                                              | `consumerPause requires a fixed producerRate or stages`        |
+| A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`              |
+| `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`               |
+| `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`          |
 
 ## Thresholds
 

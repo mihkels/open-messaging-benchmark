@@ -13,11 +13,11 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
-/** The stage of a workload run, in the order a run passes through them. */
+/** The phase of a workload run; a consumer pause re-enters the backlog phases mid-run. */
 public enum RunPhase {
     /** Traffic before measurement, recorded but excluded from the summary. */
     WARMUP,
-    /** Consumers paused while the requested backlog accumulates. */
+    /** Consumers paused while a backlog accumulates, for a backlog workload or a consumer pause. */
     BACKLOG_BUILD,
     /** Consumers resumed and draining the backlog. */
     BACKLOG_DRAIN,

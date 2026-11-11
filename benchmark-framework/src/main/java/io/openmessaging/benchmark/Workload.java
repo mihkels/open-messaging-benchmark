@@ -103,6 +103,18 @@ public class Workload {
     }
 
     /**
+     * A window of the measured run in which consumers stop while producers keep publishing.
+     *
+     * @param afterMinutes minutes into the measured run before consumers pause
+     * @param durationMinutes how long consumers stay paused
+     */
+    public record ConsumerPause(int afterMinutes, int durationMinutes) {}
+
+    /** Optional mid-run consumer pause; the catch-up after it is timed in the result. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable ConsumerPause consumerPause;
+
+    /**
      * The measured window length.
      *
      * @return the sum of the stage durations, or {@link #testDurationMinutes}
@@ -146,6 +158,10 @@ public class Workload {
         if (profile != null && !profile.isEmpty()) {
             validateStages(profile);
         }
+        ConsumerPause pause = consumerPause;
+        if (pause != null) {
+            validatePause(pause);
+        }
         if (consumerBacklogSizeGB > 0) {
             validateBacklog();
         }
@@ -171,6 +187,26 @@ public class Workload {
         }
         if (measuredMinutes() <= 0) {
             throw new IllegalArgumentException("stages must last at least one minute in total");
+        }
+    }
+
+    private void validatePause(ConsumerPause pause) {
+        if (consumerBacklogSizeGB > 0) {
+            throw new IllegalArgumentException(
+                    "consumerPause cannot be combined with a consumer backlog");
+        }
+        if (producerRate == 0 && !usesStages()) {
+            throw new IllegalArgumentException("consumerPause requires a fixed producerRate or stages");
+        }
+        if (pause.afterMinutes() < 0) {
+            throw new IllegalArgumentException("consumerPause afterMinutes must not be negative");
+        }
+        if (pause.durationMinutes() <= 0) {
+            throw new IllegalArgumentException("consumerPause durationMinutes must be positive");
+        }
+        // Strict, so some of the run is left to time the drain
+        if ((long) pause.afterMinutes() + pause.durationMinutes() >= measuredMinutes()) {
+            throw new IllegalArgumentException("consumerPause must end before the measured run ends");
         }
     }
 

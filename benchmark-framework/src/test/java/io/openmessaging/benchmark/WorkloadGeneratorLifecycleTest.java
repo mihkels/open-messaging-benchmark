@@ -333,6 +333,112 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void consumerPauseStopsConsumersForTheWindowAndTimesTheDrain() throws Exception {
+        Worker worker = worker();
+        // One subscription, so backlog = sent - received: 10 before the pause, 5000 at resume, then
+        // 4000 (above the 1000 floor) and 500 (drained)
+        when(worker.getCountersStats())
+                .thenReturn(
+                        new CountersStats(100, 0, 90),
+                        new CountersStats(6_000, 0, 1_000),
+                        new CountersStats(7_000, 0, 3_000),
+                        new CountersStats(8_000, 0, 7_500));
+        Workload workload = pausedWorkload();
+        // Every clock read is one minute later
+        AtomicLong reads = new AtomicLong();
+        List<Long> callMinutes = Collections.synchronizedList(new ArrayList<>());
+        TestResult result = new TestResult();
+        try (WorkloadGenerator generator =
+                new WorkloadGenerator(
+                        "driver",
+                        workload,
+                        worker,
+                        Duration.ofMillis(10),
+                        Duration.ofMillis(10),
+                        Duration.ofSeconds(2))) {
+            // Record one period in each phase the controller passes through
+            doAnswer(
+                            invocation -> {
+                                callMinutes.add(reads.get() - 1);
+                                generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+                                return null;
+                            })
+                    .when(worker)
+                    .pauseConsumers();
+            doAnswer(
+                            invocation -> {
+                                callMinutes.add(reads.get() - 1);
+                                generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+                                return null;
+                            })
+                    .when(worker)
+                    .resumeConsumers();
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+            generator.pauseConsumersMidRun(
+                    workload.consumerPause, () -> TimeUnit.MINUTES.toNanos(reads.getAndIncrement()), 1);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+        }
+
+        // Paused 1 minute in, resumed 2 minutes later
+        assertThat(callMinutes).containsExactly(1L, 3L);
+        var order = inOrder(worker);
+        order.verify(worker).setPhase(RunPhase.BACKLOG_BUILD);
+        order.verify(worker).pauseConsumers();
+        order.verify(worker).setPhase(RunPhase.BACKLOG_DRAIN);
+        order.verify(worker).resumeConsumers();
+        order.verify(worker).setPhase(RunPhase.MEASURE);
+        assertThat(result.phase)
+                .containsExactly(
+                        RunPhase.MEASURE, RunPhase.BACKLOG_BUILD, RunPhase.BACKLOG_DRAIN, RunPhase.MEASURE);
+        // Resume read the clock at 4 minutes and the drained check at 5
+        assertThat(result.consumerPause)
+                .isEqualTo(new TestResult.ConsumerPauseResult(1, 1, 5_000, 60.0));
+    }
+
+    @Test
+    void consumerPauseLeavesTheDrainTimeUnsetWhenTheRunEndsFirst() throws Exception {
+        Worker worker = worker();
+        Workload workload = pausedWorkload();
+        AtomicLong reads = new AtomicLong();
+        AtomicInteger counterReads = new AtomicInteger();
+        TestResult result = new TestResult();
+        WorkloadGenerator generator =
+                new WorkloadGenerator(
+                        "driver",
+                        workload,
+                        worker,
+                        Duration.ofMillis(10),
+                        Duration.ofMillis(10),
+                        Duration.ofSeconds(2));
+        // The backlog only grows; the run ends at the first drain check
+        when(worker.getCountersStats())
+                .thenAnswer(invocation -> {
+                    int read = counterReads.incrementAndGet();
+                    if (read == 3) {
+                        generator.close();
+                    }
+                    return new CountersStats(read * 10_000L, 0, 0);
+                });
+        doAnswer(
+                        invocation -> {
+                            generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+                            return null;
+                        })
+                .when(worker)
+                .pauseConsumers();
+
+        try (generator) {
+            generator.pauseConsumersMidRun(
+                    workload.consumerPause, () -> TimeUnit.MINUTES.toNanos(reads.getAndIncrement()), 1);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+        }
+
+        verify(worker, never()).setPhase(RunPhase.MEASURE);
+        assertThat(result.consumerPause)
+                .isEqualTo(new TestResult.ConsumerPauseResult(0, 0, 20_000, null));
+    }
+
+    @Test
     void propagatesReadinessFailureAndStillStopsWorker() {
         Worker worker = worker();
         doThrow(new IllegalStateException("probe rejected")).when(worker).probeProducers();
@@ -665,6 +771,15 @@ class WorkloadGeneratorLifecycleTest {
         workload.producerRate = 1;
         workload.warmupDurationMinutes = 0;
         workload.testDurationMinutes = 1;
+        return workload;
+    }
+
+    private static Workload pausedWorkload() {
+        Workload workload = workload();
+        workload.subscriptionsPerTopic = 1;
+        workload.testDurationMinutes = 5;
+        workload.consumerPause = new Workload.ConsumerPause(1, 2);
+        workload.validate();
         return workload;
     }
 

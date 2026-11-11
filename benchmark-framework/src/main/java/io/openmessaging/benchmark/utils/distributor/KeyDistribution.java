@@ -36,6 +36,16 @@ public record KeyDistribution(int keys, double exponent) {
         }
     }
 
+    /**
+     * Returns the parameters a Zipfian distributor uses.
+     *
+     * @param distribution the configured parameters, or null when the workload sets none
+     * @return {@code distribution}, or {@link #DEFAULT} when it is null
+     */
+    public static KeyDistribution orDefault(@Nullable KeyDistribution distribution) {
+        return distribution != null ? distribution : DEFAULT;
+    }
+
     @JsonCreator
     public static KeyDistribution fromJson(
             @JsonProperty("keys") @Nullable Integer keys,

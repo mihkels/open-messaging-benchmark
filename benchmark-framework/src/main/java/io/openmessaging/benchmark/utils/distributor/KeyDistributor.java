@@ -28,6 +28,7 @@ package io.openmessaging.benchmark.utils.distributor;
 
 import java.util.Base64;
 import java.util.Random;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public abstract class KeyDistributor {
@@ -67,8 +68,25 @@ public abstract class KeyDistributor {
             case NO_KEY -> new NoKeyDistributor();
             case KEY_ROUND_ROBIN -> new KeyRoundRobin();
             case RANDOM_NANO -> new RandomNano();
-            case ZIPFIAN ->
-                    new ZipfianKeyDistributor(distribution != null ? distribution : KeyDistribution.DEFAULT);
+            case ZIPFIAN -> new ZipfianKeyDistributor(KeyDistribution.orDefault(distribution));
         };
+    }
+
+    /**
+     * Returns the source of distributors for the producers of one load. Zipfian distributors are
+     * immutable, so their O(keys) table is built once here and shared. The others keep per-instance
+     * state and are not thread-safe, so every call returns a new one.
+     *
+     * @param keyType the distribution strategy
+     * @param distribution the Zipfian parameters, or null for the default
+     * @return a supplier to call once per producer
+     */
+    public static Supplier<KeyDistributor> supplier(
+            KeyDistributorType keyType, @Nullable KeyDistribution distribution) {
+        if (keyType == KeyDistributorType.ZIPFIAN) {
+            KeyDistributor shared = build(keyType, distribution);
+            return () -> shared;
+        }
+        return () -> build(keyType);
     }
 }

@@ -48,11 +48,6 @@ public record ProducerWorkAssignment(
         @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable KeyDistribution keyDistribution) {
 
     public ProducerWorkAssignment(
-            PayloadTemplates payloads, double publishRate, KeyDistributorType keyDistributorType) {
-        this(payloads, publishRate, keyDistributorType, null);
-    }
-
-    public ProducerWorkAssignment(
             List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
         this(payloadData, publishRate, keyDistributorType, null);
     }

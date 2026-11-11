@@ -97,12 +97,14 @@ class WorkloadSetGeneratorTest {
                         null,
                         null,
                         null,
+                        null,
                         false,
                         0.0,
                         0,
                         0,
                         0,
-                        0);
+                        0,
+                        null);
 
         assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
@@ -136,13 +138,15 @@ class WorkloadSetGeneratorTest {
                         List.of(11, 12),
                         List.of(13000, 14000),
                         KeyDistributorType.KEY_ROUND_ROBIN,
+                        null,
                         "payload/custom.data",
                         true,
                         0.37,
                         1234,
                         2345,
                         67,
-                        89);
+                        89,
+                        null);
 
         List<Workload> workloads = new WorkloadSetGenerator(template).generate();
 

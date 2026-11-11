@@ -539,7 +539,7 @@ def parser():
     runner.add_argument("--supervisor-initial-heap", default="128m")
     runner.add_argument("--driver-jvm-opts", default="")
     runner.add_argument("--coordinator-jvm-opts", default="")
-    runner.add_argument("--key", choices=["NO_KEY", "RANDOM_NANO", "KEY_ROUND_ROBIN"], default="NO_KEY")
+    runner.add_argument("--key", choices=["NO_KEY", "RANDOM_NANO", "KEY_ROUND_ROBIN", "ZIPFIAN"], default="NO_KEY")
     runner.add_argument("--weighted", action="store_true")
     runner.add_argument("--smoke", action="store_true")
     runner.add_argument("--profile", action="store_true")

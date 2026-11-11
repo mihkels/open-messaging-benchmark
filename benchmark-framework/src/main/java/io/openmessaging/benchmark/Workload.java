@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import java.util.Map;
@@ -29,6 +30,9 @@ public class Workload {
     public int partitionsPerTopic;
 
     public KeyDistributorType keyDistributor = KeyDistributorType.NO_KEY;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable KeyDistribution keyDistribution;
 
     public int messageSize;
 

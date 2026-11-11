@@ -85,9 +85,12 @@ configuration enables compression.
 | `NO_KEY` (default) | No key; the client's default partitioning applies, usually round-robin or sticky batching |
 | `KEY_ROUND_ROBIN`  | Cycles through 10,000 random 10-character keys                                            |
 | `RANDOM_NANO`      | Picks one of the same 10,000 keys based on `System.nanoTime()`                            |
+| `ZIPFIAN`          | Samples a configurable set of keys with a skew towards hot keys                           |
 
-An unknown value fails workload parsing; omit the field or use `NO_KEY` for the default. Keys are
-generated independently in each worker process.
+An unknown value fails workload parsing; omit the field or use `NO_KEY` for the default.
+Round-robin and random keys are generated independently in each worker process. Zipfian keys and
+their popularity ranks are the same across workers. See the [workload reference](../reference/workload-schema.md#zipfian-keys)
+for configuration.
 
 Keys matter because most partitioned systems hash them to choose a partition, and because some
 drivers use them for routing or ordering. With keys, per-partition batches are usually smaller,

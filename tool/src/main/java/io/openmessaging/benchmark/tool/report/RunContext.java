@@ -16,6 +16,8 @@ package io.openmessaging.benchmark.tool.report;
 import io.openmessaging.benchmark.ResultMetadata;
 import io.openmessaging.benchmark.TestResult;
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -63,6 +65,11 @@ final class RunContext {
             identity.put("subscriptionsPerTopic", String.valueOf(workload.subscriptionsPerTopic));
             identity.put("consumerPerSubscription", String.valueOf(workload.consumerPerSubscription));
             identity.put("keyDistributor", String.valueOf(workload.keyDistributor));
+            if (workload.keyDistributor == KeyDistributorType.ZIPFIAN) {
+                KeyDistribution keys =
+                        workload.keyDistribution != null ? workload.keyDistribution : KeyDistribution.DEFAULT;
+                identity.put("keyDistribution", keys.toString());
+            }
             Map<String, Integer> distribution = workload.messageSizeDistribution;
             identity.put(
                     "messageSizeDistribution",

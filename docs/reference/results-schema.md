@@ -52,7 +52,7 @@ The `summary` object contains headline values for the measured window, after war
 | `totalMessagesSent` | integer | Successfully sent messages in the measured window                   |
 | `totalErrors`       | integer | Failed sends in the measured window                                 |
 | `maxBacklog`        | integer | Maximum sampled backlog during the measured window                  |
-| `targetRate`        | number  | Configured or discovered target publish rate, messages per second   |
+| `targetRate`        | number  | Configured or discovered target rate, msg/s; staged: measured mean  |
 
 ## Threshold evaluation
 
@@ -102,6 +102,8 @@ existed have no warm-up periods.
 |                                  Field                                   |     Type     |                                                                      Description                                                                      |
 |--------------------------------------------------------------------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `phase`                                                                  | string list  | Run phase of the period: `WARMUP`, `BACKLOG_BUILD`, `BACKLOG_DRAIN` or `MEASURE`                                                                      |
+| `targetRate`                                                             | number list  | Target publish rate in msg/s at the end of the period; absent in older files                                                                          |
+| `stage`                                                                  | int list     | Index of the running workload [stage](../guides/rate-profiles.md); only present for staged workloads                                                  |
 | `publishRate`                                                            | number list  | Messages published per second                                                                                                                         |
 | `publishErrorRate`                                                       | number list  | Failed publishes per second                                                                                                                           |
 | `consumeRate`                                                            | number list  | Messages received per second, across all subscriptions                                                                                                |

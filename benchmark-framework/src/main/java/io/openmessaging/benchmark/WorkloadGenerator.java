@@ -44,6 +44,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +80,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
     private volatile double targetPublishRate;
     private volatile RunPhase phase = RunPhase.MEASURE;
+    private volatile int stage;
     // The creator's MDC (run id, workload, driver), repeated on phase events from controller threads
     private final Map<String, String> logContext =
             Objects.requireNonNullElse(MDC.getCopyOfContextMap(), Map.of());
@@ -154,7 +156,10 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         ensureTopicsAreReady();
 
-        if (workload.producerRate > 0) {
+        List<Workload.Stage> stages = workload.stages;
+        if (stages != null && !stages.isEmpty()) {
+            targetPublishRate = stages.getFirst().targetRate();
+        } else if (workload.producerRate > 0) {
             targetPublishRate = workload.producerRate;
         } else {
             // Producer rate is 0 and we need to discover the sustainable rate
@@ -193,9 +198,13 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
 
         worker.resetStats();
-        log.info("----- Starting benchmark traffic ({}m)------", workload.testDurationMinutes);
+        int measuredMinutes = workload.measuredMinutes();
+        log.info("----- Starting benchmark traffic ({}m)------", measuredMinutes);
+        if (workload.usesStages()) {
+            startController("stages", () -> driveStages(System::nanoTime, 1000), () -> {});
+        }
 
-        collect(result, workload.testDurationMinutes, TimeUnit.MINUTES, true);
+        collect(result, measuredMinutes, TimeUnit.MINUTES, true);
         checkControllerFailure();
         return result;
     }
@@ -260,6 +269,48 @@ public final class WorkloadGenerator implements WorkloadRun {
                             currentRate, periodNanos, stats.messagesSent(), stats.messagesReceived());
             targetPublishRate = currentRate;
             worker.adjustPublishRate(currentRate);
+        }
+    }
+
+    /**
+     * Moves the publish rate through the workload stages, telling workers only when it changes.
+     *
+     * @param clock the nanosecond clock the stage durations are measured against
+     * @param tickMillis how often the rate is recomputed
+     */
+    void driveStages(LongSupplier clock, long tickMillis) throws InterruptedException {
+        List<Workload.Stage> stages = Objects.requireNonNull(workload.stages);
+        long start = clock.getAsLong();
+        long total = MINUTES.toNanos(workload.measuredMinutes());
+        double sent = targetPublishRate;
+        while (!runCompleted) {
+            long elapsed = clock.getAsLong() - start;
+            // Walk the stages: a zero-length stage is passed at once, so its target becomes a step
+            int index = stages.size() - 1;
+            double rate = stages.get(index).targetRate();
+            double from = stages.getFirst().targetRate();
+            long stageStart = 0;
+            for (int i = 0; i < stages.size(); i++) {
+                Workload.Stage s = stages.get(i);
+                long length = MINUTES.toNanos(s.durationMinutes());
+                if (elapsed < stageStart + length) {
+                    index = i;
+                    rate = from + (s.targetRate() - from) * (double) (elapsed - stageStart) / length;
+                    break;
+                }
+                stageStart += length;
+                from = s.targetRate();
+            }
+            stage = index;
+            targetPublishRate = rate;
+            if (Double.compare(rate, sent) != 0) {
+                worker.adjustPublishRate(rate);
+                sent = rate;
+            }
+            if (elapsed >= total) {
+                return;
+            }
+            Thread.sleep(tickMillis);
         }
     }
 
@@ -519,7 +570,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             try (var ignored = MDC.putCloseable("phase", current.name())) {
                 ResultLog.period(period);
             }
-            result.recordPeriod(period, current);
+            result.recordPeriod(period, current, targetPublishRate, workload.usesStages() ? stage : null);
 
             if (now >= endTime && !(measured && needToWaitForBacklogDraining)) {
                 if (measured) {
@@ -539,7 +590,10 @@ public final class WorkloadGenerator implements WorkloadRun {
         var counters = worker.getCountersStats();
         result.recordSummary(
                 counters,
-                targetPublishRate,
+                // A staged run has no single target; the measured average matches the achieved average
+                workload.usesStages()
+                        ? TestResult.average(TestResult.measured(result.phase, result.targetRate))
+                        : targetPublishRate,
                 TestResult.measured(result.phase, result.backlog).stream()
                         .mapToLong(Long::longValue)
                         .max()

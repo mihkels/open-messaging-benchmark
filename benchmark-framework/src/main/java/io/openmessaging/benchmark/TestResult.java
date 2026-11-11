@@ -72,6 +72,14 @@ public class TestResult {
     /** The run phase of each period; warm-up periods come first and are left out of the summary. */
     public List<RunPhase> phase = new ArrayList<>();
 
+    /** The target publish rate at the end of each period; absent in older files. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<Double> targetRate = new ArrayList<>();
+
+    /** The index of the workload stage running at the end of each period; only for staged runs. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<Integer> stage = new ArrayList<>();
+
     public List<Double> publishLatencyAvg = new ArrayList<>();
     public List<Double> publishLatency50pct = new ArrayList<>();
     public List<Double> publishLatency75pct = new ArrayList<>();
@@ -159,9 +167,19 @@ public class TestResult {
      *
      * @param period the report interval, with latencies in microseconds
      * @param periodPhase the run phase the interval was recorded in
+     * @param periodTargetRate the target publish rate at the end of the interval
+     * @param periodStage the running stage index, or null for a workload without stages
      */
-    void recordPeriod(PeriodReport period, RunPhase periodPhase) {
+    void recordPeriod(
+            PeriodReport period,
+            RunPhase periodPhase,
+            double periodTargetRate,
+            @Nullable Integer periodStage) {
         phase.add(periodPhase);
+        targetRate.add(periodTargetRate);
+        if (periodStage != null) {
+            stage.add(periodStage);
+        }
         publishRate.add(period.publishRate());
         publishErrorRate.add(period.publishErrorRate());
         consumeRate.add(period.consumeRate());

@@ -89,6 +89,9 @@ sustains without queueing. The thresholds come from environment variables on the
 
 Rate discovery cannot be combined with `consumerBacklogSizeGB`.
 
+To vary the rate during the run, with ramps, holds and bursts, use `stages` instead; see
+[Rate profiles](rate-profiles.md).
+
 > **Note:** At a fixed rate above capacity, latency reflects queueing in the client and broker, not
 > the system's latency at a usable load. Report such runs as throughput tests.
 

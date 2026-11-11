@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
+import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
@@ -81,6 +82,35 @@ public class Workload {
     public @Nullable Thresholds thresholds;
 
     /**
+     * One step of a rate profile: the rate moves linearly from the previous stage's target to this
+     * one over the duration. The first stage starts at its own target, so it holds.
+     *
+     * @param durationMinutes the stage length; 0 jumps straight to the target
+     * @param targetRate the total msg/s across all producers at the end of the stage
+     */
+    public record Stage(int durationMinutes, int targetRate) {}
+
+    /** Optional rate profile replacing {@link #producerRate} and {@link #testDurationMinutes}. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable List<Stage> stages;
+
+    public boolean usesStages() {
+        return stages != null && !stages.isEmpty();
+    }
+
+    /**
+     * The measured window length.
+     *
+     * @return the sum of the stage durations, or {@link #testDurationMinutes}
+     */
+    public int measuredMinutes() {
+        List<Stage> profile = stages;
+        return profile != null && !profile.isEmpty()
+                ? profile.stream().mapToInt(Stage::durationMinutes).sum()
+                : testDurationMinutes;
+    }
+
+    /**
      * The message size used for backlog and result calculations.
      *
      * @return the distribution's weighted average size, or {@link #messageSize}
@@ -107,6 +137,29 @@ public class Workload {
         Map<String, Integer> distribution = messageSizeDistribution;
         if (distribution != null && !distribution.isEmpty()) {
             new MessageSizeDistribution(distribution);
+        }
+        List<Stage> profile = stages;
+        if (profile != null && !profile.isEmpty()) {
+            if (producerRate != 0) {
+                throw new IllegalArgumentException("stages and producerRate are mutually exclusive");
+            }
+            if (testDurationMinutes != 0) {
+                throw new IllegalArgumentException("stages and testDurationMinutes are mutually exclusive");
+            }
+            if (consumerBacklogSizeGB > 0) {
+                throw new IllegalArgumentException("stages cannot be combined with a consumer backlog");
+            }
+            for (Stage stage : profile) {
+                if (stage.targetRate() <= 0) {
+                    throw new IllegalArgumentException("Stage targetRate must be positive");
+                }
+                if (stage.durationMinutes() < 0) {
+                    throw new IllegalArgumentException("Stage durationMinutes must not be negative");
+                }
+            }
+            if (measuredMinutes() <= 0) {
+                throw new IllegalArgumentException("stages must last at least one minute in total");
+            }
         }
         if (consumerBacklogSizeGB > 0) {
             if (producerRate == 0) {

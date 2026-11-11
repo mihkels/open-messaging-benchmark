@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.tool.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +42,8 @@ import org.jspecify.annotations.Nullable;
  * @param consumerBacklogSizeGB consumer backlog size in gigabytes
  * @param testDurationMinutes duration of each test in minutes
  * @param warmupDurationMinutes warmup duration in minutes before each test
+ * @param stages optional rate profile copied to every workload; replaces producerRate and
+ *     testDurationMinutes
  */
 public record WorkloadSetTemplate(
         String nameFormat,
@@ -58,7 +61,8 @@ public record WorkloadSetTemplate(
         int randomizedPayloadPoolSize,
         long consumerBacklogSizeGB,
         int testDurationMinutes,
-        int warmupDurationMinutes) {
+        int warmupDurationMinutes,
+        @Nullable List<Workload.Stage> stages) {
 
     public static final String DEFAULT_NAME_TEMPLATE =
             "${topics}-topics-${partitionsPerTopic}-partitions-${messageSize}b"
@@ -84,7 +88,8 @@ public record WorkloadSetTemplate(
             int randomizedPayloadPoolSize,
             long consumerBacklogSizeGB,
             int testDurationMinutes,
-            int warmupDurationMinutes) {
+            int warmupDurationMinutes,
+            @Nullable List<Workload.Stage> stages) {
         this.nameFormat = nameFormat;
         this.topics = topics != null ? List.copyOf(topics) : List.of();
         this.partitionsPerTopic =
@@ -104,6 +109,7 @@ public record WorkloadSetTemplate(
         this.consumerBacklogSizeGB = consumerBacklogSizeGB;
         this.testDurationMinutes = testDurationMinutes;
         this.warmupDurationMinutes = warmupDurationMinutes;
+        this.stages = stages != null ? List.copyOf(stages) : null;
     }
 
     // Jackson creator: boxed scalars let fields missing from the template fall back to the defaults
@@ -125,7 +131,8 @@ public record WorkloadSetTemplate(
             @JsonProperty("randomizedPayloadPoolSize") Integer randomizedPayloadPoolSize,
             @JsonProperty("consumerBacklogSizeGB") Long consumerBacklogSizeGB,
             @JsonProperty("testDurationMinutes") Integer testDurationMinutes,
-            @JsonProperty("warmupDurationMinutes") Integer warmupDurationMinutes) {
+            @JsonProperty("warmupDurationMinutes") Integer warmupDurationMinutes,
+            @JsonProperty("stages") List<Workload.Stage> stages) {
         return new WorkloadSetTemplate(
                 nameFormat != null ? nameFormat : DEFAULT_NAME_TEMPLATE,
                 topics,
@@ -142,7 +149,8 @@ public record WorkloadSetTemplate(
                 randomizedPayloadPoolSize != null ? randomizedPayloadPoolSize : 0,
                 consumerBacklogSizeGB != null ? consumerBacklogSizeGB : 0,
                 testDurationMinutes != null ? testDurationMinutes : DEFAULT_TEST_DURATION_MINUTES,
-                warmupDurationMinutes != null ? warmupDurationMinutes : DEFAULT_WARMUP_DURATION_MINUTES);
+                warmupDurationMinutes != null ? warmupDurationMinutes : DEFAULT_WARMUP_DURATION_MINUTES,
+                stages);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -163,7 +171,8 @@ public record WorkloadSetTemplate(
                 0,
                 0,
                 DEFAULT_TEST_DURATION_MINUTES,
-                DEFAULT_WARMUP_DURATION_MINUTES);
+                DEFAULT_WARMUP_DURATION_MINUTES,
+                null);
     }
 
     // Defensive copy getters for mutable List fields

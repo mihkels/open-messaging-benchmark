@@ -125,4 +125,63 @@ class WorkloadTest {
                 .extractingByKey("named")
                 .satisfies(workload -> assertThat(workload.name).isEqualTo("example"));
     }
+
+    @Test
+    void loadsAStagedWorkloadAndMeasuresForTheSumOfItsStages(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("ramp.yaml");
+        Files.writeString(
+                file,
+                """
+                name: ramp
+                topics: 1
+                messageSize: 1024
+                stages:
+                  - durationMinutes: 5
+                    targetRate: 50000
+                  - durationMinutes: 10
+                    targetRate: 150000
+                  - durationMinutes: 0
+                    targetRate: 200000
+                """);
+
+        Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("ramp");
+        workload.validate();
+
+        assertThat(workload.stages)
+                .containsExactly(
+                        new Workload.Stage(5, 50000),
+                        new Workload.Stage(10, 150000),
+                        new Workload.Stage(0, 200000));
+        assertThat(workload.measuredMinutes()).isEqualTo(15);
+    }
+
+    @Test
+    void rejectsStagesMixedWithIncompatibleSettings() {
+        assertRejectedStages(w -> w.producerRate = 1000, "stages and producerRate are mutually exclusive");
+        assertRejectedStages(
+                w -> w.testDurationMinutes = 5, "stages and testDurationMinutes are mutually exclusive");
+        assertRejectedStages(
+                w -> w.consumerBacklogSizeGB = 1, "stages cannot be combined with a consumer backlog");
+        assertRejectedStages(
+                w -> w.stages = List.of(new Workload.Stage(1, 0)), "Stage targetRate must be positive");
+        assertRejectedStages(
+                w -> w.stages = List.of(new Workload.Stage(-1, 10), new Workload.Stage(2, 10)),
+                "Stage durationMinutes must not be negative");
+        assertRejectedStages(
+                w -> w.stages = List.of(new Workload.Stage(0, 10)),
+                "stages must last at least one minute in total");
+    }
+
+    private static void assertRejectedStages(
+            java.util.function.Consumer<Workload> change, String message) {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.stages = List.of(new Workload.Stage(1, 1000));
+        workload.validate();
+        change.accept(workload);
+
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(message);
+    }
 }

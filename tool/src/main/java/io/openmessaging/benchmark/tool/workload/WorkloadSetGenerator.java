@@ -36,6 +36,10 @@ final class WorkloadSetGenerator {
      */
     WorkloadSetGenerator(WorkloadSetTemplate template) {
         this.template = Objects.requireNonNull(template, "Template cannot be null");
+        List<Workload.Stage> stages = template.stages();
+        if (stages != null && !stages.isEmpty() && !template.producerRate().isEmpty()) {
+            throw new IllegalArgumentException("stages and producerRate are mutually exclusive");
+        }
         this.nameFormat = new WorkloadNameFormat(template.nameFormat());
     }
 

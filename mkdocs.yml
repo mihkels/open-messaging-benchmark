@@ -132,6 +132,7 @@ nav:
       - Distributed runs: getting-started/distributed-runs.md
   - Running benchmarks:
       - Workloads: guides/workloads.md
+      - Rate profiles: guides/rate-profiles.md
       - Payloads and keys: guides/payloads-and-keys.md
       - Workload generation: guides/workload-generation.md
       - Results: guides/results.md

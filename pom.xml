@@ -102,6 +102,7 @@
         <pitest.threads>4</pitest.threads>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
+        <zstd.version>1.5.7-25</zstd.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
         <argLine/>
         <!--
@@ -178,6 +179,11 @@
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
                 <version>${jackson.annotations.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>${zstd.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>

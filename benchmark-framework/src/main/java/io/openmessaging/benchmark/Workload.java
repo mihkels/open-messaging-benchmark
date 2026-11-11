@@ -17,6 +17,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
+import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -49,6 +51,10 @@ public class Workload {
     public int randomizedPayloadPoolSize;
 
     public @Nullable String payloadFile;
+
+    /** Optional generated payloads with a target compression ratio; excludes the other sources. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable PayloadGenerator payloadGenerator;
 
     public int subscriptionsPerTopic;
 
@@ -135,6 +141,10 @@ public class Workload {
         if (thresholds != null) {
             thresholds.validate(this);
         }
+        PayloadGenerator generator = payloadGenerator;
+        if (generator != null) {
+            validatePayloadGenerator(generator);
+        }
         if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
             throw new IllegalArgumentException("Randomized payload pool size must be positive");
         }
@@ -148,6 +158,32 @@ public class Workload {
         }
         if (consumerBacklogSizeGB > 0) {
             validateBacklog();
+        }
+    }
+
+    private void validatePayloadGenerator(PayloadGenerator generator) {
+        if (payloadFile != null) {
+            throw new IllegalArgumentException("payloadGenerator and payloadFile are mutually exclusive");
+        }
+        if (useRandomizedPayloads) {
+            throw new IllegalArgumentException(
+                    "payloadGenerator and useRandomizedPayloads are mutually exclusive");
+        }
+        Map<String, Integer> distribution = messageSizeDistribution;
+        if (distribution == null || distribution.isEmpty()) {
+            if (messageSize <= 0) {
+                throw new IllegalArgumentException("Message size must be positive with payloadGenerator");
+            }
+            return;
+        }
+        // Each bucket's weight is repeated for its poolSize payloads, and the sampler sums them as int
+        int totalWeight = Arrays.stream(new MessageSizeDistribution(distribution).getWeights()).sum();
+        try {
+            Math.multiplyExact(totalWeight, generator.poolSize());
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(
+                    "payloadGenerator poolSize times the distribution weights exceeds the supported total",
+                    e);
         }
     }
 

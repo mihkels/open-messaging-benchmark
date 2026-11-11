@@ -15,13 +15,15 @@ limitations under the License.
 # Payloads and keys
 
 Message contents and keys affect compression, batching, partition placement and ordering. OMB
-supports three ways to build payloads and three key strategies.
+supports four ways to build payloads and four key strategies.
 
 ## Payload sources
 
 The coordinator prepares payloads once, before producers start, and sends them to the producer
-workers. Producers pick one payload per message, uniformly at random unless weights apply. Exactly
-one of these sources is used, in this order of precedence:
+workers. Producers pick one payload per message, uniformly at random unless weights apply. A
+[`payloadGenerator`](#4-payloads-with-a-target-compression-ratio) replaces the other sources and
+takes its sizes from `messageSize` or the distribution. Otherwise exactly one of these sources is
+used, in this order of precedence:
 
 ### 1. Message size distribution
 
@@ -73,8 +75,40 @@ another size:
 head -c 65536 /dev/urandom > payload/payload-64Kb.data
 ```
 
-A single repeated payload compresses extremely well. Prefer randomized payloads when a driver
+A single repeated payload compresses extremely well. Prefer generated payloads when a driver
 configuration enables compression.
+
+### 4. Payloads with a target compression ratio
+
+```yaml
+messageSize: 1024
+payloadGenerator:
+  type: COMPRESSIBLE
+  targetCompressionRatio: 0.45   # compressed size / original size
+  poolSize: 1000
+```
+
+The coordinator generates `poolSize` distinct payloads whose zstd (level 3) compressed size is
+`targetCompressionRatio` of their original size. Each payload is a run of 64-byte segments that are
+either random or a copy of an earlier segment in the same payload, and the share of random segments
+is calibrated at startup until the ratio matches. Because codecs only shrink the copies, lz4, snappy
+and zstd see similar ratios, and because payloads share no content, a batch of them compresses about
+as well as one payload alone.
+
+- `targetCompressionRatio` must be greater than 0 and at most 1; `1` is incompressible.
+- `payloadGenerator` cannot be combined with `payloadFile` or `useRandomizedPayloads`;
+  `randomBytesRatio` and `randomizedPayloadPoolSize` are ignored.
+- With `messageSizeDistribution`, each size bucket gets its own `poolSize` payloads. The pool holds
+  `poolSize` × the sum of the bucket sizes in memory on the coordinator and on every producer worker.
+- Generation takes well under a second for typical pools and happens before producers start, so
+  the send path is unchanged.
+- The achieved ratio, weighted by how often each payload is sent, is logged and recorded as
+  `payloadCompressionRatio` in the [result](../reference/results-schema.md).
+- The ratio is measured per payload, so it includes zstd's few bytes of frame overhead. Small
+  payloads cannot reach low ratios: the lowest reachable ratio is about 0.08 at 1 KiB, 0.33 at
+  256 bytes and 0.8 at 100 bytes, and the coordinator logs a warning when the target is missed by
+  more than 5%. Brokers that compress batches of small messages see a slightly lower
+  ratio than the recorded one.
 
 ## Keys
 
@@ -101,4 +135,4 @@ page; some ignore them.
 
 Use the same payload source, size, randomness and key strategy for every system in a comparison,
 and record them with the results. Compression settings on the driver side interact strongly with
-`randomBytesRatio`. See [Fair comparisons](../methodology/fair-comparisons.md).
+`randomBytesRatio` and `targetCompressionRatio`. See [Fair comparisons](../methodology/fair-comparisons.md).

@@ -171,7 +171,8 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         PayloadTemplates payloads = PayloadFactory.create(workload);
         var producerWorkAssignment =
-                new ProducerWorkAssignment(payloads, targetPublishRate, workload.keyDistributor);
+                new ProducerWorkAssignment(
+                        payloads, targetPublishRate, workload.keyDistributor, workload.keyDistribution);
         log.info(
                 "Prepared {} payloads from {} in {} ms",
                 payloads.size(),

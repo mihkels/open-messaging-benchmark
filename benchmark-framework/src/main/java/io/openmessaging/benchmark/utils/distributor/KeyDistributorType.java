@@ -38,4 +38,7 @@ public enum KeyDistributorType {
 
     /** Random distribution based on System.nanoTime(). */
     RANDOM_NANO,
+
+    /** Zipfian distribution over a configurable set of keys. */
+    ZIPFIAN,
 }

@@ -35,7 +35,8 @@ for explanations and examples.
 | `randomBytesRatio`          | number  | 0.0      | Fraction of each randomized payload that is random; the rest is zeros                                                                                                                     |
 | `randomizedPayloadPoolSize` | int     | 0        | Number of randomized payloads generated; must be positive when `useRandomizedPayloads` is true and no distribution is set                                                                 |
 | `messageSizeDistribution`   | map     | none     | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool                                                                                                      |
-| `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN` or `RANDOM_NANO`                                                                                                                                              |
+| `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                   |
+| `keyDistribution`           | object  | none     | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                      |
 | `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                                                                                                                          |
 | `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                |
 | `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                              |
@@ -53,6 +54,24 @@ benchmark.
 1. `messageSizeDistribution`, if present and not empty.
 2. Otherwise, randomized payloads if `useRandomizedPayloads` is `true`.
 3. Otherwise, `payloadFile`.
+
+## Zipfian keys
+
+```yaml
+keyDistributor: ZIPFIAN
+keyDistribution:
+  keys: 10000
+  exponent: 0.99
+```
+
+`keys` must be between 1 and 1,000,000; `exponent` must be finite and non-negative.
+Rank `r` (starting at 1) has probability proportional to `1 / r^exponent`. Zero gives a
+uniform distribution; larger exponents concentrate updates on fewer keys. If the entire
+`keyDistribution` block is omitted, `ZIPFIAN` uses 10,000 keys and exponent 0.99.
+If the block is present, both fields are required.
+The same deterministic keys and ranks are used by every worker and producer. Each worker
+precomputes and shares an O(keys) alias table; sampling takes constant time per message.
+`keyDistribution` is ignored for other distributors.
 
 ## messageSizeDistribution
 

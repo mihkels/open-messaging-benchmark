@@ -83,6 +83,10 @@ final class SupportedWorkloadFields {
                             (template, workload) -> workload.keyDistributor = template.keyDistributor(),
                             workload -> workload.keyDistributor),
                     new FixedField(
+                            "keyDistribution",
+                            (template, workload) -> workload.keyDistribution = template.keyDistribution(),
+                            workload -> workload.keyDistribution),
+                    new FixedField(
                             "payloadFile",
                             (template, workload) -> workload.payloadFile = template.payloadFile(),
                             workload -> workload.payloadFile),

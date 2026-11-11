@@ -65,7 +65,9 @@ LABEL org.opencontainers.image.title="OpenMessaging Benchmark" \
       io.openmessaging.benchmark.drivers="${DRIVERS}"
 
 # Upgrades OS packages so Ubuntu security fixes apply before the pinned Temurin image is rebuilt.
-RUN apt-get update \
+# --error-on=any fails the build when an index cannot be fetched (apt-get otherwise only warns),
+# so a network failure cannot silently ship an image without the upgrades.
+RUN apt-get update --error-on=any \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 omb \

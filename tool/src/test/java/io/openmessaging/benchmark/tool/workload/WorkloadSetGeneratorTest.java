@@ -102,8 +102,7 @@ class WorkloadSetGeneratorTest {
                         0,
                         0,
                         0,
-                        0,
-                        null);
+                        0);
 
         assertThat(new WorkloadSetGenerator(template).generate())
                 .singleElement()
@@ -143,8 +142,7 @@ class WorkloadSetGeneratorTest {
                         1234,
                         2345,
                         67,
-                        89,
-                        null);
+                        89);
 
         List<Workload> workloads = new WorkloadSetGenerator(template).generate();
 
@@ -228,6 +226,7 @@ class WorkloadSetGeneratorTest {
                 null,
                 rates,
                 KeyDistributorType.NO_KEY,
+                null,
                 null,
                 true,
                 1.0,

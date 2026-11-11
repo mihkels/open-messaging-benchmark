@@ -58,10 +58,17 @@ public abstract class KeyDistributor {
     public abstract @Nullable String next();
 
     public static KeyDistributor build(KeyDistributorType keyType) {
+        return build(keyType, null);
+    }
+
+    public static KeyDistributor build(
+            KeyDistributorType keyType, @Nullable KeyDistribution distribution) {
         return switch (keyType) {
             case NO_KEY -> new NoKeyDistributor();
             case KEY_ROUND_ROBIN -> new KeyRoundRobin();
             case RANDOM_NANO -> new RandomNano();
+            case ZIPFIAN ->
+                    new ZipfianKeyDistributor(distribution != null ? distribution : KeyDistribution.DEFAULT);
         };
     }
 }

@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -32,6 +33,24 @@ class WorkloadGenerationToolTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void generatesZipfianWorkload() throws Exception {
+        Path template = tempDir.resolve("zipf.yaml");
+        Path output = tempDir.resolve("out");
+        Files.createDirectories(output);
+        Files.writeString(template, """
+                nameFormat: zipf
+                keyDistributor: ZIPFIAN
+                keyDistribution:
+                  keys: 123
+                  exponent: 1.1
+                """);
+        WorkloadGenerationTool.main(new String[] {"-t", template.toString(), "-o", output.toString()});
+        Workload workload = YAML_MAPPER.readValue(output.resolve("zipf.yaml").toFile(), Workload.class);
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.ZIPFIAN);
+        assertThat(workload.keyDistribution).isEqualTo(new KeyDistribution(123, 1.1));
+    }
 
     @Test
     void generatesOneFilePerWorkloadCombination() throws Exception {

@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker.commands;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.List;
@@ -110,7 +111,7 @@ class ProducerWorkAssignmentTest {
         assertThat(assignment)
                 .hasToString(
                         "ProducerWorkAssignment[payloads=1 templates, sizes [3], weights [7], publishRate=10.0, "
-                                + "keyDistributorType=NO_KEY]");
+                                + "keyDistributorType=NO_KEY, keyDistribution=null]");
     }
 
     @Test
@@ -135,5 +136,22 @@ class ProducerWorkAssignmentTest {
         assertThat(mapper.writeValueAsString(uniform)).isEqualTo(uniformJson);
         assertThat(mapper.readValue(weightedJson, ProducerWorkAssignment.class)).isEqualTo(weighted);
         assertThat(mapper.readValue(uniformJson, ProducerWorkAssignment.class)).isEqualTo(uniform);
+    }
+
+    @Test
+    void preservesZipfianParametersOnWireAndRateChange() {
+        var config = new KeyDistribution(37, 1.2);
+        var assignment =
+                new ProducerWorkAssignment(
+                        io.openmessaging.benchmark.utils.payload.PayloadTemplates.of(
+                                List.of(new byte[] {1}), null),
+                        10,
+                        KeyDistributorType.ZIPFIAN,
+                        config);
+        ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+        String json = mapper.writeValueAsString(assignment);
+        assertThat(json).contains("\"keyDistribution\":{\"keys\":37,\"exponent\":1.2}");
+        assertThat(mapper.readValue(json, ProducerWorkAssignment.class)).isEqualTo(assignment);
+        assertThat(assignment.withPublishRate(20).keyDistribution()).isEqualTo(config);
     }
 }

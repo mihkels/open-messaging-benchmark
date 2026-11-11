@@ -83,6 +83,8 @@ public final class WorkloadGenerator implements WorkloadRun {
     private volatile double targetPublishRate;
     private volatile RunPhase phase = RunPhase.MEASURE;
     private volatile int stage;
+    private volatile long pausePeakBacklog;
+    private volatile @Nullable Double pauseDrainSeconds;
     // The creator's MDC (run id, workload, driver), repeated on phase events from controller threads
     private final Map<String, String> logContext =
             Objects.requireNonNullElse(MDC.getCopyOfContextMap(), Map.of());
@@ -217,6 +219,11 @@ public final class WorkloadGenerator implements WorkloadRun {
         if (workload.usesStages()) {
             startController("stages", () -> driveStages(System::nanoTime, 1000), () -> {});
         }
+        Workload.ConsumerPause pause = workload.consumerPause;
+        if (pause != null) {
+            startController(
+                    "consumer pause", () -> pauseConsumersMidRun(pause, System::nanoTime, 100), () -> {});
+        }
 
         collect(result, measuredMinutes, TimeUnit.MINUTES, true);
         checkControllerFailure();
@@ -326,6 +333,62 @@ public final class WorkloadGenerator implements WorkloadRun {
             }
             Thread.sleep(tickMillis);
         }
+    }
+
+    /**
+     * Pauses consumers for the workload's pause window while producers continue, then times how long
+     * the backlog takes to drain once they resume.
+     *
+     * @param pause the pause window, relative to when this is called
+     * @param clock the nanosecond clock the window is measured against
+     * @param tickMillis how often the clock and the backlog are checked
+     */
+    void pauseConsumersMidRun(Workload.ConsumerPause pause, LongSupplier clock, long tickMillis)
+            throws InterruptedException {
+        long start = clock.getAsLong();
+        long pauseAt = start + MINUTES.toNanos(pause.afterMinutes());
+        if (!waitUntil(clock, pauseAt, tickMillis)) {
+            return;
+        }
+        long steady = backlog(worker.getCountersStats());
+        log.info("--- Pausing consumers for {}m ---", pause.durationMinutes());
+        enterPhase(RunPhase.BACKLOG_BUILD);
+        worker.pauseConsumers();
+        if (!waitUntil(clock, pauseAt + MINUTES.toNanos(pause.durationMinutes()), tickMillis)) {
+            return;
+        }
+        long peak = backlog(worker.getCountersStats());
+        pausePeakBacklog = peak;
+        enterPhase(RunPhase.BACKLOG_DRAIN);
+        worker.resumeConsumers();
+        long resumed = clock.getAsLong();
+        log.info("--- Resumed consumers with a backlog of {} messages ---", peak);
+
+        // consumerBacklogSizeGB's drain rule, floored at the backlog in flight before the pause
+        long drained =
+                Math.max(steady, Math.max(1000L, (long) ((1.0 - workload.backlogDrainRatio) * peak)));
+        while (!runCompleted) {
+            if (backlog(worker.getCountersStats()) <= drained) {
+                double seconds = (clock.getAsLong() - resumed) / 1e9;
+                pauseDrainSeconds = seconds;
+                log.info("--- Drained the paused backlog in {} s ---", seconds);
+                enterPhase(RunPhase.MEASURE);
+                return;
+            }
+            Thread.sleep(tickMillis);
+        }
+    }
+
+    // Returns false if the run completed first
+    private boolean waitUntil(LongSupplier clock, long deadline, long tickMillis)
+            throws InterruptedException {
+        while (!runCompleted) {
+            if (clock.getAsLong() >= deadline) {
+                return true;
+            }
+            Thread.sleep(tickMillis);
+        }
+        return false;
     }
 
     // onExit runs after any controller failure has been recorded, so the run cannot finish without it
@@ -619,6 +682,9 @@ public final class WorkloadGenerator implements WorkloadRun {
                         .mapToLong(Long::longValue)
                         .max()
                         .orElse(0));
+        if (workload.consumerPause != null) {
+            result.recordConsumerPause(pausePeakBacklog, pauseDrainSeconds);
+        }
         if (includeHistograms) {
             result.recordHistogramData(aggregate);
         }

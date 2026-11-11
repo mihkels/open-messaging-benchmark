@@ -88,6 +88,21 @@ public class TestResult {
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<Integer> stage = new ArrayList<>();
 
+    /**
+     * The outcome of a mid-run consumer pause.
+     *
+     * @param startPeriod the index of the first period recorded while consumers were paused
+     * @param endPeriod the index of the last period recorded while consumers were paused
+     * @param peakBacklog the backlog in messages when consumers resumed
+     * @param drainSeconds the time from resume to the drained backlog, or null if it did not drain
+     */
+    public record ConsumerPauseResult(
+            int startPeriod, int endPeriod, long peakBacklog, @Nullable Double drainSeconds) {}
+
+    /** The mid-run consumer pause; only for workloads with a consumerPause that reached it. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable ConsumerPauseResult consumerPause;
+
     public List<Double> publishLatencyAvg = new ArrayList<>();
     public List<Double> publishLatency50pct = new ArrayList<>();
     public List<Double> publishLatency75pct = new ArrayList<>();
@@ -313,6 +328,21 @@ public class TestResult {
                         counters.messageSendErrors(),
                         maxBacklog,
                         targetRate);
+    }
+
+    /**
+     * Records a mid-run consumer pause, locating it by the {@link RunPhase#BACKLOG_BUILD} periods.
+     *
+     * @param peakBacklog the backlog in messages when consumers resumed
+     * @param drainSeconds the time from resume to the drained backlog, or null if it did not drain
+     */
+    void recordConsumerPause(long peakBacklog, @Nullable Double drainSeconds) {
+        int start = phase.indexOf(RunPhase.BACKLOG_BUILD);
+        if (start >= 0) {
+            consumerPause =
+                    new ConsumerPauseResult(
+                            start, phase.lastIndexOf(RunPhase.BACKLOG_BUILD), peakBacklog, drainSeconds);
+        }
     }
 
     void recordHistogramData(CumulativeLatencies aggregate) {

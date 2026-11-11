@@ -133,6 +133,29 @@
       },
       "additionalProperties": false
     },
+    "consumerPause": {
+      "description": "Mid-run consumer pause. Present only for workloads with consumerPause that reached the pause.",
+      "type": "object",
+      "required": ["startPeriod", "endPeriod", "peakBacklog", "drainSeconds"],
+      "properties": {
+        "startPeriod": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endPeriod": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peakBacklog": {
+          "type": "integer"
+        },
+        "drainSeconds": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "histograms": {
       "type": "object",
       "properties": {

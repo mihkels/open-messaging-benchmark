@@ -241,6 +241,73 @@ class WorkloadTest {
                 "stages must last at least one minute in total");
     }
 
+    @Test
+    void loadsAConsumerPause(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("pause.yaml");
+        Files.writeString(
+                file,
+                """
+                name: pause
+                topics: 1
+                messageSize: 1024
+                producerRate: 1000
+                testDurationMinutes: 10
+                consumerPause:
+                  afterMinutes: 5
+                  durationMinutes: 3
+                """);
+
+        Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("pause");
+        workload.validate();
+
+        assertThat(workload.consumerPause).isEqualTo(new Workload.ConsumerPause(5, 3));
+    }
+
+    @Test
+    void acceptsAConsumerPauseInsideAStagedRun() {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.stages = List.of(new Workload.Stage(2, 1000), new Workload.Stage(2, 3000));
+        workload.consumerPause = new Workload.ConsumerPause(1, 2);
+
+        workload.validate();
+    }
+
+    @Test
+    void rejectsAConsumerPauseWithIncompatibleSettings() {
+        assertRejectedPause(
+                w -> w.consumerBacklogSizeGB = 1,
+                "consumerPause cannot be combined with a consumer backlog");
+        assertRejectedPause(
+                w -> w.producerRate = 0, "consumerPause requires a fixed producerRate or stages");
+        assertRejectedPause(
+                w -> w.consumerPause = new Workload.ConsumerPause(-1, 2),
+                "consumerPause afterMinutes must not be negative");
+        assertRejectedPause(
+                w -> w.consumerPause = new Workload.ConsumerPause(1, 0),
+                "consumerPause durationMinutes must be positive");
+        assertRejectedPause(
+                w -> w.consumerPause = new Workload.ConsumerPause(3, 2),
+                "consumerPause must end before the measured run ends");
+        assertRejectedPause(
+                w -> w.testDurationMinutes = 0, "consumerPause must end before the measured run ends");
+    }
+
+    private static void assertRejectedPause(
+            java.util.function.Consumer<Workload> change, String message) {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.producerRate = 1000;
+        workload.testDurationMinutes = 5;
+        workload.consumerPause = new Workload.ConsumerPause(1, 2);
+        workload.validate();
+        change.accept(workload);
+
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(message);
+    }
+
     private static void assertRejectedStages(
             java.util.function.Consumer<Workload> change, String message) {
         Workload workload = new Workload();

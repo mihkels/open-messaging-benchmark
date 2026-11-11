@@ -55,7 +55,8 @@ class WorkloadSetGeneratorTest {
                                                 "messageSizeDistribution",
                                                 "payloadGenerator",
                                                 "backlogDrainRatio",
-                                                "thresholds"))
+                                                "thresholds",
+                                                "consumerPause"))
                                 .toList());
     }
 

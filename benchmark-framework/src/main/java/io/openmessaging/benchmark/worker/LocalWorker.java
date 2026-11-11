@@ -33,7 +33,6 @@ import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
-import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -304,21 +303,16 @@ public final class LocalWorker implements Worker {
                 PayloadSampler.of(
                         producerWorkAssignment.payloads().templates(),
                         producerWorkAssignment.payloads().weights());
+        // Built before the load starts, so a failure (such as a large Zipfian table) leaves it
+        // unstarted
+        Supplier<KeyDistributor> keyDistributors =
+                KeyDistributor.supplier(
+                        producerWorkAssignment.keyDistributorType(), producerWorkAssignment.keyDistribution());
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());
-        KeyDistributor zipfian =
-                producerWorkAssignment.keyDistributorType() == KeyDistributorType.ZIPFIAN
-                        ? KeyDistributor.build(
-                                producerWorkAssignment.keyDistributorType(),
-                                producerWorkAssignment.keyDistribution())
-                        : null;
         for (BenchmarkProducer producer : producers) {
-            KeyDistributor keyDistributor =
-                    zipfian != null
-                            ? zipfian
-                            : KeyDistributor.build(producerWorkAssignment.keyDistributorType());
-            startProducer(current, producer, keyDistributor, payloads);
+            startProducer(current, producer, keyDistributors.get(), payloads);
         }
     }
 

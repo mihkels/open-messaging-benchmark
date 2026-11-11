@@ -40,16 +40,34 @@ class WorkloadGenerationToolTest {
         Path output = tempDir.resolve("out");
         Files.createDirectories(output);
         Files.writeString(template, """
-                nameFormat: zipf
+                nameFormat: zipf-${keyDistribution}
                 keyDistributor: ZIPFIAN
                 keyDistribution:
                   keys: 123
                   exponent: 1.1
                 """);
         WorkloadGenerationTool.main(new String[] {"-t", template.toString(), "-o", output.toString()});
-        Workload workload = YAML_MAPPER.readValue(output.resolve("zipf.yaml").toFile(), Workload.class);
+        Workload workload =
+                YAML_MAPPER.readValue(output.resolve("zipf-123-1.1.yaml").toFile(), Workload.class);
+        assertThat(workload.name).isEqualTo("zipf-123-1.1");
         assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.ZIPFIAN);
         assertThat(workload.keyDistribution).isEqualTo(new KeyDistribution(123, 1.1));
+    }
+
+    @Test
+    void namesEffectiveKeyDistribution() throws Exception {
+        WorkloadSetTemplate zipfian =
+                YAML_MAPPER.readValue(
+                        "nameFormat: k-${keyDistribution}\nkeyDistributor: ZIPFIAN\n",
+                        WorkloadSetTemplate.class);
+        WorkloadSetTemplate roundRobin =
+                YAML_MAPPER.readValue(
+                        "nameFormat: k-${keyDistribution}\nkeyDistributor: KEY_ROUND_ROBIN\n",
+                        WorkloadSetTemplate.class);
+        assertThat(new WorkloadSetGenerator(zipfian).generate().getFirst().name)
+                .isEqualTo("k-10k-0.99");
+        assertThat(new WorkloadSetGenerator(roundRobin).generate().getFirst().name)
+                .isEqualTo("k-none");
     }
 
     @Test

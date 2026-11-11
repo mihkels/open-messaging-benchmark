@@ -67,6 +67,15 @@ class ZipfianKeyDistributorTest {
     }
 
     @Test
+    void supplierSharesOnlyTheImmutableZipfianDistributor() {
+        var zipfian = KeyDistributor.supplier(KeyDistributorType.ZIPFIAN, new KeyDistribution(3, 1));
+        assertThat(zipfian.get()).isSameAs(zipfian.get());
+        var roundRobin = KeyDistributor.supplier(KeyDistributorType.KEY_ROUND_ROBIN, null);
+        assertThat(roundRobin.get()).isNotSameAs(roundRobin.get());
+        assertThat(KeyDistribution.orDefault(null)).isEqualTo(KeyDistribution.DEFAULT);
+    }
+
+    @Test
     void rejectsInvalidParameters() {
         assertThatThrownBy(() -> new KeyDistribution(0, 1))
                 .isInstanceOf(IllegalArgumentException.class);

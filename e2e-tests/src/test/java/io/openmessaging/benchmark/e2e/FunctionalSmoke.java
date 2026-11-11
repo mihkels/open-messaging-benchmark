@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.e2e;
 
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -112,7 +113,10 @@ public final class FunctionalSmoke {
             worker.resetStats();
             worker.startLoad(
                     new ProducerWorkAssignment(
-                            payloads(workload), workload.producerRate, workload.keyDistributor));
+                            PayloadTemplates.of(payloads(workload), null),
+                            workload.producerRate,
+                            workload.keyDistributor,
+                            workload.keyDistribution));
 
             long minimumSent = minimumMessages(workload);
             long minimumReceived = minimumSent * workload.subscriptionsPerTopic;

@@ -174,44 +174,6 @@ public record WorkloadSetTemplate(
                 DEFAULT_WARMUP_DURATION_MINUTES);
     }
 
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    public WorkloadSetTemplate(
-            String nameFormat,
-            List<Integer> topics,
-            List<Integer> partitionsPerTopic,
-            List<Integer> messageSize,
-            List<Integer> subscriptionsPerTopic,
-            List<Integer> producersPerTopic,
-            List<Integer> consumerPerSubscription,
-            List<Integer> producerRate,
-            KeyDistributorType keyDistributor,
-            @Nullable String payloadFile,
-            boolean useRandomizedPayloads,
-            double randomBytesRatio,
-            int randomizedPayloadPoolSize,
-            long consumerBacklogSizeGB,
-            int testDurationMinutes,
-            int warmupDurationMinutes) {
-        this(
-                nameFormat,
-                topics,
-                partitionsPerTopic,
-                messageSize,
-                subscriptionsPerTopic,
-                producersPerTopic,
-                consumerPerSubscription,
-                producerRate,
-                keyDistributor,
-                null,
-                payloadFile,
-                useRandomizedPayloads,
-                randomBytesRatio,
-                randomizedPayloadPoolSize,
-                consumerBacklogSizeGB,
-                testDurationMinutes,
-                warmupDurationMinutes);
-    }
-
     // Defensive copy getters for mutable List fields
     @Override
     public List<Integer> topics() {

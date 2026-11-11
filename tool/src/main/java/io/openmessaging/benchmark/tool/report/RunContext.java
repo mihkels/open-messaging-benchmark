@@ -66,9 +66,8 @@ final class RunContext {
             identity.put("consumerPerSubscription", String.valueOf(workload.consumerPerSubscription));
             identity.put("keyDistributor", String.valueOf(workload.keyDistributor));
             if (workload.keyDistributor == KeyDistributorType.ZIPFIAN) {
-                KeyDistribution keys =
-                        workload.keyDistribution != null ? workload.keyDistribution : KeyDistribution.DEFAULT;
-                identity.put("keyDistribution", keys.toString());
+                identity.put(
+                        "keyDistribution", KeyDistribution.orDefault(workload.keyDistribution).toString());
             }
             Map<String, Integer> distribution = workload.messageSizeDistribution;
             identity.put(

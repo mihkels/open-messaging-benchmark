@@ -14,6 +14,8 @@
 package io.openmessaging.benchmark.tool.workload;
 
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +85,7 @@ final class SupportedWorkloadFields {
                     new FixedField(
                             "keyDistribution",
                             (template, workload) -> workload.keyDistribution = template.keyDistribution(),
-                            workload -> workload.keyDistribution),
+                            SupportedWorkloadFields::keyDistributionName),
                     new FixedField(
                             "payloadFile",
                             (template, workload) -> workload.payloadFile = template.payloadFile(),
@@ -152,6 +154,16 @@ final class SupportedWorkloadFields {
             String name,
             BiConsumer<WorkloadSetTemplate, Workload> assign,
             Function<Workload, Object> nameValue) {}
+
+    // Effective Zipfian parameters in file-name-safe form, such as 10k-0.99; "none" for other
+    // distributors
+    private static String keyDistributionName(Workload workload) {
+        if (workload.keyDistributor != KeyDistributorType.ZIPFIAN) {
+            return "none";
+        }
+        KeyDistribution distribution = KeyDistribution.orDefault(workload.keyDistribution);
+        return countToDisplaySize(distribution.keys()) + "-" + distribution.exponent();
+    }
 
     private static String countToDisplaySize(long size) {
         if (size / 1_000_000_000L > 0L) {

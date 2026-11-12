@@ -58,8 +58,14 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         config = DriverConfigs.read(configurationFile, NsqConfig.class);
-        if (config.nsqdHttpPort < 1 || config.nsqdHttpPort > 65535) {
-            throw new IllegalArgumentException("nsqdHttpPort must be between 1 and 65535");
+        checkPort("nsqdHttpPort", config.nsqdHttpPort);
+        checkPort("nsqdTcpPort", config.nsqdTcpPort);
+        checkPort("lookupHttpPort", config.lookupHttpPort);
+    }
+
+    private static void checkPort(String name, int port) {
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException(name + " must be between 1 and 65535");
         }
     }
 
@@ -108,7 +114,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         NSQProducer nsqProducer = null;
         try {
             nsqProducer = newProducer();
-            nsqProducer.addAddress(config.nsqdHost, 4150);
+            nsqProducer.addAddress(config.nsqdHost, config.nsqdTcpPort);
             nsqProducer.start();
             log.info("start a nsq producer");
             return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
@@ -134,7 +140,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         try {
             NsqLookup lookup =
                     new NsqLookup(httpClient, Duration.ofSeconds(3), config.nsqdHost, config.nsqdHttpPort);
-            lookup.addLookupAddress(config.lookupHost, 4161);
+            lookup.addLookupAddress(config.lookupHost, config.lookupHttpPort);
             scope = new NsqEventLoopGroup(consumerEventLoops());
             consumer = newConsumer(lookup, topic, subscriptionName, consumerCallback, scope);
             CompletableFuture<BenchmarkConsumer> creation;

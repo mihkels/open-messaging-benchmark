@@ -46,7 +46,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -62,7 +64,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkDriver.class);
     private static final Pattern server_uri_pattern =
-            Pattern.compile("(?:[^:]*+://)?+([^:]++)(?::(\\w++))?+");
+            Pattern.compile("(?:([^:]*+)://)?+([^:]++)(?::(\\w++))?+");
     public static final MqttUtf8String USER_PROPERTY_KEY_PUBLISH_TIMESTAMP =
             MqttUtf8String.of("benchmark-publish-timestamp");
 
@@ -372,12 +374,16 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return DriverConfigs.read(configurationFile, MqttConfig.class);
     }
 
-    private static HostAndPort parseServerUri(String serverUri) {
+    static HostAndPort parseServerUri(String serverUri) {
         Matcher matcher = server_uri_pattern.matcher(serverUri);
         if (matcher.find()) {
-            String host = matcher.group(1);
-            String portStr = matcher.group(2);
-            int port = portStr != null && !portStr.isEmpty() ? Integer.parseInt(portStr) : 80;
+            String scheme = matcher.group(1);
+            String host = matcher.group(2);
+            String portStr = matcher.group(3);
+            boolean tls =
+                    scheme != null && Set.of("ssl", "tls", "mqtts").contains(scheme.toLowerCase(Locale.ROOT));
+            int port =
+                    portStr != null && !portStr.isEmpty() ? Integer.parseInt(portStr) : tls ? 8883 : 1883;
             return HostAndPort.fromParts(host, port);
         } else {
             throw new IllegalArgumentException("Invalid serverUri: " + serverUri);

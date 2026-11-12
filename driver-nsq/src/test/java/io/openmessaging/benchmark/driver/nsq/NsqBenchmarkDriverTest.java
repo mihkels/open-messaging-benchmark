@@ -59,6 +59,8 @@ class NsqBenchmarkDriverTest {
                 new ObjectMapper(new YAMLFactory())
                         .readValue("nsqdHost: localhost\nlookupHost: localhost\n", NsqConfig.class);
         assertThat(config.nsqdHttpPort).isEqualTo(4151);
+        assertThat(config.nsqdTcpPort).isEqualTo(4150);
+        assertThat(config.lookupHttpPort).isEqualTo(4161);
     }
 
     @Test

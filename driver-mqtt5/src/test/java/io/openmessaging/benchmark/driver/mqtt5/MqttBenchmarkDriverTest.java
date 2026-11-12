@@ -69,6 +69,15 @@ import org.junit.jupiter.api.Test;
 
 class MqttBenchmarkDriverTest {
     @Test
+    void serverUriWithoutPortUsesMqttDefaultPort() {
+        assertThat(MqttBenchmarkDriver.parseServerUri("tcp://broker").getPort()).isEqualTo(1883);
+        assertThat(MqttBenchmarkDriver.parseServerUri("broker").getPort()).isEqualTo(1883);
+        assertThat(MqttBenchmarkDriver.parseServerUri("ssl://broker").getPort()).isEqualTo(8883);
+        assertThat(MqttBenchmarkDriver.parseServerUri("tcp://broker:1999").getPort()).isEqualTo(1999);
+        assertThat(MqttBenchmarkDriver.parseServerUri("ssl://broker").getHost()).isEqualTo("broker");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void realClientBuilderPathSubscribesAfterConnectWithManualAcknowledgements() throws Exception {
         Mqtt5AsyncClient client = mock(Mqtt5AsyncClient.class);

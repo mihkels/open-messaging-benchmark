@@ -16,5 +16,7 @@ package io.openmessaging.benchmark.driver.nsq;
 public class NsqConfig {
     public String nsqdHost;
     public int nsqdHttpPort = 4151;
+    public int nsqdTcpPort = 4150;
+    public int lookupHttpPort = 4161;
     public String lookupHost;
 }

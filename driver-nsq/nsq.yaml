@@ -16,8 +16,10 @@
 name: Nsq
 driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
 
-# NSQ hosts. Topic creation uses nsqd's HTTP port; producers use TCP 4150 and lookup uses HTTP 4161.
+# NSQ hosts. Topic creation uses nsqd's HTTP port, producers its TCP port, consumers nsqlookupd's HTTP port.
 
 nsqdHost: localhost
 nsqdHttpPort: 4151
+nsqdTcpPort: 4150
+lookupHttpPort: 4161
 lookupHost: localhost

@@ -124,6 +124,7 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `driver` / `workload`                                                  | `driver-kafka/kafka-latency.yaml`, `workloads/1-topic-16-partitions-1kb.yaml` | Paths in the image                                                                     |
 | `workers.auth.enabled`                                                 | `false`                                                                       | Require a bearer token on the worker API; the coordinator sends it. See below          |
 | `workers.auth.existingSecret` / `workers.auth.secretKey`               | empty, `token`                                                                | Secret holding the token. When empty, the chart creates `<fullname>-worker-token`      |
+| `workers.auth.token`                                                   | empty                                                                         | Fixed token for the created Secret; set it or `existingSecret` for GitOps renders      |
 | `workers.auth.protectMetrics`                                          | `false`                                                                       | Require the token on `/metrics` too                                                    |
 | `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                    |
 | `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                   |
@@ -147,8 +148,10 @@ reach it; `networkPolicy.metricsFrom` adds peers such as Prometheus.
 With `workers.auth.enabled=true` the worker API also requires a bearer token. The chart injects
 `OMB_WORKER_TOKEN` from a Secret into the workers and the coordinator, so `benchmark` in the
 coordinator sends it without extra arguments. Without `workers.auth.existingSecret`, the chart
-creates a Secret with a random token and reuses it on `helm upgrade`; `helm template` and
-`--dry-run` cannot look up the existing Secret and render a new token. To bring your own:
+creates a Secret with a random token and reuses it on `helm upgrade`; `helm template`,
+`--dry-run`, Argo CD and Flux cannot look up the existing Secret and render a new token on every
+render, which rotates it under running pods. For GitOps, set `workers.auth.existingSecret` or a
+fixed `workers.auth.token`. To bring your own Secret:
 
 ```bash
 kubectl create secret generic omb-worker-token --from-literal=token="$(openssl rand -hex 32)"

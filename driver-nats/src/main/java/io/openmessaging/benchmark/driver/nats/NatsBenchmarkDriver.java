@@ -57,7 +57,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                     Nats.connect(
                             new Options.Builder()
                                     .server(config.natsHostUrl)
-                                    .maxReconnects(5)
+                                    .maxReconnects(-1) // unlimited
                                     .reconnectWait(Duration.ofSeconds(1))
                                     .connectionTimeout(Duration.ofSeconds(5))
                                     .pingInterval(Duration.ofSeconds(60))

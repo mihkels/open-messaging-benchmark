@@ -136,7 +136,7 @@ All keys are read by `NatsConfig`. Unknown keys are ignored.
 | `storageType`       | enum   | `file`   | Stream storage: `file` or `memory`. Values must be lower case; `File` or `Memory` are not accepted.                                       |
 | `maxBytes`          | int    | `-1`     | Stream `max_bytes` limit in bytes; `-1` means unlimited. A 32-bit integer, so the largest finite value is 2147483647 bytes (about 2 GiB). |
 
-Connection settings are fixed in the driver: 5 s connection timeout, up to 5 reconnect attempts 1 s apart, and a
+Connection settings are fixed in the driver: 5 s connection timeout, unlimited reconnect attempts 1 s apart, and a
 60 s ping interval. There is no user, token, credentials-file or TLS setting, and no pass-through client properties.
 Other stream and consumer settings are server and client defaults; see the
 [JetStream documentation](https://docs.nats.io/nats-concepts/jetstream).

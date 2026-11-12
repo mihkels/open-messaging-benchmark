@@ -76,7 +76,8 @@ Consequences:
   sub-millisecond comparisons.
 - **Driver differences.** Some drivers use a broker-assigned timestamp, some use the producer's,
   and some have coarser resolution. See the "Semantics" section of each
-  [driver page](../drivers/index.md).
+  [driver page](../drivers/index.md). NATS Streaming uses the server's store time, so its
+  end-to-end latency excludes the producer-to-server leg and is not comparable to other drivers.
 - **Range.** End-to-end values are capped at 12 hours, so backlog drains are measured without an
   oversized value failing the run. All three producer latency metrics are capped at 60 seconds.
 

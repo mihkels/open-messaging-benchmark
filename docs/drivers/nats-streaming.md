@@ -163,7 +163,8 @@ message after the benchmark callback returns. `maxInFlight` limits unacknowledge
 **End-to-end latency.** The consumer uses the message timestamp assigned by the NATS Streaming server (nanoseconds,
 converted to milliseconds) as the publish time. Latency is therefore measured from when the server stored the
 message, using the server's clock, and excludes the time from the producer to the server. Clock offset between the
-server and the workers adds directly to the result. See [Latency and backlog](../methodology/latency-and-backlog.md).
+server and the workers adds directly to the result. Because the producer-to-server leg is missing, these figures
+are not comparable to end-to-end latency from other drivers, which measure from the client publish time. See [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Durability.** Determined by the server store (`-store memory` or `file`) and its sync settings, not by the driver.
 

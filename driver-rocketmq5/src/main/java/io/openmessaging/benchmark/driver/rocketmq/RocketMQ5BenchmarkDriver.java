@@ -64,6 +64,10 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     public synchronized void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
+        if (rmqClientConfig.sendDelayMsg
+                && (rmqClientConfig.delayTimeInSec == null || rmqClientConfig.delayTimeInSec <= 0)) {
+            throw new IllegalArgumentException("delayTimeInSec must be > 0 when sendDelayMsg is true");
+        }
         RPCHook rpcHook = null;
         if (isAdminAclEnabled()) {
             rpcHook =

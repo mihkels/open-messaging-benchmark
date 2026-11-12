@@ -41,8 +41,10 @@ import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class RocketMQ5BenchmarkDriverTest {
@@ -97,6 +99,18 @@ class RocketMQ5BenchmarkDriverTest {
         assertThat(startupFailure.getSuppressed()).containsExactly(closeFailure);
         driver.close();
         verify(driver.admin, times(1)).shutdown();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "delayTimeInSec: 0\n"})
+    void delayMessagesWithoutDelayTimeFailAtInit(String delay, @TempDir Path dir) throws Exception {
+        Path config = dir.resolve("rocketmq.yaml");
+        Files.writeString(config, "namesrvAddr: localhost:9876\nsendDelayMsg: true\n" + delay);
+        TestDriver driver = new TestDriver();
+        assertThatThrownBy(() -> driver.initialize(config, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("delayTimeInSec");
+        verify(driver.admin, times(0)).start();
     }
 
     @Test

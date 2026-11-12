@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -153,6 +154,74 @@ class WorkloadTest {
                         new Workload.Stage(10, 150000),
                         new Workload.Stage(0, 200000));
         assertThat(workload.measuredMinutes()).isEqualTo(15);
+    }
+
+    @Test
+    void loadsAWorkloadWithAPayloadGenerator(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("compressible.yaml");
+        Files.writeString(
+                file,
+                """
+                name: compressible
+                messageSize: 1024
+                payloadGenerator:
+                  type: COMPRESSIBLE
+                  targetCompressionRatio: 0.45
+                  poolSize: 1000
+                """);
+
+        Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("compressible");
+        workload.validate();
+
+        assertThat(workload.payloadGenerator)
+                .isEqualTo(new PayloadGenerator(PayloadGenerator.Type.COMPRESSIBLE, 0.45, 1000));
+    }
+
+    @Test
+    void loadingAPayloadGeneratorWithAnInvalidRatioFails(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("invalid.yaml");
+        Files.writeString(
+                file,
+                """
+                name: invalid
+                messageSize: 1024
+                payloadGenerator:
+                  type: COMPRESSIBLE
+                  targetCompressionRatio: 1.5
+                  poolSize: 10
+                """);
+
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())))
+                .hasStackTraceContaining("payloadGenerator targetCompressionRatio must be in (0, 1]");
+    }
+
+    @Test
+    void rejectsAPayloadGeneratorMixedWithIncompatibleSettings() {
+        assertRejectedGenerator(
+                w -> w.payloadFile = "payload/payload-1Kb.data",
+                "payloadGenerator and payloadFile are mutually exclusive");
+        assertRejectedGenerator(
+                w -> w.useRandomizedPayloads = true,
+                "payloadGenerator and useRandomizedPayloads are mutually exclusive");
+        assertRejectedGenerator(
+                w -> w.messageSize = 0, "Message size must be positive with payloadGenerator");
+        assertRejectedGenerator(
+                w -> w.messageSizeDistribution = Map.of("1KB-1KB", Integer.MAX_VALUE / 2),
+                "payloadGenerator poolSize times the distribution weights exceeds the supported total");
+    }
+
+    private static void assertRejectedGenerator(
+            java.util.function.Consumer<Workload> change, String message) {
+        Workload workload = new Workload();
+        workload.messageSize = 1024;
+        workload.producerRate = 1000;
+        workload.payloadGenerator = new PayloadGenerator(PayloadGenerator.Type.COMPRESSIBLE, 0.5, 10);
+        workload.validate();
+        change.accept(workload);
+
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(message);
     }
 
     @Test

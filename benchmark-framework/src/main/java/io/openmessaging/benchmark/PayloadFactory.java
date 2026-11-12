@@ -13,10 +13,13 @@
  */
 package io.openmessaging.benchmark;
 
+import io.openmessaging.benchmark.utils.payload.CompressiblePayloads;
 import io.openmessaging.benchmark.utils.payload.FilePayloadReader;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
+import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -32,6 +35,10 @@ final class PayloadFactory {
 
     static PayloadTemplates create(Workload workload) {
         Random random = ThreadLocalRandom.current();
+        PayloadGenerator generator = workload.payloadGenerator;
+        if (generator != null) {
+            return generated(workload, generator, random);
+        }
         Map<String, Integer> sizes = workload.messageSizeDistribution;
         if (sizes != null && !sizes.isEmpty()) {
             MessageSizeDistribution distribution = new MessageSizeDistribution(sizes);
@@ -62,11 +69,33 @@ final class PayloadFactory {
             throw new IllegalArgumentException(
                     "Workload "
                             + workload.name
-                            + " must set payloadFile, useRandomizedPayloads or"
-                            + " messageSizeDistribution");
+                            + " must set payloadFile, payloadGenerator,"
+                            + " useRandomizedPayloads or messageSizeDistribution");
         }
         return PayloadTemplates.of(
                 List.of(new FilePayloadReader(workload.messageSize).load(payloadFile)), null);
+    }
+
+    // poolSize payloads per size; with a distribution each payload carries its bucket's weight
+    private static PayloadTemplates generated(
+            Workload workload, PayloadGenerator generator, Random random) {
+        double target = generator.targetCompressionRatio();
+        int poolSize = generator.poolSize();
+        Map<String, Integer> sizes = workload.messageSizeDistribution;
+        if (sizes == null || sizes.isEmpty()) {
+            return PayloadTemplates.of(
+                    CompressiblePayloads.pool(workload.messageSize, target, poolSize, random), null);
+        }
+        MessageSizeDistribution distribution = new MessageSizeDistribution(sizes);
+        List<Integer> bucketSizes = distribution.getBucketSizes();
+        int[] bucketWeights = distribution.getWeights();
+        List<byte[]> payloads = new ArrayList<>();
+        int[] weights = new int[bucketSizes.size() * poolSize];
+        for (int bucket = 0; bucket < bucketSizes.size(); bucket++) {
+            payloads.addAll(CompressiblePayloads.pool(bucketSizes.get(bucket), target, poolSize, random));
+            Arrays.fill(weights, bucket * poolSize, (bucket + 1) * poolSize, bucketWeights[bucket]);
+        }
+        return PayloadTemplates.of(payloads, weights);
     }
 
     // A payload whose first randomBytesRatio share is random and whose remainder is zero

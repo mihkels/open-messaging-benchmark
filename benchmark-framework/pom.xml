@@ -43,6 +43,11 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- Reference codec for calibrating generated payloads; coordinator only -->
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
@@ -155,8 +160,9 @@
                     <execution>
                         <!--
                             Records the core artifacts that every driver process needs. Driver processes get
-                            these plus the selected plugin bundle; coordinator-only HTTP client libraries are
-                            excluded so they cannot clash with driver dependencies.
+                            these plus the selected plugin bundle; coordinator-only HTTP client and zstd
+                            (payload calibration) libraries are excluded so they cannot clash with driver
+                            dependencies.
                         -->
                         <id>worker-runtime-artifacts</id>
                         <goals>
@@ -166,7 +172,7 @@
                         <configuration>
                             <outputFile>${project.build.outputDirectory}/META-INF/omb/worker-runtime-artifacts.txt</outputFile>
                             <includeScope>runtime</includeScope>
-                            <excludeGroupIds>io.netty,org.asynchttpclient,com.typesafe.netty,org.reactivestreams,com.google.guava,com.google.errorprone,com.google.j2objc,org.checkerframework,com.google.code.findbugs,org.jcommander,com.sun.activation,jakarta.activation,org.apache.commons</excludeGroupIds>
+                            <excludeGroupIds>io.netty,org.asynchttpclient,com.github.luben,com.typesafe.netty,org.reactivestreams,com.google.guava,com.google.errorprone,com.google.j2objc,org.checkerframework,com.google.code.findbugs,org.jcommander,com.sun.activation,jakarta.activation,org.apache.commons</excludeGroupIds>
                             <sort>true</sort>
                             <appendOutput>false</appendOutput>
                         </configuration>

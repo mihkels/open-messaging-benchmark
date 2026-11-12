@@ -20,30 +20,31 @@ for explanations and examples.
 
 ## Fields
 
-|            Field            |  Type   | Default  |                                                                                        Description                                                                                        |
-|-----------------------------|---------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`                      | string  | none     | Stored as `workload` in the result and used to group charts                                                                                                                               |
-| `topics`                    | int     | 0        | Number of topics to create                                                                                                                                                                |
-| `partitionsPerTopic`        | int     | 0        | Partitions per topic; interpretation depends on the driver                                                                                                                                |
-| `subscriptionsPerTopic`     | int     | 0        | Independent subscriptions per topic; each receives every message                                                                                                                          |
-| `consumerPerSubscription`   | int     | 0        | Consumers sharing each subscription                                                                                                                                                       |
-| `producersPerTopic`         | int     | 0        | Producers per topic                                                                                                                                                                       |
-| `producerRate`              | int     | 0        | Total target rate in msg/s across all producers; `0` searches for the maximum sustainable rate                                                                                            |
-| `messageSize`               | int     | 0        | Message size in bytes, for payload files and randomized payloads                                                                                                                          |
-| `payloadFile`               | path    | none     | File used as every message's payload, relative to the current directory; its length must equal `messageSize`. Required unless `useRandomizedPayloads` or `messageSizeDistribution` is set |
-| `useRandomizedPayloads`     | boolean | false    | Generate a pool of random payloads instead of using `payloadFile`                                                                                                                         |
-| `randomBytesRatio`          | number  | 0.0      | Fraction of each randomized payload that is random; the rest is zeros                                                                                                                     |
-| `randomizedPayloadPoolSize` | int     | 0        | Number of randomized payloads generated; must be positive when `useRandomizedPayloads` is true and no distribution is set                                                                 |
-| `messageSizeDistribution`   | map     | none     | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool                                                                                                      |
-| `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                   |
-| `keyDistribution`           | object  | none     | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                      |
-| `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                                                                                                                          |
-| `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                |
-| `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                              |
-| `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                  |
-| `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                              |
-| `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                            |
-| `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                   |
+|            Field            |  Type   | Default  |                                                                                                  Description                                                                                                  |
+|-----------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`                      | string  | none     | Stored as `workload` in the result and used to group charts                                                                                                                                                   |
+| `topics`                    | int     | 0        | Number of topics to create                                                                                                                                                                                    |
+| `partitionsPerTopic`        | int     | 0        | Partitions per topic; interpretation depends on the driver                                                                                                                                                    |
+| `subscriptionsPerTopic`     | int     | 0        | Independent subscriptions per topic; each receives every message                                                                                                                                              |
+| `consumerPerSubscription`   | int     | 0        | Consumers sharing each subscription                                                                                                                                                                           |
+| `producersPerTopic`         | int     | 0        | Producers per topic                                                                                                                                                                                           |
+| `producerRate`              | int     | 0        | Total target rate in msg/s across all producers; `0` searches for the maximum sustainable rate                                                                                                                |
+| `messageSize`               | int     | 0        | Message size in bytes, for payload files and randomized payloads                                                                                                                                              |
+| `payloadFile`               | path    | none     | File used as every message's payload, relative to the current directory; its length must equal `messageSize`. Required unless `payloadGenerator`, `useRandomizedPayloads` or `messageSizeDistribution` is set |
+| `useRandomizedPayloads`     | boolean | false    | Generate a pool of random payloads instead of using `payloadFile`                                                                                                                                             |
+| `randomBytesRatio`          | number  | 0.0      | Fraction of each randomized payload that is random; the rest is zeros                                                                                                                                         |
+| `randomizedPayloadPoolSize` | int     | 0        | Number of randomized payloads generated; must be positive when `useRandomizedPayloads` is true and no distribution is set                                                                                     |
+| `messageSizeDistribution`   | map     | none     | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool                                                                                                                          |
+| `payloadGenerator`          | object  | none     | Generated payloads with a target compression ratio; excludes `payloadFile` and `useRandomizedPayloads`. See below                                                                                             |
+| `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                                       |
+| `keyDistribution`           | object  | none     | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                                          |
+| `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                                                                                                                                              |
+| `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                                    |
+| `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                                                  |
+| `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                                      |
+| `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                                                  |
+| `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                                                |
+| `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -52,9 +53,26 @@ benchmark.
 
 ## Payload precedence
 
-1. `messageSizeDistribution`, if present and not empty.
-2. Otherwise, randomized payloads if `useRandomizedPayloads` is `true`.
-3. Otherwise, `payloadFile`.
+1. `payloadGenerator`, if present, sized by `messageSizeDistribution` or `messageSize`.
+2. Otherwise, `messageSizeDistribution`, if present and not empty.
+3. Otherwise, randomized payloads if `useRandomizedPayloads` is `true`.
+4. Otherwise, `payloadFile`.
+
+## payloadGenerator
+
+```yaml
+payloadGenerator:
+  type: COMPRESSIBLE
+  targetCompressionRatio: 0.45
+  poolSize: 1000
+```
+
+All three fields are required. `type` is `COMPRESSIBLE`. `targetCompressionRatio` is the zstd
+level 3 compressed size divided by the original size and must be greater than 0 and at most 1.
+`poolSize` is the number of distinct payloads per message size and must be positive; with
+`messageSizeDistribution` each range gets `poolSize` payloads carrying its weight. The achieved
+ratio is recorded as `payloadCompressionRatio` in the result. See
+[Payloads and keys](../guides/payloads-and-keys.md#4-payloads-with-a-target-compression-ratio).
 
 ## Zipfian keys
 
@@ -86,31 +104,39 @@ messageSizeDistribution:
 - Weights are non-negative integers and must sum to more than zero.
 - Each range contributes one payload at its midpoint, chosen with probability proportional to its
   weight. The payload is all zeros unless `useRandomizedPayloads` is `true`, in which case
-  `randomBytesRatio` applies; `randomizedPayloadPoolSize` and `payloadFile` are ignored.
+  `randomBytesRatio` applies; `randomizedPayloadPoolSize` and `payloadFile` are ignored. With a
+  `payloadGenerator`, each range contributes `poolSize` generated payloads instead.
 - The result's `messageSize` and the backlog size computation use the weighted average of the
   midpoints.
 
 ## Constraints
 
-|                                              Condition                                              |                             Result                             |
-|-----------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| `producerRate: 0` with `consumerBacklogSizeGB > 0`                                                  | `Cannot probe producer sustainable rate when building backlog` |
-| Backlog requested with a message size of zero                                                       | `Message size must be positive when building a backlog`        |
-| `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                      |
-| Invalid distribution range or weight                                                                | An error naming the range or weight                            |
-| `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                |
-| `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`          |
-| `stages` with `producerRate` other than `0`                                                         | `stages and producerRate are mutually exclusive`               |
-| `stages` with `testDurationMinutes` other than `0`                                                  | `stages and testDurationMinutes are mutually exclusive`        |
-| `stages` with `consumerBacklogSizeGB > 0`                                                           | `stages cannot be combined with a consumer backlog`            |
-| A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                            |
-| A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                   |
-| Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                |
-| `consumerPause` with `consumerBacklogSizeGB > 0`                                                    | `consumerPause cannot be combined with a consumer backlog`     |
-| `consumerPause` with `producerRate: 0` and no `stages`                                              | `consumerPause requires a fixed producerRate or stages`        |
-| A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`              |
-| `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`               |
-| `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`          |
+|                                              Condition                                              |                                         Result                                         |
+|-----------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| `producerRate: 0` with `consumerBacklogSizeGB > 0`                                                  | `Cannot probe producer sustainable rate when building backlog`                         |
+| Backlog requested with a message size of zero                                                       | `Message size must be positive when building a backlog`                                |
+| `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                                              |
+| Invalid distribution range or weight                                                                | An error naming the range or weight                                                    |
+| `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                                        |
+| `payloadGenerator` missing a field                                                                  | `payloadGenerator requires type, targetCompressionRatio and poolSize`                  |
+| `targetCompressionRatio` ≤ 0, > 1 or not a number                                                   | `payloadGenerator targetCompressionRatio must be in (0, 1]`                            |
+| `payloadGenerator.poolSize` ≤ 0                                                                     | `payloadGenerator poolSize must be positive`                                           |
+| `payloadGenerator` with `payloadFile`                                                               | `payloadGenerator and payloadFile are mutually exclusive`                              |
+| `payloadGenerator` with `useRandomizedPayloads: true`                                               | `payloadGenerator and useRandomizedPayloads are mutually exclusive`                    |
+| `payloadGenerator` without `messageSizeDistribution` and `messageSize` ≤ 0                          | `Message size must be positive with payloadGenerator`                                  |
+| `payloadGenerator.poolSize` × the distribution weights above 2,147,483,647                          | `payloadGenerator poolSize times the distribution weights exceeds the supported total` |
+| `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`                                  |
+| `stages` with `producerRate` other than `0`                                                         | `stages and producerRate are mutually exclusive`                                       |
+| `stages` with `testDurationMinutes` other than `0`                                                  | `stages and testDurationMinutes are mutually exclusive`                                |
+| `stages` with `consumerBacklogSizeGB > 0`                                                           | `stages cannot be combined with a consumer backlog`                                    |
+| A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                                                    |
+| A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                                           |
+| Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                                        |
+| `consumerPause` with `consumerBacklogSizeGB > 0`                                                    | `consumerPause cannot be combined with a consumer backlog`                             |
+| `consumerPause` with `producerRate: 0` and no `stages`                                              | `consumerPause requires a fixed producerRate or stages`                                |
+| A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`                                      |
+| `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`                                       |
+| `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`                                  |
 
 ## Thresholds
 

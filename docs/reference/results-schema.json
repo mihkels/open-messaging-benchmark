@@ -199,6 +199,11 @@
     "consumersPerTopic": {
       "type": "integer"
     },
+    "payloadCompressionRatio": {
+      "description": "zstd level 3 compressed size divided by original size of the generated payloads, weighted by send frequency. Present only for workloads with a payloadGenerator.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
     "publishRate": {
       "$ref": "#/$defs/numberSeries"
     },

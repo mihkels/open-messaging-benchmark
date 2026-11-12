@@ -93,15 +93,16 @@ internally, while the existing result fields retain their documented units.
 
 ## Run description
 
-|        Field        |  Type  |                                            Description                                            |
-|---------------------|--------|---------------------------------------------------------------------------------------------------|
-| `workload`          | string | The workload's `name` field, not its file name                                                    |
-| `driver`            | string | The driver configuration's `name` field                                                           |
-| `messageSize`       | long   | `messageSize`, or for a `messageSizeDistribution` the integer weighted average of range midpoints |
-| `topics`            | int    | `topics`                                                                                          |
-| `partitions`        | int    | `partitionsPerTopic`                                                                              |
-| `producersPerTopic` | int    | `producersPerTopic`                                                                               |
-| `consumersPerTopic` | int    | `consumerPerSubscription`. It is **not** multiplied by `subscriptionsPerTopic`                    |
+|           Field           |  Type  |                                                                                                                      Description                                                                                                                       |
+|---------------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `workload`                | string | The workload's `name` field, not its file name                                                                                                                                                                                                         |
+| `driver`                  | string | The driver configuration's `name` field                                                                                                                                                                                                                |
+| `messageSize`             | long   | `messageSize`, or for a `messageSizeDistribution` the integer weighted average of range midpoints                                                                                                                                                      |
+| `topics`                  | int    | `topics`                                                                                                                                                                                                                                               |
+| `partitions`              | int    | `partitionsPerTopic`                                                                                                                                                                                                                                   |
+| `producersPerTopic`       | int    | `producersPerTopic`                                                                                                                                                                                                                                    |
+| `consumersPerTopic`       | int    | `consumerPerSubscription`. It is **not** multiplied by `subscriptionsPerTopic`                                                                                                                                                                         |
+| `payloadCompressionRatio` | number | zstd level 3 compressed size divided by original size of the generated payloads, weighted by how often each is sent; only present for workloads with a [`payloadGenerator`](../guides/payloads-and-keys.md#4-payloads-with-a-target-compression-ratio) |
 
 ## Period series
 

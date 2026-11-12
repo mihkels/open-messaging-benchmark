@@ -53,6 +53,7 @@ class WorkloadSetGeneratorTest {
                                         Stream.of(
                                                 "name",
                                                 "messageSizeDistribution",
+                                                "payloadGenerator",
                                                 "backlogDrainRatio",
                                                 "thresholds",
                                                 "consumerPause"))

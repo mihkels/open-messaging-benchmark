@@ -59,6 +59,14 @@ public class TestResult {
     public @Nullable String workload;
     public @Nullable String driver;
     public long messageSize;
+
+    /**
+     * zstd-compressed size divided by original size of the generated payloads, weighted by how often
+     * each is sent; only for workloads with a payload generator.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable Double payloadCompressionRatio;
+
     public int topics;
     public int partitions;
     public int producersPerTopic;

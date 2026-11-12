@@ -19,6 +19,8 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.RandomGenerator;
 import io.openmessaging.benchmark.utils.Timer;
+import io.openmessaging.benchmark.utils.payload.CompressiblePayloads;
+import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -178,12 +180,23 @@ public final class WorkloadGenerator implements WorkloadRun {
         log.info(
                 "Prepared {} payloads from {} in {} ms",
                 payloads.size(),
-                workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile,
+                payloadSource(),
                 timer.elapsedMillis());
+        PayloadGenerator generator = workload.payloadGenerator;
+        Double compressionRatio = null;
+        if (generator != null) {
+            compressionRatio = CompressiblePayloads.ratio(payloads);
+            log.info(
+                    "Generated payloads compress to {} with zstd level {} (target {})",
+                    compressionRatio,
+                    CompressiblePayloads.ZSTD_LEVEL,
+                    generator.targetCompressionRatio());
+        }
         worker.startLoad(producerWorkAssignment);
         checkControllerFailure();
 
         TestResult result = newResult();
+        result.payloadCompressionRatio = compressionRatio;
         if (workload.warmupDurationMinutes > 0) {
             enterPhase(RunPhase.WARMUP);
             log.info("----- Starting warm-up traffic ({}m) ------", workload.warmupDurationMinutes);
@@ -601,6 +614,13 @@ public final class WorkloadGenerator implements WorkloadRun {
         TestResult result = newResult();
         collect(result, testDurations, unit, true);
         return result;
+    }
+
+    private @Nullable String payloadSource() {
+        if (workload.payloadGenerator != null) {
+            return "payload generator";
+        }
+        return workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile;
     }
 
     private TestResult newResult() {

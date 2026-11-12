@@ -52,6 +52,11 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = readConfig(configurationFile);
+        if (!config.includeTimestampInEvent()) {
+            log.warn(
+                    "includeTimestampInEvent is false: end-to-end latency is not measured and will be"
+                            + " reported as empty");
+        }
         ClientConfig clientConfig =
                 ClientConfig.builder().controllerURI(URI.create(config.client().controllerURI())).build();
         scopeName = config.client().scopeName();

@@ -71,7 +71,9 @@ a performance result.
   waiting for the batch and commit. Events become visible at commit. An open transaction is aborted
   at close and its pending sends fail (up to `eventsPerTransaction - 1` events).
 - `eventsPerSecond` and `kbytesPerSecond` only apply with `enableStreamAutoScaling: true`.
-- With `includeTimestampInEvent: false`, end-to-end latency is meaningless.
+- With `includeTimestampInEvent: false`, end-to-end latency is not measured: every sample is
+  dropped, so the end-to-end section of the results is empty (zeros). The driver logs a warning at
+  startup.
 - Streams are sealed and deleted at the end (`deleteStreams`); reader groups and the scope remain.
 - No authentication or TLS settings.
 

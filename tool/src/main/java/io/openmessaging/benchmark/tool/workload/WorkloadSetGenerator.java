@@ -16,8 +16,10 @@ package io.openmessaging.benchmark.tool.workload;
 import io.openmessaging.benchmark.Workload;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +62,19 @@ final class WorkloadSetGenerator {
                         .map(field -> field.valuesOrDefault(template))
                         .toList();
         generateCombinations(values, new int[values.size()], 0, workloads);
+
+        // Names become file names, so a duplicate would silently overwrite another workload.
+        Set<String> names = new HashSet<>();
+        for (Workload workload : workloads) {
+            if (!names.add(workload.name)) {
+                throw new IllegalArgumentException(
+                        "Duplicate workload name '"
+                                + workload.name
+                                + "' from nameFormat '"
+                                + template.nameFormat()
+                                + "'; add every swept field to nameFormat");
+            }
+        }
 
         log.info("Generated {} workloads", workloads.size());
         return workloads;

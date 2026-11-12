@@ -80,7 +80,7 @@ class MqttBenchmarkDriverOptionsTest {
         config.client.username = "user";
         Mqtt5ClientConfig built =
                 new MqttBenchmarkDriver(config).createClient("id", () -> false).getConfig();
-        assertThat(built.getServerAddress().getPort()).isEqualTo(80);
+        assertThat(built.getServerAddress().getPort()).isEqualTo(1883);
         assertThat(built.getSimpleAuth()).isEmpty();
 
         config.client.username = null;

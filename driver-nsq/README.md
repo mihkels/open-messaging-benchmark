@@ -29,10 +29,10 @@ Local quickstarts: [Docker Compose](../docs/drivers/nsq.md#local-docker-compose)
 
 ## Prerequisites
 
-- `nsqd` reachable on TCP 4150 (fixed) and on its HTTP port (`nsqdHttpPort`, default 4151, used to create topics).
-- `nsqlookupd` reachable on HTTP 4161 (fixed), with `nsqd` registered to it.
+- `nsqd` reachable on its TCP port (`nsqdTcpPort`, default 4150) and on its HTTP port (`nsqdHttpPort`, default 4151, used to create topics).
+- `nsqlookupd` reachable on its HTTP port (`lookupHttpPort`, default 4161), with `nsqd` registered to it.
 - `nsqd` must announce (`--broadcast-address`) an address the workers can reach; consumers connect to that address.
-- `nsqdHost:nsqdHttpPort` and `nsqdHost:4150` must reach the same single daemon. The driver reads its `/info`
+- `nsqdHost:nsqdHttpPort` and `nsqdHost:nsqdTcpPort` must reach the same single daemon. The driver reads its `/info`
   identity and waits for that node to appear in discovery.
 - The `nsq` plugin bundle installed on the coordinator (local mode) and on every worker.
 

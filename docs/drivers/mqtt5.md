@@ -119,16 +119,16 @@ Install the plugin bundle on every worker, see [Runtime and plugins](../referenc
 
 Keys are nested under `client` and `consumer` and read by `MqttConfig`. Unknown keys are ignored.
 
-|               Key                |  Type   |        Default         |                                                                          Description                                                                           |
-|----------------------------------|---------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `client.serverUri`               | string  | `tcp://localhost:1883` | Broker address as `[scheme://]host[:port]`. Only host and port are used; the scheme is ignored. Write the port explicitly: without it the driver uses port 80. |
-| `client.username`                | string  | empty                  | User name for MQTT simple authentication. Used only when `password` is also non-empty.                                                                         |
-| `client.password`                | string  | empty                  | Password. Used only when `username` is also non-empty.                                                                                                         |
-| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value is treated as `1`.                                                                       |
-| `client.topicPrefix`             | string  | `benchmark`            | First level of the topic names, without trailing slash.                                                                                                        |
-| `consumer.cleanSession`          | boolean | `true`                 | Clean Start flag of consumer connections.                                                                                                                      |
-| `consumer.sessionExpiryInterval` | int     | `259200` (3 days)      | Session expiry in seconds for consumer connections. Used only when `cleanSession` is `false`; otherwise 0.                                                     |
-| `consumer.receiveMaximum`        | int     | `256`                  | Receive Maximum of consumer connections: QoS 1 and 2 messages the broker may have unacknowledged per consumer.                                                 |
+|               Key                |  Type   |        Default         |                                                                            Description                                                                            |
+|----------------------------------|---------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `client.serverUri`               | string  | `tcp://localhost:1883` | Broker address as `[scheme://]host[:port]`. Only host and port are used. Without a port: 8883 for `ssl`, `tls` or `mqtts`, else 1883 (TLS itself is not enabled). |
+| `client.username`                | string  | empty                  | User name for MQTT simple authentication. Used only when `password` is also non-empty.                                                                            |
+| `client.password`                | string  | empty                  | Password. Used only when `username` is also non-empty.                                                                                                            |
+| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value is treated as `1`.                                                                          |
+| `client.topicPrefix`             | string  | `benchmark`            | First level of the topic names, without trailing slash.                                                                                                           |
+| `consumer.cleanSession`          | boolean | `true`                 | Clean Start flag of consumer connections.                                                                                                                         |
+| `consumer.sessionExpiryInterval` | int     | `259200` (3 days)      | Session expiry in seconds for consumer connections. Used only when `cleanSession` is `false`; otherwise 0.                                                        |
+| `consumer.receiveMaximum`        | int     | `256`                  | Receive Maximum of consumer connections: QoS 1 and 2 messages the broker may have unacknowledged per consumer.                                                    |
 
 Producer connections use client defaults for Clean Start, session expiry and Receive Maximum. Keep-alive, TLS and
 WebSocket transport are not configurable; TLS and WebSocket are not supported.
@@ -224,7 +224,7 @@ A passing case is a functional check at a low rate, not a performance result.
 
 Common problems:
 
-- A connection timeout: check the host, whether `serverUri` includes the port (without it the driver uses port 80),
+- A connection timeout: check the host, whether `serverUri` has the right port (default 1883),
   and whether the broker listens on a non-loopback interface.
 - `ConnAck-ReasonCode: NOT_AUTHORIZED` or `BAD_USER_NAME_OR_PASSWORD`: authentication failed, or the broker
   requires credentials and only one of `username` and `password` is set.

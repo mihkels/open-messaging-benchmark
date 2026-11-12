@@ -18,15 +18,15 @@ The NSQ driver benchmarks [NSQ](https://nsq.io/). Producers publish to one `nsqd
 `nsqd` through `nsqlookupd` and read from a channel. Each benchmark topic is an NSQ topic and each subscription is an
 NSQ channel. It uses the `com.github.brainlag:nsq-client` library (1.0.0.RC4).
 
-|          Item          |                                                                              Value                                                                              |
-|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `nsq`                                                                                                                                                           |
-| Module                 | `driver-nsq`                                                                                                                                                    |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                                                                      |
-| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                                                                  |
-| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                                                            |
-| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                          |
-| Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; fixed TCP 4150 and lookup HTTP 4161 ports; `nsqdHost` must identify the same daemon on HTTP and TCP |
+|          Item          |                                                        Value                                                         |
+|------------------------|----------------------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `nsq`                                                                                                                |
+| Module                 | `driver-nsq`                                                                                                         |
+| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                           |
+| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                       |
+| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                 |
+| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)               |
+| Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; `nsqdHost` must identify the same daemon on HTTP and TCP |
 
 ## Local Docker Compose
 
@@ -57,20 +57,20 @@ retained run or remove the cluster.
 
 ## Prerequisites and broker setup
 
-The driver uses three ports, two of them fixed in the code:
+The driver uses three ports, all configurable:
 
-|         Port         |                            Used for                             |            Configurable            |
-|----------------------|-----------------------------------------------------------------|------------------------------------|
-| nsqd TCP 4150        | Publishing (`PUB`) from every producer                          | No, always 4150                    |
-| nsqd HTTP 4151       | Creating topics before the run (`POST /topic/create?topic=...`) | Yes, `nsqdHttpPort` (default 4151) |
-| nsqlookupd HTTP 4161 | Consumer discovery of `nsqd` instances for a topic              | No, always 4161                    |
+|         Port         |                            Used for                             |             Configurable             |
+|----------------------|-----------------------------------------------------------------|--------------------------------------|
+| nsqd TCP 4150        | Publishing (`PUB`) from every producer                          | Yes, `nsqdTcpPort` (default 4150)    |
+| nsqd HTTP 4151       | Creating topics before the run (`POST /topic/create?topic=...`) | Yes, `nsqdHttpPort` (default 4151)   |
+| nsqlookupd HTTP 4161 | Consumer discovery of `nsqd` instances for a topic              | Yes, `lookupHttpPort` (default 4161) |
 
 In addition:
 
 - `nsqd` must register with `nsqlookupd` (`--lookupd-tcp-address`) so that consumers can find it.
 - The address `nsqd` announces to `nsqlookupd` (`--broadcast-address`, default the host name) must be reachable from
   the workers on port 4150. Consumers connect to that announced address, not to `nsqdHost`.
-- `nsqdHost:nsqdHttpPort` and `nsqdHost:4150` must reach the same single publishing daemon. Consumers read its
+- `nsqdHost:nsqdHttpPort` and `nsqdHost:nsqdTcpPort` must reach the same single publishing daemon. Consumers read its
   advertised identity from the `nsqd` HTTP `/info` endpoint and wait for `nsqlookupd` to discover it.
 
 The regression suite starts NSQ from
@@ -97,6 +97,8 @@ driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
 
 nsqdHost: localhost
 nsqdHttpPort: 4151
+nsqdTcpPort: 4150
+lookupHttpPort: 4161
 lookupHost: localhost
 ```
 
@@ -126,11 +128,13 @@ Install the plugin bundle on every worker, see [Runtime and plugins](../referenc
 
 All keys are read by `NsqConfig`. Unknown keys are ignored.
 
-|      Key       |  Type  | Default  |                                             Description                                              |
-|----------------|--------|----------|------------------------------------------------------------------------------------------------------|
-| `nsqdHost`     | string | required | Host of the `nsqd` that producers publish to (TCP port 4150) and that topics are created on (HTTP).  |
-| `nsqdHttpPort` | int    | `4151`   | `nsqd` HTTP port used for topic creation. Must be from 1 to 65535; other values fail initialization. |
-| `lookupHost`   | string | required | Host of `nsqlookupd`; consumers query its HTTP API on port 4161.                                     |
+|       Key        |  Type  | Default  |                                             Description                                              |
+|------------------|--------|----------|------------------------------------------------------------------------------------------------------|
+| `nsqdHost`       | string | required | Host of the `nsqd` that producers publish to (TCP) and that topics are created on (HTTP).            |
+| `nsqdHttpPort`   | int    | `4151`   | `nsqd` HTTP port used for topic creation. Must be from 1 to 65535; other values fail initialization. |
+| `nsqdTcpPort`    | int    | `4150`   | `nsqd` TCP port producers publish to. Must be from 1 to 65535.                                       |
+| `lookupHost`     | string | required | Host of `nsqlookupd`; consumers query its HTTP API.                                                  |
+| `lookupHttpPort` | int    | `4161`   | `nsqlookupd` HTTP port. Must be from 1 to 65535.                                                     |
 
 There are no pass-through client properties. The consumer uses the
 [nsq-client library](https://github.com/brainlag/JavaNSQClient) defaults, including 200 messages per batch; the
@@ -144,7 +148,7 @@ response other than HTTP 200. Creating the topic up front makes `nsqd` register 
 look it up; otherwise consumers would only find it at their next periodic lookup. NSQ has no partitions;
 `partitionsPerTopic` is accepted, logged as ignored, and has no effect.
 
-**Producers.** Each producer has its own NSQ producer connected to `nsqdHost:4150`. A send is handed to a virtual-thread executor
+**Producers.** Each producer has its own NSQ producer connected to `nsqdHost:nsqdTcpPort`. A send is handed to a virtual-thread executor
 that performs a blocking publish; up to 1000 sends per producer can be outstanding, after which `sendAsync` waits.
 The send completes after the publish call returns. The driver owns a copy of the message bytes, so caller buffers may
 be reused after completion or cancellation. Keys are ignored.
@@ -152,7 +156,7 @@ be reused after completion or cancellation. Keys are ignored.
 **Publish errors.** Exceptions and timeouts reported by the NSQ client, interrupted capacity waits, executor rejection
 and producer shutdown complete sends exceptionally. They are counted as publish errors rather than successful sends.
 
-**Subscriptions and consumers.** Each consumer queries `nsqlookupd` at `lookupHost:4161` for the topic and connects
+**Subscriptions and consumers.** Each consumer queries `nsqlookupd` at `lookupHost:lookupHttpPort` for the topic and connects
 to the announced `nsqd` instances. The benchmark subscription name is used as the NSQ channel. Consumers of the same
 channel share messages; each channel receives a copy of every message in the topic, so multiple subscriptions per
 topic work. Consumer creation waits until the publishing daemon appears in discovery, every node in the discovery
@@ -222,10 +226,10 @@ Common problems:
 
 - `Failed to create NSQ topic <topic>: HTTP <code>` or a connection error during topic creation: `nsqdHost` or
   `nsqdHttpPort` does not point to the `nsqd` HTTP API.
-- `nsqdHttpPort must be between 1 and 65535`: invalid port in the driver file.
+- `<port key> must be between 1 and 65535`: invalid `nsqdHttpPort`, `nsqdTcpPort` or `lookupHttpPort` in the driver file.
 - Messages are published but nothing is consumed: consumers cannot reach the address `nsqd` announced to
   `nsqlookupd` (check `--broadcast-address`), `nsqd` is not registered with `nsqlookupd`, or `lookupHost` is wrong.
-  `http://<lookupHost>:4161/lookup?topic=<topic>` shows what consumers receive.
+  `http://<lookupHost>:<lookupHttpPort>/lookup?topic=<topic>` shows what consumers receive.
 - A consumer readiness timeout means discovery, publisher identity, a connection, `SUB` acknowledgement or `RDY`
   did not become ready in 30 seconds. Compare `/info` on the publishing `nsqd` with the lookup result, and check
   broadcast addresses and broker logs. A rejected `SUB` is reported immediately with the broker's error.

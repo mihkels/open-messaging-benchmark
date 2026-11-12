@@ -193,7 +193,9 @@ de-duplicate on the consumer side.
   each event with `System.currentTimeMillis()` and the consumer reads it back. Latency therefore
   compares producer and consumer host clocks; see
   [Latency and backlog](../methodology/latency-and-backlog.md). With `false`, the consumer reports a
-  fixed placeholder timestamp, and end-to-end latency figures are meaningless. Each event uses an
+  far-future placeholder timestamp; the framework drops the resulting negative latencies, so no
+  end-to-end latency is recorded and the results show an empty (zero) end-to-end section. The
+  driver logs a warning at startup. Each event uses an
   owned buffer so pending writes and transactions cannot reuse caller-owned payloads; this adds an
   allocation per send.
 - **Backlog workloads.** The framework blocks the consumer callback, so the reader stops reading
@@ -242,7 +244,8 @@ Common problems:
 - **`Timed out waiting for consumers to be ready`.** Readers did not receive the probe event within
   60 seconds: the reader group could not be created, the segment store is unreachable, or (for
   transactions) the commit did not complete.
-- **End-to-end latency is meaningless.** `includeTimestampInEvent` is false.
+- **End-to-end latency is empty or zero.** `includeTimestampInEvent` is false, so no end-to-end
+  samples are recorded (the driver logs a warning at startup).
 - **Pending transactional sends fail at close.** The final partial transaction is aborted, not
   committed. Its sends are not successful publications; lower `eventsPerTransaction` to reduce
   the number left open at shutdown.

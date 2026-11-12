@@ -13,49 +13,5 @@
 # limitations under the License.
 #
 
-BASE_DIR=$(cd "$(dirname "$0")/.." && pwd)
-
-# The launcher JVM only holds the benchmark core. Each driver runs in its own JVM with the core plus
-# its plugin bundle from drivers/<name> (binary distribution) or driver-*/target/omb-plugin (source).
-if [ -d "$BASE_DIR/lib" ]; then
-    CLASSPATH="$BASE_DIR/lib/*"
-else
-    CLASSPATH="$BASE_DIR/benchmark-framework/target/classes:$(cat "$BASE_DIR/benchmark-framework/target/classpath.txt")"
-fi
-
-# Heap of the driver JVM that produces and consumes messages
-if [ -z "$HEAP_OPTS" ]
-then
-    HEAP_OPTS="-Xms4G -Xmx4G"
-fi
-
-# Heap of this launcher JVM, which coordinates the run and supervises the driver JVM
-if [ -z "$SUPERVISOR_HEAP_OPTS" ]
-then
-    SUPERVISOR_HEAP_OPTS="-Xmx1G"
-fi
-
-DEFAULT_JVM_OPTS="--enable-native-access=ALL-UNNAMED"
-# Required by Netty for optimized direct byte buffer access
-DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true"
-DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED"
-# Set io.netty.tryReflectionSetAccessible in Pulsar's shaded client
-DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dorg.apache.pulsar.shade.io.netty.tryReflectionSetAccessible=true"
-# Required by Pulsar client optimized checksum calculation on other than Linux x86_64 platforms
-# reflection access to java.util.zip.CRC32C
-DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
-
-# Options of the driver JVM; set OMB_DRIVER_JVM_OPTS to override them completely
-if [ -z "$OMB_DRIVER_JVM_OPTS" ]
-then
-    export OMB_DRIVER_JVM_OPTS="-server $HEAP_OPTS -XX:+UseG1GC $DEFAULT_JVM_OPTS ${JVM_OPTS:-}"
-fi
-
-# Write the log file into OMB_LOG_DIR instead of the working directory, for read-only containers
-LOG_OPTS=""
-if [ -n "$OMB_LOG_DIR" ]
-then
-    LOG_OPTS="-Domb.log.name=${OMB_LOG_DIR%/}/benchmark-worker"
-fi
-
-exec java -server -cp "$CLASSPATH" $SUPERVISOR_HEAP_OPTS -XX:+UseG1GC $DEFAULT_JVM_OPTS $LOG_OPTS -Domb.home="${OMB_HOME:-$BASE_DIR}" io.openmessaging.benchmark.worker.BenchmarkWorker "$@"
+# shellcheck source=bin/omb-launch.sh
+. "$(dirname "$0")/omb-launch.sh" benchmark-worker io.openmessaging.benchmark.worker.BenchmarkWorker "$@"

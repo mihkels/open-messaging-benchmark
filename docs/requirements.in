@@ -17,6 +17,5 @@
 #   cd docs && uvx --python 3.13 --from pip-tools pip-compile --generate-hashes --allow-unsafe --strip-extras requirements.in
 #
 
-mkdocs==1.6.1
-mkdocs-material==9.8.0
-pymdown-extensions==12.3
+# Zensical is in beta, so the version is pinned exactly.
+zensical==0.1.1

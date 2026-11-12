@@ -40,14 +40,12 @@ jobs:
           cache: pip
           cache-dependency-path: docs/requirements.txt
 
-      - name: Install MkDocs
+      - name: Install Zensical
         run: |
           pip install --require-hashes --only-binary :all: -r docs/requirements.txt
 
       - name: Build site
-        run: mkdocs build --strict
-        env:
-          NO_MKDOCS_2_WARNING: '1'
+        run: zensical build --clean --strict
 
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

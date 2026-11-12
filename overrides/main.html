@@ -12,6 +12,7 @@
   limitations under the License.
 
   Pages cannot start with YAML front matter because the license header comes first, so the
-  home page template is chosen here instead of with "template: home.html".
+  home page template is chosen here instead of with "template: home.html". Zensical does not
+  expose page.is_homepage, so the home page is matched by its empty URL.
 -#}
-{% extends ("home.html" if page and page.is_homepage else "base.html") %}
+{% extends ("home.html" if page and page.url == "" else "base.html") %}

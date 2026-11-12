@@ -14,10 +14,11 @@ limitations under the License.
 
 # Documentation
 
-This site is built with [MkDocs](https://www.mkdocs.org/) and the Material theme from the `docs/`
-directory and
+This site is built with [Zensical](https://zensical.org/), the successor to Material for MkDocs, from
+the `docs/` directory and
 [`mkdocs.yml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/mkdocs.yml) at the repository
-root. This page explains how to preview it, the conventions pages follow, and how to add a driver page.
+root. Zensical reads `mkdocs.yml` directly. This page explains how to preview the site, the conventions
+pages follow, how to add a driver page and how to write a blog post.
 
 ## Local preview
 
@@ -28,8 +29,8 @@ and locked, with every transitive package pinned and hashed, in
 Install with `--require-hashes --only-binary :all:` so pip rejects unhashed packages and never runs a
 source distribution's build script. Dependabot keeps both files up to date.
 `mise install` provides Python (see [Building the project](building-the-project.md#tools)). CI builds
-the site with Python 3.13 (`docs.yml`); any Python 3 that installs `docs/requirements.txt` works
-locally. To preview or validate docs, use a virtual environment outside the checkout and install
+the site with Python 3.13 (`docs.yml`); Zensical needs Python 3.11 or newer locally. Zensical is in
+beta, so `docs/requirements.in` pins an exact version. To preview or validate docs, use a virtual environment outside the checkout and install
 dependencies only when missing.
 
 From the repository root, set `DOCS_VENV` to that environment's absolute path:
@@ -48,19 +49,20 @@ python3 -m venv "$DOCS_VENV"
 To preview:
 
 ```bash
-"$DOCS_VENV/bin/mkdocs" serve
+"$DOCS_VENV/bin/zensical" serve
 ```
 
-`mkdocs serve` serves the site at `http://127.0.0.1:8000/` and reloads it when files change.
+`zensical serve` serves the site at `http://localhost:8000/` and reloads it when files change.
 
 Before opening a pull request, build the site the way CI does:
 
 ```bash
-"$DOCS_VENV/bin/mkdocs" build --strict
+"$DOCS_VENV/bin/zensical" build --clean --strict
 ```
 
-`mkdocs.yml` also sets `strict: true`, so any warning fails the build: a missing page, a broken relative
-link, or a page in `docs/` that is not in the navigation. The output goes to `site/`.
+`mkdocs.yml` also sets `strict: true`, so any warning fails the build, such as a link to a missing page
+or a missing anchor. Zensical does not warn about a page in `docs/` that is not in the navigation, so
+check the `nav` by hand when you add a page. The output goes to `site/`.
 
 To add or bump a docs dependency, edit `docs/requirements.in`, then regenerate the lock file with
 Python 3.13 (the version CI uses) and commit both files:
@@ -76,10 +78,14 @@ it is added there:
 
 ```yaml
 nav:
-  - Driver development:
-      - Architecture: development/architecture.md
-      - Building the project: development/building-the-project.md
+  - Docs:
+    - Driver development:
+        - Architecture: development/architecture.md
+        - Building the project: development/building-the-project.md
 ```
+
+The top-level entries are the tabs: **Home**, **Docs** and **Blog**. Documentation sections go under
+`Docs`. Blog posts are not listed in the `nav`; the blog plugin adds them.
 
 Pages are grouped by audience:
 
@@ -91,6 +97,7 @@ Pages are grouped by audience:
 | `methodology/`     | How to design and compare benchmarks                            |
 | `reference/`       | CLI, workload schema, runtime settings, results schema          |
 | `development/`     | Framework architecture, building, driver development, this page |
+| `blog/`            | Blog index, `.authors.yml` and the posts in `blog/posts/`       |
 
 ## Page conventions
 
@@ -172,13 +179,13 @@ for the home page, because YAML front matter (`template: home.html`) cannot prec
 
 ## Analytics
 
-The site uses Google Analytics 4 through the Material theme. The `extra.analytics` and `extra.consent`
+The site uses Google Analytics 4 through the Zensical theme. The `extra.analytics` and `extra.consent`
 sections of `mkdocs.yml` hold the measurement ID, the "Was this page helpful?" widget and the cookie
 banner. Google Analytics loads only after a visitor accepts analytics cookies; the "Change cookie
-settings" link in the footer reopens the banner. Pages served by `mkdocs serve` load it too once you
+settings" link in the footer reopens the banner. Pages served by `zensical serve` load it too once you
 accept, so reject the banner while previewing.
 
-Material sends page views, `search` (the search term) and `feedback` (`page` and `data`, 1 for helpful
+The theme sends page views, `search` (the search term) and `feedback` (`page` and `data`, 1 for helpful
 and 0 for not helpful). Custom events are sent from
 [`docs/assets/javascripts/site.js`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/assets/javascripts/site.js):
 
@@ -210,12 +217,45 @@ Each driver has a page in `docs/drivers/`. Every driver page uses the same secti
 Adding a driver page takes four changes:
 
 1. Add the page, `docs/drivers/<name>.md`, with the sections above.
-2. Add a `nav` entry under `Drivers` in `mkdocs.yml`.
+2. Add a `nav` entry under `Docs > Drivers` in `mkdocs.yml`.
 3. Update the module README, `driver-<name>/README.md`, to link to the page on the published site, for
    example `https://mihkels.github.io/open-messaging-benchmark/drivers/<name>/`.
 4. Add a row for the driver to the overview table in `docs/drivers/index.md`.
 
 For the driver itself, see [Implementing a driver](implementing-a-driver.md).
+
+## Writing a blog post
+
+Posts live in `docs/blog/posts/`, one Markdown file per post. A post starts with YAML front matter that
+sets its date, authors and categories, then a `# Title`. The excerpt shown on the blog index ends at the
+`<!-- more -->` marker:
+
+```markdown
+---
+date: 2026-11-12
+authors:
+  - mihkels
+categories:
+  - Project news
+---
+
+# Post title
+
+The first paragraph is the excerpt.
+
+<!-- more -->
+
+The rest of the post.
+```
+
+- The post is published at `/blog/<year>/<month>/<day>/<slug>/`, where the slug comes from the title.
+  Changing the title or date later changes the URL.
+- Authors are defined in `docs/blog/.authors.yml`. Add yourself there before your first post.
+- Add `draft: true` to the front matter to keep a post out of the published site. `zensical serve`
+  still shows drafts.
+- Front matter must be the first thing in the file, so posts are excluded from the license header and
+  Spotless checks. Keep them to the same plain CommonMark as other pages anyway.
+- Posts are also published as RSS (`feed_rss_created.xml`) and JSON (`feed_json_created.json`) feeds.
 
 ## Publishing
 

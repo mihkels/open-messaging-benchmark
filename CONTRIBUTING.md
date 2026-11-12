@@ -93,11 +93,11 @@ python3 -m venv "$DOCS_VENV"
 Preview the documentation site, and build it strictly before opening a pull request:
 
 ```bash
-"$DOCS_VENV/bin/mkdocs" serve
+"$DOCS_VENV/bin/zensical" serve
 ```
 
 ```bash
-"$DOCS_VENV/bin/mkdocs" build --strict
+"$DOCS_VENV/bin/zensical" build --clean --strict
 ```
 
 ## Development guides

@@ -24,6 +24,15 @@ copyright: >
 
 strict: true
 
+plugins:
+  - search
+  - blog
+  # RSS 2.0 and JSON feeds for blog posts, dated from each post's front matter.
+  - rss:
+      match_path: blog/posts/.*
+      date_from_meta:
+        as_creation: date
+
 exclude_docs: |
   requirements.in
   requirements.txt
@@ -125,57 +134,60 @@ validation:
 
 nav:
   - Home: index.md
-  - Getting started:
-      - Quickstart: getting-started/quickstart.md
-      - Using your broker: getting-started/using-your-broker.md
-      - Understanding your first run: getting-started/understanding-your-first-run.md
-      - Distributed runs: getting-started/distributed-runs.md
-  - Running benchmarks:
-      - Workloads: guides/workloads.md
-      - Rate profiles: guides/rate-profiles.md
-      - Payloads and keys: guides/payloads-and-keys.md
-      - Workload generation: guides/workload-generation.md
-      - Results: guides/results.md
-      - HTML report: guides/html-report.md
-      - CI performance gates: guides/ci-gating.md
-      - Comparing runs: guides/comparing-runs.md
-      - Monitoring: guides/monitoring.md
-      - Containers and Kubernetes: guides/containers-and-kubernetes.md
-      - Local Kubernetes: guides/kubernetes-local.md
-      - Troubleshooting: guides/troubleshooting.md
-  - Drivers:
-      - Supported drivers: drivers/index.md
-      - Apache ActiveMQ Artemis: drivers/artemis.md
-      - Apache BookKeeper (DistributedLog): drivers/bookkeeper.md
-      - Apache Kafka: drivers/kafka.md
-      - Kafka-on-Pulsar (KoP): drivers/kop.md
-      - MQTT 5: drivers/mqtt5.md
-      - JMS: drivers/jms.md
-      - NATS JetStream: drivers/nats.md
-      - NATS Streaming (legacy): drivers/nats-streaming.md
-      - NSQ: drivers/nsq.md
-      - Pravega: drivers/pravega.md
-      - Apache Pulsar: drivers/pulsar.md
-      - RabbitMQ: drivers/rabbitmq.md
-      - Redis: drivers/redis.md
-      - Apache RocketMQ: drivers/rocketmq.md
-      - Apache RocketMQ 5 (gRPC): drivers/rocketmq5.md
-  - Methodology:
-      - Benchmark design: methodology/benchmark-design.md
-      - Fair comparisons: methodology/fair-comparisons.md
-      - Reproducibility: methodology/reproducibility.md
-      - Latency and backlog: methodology/latency-and-backlog.md
-  - Reference:
-      - CLI: reference/cli.md
-      - Workload schema: reference/workload-schema.md
-      - Runtime and plugins: reference/runtime-and-plugins.md
-      - Results schema: reference/results-schema.md
-  - Driver development:
-      - Architecture: development/architecture.md
-      - Building the project: development/building-the-project.md
-      - Implementing a driver: development/implementing-a-driver.md
-      - Packaging a plugin: development/packaging-a-plugin.md
-      - Testing a driver: development/testing-a-driver.md
-      - Framework resource efficiency: development/framework-performance.md
-      - Releasing: development/releasing.md
-      - Documentation: development/documentation.md
+  - Docs:
+    - Getting started:
+        - Quickstart: getting-started/quickstart.md
+        - Using your broker: getting-started/using-your-broker.md
+        - Understanding your first run: getting-started/understanding-your-first-run.md
+        - Distributed runs: getting-started/distributed-runs.md
+    - Running benchmarks:
+        - Workloads: guides/workloads.md
+        - Rate profiles: guides/rate-profiles.md
+        - Payloads and keys: guides/payloads-and-keys.md
+        - Workload generation: guides/workload-generation.md
+        - Results: guides/results.md
+        - HTML report: guides/html-report.md
+        - CI performance gates: guides/ci-gating.md
+        - Comparing runs: guides/comparing-runs.md
+        - Monitoring: guides/monitoring.md
+        - Containers and Kubernetes: guides/containers-and-kubernetes.md
+        - Local Kubernetes: guides/kubernetes-local.md
+        - Troubleshooting: guides/troubleshooting.md
+    - Drivers:
+        - Supported drivers: drivers/index.md
+        - Apache ActiveMQ Artemis: drivers/artemis.md
+        - Apache BookKeeper (DistributedLog): drivers/bookkeeper.md
+        - Apache Kafka: drivers/kafka.md
+        - Kafka-on-Pulsar (KoP): drivers/kop.md
+        - MQTT 5: drivers/mqtt5.md
+        - JMS: drivers/jms.md
+        - NATS JetStream: drivers/nats.md
+        - NATS Streaming (legacy): drivers/nats-streaming.md
+        - NSQ: drivers/nsq.md
+        - Pravega: drivers/pravega.md
+        - Apache Pulsar: drivers/pulsar.md
+        - RabbitMQ: drivers/rabbitmq.md
+        - Redis: drivers/redis.md
+        - Apache RocketMQ: drivers/rocketmq.md
+        - Apache RocketMQ 5 (gRPC): drivers/rocketmq5.md
+    - Methodology:
+        - Benchmark design: methodology/benchmark-design.md
+        - Fair comparisons: methodology/fair-comparisons.md
+        - Reproducibility: methodology/reproducibility.md
+        - Latency and backlog: methodology/latency-and-backlog.md
+    - Reference:
+        - CLI: reference/cli.md
+        - Workload schema: reference/workload-schema.md
+        - Runtime and plugins: reference/runtime-and-plugins.md
+        - Results schema: reference/results-schema.md
+    - Driver development:
+        - Architecture: development/architecture.md
+        - Building the project: development/building-the-project.md
+        - Implementing a driver: development/implementing-a-driver.md
+        - Packaging a plugin: development/packaging-a-plugin.md
+        - Testing a driver: development/testing-a-driver.md
+        - Framework resource efficiency: development/framework-performance.md
+        - Releasing: development/releasing.md
+        - Documentation: development/documentation.md
+  - Blog:
+    - blog/index.md

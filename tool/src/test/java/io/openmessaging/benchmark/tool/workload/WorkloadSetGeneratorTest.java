@@ -225,6 +225,34 @@ class WorkloadSetGeneratorTest {
                 .hasMessageContaining("mutually exclusive");
     }
 
+    @Test
+    void rejectsANameFormatThatOmitsASweptField() {
+        WorkloadSetTemplate template =
+                new WorkloadSetTemplate(
+                        "${topics}-topics",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(1000, 2000),
+                        KeyDistributorType.NO_KEY,
+                        null,
+                        null,
+                        true,
+                        1.0,
+                        1,
+                        0,
+                        WorkloadSetTemplate.DEFAULT_TEST_DURATION_MINUTES,
+                        0,
+                        null);
+
+        assertThatThrownBy(() -> new WorkloadSetGenerator(template).generate())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate workload name '1-topics'");
+    }
+
     private static WorkloadSetTemplate staged(List<Workload.Stage> stages, List<Integer> rates) {
         return new WorkloadSetTemplate(
                 WorkloadSetTemplate.DEFAULT_NAME_TEMPLATE,

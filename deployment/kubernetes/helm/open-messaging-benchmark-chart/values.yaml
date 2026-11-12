@@ -74,6 +74,9 @@ workers:
     # Name of an existing Secret with the token. When empty, the chart creates
     # <fullname>-worker-token with a random token that stays the same across upgrades
     existingSecret: ""
+    # Fixed token for that created Secret. helm template, --dry-run, Argo CD and Flux cannot look up
+    # the existing Secret and render a new random token each time; set this or existingSecret there
+    token: ""
     # Key in the Secret that holds the token
     secretKey: token
     # Require the token on /metrics too. Leave false so Prometheus can scrape without it

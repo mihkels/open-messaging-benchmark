@@ -55,13 +55,14 @@ workers:
   heapOpts: "-Xms1G -Xmx1G"
   # Heap of the worker supervisor JVM
   supervisorHeapOpts: "-Xmx512m"
-  # Give the container more memory than both heaps together, or it is killed at the limit
+  # Both JVMs share the limit: 1.5 GiB of heaps plus metaspace, thread stacks and direct buffers
+  # of each. Raise it with the heaps, or the pod is OOMKilled mid-run
   resources:
     requests:
       cpu: 500m
-      memory: 2Gi
+      memory: 3Gi
     limits:
-      memory: 2Gi
+      memory: 3Gi
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

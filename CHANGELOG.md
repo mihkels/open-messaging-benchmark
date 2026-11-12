@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.5.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.4.0...v0.5.0) (2026-11-12)
+
+
+### Features
+
+* add Zipfian key distributor ([#339](https://github.com/mihkels/open-messaging-benchmark/issues/339)) ([8c8dd4c](https://github.com/mihkels/open-messaging-benchmark/commit/8c8dd4c0d5205c9b273c5522f0c3c6cc8ee21e40))
+* generate payloads with a target compression ratio ([#37](https://github.com/mihkels/open-messaging-benchmark/issues/37)) ([#347](https://github.com/mihkels/open-messaging-benchmark/issues/347)) ([c4a4460](https://github.com/mihkels/open-messaging-benchmark/commit/c4a4460c5640c14670edd780bd6411bb95bbfc83))
+* mid-run consumer pause and drain phase ([#345](https://github.com/mihkels/open-messaging-benchmark/issues/345)) ([c70c51e](https://github.com/mihkels/open-messaging-benchmark/commit/c70c51eeb2cef4986ac0dee52bcab4adf8a8707a))
+* multi-stage rate profiles in workloads ([#342](https://github.com/mihkels/open-messaging-benchmark/issues/342)) ([163952d](https://github.com/mihkels/open-messaging-benchmark/commit/163952d0cb8e982b067f55a82cff6e49011dbb08))
+
+
+### Bug Fixes
+
+* address Zipfian key distributor review findings, ref: [#343](https://github.com/mihkels/open-messaging-benchmark/issues/343) ([#344](https://github.com/mihkels/open-messaging-benchmark/issues/344)) ([5e15c29](https://github.com/mihkels/open-messaging-benchmark/commit/5e15c298bff3ec524f69c261d6fb9932e162e6bb))
+* allow a fixed Helm worker auth token for GitOps renders ([#362](https://github.com/mihkels/open-messaging-benchmark/issues/362)) ([0a40cd5](https://github.com/mihkels/open-messaging-benchmark/commit/0a40cd5d2dc56839a17f977ef858168b2735898a)), closes [#352](https://github.com/mihkels/open-messaging-benchmark/issues/352)
+* fail fast when RocketMQ5 delay messages have no delay time ([#365](https://github.com/mihkels/open-messaging-benchmark/issues/365)) ([c001c16](https://github.com/mihkels/open-messaging-benchmark/commit/c001c16b924b037414066e5e45427ef6f221d1d0)), closes [#355](https://github.com/mihkels/open-messaging-benchmark/issues/355)
+* fail image build when apt indexes cannot be fetched, ref: [#340](https://github.com/mihkels/open-messaging-benchmark/issues/340) ([#341](https://github.com/mihkels/open-messaging-benchmark/issues/341)) ([5c5c419](https://github.com/mihkels/open-messaging-benchmark/commit/5c5c419668a264f2c506fe996ab6cc3a996cb946))
+* give Helm workers room for both JVMs ([#360](https://github.com/mihkels/open-messaging-benchmark/issues/360)) ([b05350a](https://github.com/mihkels/open-messaging-benchmark/commit/b05350afc01cc6183669156cb7d0a539bfc713dc)), closes [#351](https://github.com/mihkels/open-messaging-benchmark/issues/351)
+* let the NATS driver reconnect without a limit ([#361](https://github.com/mihkels/open-messaging-benchmark/issues/361)) ([e5f92e1](https://github.com/mihkels/open-messaging-benchmark/commit/e5f92e10822f95c35fa1ec24d3a260ba2f575377)), closes [#353](https://github.com/mihkels/open-messaging-benchmark/issues/353)
+* make NSQ ports configurable and default MQTT to 1883 ([#368](https://github.com/mihkels/open-messaging-benchmark/issues/368)) ([64ef1d5](https://github.com/mihkels/open-messaging-benchmark/commit/64ef1d55636199731feafaeb10bb462ea4ddefc0)), closes [#354](https://github.com/mihkels/open-messaging-benchmark/issues/354)
+* reject generated workloads with duplicate names ([#366](https://github.com/mihkels/open-messaging-benchmark/issues/366)) ([e383e8f](https://github.com/mihkels/open-messaging-benchmark/commit/e383e8f6abc9d9680144c1327aa91530bcbb795a)), closes [#358](https://github.com/mihkels/open-messaging-benchmark/issues/358)
+* retry release image signing, ref: [#336](https://github.com/mihkels/open-messaging-benchmark/issues/336) ([#337](https://github.com/mihkels/open-messaging-benchmark/issues/337)) ([5663fbf](https://github.com/mihkels/open-messaging-benchmark/commit/5663fbfaebe6078fdbe90792a164df2acf2a0087))
+* warn when Pravega runs cannot measure end-to-end latency ([#363](https://github.com/mihkels/open-messaging-benchmark/issues/363)) ([f876b7c](https://github.com/mihkels/open-messaging-benchmark/commit/f876b7c0c4708117468782506193c8c52dce8c99)), closes [#356](https://github.com/mihkels/open-messaging-benchmark/issues/356)
+
+
+### Refactoring
+
+* share one launcher between bin/benchmark and bin/benchmark-worker ([#364](https://github.com/mihkels/open-messaging-benchmark/issues/364)) ([dd3fb44](https://github.com/mihkels/open-messaging-benchmark/commit/dd3fb440dc57f08b82d447111ac7a5252eb836ba))
+
+
+### Documentation
+
+* explain NATS Streaming end-to-end latency uses the server timestamp ([#367](https://github.com/mihkels/open-messaging-benchmark/issues/367)) ([bc2e838](https://github.com/mihkels/open-messaging-benchmark/commit/bc2e838a2389df4bf570792ebec6d8781f70007a)), closes [#357](https://github.com/mihkels/open-messaging-benchmark/issues/357)
+* move the site to Zensical and add a blog, ref: [#369](https://github.com/mihkels/open-messaging-benchmark/issues/369) ([#370](https://github.com/mihkels/open-messaging-benchmark/issues/370)) ([135b999](https://github.com/mihkels/open-messaging-benchmark/commit/135b999811e6df43eb237bf94d8b6051ef42ac80))
+
 ## [0.4.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.3.0...v0.4.0) (2026-11-10)
 
 

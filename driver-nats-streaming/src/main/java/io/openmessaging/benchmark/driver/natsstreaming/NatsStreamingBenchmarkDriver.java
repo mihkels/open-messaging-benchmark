@@ -124,7 +124,8 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
             streamingConnection.subscribe(
                     topic,
                     subscriptionName,
-                    // NATS Streaming timestamps are nanoseconds since the epoch
+                    // Server store time (ns since epoch), not the client send time: E2E latency
+                    // excludes the producer-to-server leg and is not comparable to other drivers.
                     message ->
                             consumerCallback.messageReceived(
                                     message.getData(), TimeUnit.NANOSECONDS.toMillis(message.getTimestamp())),

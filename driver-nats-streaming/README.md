@@ -69,6 +69,8 @@ the send returns or schedule close on another thread without waiting in the call
 - `partitionsPerTopic` and message keys are ignored.
 - Subscriptions are non-durable queue subscriptions that receive only messages published after subscribing.
 - End-to-end latency uses the server-assigned message timestamp (server clock), not the producer's send time.
+  It is measured from when the server stored the message, excludes the producer-to-server leg, and is not
+  comparable to other drivers' end-to-end latency.
 - The driver does not delete channels.
 
 ## Further reading

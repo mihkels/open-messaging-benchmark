@@ -1,0 +1,69 @@
+name: Cache cleanup
+
+# Keeps the Actions cache under the 10 GB per-repository limit. CodeQL default setup saves a large
+# dependency cache per pull request, and main collects older Maven, CodeQL and mise entries that
+# nothing restores any more. See .github/scripts/cache-cleanup.sh.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List the caches that would be deleted without deleting them
+        type: boolean
+        default: true
+  pull_request:
+    types:
+      - closed
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  # Fork pull requests get a read-only token; the daily run removes their caches instead
+  pull-request:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete the pull request's caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          for ref in "refs/pull/$PR_NUMBER/head" "refs/pull/$PR_NUMBER/merge"; do
+            for id in $(gh cache list --ref "$ref" --limit 1000 --json id --jq '.[].id'); do
+              gh cache delete "$id"
+              echo "Deleted cache $id from $ref" | tee -a "$GITHUB_STEP_SUMMARY"
+            done
+          done
+
+  cleanup:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Delete stale caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: .github/scripts/cache-cleanup.sh

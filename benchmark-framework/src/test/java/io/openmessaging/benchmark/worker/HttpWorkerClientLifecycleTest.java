@@ -15,6 +15,8 @@ package io.openmessaging.benchmark.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.asynchttpclient.Dsl.asyncHttpClient;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -22,8 +24,10 @@ import static org.mockito.Mockito.mock;
 import io.javalin.Javalin;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.asynchttpclient.AsyncHttpClient;
@@ -194,6 +198,47 @@ class HttpWorkerClientLifecycleTest {
                     assertThatThrownBy(remote::stopAll)
                             .hasStackTraceContaining("primary close failure")
                             .hasStackTraceContaining("suppressed: java.io.IOException: additional close failure");
+                }
+            } finally {
+                app.stop();
+            }
+        }
+    }
+
+    @Test
+    void namesTheWorkerPathAndTimeoutWhenARequestTimesOut() throws Exception {
+        Worker worker = mock(Worker.class);
+        CountDownLatch release = new CountDownLatch(1);
+        doAnswer(
+                        ignored -> {
+                            release.await();
+                            return null;
+                        })
+                .when(worker)
+                .createProducers(anyList());
+        try (WorkerHandler handler = new WorkerHandler(worker)) {
+            Javalin app =
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
+            try {
+                app.start("127.0.0.1", 0);
+                String host = "http://127.0.0.1:" + app.port();
+                try (HttpWorkerClient remote =
+                        new HttpWorkerClient(
+                                asyncHttpClient(),
+                                host,
+                                null,
+                                Duration.ofSeconds(2),
+                                Duration.ofMillis(200),
+                                Duration.ofSeconds(2))) {
+                    assertThatThrownBy(() -> remote.createProducers(List.of("topic")))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessage("HTTP post " + host + "/create-producers timed out after 200 ms")
+                            .hasCauseInstanceOf(TimeoutException.class);
+                } finally {
+                    release.countDown();
                 }
             } finally {
                 app.stop();

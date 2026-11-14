@@ -67,6 +67,13 @@ Consumers did not receive the probe message on every topic within 60 seconds. Ch
   driver page describes;
 - the broker can create the requested number of topics and partitions quickly enough.
 
+**`HTTP post http://worker:8080/create-producers timed out after 600000 ms`**
+
+The named worker did not answer that request in time, usually because its driver call is blocked on
+the broker, for example while fetching metadata for many topics. Check that worker's log for the
+call it was running. If the call is slow but healthy, raise `OMB_WORKER_REQUEST_TIMEOUT_SECONDS` on
+the coordinator and all workers; see [Runtime and plugins](../reference/runtime-and-plugins.md#environment-variables).
+
 **`Cannot probe producer sustainable rate when building backlog`**
 
 `producerRate: 0` cannot be combined with `consumerBacklogSizeGB`. Set a fixed rate.

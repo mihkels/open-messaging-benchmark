@@ -315,7 +315,7 @@ class WorkerHttpRoundTripTest {
         app = null;
         assertThatThrownBy(remote::getCountersStats)
                 .isExactlyInstanceOf(IllegalStateException.class)
-                .hasMessage("HTTP request to worker " + host + " failed")
+                .hasMessage("HTTP get " + host + WorkerHandler.COUNTERS_STATS + " failed")
                 .hasCauseInstanceOf(java.net.ConnectException.class);
     }
 

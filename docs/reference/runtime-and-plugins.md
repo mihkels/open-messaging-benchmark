@@ -22,19 +22,28 @@ artifact coordinates and reports conflicts; see [Packaging a plugin](../developm
 
 ## Environment variables
 
-|        Variable        |          Default           |   Applies to   |                                                 Description                                                 |
-|------------------------|----------------------------|----------------|-------------------------------------------------------------------------------------------------------------|
-| `HEAP_OPTS`            | `-Xms4G -Xmx4G`            | Driver JVM     | Heap options                                                                                                |
-| `JVM_OPTS`             | empty                      | Driver JVM     | Extra options appended to the defaults, for example GC logging                                              |
-| `OMB_DRIVER_JVM_OPTS`  | derived                    | Driver JVM     | Replaces **all** driver JVM options, including `HEAP_OPTS`, `JVM_OPTS` and the required `--add-opens` flags |
-| `SUPERVISOR_HEAP_OPTS` | `-Xmx1G`                   | Supervisor JVM | Heap options; also the place for supervisor `-D` system properties                                          |
-| `OMB_HOME`             | the distribution directory | Supervisor     | Directory searched for plugins                                                                              |
-| `OMB_PLUGIN_PATH`      | empty                      | Supervisor     | Extra plugin locations, separated by `:`                                                                    |
+|               Variable               |          Default           |             Applies to             |                                                 Description                                                 |
+|--------------------------------------|----------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `HEAP_OPTS`                          | `-Xms4G -Xmx4G`            | Driver JVM                         | Heap options                                                                                                |
+| `JVM_OPTS`                           | empty                      | Driver JVM                         | Extra options appended to the defaults, for example GC logging                                              |
+| `OMB_DRIVER_JVM_OPTS`                | derived                    | Driver JVM                         | Replaces **all** driver JVM options, including `HEAP_OPTS`, `JVM_OPTS` and the required `--add-opens` flags |
+| `SUPERVISOR_HEAP_OPTS`               | `-Xmx1G`                   | Supervisor JVM                     | Heap options; also the place for supervisor `-D` system properties                                          |
+| `OMB_HOME`                           | the distribution directory | Supervisor                         | Directory searched for plugins                                                                              |
+| `OMB_PLUGIN_PATH`                    | empty                      | Supervisor                         | Extra plugin locations, separated by `:`                                                                    |
+| `OMB_WORKER_REQUEST_TIMEOUT_SECONDS` | `600`                      | Coordinator, worker and driver JVM | How long a worker request may take; see below                                                               |
+| `OMB_WORKER_STOP_TIMEOUT_SECONDS`    | `180`                      | Coordinator, worker and driver JVM | How long `/stop-all`, which closes every producer and consumer, may take                                    |
 
 When `OMB_DRIVER_JVM_OPTS` is not set, the scripts build it as
 `-server $HEAP_OPTS -XX:+UseG1GC <defaults> $JVM_OPTS`. Prefer `HEAP_OPTS` and `JVM_OPTS`; set
 `OMB_DRIVER_JVM_OPTS` only when you need full control, and copy the default flags from `bin/benchmark`
 into it.
+
+The two worker timeouts can also be set as the system properties `omb.worker.requestTimeoutSeconds`
+and `omb.worker.stopTimeoutSeconds` in `SUPERVISOR_HEAP_OPTS`; a property wins over the variable.
+Set the same values on the coordinator and on every worker: the coordinator gives up on a request
+after its timeout, and a worker keeps a busy request open for the longer of its two timeouts. Lower
+them to surface a hung worker sooner, raise them when creating many producers or consumers takes
+longer than 10 minutes. With the Helm chart, `extraEnv` sets them on both.
 
 The coordinator also reads `PUBLISH_BACKLOG_LIMIT`, `RECEIVE_BACKLOG_LIMIT`, `MIN_RAMPING_FACTOR` and
 `MAX_RAMPING_FACTOR` for `producerRate: 0` runs; see [Workloads](../guides/workloads.md).

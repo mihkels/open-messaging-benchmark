@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,6 +83,8 @@ public final class WorkloadGenerator implements WorkloadRun {
 
     private volatile double targetPublishRate;
     private volatile RunPhase phase = RunPhase.MEASURE;
+    // Send error reason last logged per worker id, so each new reason is logged once
+    private final Map<String, String> loggedSendErrors = new HashMap<>();
     private volatile int stage;
     private volatile long pausePeakBacklog;
     private volatile @Nullable Double pauseDrainSeconds;
@@ -647,6 +650,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             waitForReportInterval();
 
             PeriodStats stats = worker.getPeriodStats();
+            logNewSendErrors(stats);
             long now = System.nanoTime();
             PeriodReport period =
                     PeriodReport.of(stats, (now - oldTime) / 1e9, workload.subscriptionsPerTopic);
@@ -665,6 +669,16 @@ public final class WorkloadGenerator implements WorkloadRun {
 
             oldTime = now;
         }
+    }
+
+    private void logNewSendErrors(PeriodStats stats) {
+        stats
+                .sendErrorReasons()
+                .forEach((workerId, reason) -> {
+                    if (!reason.equals(loggedSendErrors.put(workerId, reason))) {
+                        log.warn("Worker {} send error: {}", workerId, reason);
+                    }
+                });
     }
 
     private void finish(TestResult result) {

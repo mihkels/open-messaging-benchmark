@@ -16,11 +16,13 @@ package io.openmessaging.benchmark.worker;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 import org.jspecify.annotations.Nullable;
@@ -55,6 +57,8 @@ public class WorkerStats {
     private final LongAdder totalMessagesReceived = new LongAdder();
 
     private volatile @Nullable RunPhase phase;
+    // Last send failure as "class: message"; kept until reset so every period reports it.
+    private volatile @Nullable String lastSendError;
 
     WorkerStats(MeterRegistry registry) {
         this.registry = registry;
@@ -139,7 +143,8 @@ public class WorkerStats {
                 publishLatency.takeInterval(),
                 publishDelayLatency.takeInterval(),
                 endToEndLatency.takeInterval(),
-                publishScheduleLatency.takeInterval());
+                publishScheduleLatency.takeInterval(),
+                lastSendError == null ? Map.of() : Map.of(LocalWorker.ID, lastSendError));
     }
 
     public CumulativeLatencies toCumulativeLatencies() {
@@ -173,9 +178,11 @@ public class WorkerStats {
         totalMessagesSent.reset();
         totalMessageSendErrors.reset();
         totalMessagesReceived.reset();
+        lastSendError = null;
     }
 
-    public void recordProducerFailure() {
+    public void recordProducerFailure(Throwable failure) {
+        lastSendError = Failures.unwrap(failure).toString();
         messageSendErrors.increment();
         messageSendErrorCounter.increment();
         totalMessageSendErrors.increment();

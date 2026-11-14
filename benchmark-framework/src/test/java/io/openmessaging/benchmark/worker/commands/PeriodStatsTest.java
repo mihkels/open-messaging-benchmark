@@ -15,7 +15,9 @@ package io.openmessaging.benchmark.worker.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.List;
+import java.util.Map;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 
@@ -139,5 +141,36 @@ class PeriodStatsTest {
         assertThat(PeriodStats.aggregate(List.of(snapshot))).isSameAs(snapshot);
         snapshot.publishLatency().recordValue(10);
         assertThat(PeriodStats.aggregate(List.of(snapshot)).publishLatency().getTotalCount()).isZero();
+    }
+
+    @Test
+    void sendErrorReasonsMergeAcrossSnapshots() {
+        PeriodStats one = withReasons(Map.of("w0", "java.io.IOException: a"));
+        PeriodStats two = withReasons(Map.of("w1", "java.io.IOException: b"));
+
+        Map<String, String> both =
+                Map.of("w0", "java.io.IOException: a", "w1", "java.io.IOException: b");
+        assertThat(one.plus(two).sendErrorReasons()).isEqualTo(both);
+        assertThat(PeriodStats.aggregate(List.of(one, two, new PeriodStats())).sendErrorReasons())
+                .isEqualTo(both);
+        assertThat(one.withWorkerId("http://w9").sendErrorReasons())
+                .isEqualTo(Map.of("http://w9", "java.io.IOException: a"));
+    }
+
+    @Test
+    void jsonOmitsEmptySendErrorReasonsAndRoundTripsThem() throws Exception {
+        var mapper = ObjectMappers.DEFAULT.mapper();
+
+        String empty = mapper.writeValueAsString(new PeriodStats());
+        assertThat(empty).doesNotContain("sendErrorReasons");
+        assertThat(mapper.readValue(empty, PeriodStats.class).sendErrorReasons()).isEmpty();
+
+        PeriodStats failing = withReasons(Map.of("local", "java.io.IOException: broker down"));
+        String json = mapper.writeValueAsString(failing);
+        assertThat(mapper.readValue(json, PeriodStats.class)).isEqualTo(failing);
+    }
+
+    private static PeriodStats withReasons(Map<String, String> reasons) {
+        return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, reasons);
     }
 }

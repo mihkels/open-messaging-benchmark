@@ -72,7 +72,7 @@ final class RunCallbacks implements ConsumerCallback {
                         stats.recordProducerSuccess(
                                 payloadLength, intendedSendTime, sendTime, nanoClock.getAsLong());
                     } else {
-                        stats.recordProducerFailure();
+                        stats.recordProducerFailure(failure);
                     }
                 }
             } finally {

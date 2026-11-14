@@ -18,6 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -104,18 +107,40 @@ class WorkerStatsTest {
     }
 
     @Test
+    void keepsTheLastSendErrorReasonUntilReset() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            assertThat(stats.toPeriodStats().sendErrorReasons()).isEmpty();
+
+            stats.recordProducerFailure(new IllegalStateException("first"));
+            stats.recordProducerFailure(new CompletionException(new IOException("broker down")));
+
+            assertThat(stats.toPeriodStats().sendErrorReasons())
+                    .isEqualTo(Map.of("local", "java.io.IOException: broker down"));
+            // Still reported in the next period, even without new failures
+            assertThat(stats.toPeriodStats().sendErrorReasons()).hasSize(1);
+
+            stats.reset();
+            assertThat(stats.toPeriodStats().sendErrorReasons()).isEmpty();
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
     void resetClearsErrorTotalsForTheNextRun() {
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
         try {
             WorkerStats stats = new WorkerStats(registry);
             stats.recordMessageSent();
             stats.recordMessageReceived(128, 1);
-            stats.recordProducerFailure();
-            stats.recordProducerFailure();
+            stats.recordProducerFailure(new IllegalStateException("broker down"));
+            stats.recordProducerFailure(new IllegalStateException("broker down"));
 
             assertThat(stats.toCountersStats()).isEqualTo(new CountersStats(1, 2, 1));
             assertThat(stats.toPeriodStats().totalMessageSendErrors()).isEqualTo(2);
-            stats.recordProducerFailure();
+            stats.recordProducerFailure(new IllegalStateException("broker down"));
 
             stats.reset();
 
@@ -125,7 +150,7 @@ class WorkerStatsTest {
             assertThat(period.totalMessageSendErrors()).isZero();
             assertThat(registry.get("message_send_errors").counter().count()).isEqualTo(3);
 
-            stats.recordProducerFailure();
+            stats.recordProducerFailure(new IllegalStateException("broker down"));
             assertThat(stats.toCountersStats().messageSendErrors()).isEqualTo(1);
         } finally {
             registry.close();

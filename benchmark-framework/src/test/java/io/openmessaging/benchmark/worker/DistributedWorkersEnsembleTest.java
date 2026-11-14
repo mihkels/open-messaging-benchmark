@@ -35,6 +35,7 @@ import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -174,6 +175,29 @@ class DistributedWorkersEnsembleTest {
                 verify(worker).resetStats();
             }
         }
+    }
+
+    @Test
+    void tagsEachWorkersSendErrorReasonWithItsId() throws Exception {
+        List<Worker> workers = workers(3);
+        when(workers.get(0).id()).thenReturn("http://w0");
+        when(workers.get(1).id()).thenReturn("http://w1");
+        when(workers.get(2).id()).thenReturn("http://w2");
+        when(workers.get(0).getPeriodStats()).thenReturn(reason("java.io.IOException: timeout"));
+        when(workers.get(1).getPeriodStats()).thenReturn(new PeriodStats());
+        when(workers.get(2).getPeriodStats())
+                .thenReturn(reason("java.lang.IllegalStateException: full"));
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            assertThat(ensemble.getPeriodStats().sendErrorReasons())
+                    .isEqualTo(
+                            Map.of(
+                                    "http://w0", "java.io.IOException: timeout",
+                                    "http://w2", "java.lang.IllegalStateException: full"));
+        }
+    }
+
+    private static PeriodStats reason(String reason) {
+        return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, Map.of("local", reason));
     }
 
     @Test

@@ -23,7 +23,10 @@ import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth.DriverState;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 
 class WorkerWatchdogTest {
@@ -62,7 +65,7 @@ class WorkerWatchdogTest {
     }
 
     @Test
-    void abortsTheRunAfterRepeatedlyFailingToReachAWorker() throws Exception {
+    void abortsTheRunAfterRepeatedlyFailingToReachAWorker() {
         Worker unreachable = mock(Worker.class);
         when(unreachable.id()).thenReturn("http://gone");
         when(unreachable.health()).thenThrow(new IllegalStateException("Connection refused"));
@@ -77,7 +80,7 @@ class WorkerWatchdogTest {
     }
 
     @Test
-    void reportsAFailureThatArrivesAfterTheRunReturnedOnClose() throws Exception {
+    void reportsAFailureThatArrivesAfterTheRunReturnedOnClose() {
         Worker dead = worker("local", new WorkerHealth(true, DriverState.NOT_STARTED, null, null));
         var watchdog = new WorkerWatchdog(dead, () -> 0, FAST, NEVER);
         sleepUntilInterrupted();
@@ -92,10 +95,15 @@ class WorkerWatchdogTest {
     void leavesAHealthyRunAloneAndKeepsDumpingThreadsWhileItIsStuck() throws Exception {
         Worker healthy = worker("local", WorkerHealth.RUNNING);
         AtomicLong progress = new AtomicLong();
-        try (var watchdog = new WorkerWatchdog(healthy, progress::get, FAST, Duration.ofMillis(50))) {
-            Thread.sleep(300);
-            progress.incrementAndGet();
-            Thread.sleep(100);
+        CountDownLatch polls = new CountDownLatch(20);
+        // Stuck for the first polls, long enough for several dumps, then progressing
+        LongSupplier observed =
+                () -> {
+                    polls.countDown();
+                    return polls.getCount() < 10 ? progress.incrementAndGet() : 0;
+                };
+        try (var watchdog = new WorkerWatchdog(healthy, observed, FAST, Duration.ofMillis(50))) {
+            assertThat(polls.await(10, TimeUnit.SECONDS)).isTrue();
             IllegalStateException own = new IllegalStateException("run failed by itself");
             assertThat(watchdog.explain(own)).isSameAs(own);
         }
@@ -104,7 +112,7 @@ class WorkerWatchdogTest {
 
     private static InterruptedException sleepUntilInterrupted() {
         try {
-            Thread.sleep(Duration.ofSeconds(30));
+            new CountDownLatch(1).await(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             return e;
         }

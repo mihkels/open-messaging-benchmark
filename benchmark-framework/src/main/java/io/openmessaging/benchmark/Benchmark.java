@@ -472,14 +472,7 @@ public final class Benchmark {
             worker.initializeDriver(Path.of(combination.driverConfig()));
             generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
             generator.includeHistograms(includeHistograms);
-            TestResult result;
-            try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
-                try {
-                    result = generator.run();
-                } catch (Exception e) {
-                    throw watchdog.explain(e);
-                }
-            }
+            TestResult result = runWatched(generator, worker);
             result.schemaVersion = 2;
             result.metadata =
                     ResultMetadata.create(
@@ -531,6 +524,17 @@ public final class Benchmark {
         MDC.remove(MDC_WORKLOAD);
         MDC.remove(MDC_DRIVER);
         return new Outcome(failure, safeToContinue, thresholdFailed);
+    }
+
+    // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
+    private static TestResult runWatched(WorkloadRun generator, Worker worker) throws Exception {
+        try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
+            try {
+                return generator.run();
+            } catch (Exception e) {
+                throw watchdog.explain(e);
+            }
+        }
     }
 
     // The explicit output file, or a generated name in the results directory. Without a results

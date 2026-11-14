@@ -35,6 +35,10 @@ updates:
       base-images:
         patterns:
           - '*'
+    ignore:
+      # Floating maven:3-eclipse-temurin-NN tag parses as version 3 and can drop the JDK below 27 (#385)
+      - dependency-name: maven
+        versions: ['3']
     commit-message:
       prefix: deps
 

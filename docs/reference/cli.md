@@ -26,19 +26,21 @@ The coordinator. It runs workloads against drivers and writes results.
 bin/benchmark [options] <workload.yaml>...
 ```
 
-|         Option          |       Argument        |                                                                        Description                                                                         |
-|-------------------------|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `-d`, `--drivers`       | Comma-separated paths | Driver configuration files. Every workload runs once with each driver                                                                                      |
-| `-w`, `--workers`       | Comma-separated URLs  | Worker addresses such as `http://10.0.0.1:8080`. Distributed mode needs at least two; a single worker is rejected with `At least two workers are required` |
-| `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs. Cannot be combined with `--workers`                                                                              |
-| `--worker-token-file`   | Path                  | File with the bearer token to send to remote workers; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication)                                  |
-| `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                         |
-| `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                  |
-| `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                          |
-| `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                        |
-| `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                           |
-| `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                        |
-| `-h`, `--help`          |                       | Print usage and exit                                                                                                                                       |
+|         Option          |       Argument        |                                                                                           Description                                                                                            |
+|-------------------------|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `-d`, `--drivers`       | Comma-separated paths | Driver configuration files. Every workload runs once with each driver                                                                                                                            |
+| `-w`, `--workers`       | Comma-separated URLs  | Worker addresses such as `http://10.0.0.1:8080`. Distributed mode needs at least two; a single worker is rejected with `At least two workers are required`, or one `dns://<host>:<port>` address |
+| `-wf`, `--workers-file` | Path                  | YAML file with a `workers:` list of URLs, or one `dns://` address. Cannot be combined with `--workers`                                                                                           |
+| `--expected-workers`    | Count                 | With a `dns://` address, wait until this many workers resolve. Default `2`, the minimum                                                                                                          |
+| `--workers-timeout`     | Duration              | With a `dns://` address, how long to wait for `--expected-workers`, such as `30s` or `5m`. Default `5m`                                                                                          |
+| `--worker-token-file`   | Path                  | File with the bearer token to send to remote workers; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication)                                                                        |
+| `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                                                               |
+| `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                                                        |
+| `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                                                                |
+| `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                                                              |
+| `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                                                                 |
+| `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                                                              |
+| `-h`, `--help`          |                       | Print usage and exit                                                                                                                                                                             |
 
 Positional arguments are workload files. `--legacy-driver-name` is accepted as a deprecated alias of
 `--driver-location`.
@@ -48,6 +50,12 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
 - **Worker selection.** Without `--workers` and `--workers-file`, a `workers.yaml` file in the
   current directory is used if present. Otherwise the run is local and the coordinator starts the
   driver in a child JVM.
+- **DNS discovery.** `--workers dns://<host>:<port>` resolves every A/AAAA record of `<host>`
+  and uses `http://<ip>:<port>` for each, in sorted order; the resolved list is logged. This suits
+  a Kubernetes headless Service, which publishes only ready pods. The coordinator retries every
+  second until `--expected-workers` addresses resolve and fails with
+  `Found <n> of <N> expected workers at ...` after `--workers-timeout`. A `dns://` address cannot
+  be combined with other worker addresses.
 - **Order.** Workloads run in alphabetical order of their file names, and for each workload the
   drivers run in the order given. Two workload files with the same file name in different
   directories collide; only one runs.
@@ -62,9 +70,9 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   A completed run that fails a workload threshold exits with status `2`, distinct from a run or
   configuration error. See [CI gating](../guides/ci-gating.md).
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
-  workload files, no `--drivers`, or a workload that fails validation (pool size, size distribution,
-  backlog settings) print a message and exit with a non-zero status before any broker resources are
-  created. Payload file errors (missing file, length mismatch) are detected only after topics,
+  workload files, no `--drivers`, `--expected-workers` below 2, or a workload that fails
+  validation (pool size, size distribution, backlog settings) print a message and exit with a
+  non-zero status before any broker resources are created. Payload file errors (missing file, length mismatch) are detected only after topics,
   producers and consumers have been created. `--help` prints usage and exits successfully.
 - **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.
 

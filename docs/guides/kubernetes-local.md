@@ -102,10 +102,11 @@ mise run k8s:down redis                    # delete the omb-redis namespace
 mise run k8s:down                          # delete the cluster
 ```
 
-In the coordinator shell, `DRIVER`, `WORKLOAD` and `WORKERS` are set for the contract case:
+In the coordinator shell, `DRIVER`, `WORKLOAD`, `WORKERS` (the `dns://` address of the worker
+headless Service) and `EXPECTED_WORKERS` are set for the contract case:
 
 ```bash
-benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
+benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"
 ```
 
 ### Environment

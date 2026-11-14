@@ -15,6 +15,7 @@ package io.openmessaging.benchmark;
 
 import static io.openmessaging.benchmark.driver.Failures.append;
 
+import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
@@ -29,13 +30,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -73,13 +77,28 @@ public final class Benchmark {
 
         @Parameter(
                 names = {"-w", "--workers"},
-                description = "List of worker nodes. eg: http://1.2.3.4:8080,http://4.5.6.7:8080")
+                description =
+                        "List of worker nodes. eg: http://1.2.3.4:8080,http://4.5.6.7:8080, or a single"
+                                + " dns://<host>:<port> resolved to one worker per A/AAAA record, eg. a"
+                                + " Kubernetes headless Service")
         public @Nullable List<String> workers;
 
         @Parameter(
                 names = {"-wf", "--workers-file"},
                 description = "Path to a YAML file containing the list of workers addresses")
         public @Nullable File workersFile;
+
+        @Parameter(
+                names = "--expected-workers",
+                description = "With a dns:// worker address, wait until this many workers resolve")
+        public int expectedWorkers = 2;
+
+        @Parameter(
+                names = "--workers-timeout",
+                description =
+                        "With a dns:// worker address, how long to wait for --expected-workers, eg. 30s, 5m",
+                converter = DurationConverter.class)
+        public Duration workersTimeout = Duration.ofMinutes(5);
 
         @Parameter(
                 names = "--worker-token-file",
@@ -120,6 +139,23 @@ public final class Benchmark {
                 names = "--report-html",
                 description = "Also write an HTML report with charts of all runs to this file")
         public @Nullable String reportHtml;
+    }
+
+    // Accepts 30s, 5m, 1h30m and the like
+    public static final class DurationConverter implements IStringConverter<Duration> {
+        @Override
+        public Duration convert(String value) {
+            try {
+                Duration duration = Duration.parse("PT" + value.toUpperCase(Locale.ROOT));
+                if (!duration.isNegative() && !duration.isZero()) {
+                    return duration;
+                }
+            } catch (DateTimeParseException e) {
+                // reported below
+            }
+            throw new ParameterException(
+                    "Invalid duration '" + value + "', expected a positive value like 30s, 5m or 1h30m");
+        }
     }
 
     private Benchmark() {
@@ -199,6 +235,9 @@ public final class Benchmark {
                     + RESULTS_DIR_ENV
                     + " to choose the results directory";
         }
+        if (arguments.expectedWorkers < 2) {
+            return "--expected-workers must be at least 2, the minimum for a distributed run";
+        }
         return null;
     }
 
@@ -208,8 +247,9 @@ public final class Benchmark {
         System.exit(-1);
     }
 
-    // Fills the worker list from --workers-file, or from workers.yaml when no workers are given
-    private static void resolveWorkers(Arguments arguments) {
+    // Fills the worker list from --workers-file, or from workers.yaml when no workers are given,
+    // then expands a dns:// address into one URL per resolved worker
+    private static void resolveWorkers(Arguments arguments) throws InterruptedException {
         if (arguments.workers == null && arguments.workersFile == null) {
             var defaultFile = new File("workers.yaml");
             if (defaultFile.exists()) {
@@ -222,6 +262,17 @@ public final class Benchmark {
             log.info("Reading workers list from {}", arguments.workersFile);
             Workers workers = workersReader.readValue(arguments.workersFile);
             arguments.workers = workers.workers;
+        }
+
+        List<String> workers = arguments.workers;
+        if (workers != null && workers.stream().anyMatch(WorkerDiscovery::isDns)) {
+            if (workers.size() != 1) {
+                throw new IllegalArgumentException(
+                        "A dns:// worker address cannot be combined with other worker addresses: " + workers);
+            }
+            arguments.workers =
+                    WorkerDiscovery.resolve(
+                            workers.getFirst(), arguments.expectedWorkers, arguments.workersTimeout);
         }
     }
 

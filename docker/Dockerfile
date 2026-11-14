@@ -27,7 +27,7 @@
 ARG DIST_SOURCE=builder
 
 # Build the distribution. Checks (tests, license, formatting, static analysis) run in CI, not here.
-FROM maven:3.10.0-eclipse-temurin-27@sha256:a6cd0d45e565ec76bf1969702bcbdb800d3461c8338012728e891b8681374575 AS builder
+FROM maven:3-eclipse-temurin-26@sha256:69a6c37f0a91fca2c9d0cdd684c9c0ea7b1bc00d4196749c24440b2e02ad163d AS builder
 WORKDIR /src
 COPY . .
 ARG DRIVERS=all

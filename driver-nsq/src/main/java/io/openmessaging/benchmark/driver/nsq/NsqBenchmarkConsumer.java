@@ -636,6 +636,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         if (closing.neverStarted()) {
             initializationFinished.complete(null);
         }
+        // Reject new sockets now; the cleanup thread may start after a pending connect registers
+        eventLoopGroup.stopConnecting();
         daemonFactory("nsq-consumer-cleanup", null)
                 .newThread(() -> closeResources(closing, failure, abort, initiator))
                 .start();

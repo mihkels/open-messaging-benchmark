@@ -199,6 +199,56 @@ class DistributedWorkersEnsembleTest {
     }
 
     @Test
+    void reportsPerWorkerCountersSoAStalledConsumerIsVisible() throws Exception {
+        List<Worker> workers = workers(2);
+        when(workers.get(0).id()).thenReturn("producer-host");
+        when(workers.get(1).id()).thenReturn("consumer-host");
+        when(workers.get(0).getCountersStats())
+                .thenReturn(new CountersStats(100, 0, 0), new CountersStats(200, 1, 0));
+        // The consumer's counters stop moving after the first poll.
+        when(workers.get(1).getCountersStats()).thenReturn(new CountersStats(0, 0, 100));
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            ensemble.countersPerWorker();
+            assertThat(ensemble.countersPerWorker())
+                    .extracting(Object::toString)
+                    .containsExactly(
+                            "producer-host [producer] sent=200 sendErrors=1 received=0",
+                            "consumer-host [consumer] sent=0 sendErrors=0 received=100");
+        }
+    }
+
+    @Test
+    void reportsCountersOfHealthyWorkersWhenOneCannotBePolled() throws Exception {
+        List<Worker> workers = workers(2);
+        when(workers.get(0).id()).thenReturn("w0");
+        when(workers.get(1).id()).thenReturn("w1");
+        when(workers.get(0).getCountersStats()).thenReturn(new CountersStats(5, 0, 0));
+        when(workers.get(1).getCountersStats())
+                .thenThrow(new IllegalStateException("HTTP post w1/counters-stats timed out after 10 ms"));
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            assertThat(ensemble.countersPerWorker())
+                    .extracting(Object::toString)
+                    .containsExactly(
+                            "w0 [producer] sent=5 sendErrors=0 received=0",
+                            "w1 [consumer] counters unavailable: java.lang.IllegalStateException: "
+                                    + "HTTP post w1/counters-stats timed out after 10 ms");
+        }
+    }
+
+    @Test
+    void pollsEveryWorkersCountersWhenAWorkerCallFails() throws Exception {
+        List<Worker> workers = workers(2);
+        var failure = new IllegalStateException("timed out");
+        when(workers.get(1).getPeriodStats()).thenThrow(failure);
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            assertThat(catchThrowable(ensemble::getPeriodStats)).isSameAs(failure);
+            for (Worker worker : workers) {
+                verify(worker).getCountersStats();
+            }
+        }
+    }
+
+    @Test
     void rejectsFewerThanTwoWorkers() {
         assertThatThrownBy(() -> new DistributedWorkersEnsemble(List.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)

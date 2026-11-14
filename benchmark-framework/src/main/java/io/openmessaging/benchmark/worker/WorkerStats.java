@@ -15,7 +15,7 @@ package io.openmessaging.benchmark.worker;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
@@ -28,7 +28,7 @@ import org.jspecify.annotations.Nullable;
 public class WorkerStats {
 
     // Micrometer registry
-    private final PrometheusMeterRegistry registry;
+    private final MeterRegistry registry;
 
     private final LatencyMetric publishLatency;
     private final LatencyMetric publishDelayLatency;
@@ -56,7 +56,7 @@ public class WorkerStats {
 
     private volatile @Nullable RunPhase phase;
 
-    WorkerStats(PrometheusMeterRegistry registry) {
+    WorkerStats(MeterRegistry registry) {
         this.registry = registry;
         for (RunPhase p : RunPhase.values()) {
             Gauge.builder("benchmark_phase", () -> phase == p ? 1 : 0)
@@ -101,7 +101,7 @@ public class WorkerStats {
                         TimeUnit.HOURS.toMicros(12), "e2e_latency", "End to end latency (micros)", registry);
     }
 
-    public PrometheusMeterRegistry getMeterRegistry() {
+    public MeterRegistry getMeterRegistry() {
         return registry;
     }
 

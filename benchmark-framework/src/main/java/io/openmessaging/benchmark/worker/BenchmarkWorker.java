@@ -17,8 +17,10 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import io.javalin.Javalin;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.openmessaging.benchmark.metrics.otlp.OtlpExport;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
@@ -128,7 +130,8 @@ public final class BenchmarkWorker {
 
         PrometheusMeterRegistry prometheusRegistry =
                 new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        new JvmResourceMetrics().bindTo(prometheusRegistry, "supervisor");
+        MeterRegistry registry = OtlpExport.withOtlp(prometheusRegistry, System.getenv());
+        new JvmResourceMetrics().bindTo(registry, "supervisor");
 
         BearerTokenAuth auth = authFor(arguments, System.getenv());
         if (auth == null) {
@@ -174,6 +177,8 @@ public final class BenchmarkWorker {
                                     } catch (Exception e) {
                                         log.warn("Failed to stop driver process", e);
                                     }
+                                    // Publishes the last OTLP step
+                                    registry.close();
                                 },
                                 "benchmark-worker-shutdown"));
         Thread.currentThread().join();

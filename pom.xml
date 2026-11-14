@@ -37,6 +37,7 @@
     <modules>
         <module>benchmark-framework</module>
         <module>driver-api</module>
+        <module>metrics-otlp</module>
         <module>package</module>
         <module>tool</module>
     </modules>

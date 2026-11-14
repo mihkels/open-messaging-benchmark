@@ -34,6 +34,7 @@ jobs:
             framework:
               - 'benchmark-framework/**'
               - 'driver-api/**'
+              - 'metrics-otlp/**'
               - 'performance-harness/**'
               - 'bin/framework-performance'
               - 'pom.xml'

@@ -102,7 +102,7 @@
         <pitest.threads>4</pitest.threads>
         <micrometer.version>1.17.2</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
-        <zstd.version>1.5.7-25</zstd.version>
+        <zstd.version>1.5.7-26</zstd.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
         <argLine/>
         <!--

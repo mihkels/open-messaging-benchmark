@@ -38,6 +38,7 @@ bin/benchmark [options] <workload.yaml>...
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                                                        |
 | `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                                                                |
 | `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                                                              |
+| `--retries`             | Count                 | Rerun a combination up to this many times after a worker, IO, timeout or stall failure; default `3` (up to 4 attempts), `0` disables. See [Behavior](#behavior)                                  |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                                                                 |
 | `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                                                              |
 | `-h`, `--help`          |                       | Print usage and exit                                                                                                                                                                             |
@@ -69,8 +70,19 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   combination or required cleanup fails; results from successful combinations remain available.
   A completed run that fails a workload threshold exits with status `2`, distinct from a run or
   configuration error. See [CI gating](../guides/ci-gating.md).
+- **Retries.** A combination that fails with a worker, IO, HTTP timeout, connection, stall or
+  health-watchdog failure is rerun from the start, up to `--retries` more times: the coordinator
+  stops every worker, initializes the driver again and logs
+  `Retrying the workload '<name>' for driver '<config>', attempt <n> of <N>, after: <reason>`.
+  Results come only from the attempt that succeeds; its file records `attempts` and the reason of
+  each earlier failure in `failedAttempts` (see [Results schema](results-schema.md#retries)). A
+  failed attempt's failure is not reported again once a later attempt succeeds. Configuration
+  errors (invalid driver YAML, a workload the driver rejects) and JVM errors fail at once, and a run
+  that already produced its measurement is not rerun when only its cleanup fails. When every attempt
+  fails, the coordinator continues with the next combination if the workers stopped cleanly.
+  Treat a retried result as a warning rather than a clean pass.
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
-  workload files, no `--drivers`, `--expected-workers` below 2, or a workload that fails
+  workload files, no `--drivers`, `--expected-workers` below 2, negative `--retries`, or a workload that fails
   validation (pool size, size distribution, backlog settings) print a message and exit with a
   non-zero status before any broker resources are created. Payload file errors (missing file, length mismatch) are detected only after topics,
   producers and consumers have been created. `--help` prints usage and exits successfully.

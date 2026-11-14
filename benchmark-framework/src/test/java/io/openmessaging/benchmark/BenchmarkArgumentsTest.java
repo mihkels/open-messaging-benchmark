@@ -54,4 +54,14 @@ class BenchmarkArgumentsTest {
         arguments.expectedWorkers = 1;
         assertThat(Benchmark.usageError(arguments)).startsWith("--expected-workers must be at least 2");
     }
+
+    @Test
+    void rejectsNegativeRetries() {
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        arguments.workloads = List.of("w1.yaml");
+        arguments.drivers = List.of("a.yaml");
+        assertThat(arguments.retries).isEqualTo(3);
+        arguments.retries = -1;
+        assertThat(Benchmark.usageError(arguments)).isEqualTo("--retries must be 0 or more");
+    }
 }

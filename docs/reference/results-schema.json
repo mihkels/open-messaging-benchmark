@@ -204,6 +204,18 @@
       "type": "number",
       "exclusiveMinimum": 0
     },
+    "attempts": {
+      "description": "Attempts the run took with --retries; the last one produced this result.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "failedAttempts": {
+      "description": "Reason each failed attempt was retried, oldest first. Absent when the first attempt succeeded.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "publishRate": {
       "$ref": "#/$defs/numberSeries"
     },

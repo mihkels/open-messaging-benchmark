@@ -142,6 +142,10 @@ kubectl exec -it deploy/omb-open-messaging-benchmark-chart-coordinator -- bash
 benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"
 ```
 
+In `job` mode the Job keeps `coordinator.job.backoffLimit` at `0`. Leave it there: the coordinator
+already reruns a failed workload up to `--retries` times (default `3`), and a Job retry on top would
+rerun the whole benchmark for each failed pod, multiplying the attempts.
+
 Copy the result with `kubectl cp <coordinator-pod>:/results/result.json .` while the pod runs, and
 remove everything with `helm uninstall omb`.
 

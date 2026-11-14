@@ -56,6 +56,14 @@ public class TestResult {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable Map<String, String> histograms;
 
+    /** How many attempts the run took, the last one being this result; absent in older files. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable Integer attempts;
+
+    /** The reason each failed attempt before this result was retried, oldest first. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<String> failedAttempts = new ArrayList<>();
+
     public @Nullable String workload;
     public @Nullable String driver;
     public long messageSize;

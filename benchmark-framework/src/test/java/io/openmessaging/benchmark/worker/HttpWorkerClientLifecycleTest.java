@@ -181,6 +181,31 @@ class HttpWorkerClientLifecycleTest {
     }
 
     @Test
+    void isReusableOnlyAfterASuccessfulStopAll() throws Exception {
+        Worker worker = mock(Worker.class);
+        doThrow(new IllegalStateException("stop failed")).doNothing().when(worker).stopAll();
+        try (WorkerHandler handler = new WorkerHandler(worker)) {
+            Javalin app =
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
+            try {
+                app.start("127.0.0.1", 0);
+                try (HttpWorkerClient remote = new HttpWorkerClient("http://127.0.0.1:" + app.port())) {
+                    assertThat(remote.canReuseAfterFailure()).isFalse();
+                    assertThatThrownBy(remote::stopAll).hasMessageContaining("stop failed");
+                    assertThat(remote.canReuseAfterFailure()).isFalse();
+                    remote.stopAll();
+                    assertThat(remote.canReuseAfterFailure()).isTrue();
+                }
+            } finally {
+                app.stop();
+            }
+        }
+    }
+
+    @Test
     void includesSuppressedCleanupFailuresInHttpErrors() throws Exception {
         Worker worker = mock(Worker.class);
         IllegalStateException failure = new IllegalStateException("primary close failure");

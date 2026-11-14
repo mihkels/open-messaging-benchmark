@@ -61,6 +61,13 @@ the overall `status` (`PASS` or `FAIL`) and one entry per configured check with 
 `observed` value and individual `status`. The latency check uses aggregated publish p99 in
 milliseconds; the throughput ratio is measured average publish rate divided by target rate.
 
+## Retries
+
+`attempts` is how many attempts the run took with [`--retries`](cli.md); the last one produced the
+file. `failedAttempts` lists why each earlier attempt failed, oldest first, and is omitted when the
+first attempt succeeded. Files written before retries existed have neither field. Treat a retried run
+as a warning: its numbers are valid, but the system under test or a worker failed at least once.
+
 ## Consumer pause
 
 `consumerPause` is present when the workload has a [`consumerPause`](../guides/workloads.md#consumer-pause)

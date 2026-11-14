@@ -28,6 +28,7 @@ import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.WorkerWatchdog;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,17 +38,25 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -140,6 +149,13 @@ public final class Benchmark {
                 names = "--report-html",
                 description = "Also write an HTML report with charts of all runs to this file")
         public @Nullable String reportHtml;
+
+        @Parameter(
+                names = "--retries",
+                description =
+                        "Rerun a driver and workload combination up to this many times after a worker,"
+                                + " IO or timeout failure; 0 disables retries")
+        public int retries = 3;
     }
 
     // Accepts 30s, 5m, 1h30m and the like
@@ -238,6 +254,9 @@ public final class Benchmark {
         }
         if (arguments.expectedWorkers < 2) {
             return "--expected-workers must be at least 2, the minimum for a distributed run";
+        }
+        if (arguments.retries < 0) {
+            return "--retries must be 0 or more";
         }
         return null;
     }
@@ -347,14 +366,7 @@ public final class Benchmark {
                     log.error("Skipping remaining workloads because worker cleanup failed");
                     break;
                 }
-                Outcome outcome =
-                        runOne(
-                                combination,
-                                arguments.output,
-                                arguments.includeHistograms,
-                                worker,
-                                generatorFactory,
-                                written);
+                Outcome outcome = runWithRetries(combination, arguments, worker, generatorFactory, written);
                 failures = append(failures, outcome.failure());
                 thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
@@ -388,10 +400,10 @@ public final class Benchmark {
     private static Outcome stopPreviousWorkload(Worker worker) {
         try {
             worker.stopAll();
-            return new Outcome(null, true, false);
+            return new Outcome(null, true, false, false);
         } catch (Throwable e) {
             log.error("Failed to stop a previous workload", e);
-            return new Outcome(e, canContinueAfterFailure(worker, null, e), false);
+            return new Outcome(e, canContinueAfterFailure(worker, null, e), false, false);
         }
     }
 
@@ -421,9 +433,13 @@ public final class Benchmark {
      * @param failure the run or cleanup failure, or {@code null}
      * @param safeToContinue whether the worker can run the next combination
      * @param thresholdFailed whether the run completed but failed an SLO threshold
+     * @param retryable whether rerunning the combination from the start could fix the failure
      */
     private record Outcome(
-            @Nullable Throwable failure, boolean safeToContinue, boolean thresholdFailed) {}
+            @Nullable Throwable failure,
+            boolean safeToContinue,
+            boolean thresholdFailed,
+            boolean retryable) {}
 
     // Workloads in name order, each with every driver in the order given
     private static List<Combination> combinations(
@@ -435,7 +451,95 @@ public final class Benchmark {
         return combinations;
     }
 
-    // Runs one combination and always stops the worker afterwards, so the next one starts clean
+    // Runs a combination, rerunning it from the start after a failure a retry can fix. Failures of
+    // attempts that a later attempt made up for are recorded in the result, not rethrown.
+    private static Outcome runWithRetries(
+            Combination combination,
+            Arguments arguments,
+            Worker worker,
+            GeneratorFactory generatorFactory,
+            Map<String, TestResult> written) {
+        List<String> failedAttempts = new ArrayList<>();
+        Throwable failures = null;
+        while (true) {
+            Outcome outcome =
+                    runOne(
+                            combination,
+                            arguments.output,
+                            arguments.includeHistograms,
+                            worker,
+                            generatorFactory,
+                            written,
+                            failedAttempts);
+            Throwable failure = outcome.failure();
+            if (failure == null) {
+                return outcome;
+            }
+            failures = append(failures, failure);
+            failedAttempts.add(reason(failure));
+            boolean safe = outcome.safeToContinue();
+            if (outcome.retryable() && failedAttempts.size() <= arguments.retries && !safe) {
+                // Cleanup failed; a worker that stops cleanly now is back in a known state
+                Outcome reset = stopPreviousWorkload(worker);
+                safe = reset.safeToContinue();
+                if (!safe) {
+                    failures = append(failures, reset.failure());
+                }
+            }
+            if (!outcome.retryable() || failedAttempts.size() > arguments.retries || !safe) {
+                return new Outcome(failures, safe, outcome.thresholdFailed(), false);
+            }
+            log.warn(
+                    "Retrying the workload '{}' for driver '{}', attempt {} of {}, after: {}",
+                    combination.workload().name,
+                    combination.driverConfig(),
+                    failedAttempts.size() + 1,
+                    arguments.retries + 1,
+                    failedAttempts.getLast());
+        }
+    }
+
+    // Worker, IO, timeout, stall and unhealthy-worker (WorkerUnhealthyException) failures can pass
+    // on a rerun. Configuration errors (invalid YAML,
+    // a workload the driver rejects) and Errors fail the same way every time.
+    static boolean isRetryable(Throwable failure) {
+        if (!(failure instanceof IllegalStateException
+                || failure instanceof IOException
+                || failure instanceof UncheckedIOException
+                || failure instanceof TimeoutException)) {
+            return false;
+        }
+        Deque<Throwable> pending = new ArrayDeque<>(List.of(failure));
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (!pending.isEmpty()) {
+            Throwable next = pending.pop();
+            if (!seen.add(next)) {
+                continue;
+            }
+            if (next instanceof Error
+                    || next instanceof IllegalArgumentException
+                    || next instanceof JacksonException) {
+                return false;
+            }
+            if (next.getCause() != null) {
+                pending.push(next.getCause());
+            }
+            pending.addAll(Arrays.asList(next.getSuppressed()));
+        }
+        return true;
+    }
+
+    // The failure and, when it wraps another, its root cause, for the result file
+    static String reason(Throwable failure) {
+        Throwable root = failure;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root == failure ? failure.toString() : failure + ", caused by " + root;
+    }
+
+    // Runs one attempt of a combination and always stops the worker afterwards, so the next one
+    // starts clean
     @SuppressWarnings("java:S1181")
     private static Outcome runOne(
             Combination combination,
@@ -443,12 +547,17 @@ public final class Benchmark {
             boolean includeHistograms,
             Worker worker,
             GeneratorFactory generatorFactory,
-            Map<String, TestResult> written) {
+            Map<String, TestResult> written,
+            List<String> failedAttempts) {
         Workload workload = combination.workload();
         WorkloadRun generator = null;
         Throwable failure = null;
         boolean safeToContinue = true;
         boolean thresholdFailed = false;
+        // A rerun would throw away a completed measurement, and a still-running controller could
+        // interfere with it
+        boolean measured = false;
+        boolean quiescent = true;
         try {
             Map<String, Object> driverConfig =
                     driverConfigReader.readValue(new File(combination.driverConfig()));
@@ -473,7 +582,10 @@ public final class Benchmark {
             generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
             generator.includeHistograms(includeHistograms);
             TestResult result = runWatched(generator, worker);
+            measured = true;
             result.schemaVersion = 2;
+            result.attempts = failedAttempts.size() + 1;
+            result.failedAttempts = List.copyOf(failedAttempts);
             result.metadata =
                     ResultMetadata.create(
                             runId,
@@ -508,9 +620,11 @@ public final class Benchmark {
             } catch (Throwable e) {
                 failure = append(failure, e);
                 safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
+                quiescent = generator == null || isQuiescent(generator);
             }
         }
-        if (Thread.currentThread().isInterrupted()) {
+        boolean interrupted = Thread.currentThread().isInterrupted();
+        if (interrupted) {
             safeToContinue = false;
         }
         if (failure != null) {
@@ -523,7 +637,9 @@ public final class Benchmark {
         MDC.remove(MDC_RUN_ID);
         MDC.remove(MDC_WORKLOAD);
         MDC.remove(MDC_DRIVER);
-        return new Outcome(failure, safeToContinue, thresholdFailed);
+        boolean retryable =
+                failure != null && !measured && quiescent && !interrupted && isRetryable(failure);
+        return new Outcome(failure, safeToContinue, thresholdFailed, retryable);
     }
 
     // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
@@ -571,6 +687,15 @@ public final class Benchmark {
                     && (generator == null || generator.isQuiescentAfterClose());
         } catch (Throwable checkFailure) {
             append(failure, checkFailure);
+            return false;
+        }
+    }
+
+    @SuppressWarnings("java:S1181")
+    private static boolean isQuiescent(WorkloadRun generator) {
+        try {
+            return generator.isQuiescentAfterClose();
+        } catch (Throwable e) {
             return false;
         }
     }

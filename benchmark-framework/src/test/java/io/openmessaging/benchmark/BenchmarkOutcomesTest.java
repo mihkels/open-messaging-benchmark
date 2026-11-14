@@ -19,11 +19,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.WorkerUnhealthyException;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -35,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -256,6 +259,164 @@ class BenchmarkOutcomesTest {
     }
 
     @Test
+    void retriesATransientFailureAndRecordsTheFailedAttempt() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 3;
+        Worker worker = mock(Worker.class);
+        WorkloadRun timedOut = mock(WorkloadRun.class);
+        WorkloadRun success = mock(WorkloadRun.class);
+        when(timedOut.run())
+                .thenThrow(
+                        new IllegalStateException(
+                                "HTTP post http://w1/create-producers timed out after 200 ms",
+                                new TimeoutException("Request timeout")));
+        when(success.run()).thenReturn(result("retried"));
+        List<WorkloadRun> attempts = new ArrayList<>(List.of(timedOut, success));
+
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("retried", workload("retried")),
+                                worker,
+                                (d, w, ignored) -> attempts.removeFirst()))
+                .isTrue();
+        JsonNode json = new ObjectMapper().readTree(Path.of(arguments.output).toFile());
+        assertThat(json.get("attempts").asInt()).isEqualTo(2);
+        assertThat(json.get("failedAttempts")).hasSize(1);
+        assertThat(json.get("failedAttempts").get(0).asString())
+                .contains("timed out after 200 ms", "caused by java.util.concurrent.TimeoutException");
+        verify(worker, times(2)).initializeDriver(any());
+        verify(timedOut).close();
+        verify(success).close();
+        verify(worker).close();
+    }
+
+    @Test
+    void givesUpAfterTheRetryLimitAndRunsTheNextWorkload() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 2;
+        Worker worker = mock(Worker.class);
+        WorkloadRun flaky = mock(WorkloadRun.class);
+        WorkloadRun next = mock(WorkloadRun.class);
+        when(flaky.run())
+                .thenThrow(
+                        new IOException("attempt 1"),
+                        new IOException("attempt 2"),
+                        new IOException("attempt 3"));
+        when(next.run()).thenReturn(result("next"));
+        Map<String, Workload> workloads = new LinkedHashMap<>();
+        workloads.put("flaky", workload("flaky"));
+        workloads.put("next", workload("next"));
+
+        Throwable failure =
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                workloads,
+                                worker,
+                                (d, workload, ignored) -> workload.name.equals("flaky") ? flaky : next));
+        assertThat(messages(failure)).contains("attempt 1", "attempt 2", "attempt 3");
+        JsonNode json = new ObjectMapper().readTree(Path.of(arguments.output).toFile());
+        assertThat(json.get("workload").asString()).isEqualTo("next");
+        assertThat(json.get("attempts").asInt()).isEqualTo(1);
+        assertThat(json.has("failedAttempts")).isFalse();
+        verify(flaky, times(3)).run();
+        verify(worker, times(4)).initializeDriver(any());
+        verify(worker).close();
+    }
+
+    @Test
+    void retriesAfterAFailedCleanupWhenTheWorkerStopsCleanly() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 1;
+        Worker worker = mock(Worker.class);
+        // Unknown state after the failed stop, then known after the coordinator's own stopAll
+        when(worker.canReuseAfterFailure()).thenReturn(false, true);
+        WorkloadRun stalled = mock(WorkloadRun.class);
+        WorkloadRun success = mock(WorkloadRun.class);
+        when(stalled.run()).thenThrow(new IllegalStateException("workload stalled"));
+        when(stalled.isQuiescentAfterClose()).thenReturn(true);
+        doThrow(new IllegalStateException("stop timed out")).when(stalled).close();
+        when(success.run()).thenReturn(result("recovered"));
+        List<WorkloadRun> attempts = new ArrayList<>(List.of(stalled, success));
+
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("recovered", workload("recovered")),
+                                worker,
+                                (d, w, ignored) -> attempts.removeFirst()))
+                .isTrue();
+        assertThat(Files.readString(Path.of(arguments.output)))
+                .contains("recovered", "workload stalled");
+        verify(worker, times(2)).stopAll();
+        verify(worker, times(2)).initializeDriver(any());
+    }
+
+    @Test
+    void doesNotRetryAWorkloadTheDriverRejects() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 3;
+        Worker worker = mock(Worker.class);
+        WorkloadRun generator = mock(WorkloadRun.class);
+        when(generator.run()).thenThrow(new IllegalArgumentException("invalid workload"));
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("first", workload("first")),
+                                worker,
+                                (d, w, ignored) -> generator))
+                .hasRootCauseMessage("invalid workload");
+        verify(worker, times(1)).initializeDriver(any());
+    }
+
+    @Test
+    void doesNotRetryAnInvalidDriverConfiguration() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 3;
+        Files.writeString(Path.of(arguments.drivers.getFirst()), "driverClass: fixture.Driver\n");
+        Worker worker = mock(Worker.class);
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments, Map.of("first", workload("first")), worker, (d, w, ignored) -> null))
+                .hasRootCauseMessage(
+                        "Driver configuration " + arguments.drivers.getFirst() + " must specify a name");
+        verify(worker, never()).initializeDriver(any());
+    }
+
+    @Test
+    void doesNotRetryWithRetriesZero() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Worker worker = mock(Worker.class);
+        WorkloadRun generator = mock(WorkloadRun.class);
+        when(generator.run()).thenThrow(new IOException("transient"));
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("first", workload("first")),
+                                worker,
+                                (d, w, ignored) -> generator))
+                .hasRootCauseMessage("transient");
+        verify(worker, times(1)).initializeDriver(any());
+    }
+
+    @Test
+    void retriesOnlyFailuresARerunCanFix() {
+        assertThat(Benchmark.isRetryable(new IOException("connection refused"))).isTrue();
+        assertThat(Benchmark.isRetryable(new IllegalStateException("stalled"))).isTrue();
+        assertThat(Benchmark.isRetryable(new WorkerUnhealthyException("w1", "driver FAILED"))).isTrue();
+        assertThat(Benchmark.isRetryable(new IllegalArgumentException("bad workload"))).isFalse();
+        assertThat(Benchmark.isRetryable(new NullPointerException())).isFalse();
+        assertThat(Benchmark.isRetryable(new IllegalStateException(new OutOfMemoryError()))).isFalse();
+        IOException withConfigError = new IOException("worker call failed");
+        withConfigError.addSuppressed(new IllegalArgumentException("bad config"));
+        assertThat(Benchmark.isRetryable(withConfigError)).isFalse();
+    }
+
+    @Test
     void processExitStatusReflectsWorkloadOutcome() throws Exception {
         Benchmark.Arguments arguments = arguments();
         Path driver = Path.of(arguments.drivers.getFirst());
@@ -404,6 +565,8 @@ class BenchmarkOutcomesTest {
         Benchmark.Arguments arguments = new Benchmark.Arguments();
         arguments.drivers = List.of(config.toString());
         arguments.output = directory.resolve("result.json").toString();
+        // Tests above check a single attempt, the behaviour of --retries 0
+        arguments.retries = 0;
         return arguments;
     }
 

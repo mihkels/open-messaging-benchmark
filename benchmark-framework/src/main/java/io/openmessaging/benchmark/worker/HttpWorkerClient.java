@@ -86,6 +86,7 @@ public final class HttpWorkerClient implements Worker {
     private final long closeTimeoutNanos;
     private final Duration requestTimeout;
     private final Duration stopTimeout;
+    private volatile boolean lastStopSucceeded;
 
     /**
      * Creates a client that sends no bearer token.
@@ -275,6 +276,7 @@ public final class HttpWorkerClient implements Worker {
 
     @Override
     public void stopAll() {
+        lastStopSucceeded = false;
         await(
                 "post",
                 STOP_ALL,
@@ -285,6 +287,13 @@ public final class HttpWorkerClient implements Worker {
                         .execute()
                         .toCompletableFuture()
                         .thenAccept(response -> checkResponse("post", STOP_ALL, response)));
+        lastStopSucceeded = true;
+    }
+
+    // A worker that confirmed stopAll has no driver or workload left over from a failed run
+    @Override
+    public boolean canReuseAfterFailure() {
+        return lastStopSucceeded;
     }
 
     @Override

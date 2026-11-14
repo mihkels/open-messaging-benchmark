@@ -78,15 +78,11 @@ Image reference: digest wins, otherwise <tag or appVersion>[-<variant>].
 {{- end -}}
 
 {{/*
-Comma-separated worker URLs, resolved through the headless Service in the release namespace.
+Worker address the coordinator resolves to one URL per ready pod behind the headless Service.
 */}}
 {{- define "omb.workers" -}}
 {{- $worker := include "omb.workerName" . -}}
-{{- $urls := list -}}
-{{- range $index := until (int .Values.workers.replicas) -}}
-{{- $urls = append $urls (printf "http://%s-%d.%s.%s.svc:8080" $worker $index $worker $.Release.Namespace) -}}
-{{- end -}}
-{{- join "," $urls -}}
+{{- printf "dns://%s.%s.svc:8080" $worker .Release.Namespace -}}
 {{- end -}}
 
 {{/*
@@ -162,39 +158,4 @@ file system, the configuration ConfigMap and user volumes.
 {{- with .Values.extraVolumeMounts }}
 {{ toYaml . }}
 {{- end }}
-{{- end -}}
-
-{{/*
-Init container that waits until every worker accepts connections, so the coordinator does not
-start a run against workers that are still starting.
-*/}}
-{{- define "omb.waitForWorkers" -}}
-- name: wait-for-workers
-  image: {{ include "omb.image" . }}
-  imagePullPolicy: {{ .Values.image.pullPolicy }}
-  securityContext:
-    {{- toYaml .Values.securityContext | nindent 4 }}
-  env:
-    - name: WORKERS
-      value: {{ include "omb.workers" . | quote }}
-  command: ["bash", "-c"]
-  args:
-    - |
-      set -eu
-      for url in ${WORKERS//,/ }; do
-        hostport=${url#http://}
-        host=${hostport%:*}
-        port=${hostport##*:}
-        until (exec 3<>"/dev/tcp/$host/$port") 2>/dev/null; do
-          echo "waiting for $host:$port"
-          sleep 2
-        done
-        echo "$host:$port is up"
-      done
-  resources:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      memory: 64Mi
 {{- end -}}

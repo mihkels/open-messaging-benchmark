@@ -37,8 +37,6 @@ spec:
   {{- end }}
   securityContext:
     {{- toYaml .Values.podSecurityContext | nindent 4 }}
-  initContainers:
-    {{- include "omb.waitForWorkers" . | nindent 4 }}
   containers:
     - name: coordinator
       image: {{ include "omb.image" . }}
@@ -48,6 +46,8 @@ spec:
       env:
         - name: WORKERS
           value: {{ include "omb.workers" . | quote }}
+        - name: EXPECTED_WORKERS
+          value: {{ .Values.workers.replicas | quote }}
         - name: DRIVER
           value: {{ include "omb.driverPath" . | quote }}
         - name: WORKLOAD
@@ -65,7 +65,7 @@ spec:
       args:
         - |
           set -euo pipefail
-          benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$@" "$WORKLOAD"
+          benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$@" "$WORKLOAD"
           echo "----- OMB RESULT BEGIN -----"
           cat /results/result.json
           echo
@@ -78,7 +78,7 @@ spec:
       args:
         - |
           echo "Start a run with:"
-          echo '  benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"'
+          echo '  benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"'
           exec sleep infinity
       {{- end }}
       resources:

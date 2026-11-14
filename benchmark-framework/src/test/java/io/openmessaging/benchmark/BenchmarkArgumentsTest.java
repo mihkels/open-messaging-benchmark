@@ -45,4 +45,13 @@ class BenchmarkArgumentsTest {
         assertThat(Benchmark.usageError(arguments))
                 .isEqualTo("At least one driver must be given with --drivers");
     }
+
+    @Test
+    void requiresAtLeastTwoExpectedWorkers() {
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        arguments.workloads = List.of("w1.yaml");
+        arguments.drivers = List.of("a.yaml");
+        arguments.expectedWorkers = 1;
+        assertThat(Benchmark.usageError(arguments)).startsWith("--expected-workers must be at least 2");
+    }
 }

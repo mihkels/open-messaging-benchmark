@@ -24,11 +24,14 @@ The default image is `docker.io/mihkels/open-messaging-benchmark:<chart appVersi
 `image.variant=kafka` for the single-driver image, or `image.repository`, `image.tag` or
 `image.digest` for your own build.
 
+The coordinator gets `WORKERS=dns://<fullname>-worker.<namespace>.svc:8080` and resolves it to the
+ready worker pods, waiting for `EXPECTED_WORKERS` (`workers.replicas`) of them.
+
 Then start a run from the coordinator:
 
 ```bash
 kubectl exec -it deploy/omb-open-messaging-benchmark-chart-coordinator -- bash
-benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
+benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"
 ```
 
 Or set `coordinator.mode=job` with `--set-file workloadConfig=my-workload.yaml`; the Job prints the

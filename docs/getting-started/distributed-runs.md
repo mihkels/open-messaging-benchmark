@@ -93,6 +93,18 @@ bin/benchmark --drivers driver-kafka/kafka-latency.yaml --workers-file workers.y
 `--workers` and `--workers-file` cannot be combined. If neither is given and a `workers.yaml` file
 exists in the current directory, it is used automatically; otherwise the run is local.
 
+When the workers share a DNS name with one record per worker, such as a Kubernetes headless
+Service, pass that name instead of a list and the coordinator resolves it:
+
+```bash
+bin/benchmark --drivers driver-kafka/kafka-latency.yaml \
+  --workers dns://omb-worker.benchmark.svc:8080 --expected-workers 4 \
+  workloads/1-topic-16-partitions-1kb.yaml
+```
+
+It waits up to `--workers-timeout` (default `5m`) for four addresses. See
+[DNS discovery](../reference/cli.md#behavior).
+
 The coordinator itself generates no load, so it can run on a small host, but it must reach every
 worker on its HTTP port. Workers must reach the brokers.
 

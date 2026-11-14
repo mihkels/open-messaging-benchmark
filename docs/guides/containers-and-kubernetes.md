@@ -129,12 +129,17 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                    |
 | `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                   |
 
-In interactive mode, open a shell in the coordinator and start a run; `DRIVER`, `WORKLOAD` and
-`WORKERS` are set:
+The coordinator finds the workers through the headless Service: `WORKERS` is
+`dns://<fullname>-worker.<namespace>.svc:8080`, which `benchmark` resolves to one URL per ready
+worker pod, waiting up to `--workers-timeout` (default `5m`) until `EXPECTED_WORKERS`
+(`workers.replicas`) have resolved. Changing `workers.replicas` needs no other setting.
+
+In interactive mode, open a shell in the coordinator and start a run; `DRIVER`, `WORKLOAD`,
+`WORKERS` and `EXPECTED_WORKERS` are set:
 
 ```bash
 kubectl exec -it deploy/omb-open-messaging-benchmark-chart-coordinator -- bash
-benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
+benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"
 ```
 
 Copy the result with `kubectl cp <coordinator-pod>:/results/result.json .` while the pod runs, and

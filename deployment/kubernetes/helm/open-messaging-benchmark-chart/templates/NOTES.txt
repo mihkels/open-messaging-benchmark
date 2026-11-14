@@ -10,7 +10,7 @@ Follow it and read the result JSON between the OMB RESULT markers:
 Open a shell in the coordinator and start a run:
 
   kubectl exec --namespace {{ .Release.Namespace }} -it deploy/{{ include "omb.coordinatorName" . }} -- bash
-  benchmark --drivers "$DRIVER" --workers "$WORKERS" -o /results/result.json "$WORKLOAD"
+  benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$WORKLOAD"
 
 Copy the result out while the pod runs:
 

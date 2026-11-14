@@ -72,6 +72,8 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class LocalWorker implements Worker {
 
+    static final String ID = "local";
+
     private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration DEFAULT_RESOURCE_CLOSE_TIMEOUT = Duration.ofSeconds(45);
     private static final Duration DEFAULT_PROBE_TIMEOUT = Duration.ofSeconds(60);
@@ -557,7 +559,7 @@ public final class LocalWorker implements Worker {
 
     @Override
     public String id() {
-        return "local";
+        return ID;
     }
 
     @Override

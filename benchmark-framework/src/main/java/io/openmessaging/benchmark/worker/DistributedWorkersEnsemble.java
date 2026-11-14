@@ -203,7 +203,8 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public PeriodStats getPeriodStats() {
-        return PeriodStats.aggregate(mapAll(workers, Worker::getPeriodStats));
+        return PeriodStats.aggregate(
+                mapAll(workers, worker -> worker.getPeriodStats().withWorkerId(worker.id())));
     }
 
     @Override

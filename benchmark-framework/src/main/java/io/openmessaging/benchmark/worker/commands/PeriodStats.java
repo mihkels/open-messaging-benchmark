@@ -13,8 +13,11 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.HdrHistogram.Histogram;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +34,10 @@ public record PeriodStats(
         @JsonProperty("publishLatency") Histogram publishLatency,
         @JsonProperty("publishDelayLatency") Histogram publishDelayLatency,
         @JsonProperty("endToEndLatency") Histogram endToEndLatency,
-        @JsonProperty("publishScheduleLatency") Histogram publishScheduleLatency) {
+        @JsonProperty("publishScheduleLatency") Histogram publishScheduleLatency,
+        // Last send failure per worker id; omitted when empty so older readers see the old shape
+        @JsonProperty("sendErrorReasons") @JsonInclude(JsonInclude.Include.NON_EMPTY)
+                Map<String, String> sendErrorReasons) {
 
     // Defensive copy constructor
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -47,7 +53,8 @@ public record PeriodStats(
             @Nullable Histogram publishLatency,
             @Nullable Histogram publishDelayLatency,
             @Nullable Histogram endToEndLatency,
-            @Nullable Histogram publishScheduleLatency) {
+            @Nullable Histogram publishScheduleLatency,
+            @Nullable Map<String, String> sendErrorReasons) {
         this.messagesSent = messagesSent;
         this.messageSendErrors = messageSendErrors;
         this.bytesSent = bytesSent;
@@ -62,6 +69,37 @@ public record PeriodStats(
         this.endToEndLatency = endToEndLatency != null ? endToEndLatency.copy() : new Histogram(5);
         this.publishScheduleLatency =
                 publishScheduleLatency != null ? publishScheduleLatency.copy() : new Histogram(5);
+        this.sendErrorReasons = sendErrorReasons != null ? Map.copyOf(sendErrorReasons) : Map.of();
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PeriodStats(
+            long messagesSent,
+            long messageSendErrors,
+            long bytesSent,
+            long messagesReceived,
+            long bytesReceived,
+            long totalMessagesSent,
+            long totalMessageSendErrors,
+            long totalMessagesReceived,
+            @Nullable Histogram publishLatency,
+            @Nullable Histogram publishDelayLatency,
+            @Nullable Histogram endToEndLatency,
+            @Nullable Histogram publishScheduleLatency) {
+        this(
+                messagesSent,
+                messageSendErrors,
+                bytesSent,
+                messagesReceived,
+                bytesReceived,
+                totalMessagesSent,
+                totalMessageSendErrors,
+                totalMessagesReceived,
+                publishLatency,
+                publishDelayLatency,
+                endToEndLatency,
+                publishScheduleLatency,
+                null);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -117,6 +155,27 @@ public record PeriodStats(
         return endToEndLatency.copy();
     }
 
+    /** Returns a copy whose send error reasons are all tagged with the given worker id. */
+    public PeriodStats withWorkerId(String workerId) {
+        if (sendErrorReasons.isEmpty()) {
+            return this;
+        }
+        return new PeriodStats(
+                messagesSent,
+                messageSendErrors,
+                bytesSent,
+                messagesReceived,
+                bytesReceived,
+                totalMessagesSent,
+                totalMessageSendErrors,
+                totalMessagesReceived,
+                publishLatency,
+                publishDelayLatency,
+                endToEndLatency,
+                publishScheduleLatency,
+                Map.of(workerId, String.join("; ", sendErrorReasons.values())));
+    }
+
     /**
      * Combines this PeriodStats with another, returning a new record with the summed values.
      *
@@ -136,7 +195,8 @@ public record PeriodStats(
                 combine(this.publishLatency, other.publishLatency),
                 combine(this.publishDelayLatency, other.publishDelayLatency),
                 combine(this.endToEndLatency, other.endToEndLatency),
-                combine(this.publishScheduleLatency, other.publishScheduleLatency));
+                combine(this.publishScheduleLatency, other.publishScheduleLatency),
+                merge(List.of(this, other)));
     }
 
     private static Histogram combine(Histogram first, Histogram second) {
@@ -144,6 +204,12 @@ public record PeriodStats(
         combined.add(first);
         combined.add(second);
         return combined;
+    }
+
+    private static Map<String, String> merge(List<PeriodStats> snapshots) {
+        Map<String, String> reasons = new HashMap<>();
+        snapshots.forEach(snapshot -> reasons.putAll(snapshot.sendErrorReasons));
+        return reasons;
     }
 
     /** Combines immutable snapshots without allocating intermediate combined snapshots. */
@@ -189,6 +255,7 @@ public record PeriodStats(
                 publish,
                 delay,
                 endToEnd,
-                schedule);
+                schedule,
+                merge(snapshots));
     }
 }

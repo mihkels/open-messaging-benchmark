@@ -217,7 +217,9 @@ reporting success:
   acknowledgement does not necessarily mean durable storage. For example, Pravega transactional
   sends complete before the transaction commits; see [Pravega semantics](../drivers/pravega.md#semantics).
 - Complete the future exceptionally when a send fails. The benchmark counts it as a publish error and
-  logs `Write error on message`. An exception thrown directly from `sendAsync`, or a `null` return, is
+  logs `Write error on message`. The worker keeps the last failure (exception class and message) and
+  reports it in `/period-stats` as `sendErrorReasons`, keyed by worker; the coordinator logs
+  `Worker <id> send error: <reason>` once for each new reason. An exception thrown directly from `sendAsync`, or a `null` return, is
   recorded as a task failure (`Producer or callback task failed`), and the run fails at the next
   statistics poll.
 - `key` is empty when the workload uses `NO_KEY`. Otherwise it is the key that the workload's key

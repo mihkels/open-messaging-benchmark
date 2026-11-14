@@ -87,7 +87,7 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void initializeDriver(Path configurationFile) throws Exception {
-        callAll(
+        callAllLoggingCounters(
                 workers,
                 worker -> {
                     worker.initializeDriver(configurationFile);
@@ -143,9 +143,16 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void stopAll() {
+        // Not callAllLoggingCounters: also runs from the shutdown hook, where polling dead workers only
+        // delays exit.
         try {
-            forAll(workers, Worker::stopAll);
-        } catch (RuntimeException | Error e) {
+            callAll(
+                    workers,
+                    worker -> {
+                        worker.stopAll();
+                        return null;
+                    });
+        } catch (Exception | Error e) {
             throw new IllegalStateException("Failed to stop one or more workers", e);
         }
     }
@@ -218,6 +225,74 @@ public final class DistributedWorkersEnsemble implements Worker {
                 .reduce(new CountersStats(), CountersStats::plus);
     }
 
+    /**
+     * Polls every worker's counters without summing them, so a stalled worker stays visible. Never
+     * throws for a failing worker: its entry carries the failure instead of counters.
+     *
+     * @return one entry per worker, in worker order
+     */
+    public List<WorkerCounters> countersPerWorker() {
+        try {
+            return callAll(workers, this::countersOf);
+        } catch (Exception e) {
+            // Only an interruption gets here, since countersOf catches every worker failure.
+            return List.of();
+        }
+    }
+
+    /**
+     * Logs one line per worker with its role and counters, so the failure log shows every worker side
+     * by side. Never throws.
+     *
+     * @param reason why the breakdown is logged, e.g. the failure or stall it explains
+     */
+    public void logCountersPerWorker(String reason) {
+        if (Thread.currentThread().isInterrupted()) {
+            return;
+        }
+        log.atWarn()
+                .setMessage("{}; counters per worker:\n{}")
+                .addArgument(reason)
+                .addArgument(() -> countersPerWorker().stream().map(c -> "  " + c).collect(joining("\n")))
+                .log();
+    }
+
+    private WorkerCounters countersOf(Worker worker) {
+        String role = producerWorkers.contains(worker) ? "producer" : "consumer";
+        try {
+            return new WorkerCounters(worker.id(), role, worker.getCountersStats(), null);
+        } catch (Exception e) {
+            return new WorkerCounters(worker.id(), role, null, e.toString());
+        }
+    }
+
+    /**
+     * One worker's counters, or the failure that kept them from being read.
+     *
+     * @param workerId the worker's id
+     * @param role {@code producer} or {@code consumer}
+     * @param counters the worker's counters, or {@code null} if polling failed
+     * @param failure why polling failed, or {@code null}
+     */
+    public record WorkerCounters(
+            String workerId, String role, @Nullable CountersStats counters, @Nullable String failure) {
+        @Override
+        public String toString() {
+            if (counters == null) {
+                return workerId + " [" + role + "] counters unavailable: " + failure;
+            }
+            return workerId
+                    + " ["
+                    + role
+                    + "] sent="
+                    + counters.messagesSent()
+                    + " sendErrors="
+                    + counters.messageSendErrors()
+                    + " received="
+                    + counters.messagesReceived();
+        }
+    }
+
     @Override
     public void resetStats() {
         forAll(workers, Worker::resetStats);
@@ -237,7 +312,7 @@ public final class DistributedWorkersEnsemble implements Worker {
         failures.throwIfAny("Failed to close one or more workers");
     }
 
-    private static <T> void forAll(List<T> targets, Consumer<T> action) {
+    private <T> void forAll(List<T> targets, Consumer<T> action) {
         mapAll(
                 targets,
                 target -> {
@@ -246,13 +321,23 @@ public final class DistributedWorkersEnsemble implements Worker {
                 });
     }
 
-    private static <T, R> List<R> mapAll(List<T> targets, Function<T, R> action) {
+    private <T, R> List<R> mapAll(List<T> targets, Function<T, R> action) {
         try {
-            return callAll(targets, action::apply);
+            return callAllLoggingCounters(targets, action::apply);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    private <T, R> List<R> callAllLoggingCounters(List<T> targets, Call<T, R> action)
+            throws Exception {
+        try {
+            return callAll(targets, action);
+        } catch (Exception e) {
+            logCountersPerWorker("Worker call failed: " + e);
+            throw e;
         }
     }
 

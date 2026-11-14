@@ -172,6 +172,10 @@ public final class DistributedWorkersEnsemble implements Worker {
         forAll(workers, worker -> worker.setPhase(phase));
     }
 
+    List<Worker> workers() {
+        return workers;
+    }
+
     public int workerCount() {
         return workers.size();
     }

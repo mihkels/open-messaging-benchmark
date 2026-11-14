@@ -18,6 +18,46 @@ The JSON result describes what the clients observed. To explain a result, and to
 was limited by the load generator instead of the system under test, also watch the workers, the
 brokers and the hosts.
 
+## Worker health
+
+Each worker answers `GET /health` on its HTTP port with the state of its driver process:
+
+```bash
+curl http://worker-1:8080/health
+```
+
+```json
+{ "ready" : true, "driver" : "EXITED", "exitCode" : 137, "lastError" : null }
+```
+
+|    Field    |                                                     Meaning                                                     |
+|-------------|-----------------------------------------------------------------------------------------------------------------|
+| `ready`     | The worker can take a driver; `false`, with status 503, once it is shutting down or failed to clean up a driver |
+| `driver`    | `NOT_STARTED`, `INITIALIZING`, `RUNNING` or `EXITED`                                                            |
+| `exitCode`  | Exit code of a driver process that has exited                                                                   |
+| `lastError` | The last driver failure; only sent with a valid bearer token, since it can name brokers and configuration       |
+
+`/health` needs no token even with `OMB_WORKER_TOKEN` or `--token-file` set, so load balancers and
+Kubernetes probes can use it; without the token it shows only the state and exit code.
+
+### Coordinator watchdog
+
+While a workload runs, the coordinator polls `/health` of every worker every 10 seconds on a
+virtual thread. When a worker's driver is not `RUNNING`, or the worker cannot be reached three polls
+in a row, it logs the counters of every worker and fails the workload with
+`Worker <url> is unhealthy: <reason>`, for example
+`driver process is EXITED with exit code 137`. Set the interval with
+`OMB_WATCHDOG_HEALTH_INTERVAL_SECONDS` or `-Domb.watchdog.healthIntervalSeconds`.
+
+When no report interval is logged for 5 minutes, the coordinator logs its own thread dump with the
+message `No workload progress for <n> s`, and again every 5 minutes while the run stays stuck. The
+`main` thread's stack shows the call the run is waiting on. Set the timeout with
+`OMB_WATCHDOG_PROGRESS_TIMEOUT_SECONDS` or `-Domb.watchdog.progressTimeoutSeconds`. Topic,
+producer and consumer creation and the wait for consumers to be ready log no report intervals, so a
+long one can log a dump without being stuck. Backlog build and drain keep logging report intervals;
+their own stall check (`OMB_STALL_TIMEOUT_SECONDS`, see
+[Troubleshooting](troubleshooting.md)) fails a backlog whose counters stop moving.
+
 ## Worker metrics
 
 Each worker serves Prometheus metrics on its HTTP port:

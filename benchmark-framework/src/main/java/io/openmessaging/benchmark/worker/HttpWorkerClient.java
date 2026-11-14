@@ -40,6 +40,7 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -254,6 +255,17 @@ public final class HttpWorkerClient implements Worker {
      */
     public String getText(String path, Duration timeout) {
         return await("get", path, timeout, fetchText(path, timeout));
+    }
+
+    /**
+     * Fetches the worker's {@code /health}, within {@link #SCRAPE_TIMEOUT}.
+     *
+     * @return the worker's health
+     * @throws IllegalStateException if the worker cannot be reached or is not ready
+     */
+    @Override
+    public WorkerHealth health() {
+        return mapper.readValue(getText(WorkerHandler.HEALTH, SCRAPE_TIMEOUT), WorkerHealth.class);
     }
 
     @Override

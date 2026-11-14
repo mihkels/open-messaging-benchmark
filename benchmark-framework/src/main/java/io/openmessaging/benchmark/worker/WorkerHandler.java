@@ -24,6 +24,7 @@ import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.nio.file.Files;
 import java.util.Collections;
@@ -60,6 +61,8 @@ public class WorkerHandler implements AutoCloseable {
     public static final String CUMULATIVE_LATENCIES = "/cumulative-latencies";
     public static final String COUNTERS_STATS = "/counters-stats";
     public static final String RESET_STATS = "/reset-stats";
+    // Served without the bearer token so probes work; the last error needs the token
+    public static final String HEALTH = "/health";
 
     // Browsers send text/plain, form and multipart POSTs cross-site without a CORS preflight, so
     // accepting only these types stops a web page from driving a worker on localhost or the LAN
@@ -132,6 +135,7 @@ public class WorkerHandler implements AutoCloseable {
         routes.get(CUMULATIVE_LATENCIES, this::handleCumulativeLatencies);
         routes.get(COUNTERS_STATS, this::handleCountersStats);
         routes.post(RESET_STATS, this::handleResetStats);
+        routes.get(HEALTH, this::handleHealth);
     }
 
     @Override
@@ -279,6 +283,17 @@ public class WorkerHandler implements AutoCloseable {
                 stats.messageSendErrors(),
                 stats.messagesReceived());
         ctx.result(writer.writeValueAsString(stats));
+    }
+
+    private void handleHealth(Context ctx) {
+        WorkerHealth health = worker.health();
+        // The error text can name brokers and configuration, so only token holders see it
+        if (auth != null && !auth.matches(ctx.header(BearerTokenAuth.AUTHORIZATION))) {
+            health = health.withoutError();
+        }
+        ctx.status(health.ready() ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE)
+                .contentType(JSON_CONTENT_TYPE)
+                .result(writer.writeValueAsString(health));
     }
 
     private void handleResetStats(Context ctx) {

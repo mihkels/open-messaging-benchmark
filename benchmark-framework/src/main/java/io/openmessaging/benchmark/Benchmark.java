@@ -25,6 +25,7 @@ import io.openmessaging.benchmark.worker.DriverConfiguration;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.WorkerWatchdog;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -471,7 +472,14 @@ public final class Benchmark {
             worker.initializeDriver(Path.of(combination.driverConfig()));
             generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
             generator.includeHistograms(includeHistograms);
-            TestResult result = generator.run();
+            TestResult result;
+            try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
+                try {
+                    result = generator.run();
+                } catch (Exception e) {
+                    throw watchdog.explain(e);
+                }
+            }
             result.schemaVersion = 2;
             result.metadata =
                     ResultMetadata.create(

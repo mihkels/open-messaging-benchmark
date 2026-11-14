@@ -76,11 +76,15 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # /health needs no token; it answers 503 once the worker can no longer take a driver, which
+          # also drops the pod from the headless Service that --expected-workers discovery reads
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
+          # A TCP check: a crashed driver must fail the run, not restart the worker under it
           livenessProbe:
             tcpSocket:
               port: http

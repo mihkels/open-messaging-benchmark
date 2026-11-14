@@ -32,6 +32,7 @@ artifact coordinates and reports conflicts; see [Packaging a plugin](../developm
 | `OMB_PLUGIN_PATH`                    | empty                      | Supervisor                         | Extra plugin locations, separated by `:`                                                                    |
 | `OMB_WORKER_REQUEST_TIMEOUT_SECONDS` | `600`                      | Coordinator, worker and driver JVM | How long a worker request may take; see below                                                               |
 | `OMB_WORKER_STOP_TIMEOUT_SECONDS`    | `180`                      | Coordinator, worker and driver JVM | How long `/stop-all`, which closes every producer and consumer, may take                                    |
+| `OMB_STALL_TIMEOUT_SECONDS`          | `300`                      | Coordinator                        | How long a backlog build or drain may go without its counter moving before the workload fails; see below    |
 
 When `OMB_DRIVER_JVM_OPTS` is not set, the scripts build it as
 `-server $HEAP_OPTS -XX:+UseG1GC <defaults> $JVM_OPTS`. Prefer `HEAP_OPTS` and `JVM_OPTS`; set
@@ -47,6 +48,12 @@ longer than 10 minutes. With the Helm chart, `extraEnv` sets them on both.
 
 The coordinator also reads `PUBLISH_BACKLOG_LIMIT`, `RECEIVE_BACKLOG_LIMIT`, `MIN_RAMPING_FACTOR` and
 `MAX_RAMPING_FACTOR` for `producerRate: 0` runs; see [Workloads](../guides/workloads.md).
+
+While a `consumerBacklogSizeGB` backlog builds or drains, or a `consumerPause` backlog drains, the
+coordinator logs the backlog against its target about every 30 seconds. If the sent count (build)
+or received count (drain) does not move for `OMB_STALL_TIMEOUT_SECONDS`, or the system property
+`omb.stallTimeoutSeconds`, the workload fails with a message naming the phase and the counters, and
+in distributed mode logs each worker's counters. Raise it for a drain that is slow but healthy.
 
 For controlled, broker-independent heap/collector and virtual-thread scheduling experiments, use
 the opt-in [framework resource-efficiency harness](../development/framework-performance.md).

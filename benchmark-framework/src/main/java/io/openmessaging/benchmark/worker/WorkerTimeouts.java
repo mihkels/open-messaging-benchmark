@@ -25,9 +25,12 @@ public final class WorkerTimeouts {
     public static final String REQUEST_ENV = "OMB_WORKER_REQUEST_TIMEOUT_SECONDS";
     public static final String STOP_PROPERTY = "omb.worker.stopTimeoutSeconds";
     public static final String STOP_ENV = "OMB_WORKER_STOP_TIMEOUT_SECONDS";
+    public static final String STALL_PROPERTY = "omb.stallTimeoutSeconds";
+    public static final String STALL_ENV = "OMB_STALL_TIMEOUT_SECONDS";
 
     static final Duration DEFAULT_REQUEST = Duration.ofMinutes(10);
     static final Duration DEFAULT_STOP = Duration.ofMinutes(3);
+    static final Duration DEFAULT_STALL = Duration.ofMinutes(5);
 
     private WorkerTimeouts() {}
 
@@ -51,6 +54,18 @@ public final class WorkerTimeouts {
      */
     public static Duration stop() {
         return configured(STOP_PROPERTY, STOP_ENV, DEFAULT_STOP);
+    }
+
+    /**
+     * How long the backlog build and drain waits tolerate counters that do not move before failing
+     * the workload.
+     *
+     * @return the {@value #STALL_PROPERTY} property, else the {@value #STALL_ENV} variable, else 5
+     *     minutes
+     * @throws IllegalArgumentException if the configured value is not a positive whole number
+     */
+    public static Duration stall() {
+        return configured(STALL_PROPERTY, STALL_ENV, DEFAULT_STALL);
     }
 
     /**

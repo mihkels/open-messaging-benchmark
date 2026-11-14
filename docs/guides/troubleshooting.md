@@ -74,6 +74,15 @@ the broker, for example while fetching metadata for many topics. Check that work
 call it was running. If the call is slow but healthy, raise `OMB_WORKER_REQUEST_TIMEOUT_SECONDS` on
 the coordinator and all workers; see [Runtime and plugins](../reference/runtime-and-plugins.md#environment-variables).
 
+**`Backlog drain stalled: messages received has not moved for 300 s`**
+
+During a `consumerBacklogSizeGB` or `consumerPause` run, consumers (drain) or producers (build,
+reported as `Backlog build stalled: messages sent ...`) made no progress for the stall window. The
+message carries the backlog, its target and the summed counters; in distributed mode the log line
+before it lists the counters of each worker, so the worker whose count stands still is the one to
+check. If the drain is slow but still moving between checks, raise `OMB_STALL_TIMEOUT_SECONDS` on
+the coordinator; see [Runtime and plugins](../reference/runtime-and-plugins.md#environment-variables).
+
 **`Cannot probe producer sustainable rate when building backlog`**
 
 `producerRate: 0` cannot be combined with `consumerBacklogSizeGB`. Set a fixed rate.

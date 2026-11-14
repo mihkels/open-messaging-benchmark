@@ -75,7 +75,6 @@ public final class HttpWorkerClient implements Worker {
     private static final String CONTENT_TYPE = "Content-Type";
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int HTTP_OK = 200;
-    private static final Duration STOP_TIMEOUT = Duration.ofMinutes(3);
     private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
@@ -84,6 +83,8 @@ public final class HttpWorkerClient implements Worker {
     private final String host;
     private final @Nullable String authorization;
     private final long closeTimeoutNanos;
+    private final Duration requestTimeout;
+    private final Duration stopTimeout;
 
     /**
      * Creates a client that sends no bearer token.
@@ -101,14 +102,19 @@ public final class HttpWorkerClient implements Worker {
      * @param token the shared worker token, or {@code null} to send none
      */
     public HttpWorkerClient(String host, @Nullable String token) {
+        this(host, token, WorkerTimeouts.request(), WorkerTimeouts.stop());
+    }
+
+    private HttpWorkerClient(
+            String host, @Nullable String token, Duration requestTimeout, Duration stopTimeout) {
         this(
                 asyncHttpClient(
-                        Dsl.config()
-                                .setReadTimeout(Duration.ofMinutes(10))
-                                .setRequestTimeout(Duration.ofMinutes(10))),
+                        Dsl.config().setReadTimeout(requestTimeout).setRequestTimeout(requestTimeout)),
                 host,
                 token,
-                CLOSE_TIMEOUT);
+                CLOSE_TIMEOUT,
+                requestTimeout,
+                stopTimeout);
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host) {
@@ -121,7 +127,19 @@ public final class HttpWorkerClient implements Worker {
 
     HttpWorkerClient(
             AsyncHttpClient httpClient, String host, @Nullable String token, Duration closeTimeout) {
+        this(httpClient, host, token, closeTimeout, WorkerTimeouts.request(), WorkerTimeouts.stop());
+    }
+
+    HttpWorkerClient(
+            AsyncHttpClient httpClient,
+            String host,
+            @Nullable String token,
+            Duration closeTimeout,
+            Duration requestTimeout,
+            Duration stopTimeout) {
         this.httpClient = httpClient;
+        this.requestTimeout = requestTimeout;
+        this.stopTimeout = stopTimeout;
         this.host = host;
         this.authorization =
                 token == null || token.isBlank() ? null : BearerTokenAuth.BEARER_PREFIX + token;
@@ -235,7 +253,7 @@ public final class HttpWorkerClient implements Worker {
      * @throws IllegalStateException if the response status is not 200
      */
     public String getText(String path, Duration timeout) {
-        return await(fetchText(path, timeout));
+        return await("get", path, timeout, fetchText(path, timeout));
     }
 
     @Override
@@ -246,11 +264,12 @@ public final class HttpWorkerClient implements Worker {
     @Override
     public void stopAll() {
         await(
-                authorized(httpClient.preparePost(host + STOP_ALL))
+                "post",
+                STOP_ALL,
+                stopTimeout,
+                timed(authorized(httpClient.preparePost(host + STOP_ALL)), stopTimeout)
                         .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(EMPTY_BODY)
-                        .setRequestTimeout(STOP_TIMEOUT)
-                        .setReadTimeout(STOP_TIMEOUT)
                         .execute()
                         .toCompletableFuture()
                         .thenAccept(response -> checkResponse("post", STOP_ALL, response)));
@@ -305,7 +324,10 @@ public final class HttpWorkerClient implements Worker {
 
     private void sendPost(String path, String contentType, byte[] body) {
         await(
-                authorized(httpClient.preparePost(host + path))
+                "post",
+                path,
+                requestTimeout,
+                timed(authorized(httpClient.preparePost(host + path)), requestTimeout)
                         .setHeader(CONTENT_TYPE, contentType)
                         .setBody(body)
                         .execute()
@@ -318,7 +340,10 @@ public final class HttpWorkerClient implements Worker {
 
     private <T> T get(String path, Class<T> clazz) {
         return await(
-                fetchText(path, null)
+                "get",
+                path,
+                requestTimeout,
+                fetchText(path, requestTimeout)
                         .thenApply(body -> {
                             var value = mapper.readValue(body, clazz);
                             log.debug("Received response: {}", value);
@@ -326,14 +351,9 @@ public final class HttpWorkerClient implements Worker {
                         }));
     }
 
-    // An authorized GET of path whose body is returned once the status is 200; a null timeout keeps
-    // the client's default
-    private CompletableFuture<String> fetchText(String path, @Nullable Duration timeout) {
-        BoundRequestBuilder request = authorized(httpClient.prepareGet(host + path));
-        if (timeout != null) {
-            request.setRequestTimeout(timeout).setReadTimeout(timeout);
-        }
-        return request
+    // An authorized GET of path whose body is returned once the status is 200
+    private CompletableFuture<String> fetchText(String path, Duration timeout) {
+        return timed(authorized(httpClient.prepareGet(host + path)), timeout)
                 .execute()
                 .toCompletableFuture()
                 .thenApply(response -> {
@@ -344,7 +364,10 @@ public final class HttpWorkerClient implements Worker {
 
     private <T> T post(String path, byte[] body, Class<T> clazz) {
         return await(
-                authorized(httpClient.preparePost(host + path))
+                "post",
+                path,
+                requestTimeout,
+                timed(authorized(httpClient.preparePost(host + path)), requestTimeout)
                         .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
                         .setBody(body)
                         .execute()
@@ -355,9 +378,14 @@ public final class HttpWorkerClient implements Worker {
                         }));
     }
 
+    private static BoundRequestBuilder timed(BoundRequestBuilder request, Duration timeout) {
+        return request.setRequestTimeout(timeout).setReadTimeout(timeout);
+    }
+
     // Rethrows a request's failure without the CompletionException wrapper, so callers see the HTTP
-    // or connection failure itself.
-    private <T> T await(CompletableFuture<T> request) {
+    // or connection failure itself. Timeouts and connection failures name the worker, path and
+    // timeout, since the client's own message does not say which call it was.
+    private <T> T await(String method, String path, Duration timeout, CompletableFuture<T> request) {
         try {
             return request.join();
         } catch (CompletionException e) {
@@ -368,7 +396,12 @@ public final class HttpWorkerClient implements Worker {
             if (cause instanceof Error error) {
                 throw error;
             }
-            throw new IllegalStateException("HTTP request to worker " + host + " failed", cause);
+            String call = "HTTP " + method + " " + host + path;
+            if (cause instanceof TimeoutException) {
+                throw new IllegalStateException(
+                        call + " timed out after " + timeout.toMillis() + " ms", cause);
+            }
+            throw new IllegalStateException(call + " failed", cause);
         }
     }
 

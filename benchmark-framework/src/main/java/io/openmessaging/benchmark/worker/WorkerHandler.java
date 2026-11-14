@@ -26,7 +26,6 @@ import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -41,7 +40,6 @@ import tools.jackson.databind.ObjectWriter;
 
 public class WorkerHandler implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(WorkerHandler.class);
-    private static final Duration REQUEST_IDLE_TIMEOUT = Duration.ofMinutes(10);
 
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
@@ -98,7 +96,7 @@ public class WorkerHandler implements AutoCloseable {
 
     public void configure(JavalinConfig config) {
         config.jetty.modifyHttpConfiguration(
-                http -> http.setIdleTimeout(REQUEST_IDLE_TIMEOUT.toMillis()));
+                http -> http.setIdleTimeout(WorkerTimeouts.serverIdle().toMillis()));
         registerRoutes(config.routes);
     }
 

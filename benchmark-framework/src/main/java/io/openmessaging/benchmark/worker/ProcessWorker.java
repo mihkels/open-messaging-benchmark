@@ -27,6 +27,7 @@ import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -135,12 +136,22 @@ public class ProcessWorker implements Worker {
                                 .collect(Collectors.joining(", "));
         log.info("Starting driver process for {}", description);
 
+        // Tags fixed at launch reach every meter; a driver process serves a single run
+        Map<String, String> metricTags = new LinkedHashMap<>();
+        String launchRunId = runId;
+        if (launchRunId != null) {
+            metricTags.put("run_id", launchRunId);
+        }
+        if (config.get("name") instanceof String name && !name.isBlank()) {
+            metricTags.put("driver", name);
+        }
+
         DriverProcess starting = new DriverProcess(description);
         current = starting;
         initializing = true;
         try {
             ensureOpen();
-            starting.start(classpath.entries(), () -> closed);
+            starting.start(classpath.entries(), metricTags, () -> closed);
             HttpWorkerClient client =
                     Objects.requireNonNull(starting.client(), "driver client after start");
             String id = runId;

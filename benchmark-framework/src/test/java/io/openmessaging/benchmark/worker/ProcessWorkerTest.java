@@ -159,7 +159,10 @@ class ProcessWorkerTest {
                     .startsWith("alpha-v1-isolated-");
             assertThat(worker.scrapeMetrics())
                     .contains("messages_sent_total", "fixture_driver_initialized_total")
-                    .containsPattern("benchmark_phase\\{phase=\"warmup\"[^}]*} 1\\.0");
+                    .containsPattern("benchmark_phase\\{[^}]*phase=\"warmup\"[^}]*} 1\\.0")
+                    // Launch tags reach meters registered before the run id arrives over HTTP
+                    .containsPattern(
+                            "messages_sent_total\\{[^}]*driver=\"test\"[^}]*run_id=\"run-before-start\"");
             worker.stopAll();
             assertThat(worker.pid()).isEqualTo(alphaPid);
 

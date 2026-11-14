@@ -42,6 +42,10 @@ process. Once a driver is initialized, it includes:
 | `e2e_latency_seconds`              | Timer   | End-to-end latency                                                                                         |
 | `benchmark_phase`                  | Gauge   | 1 for the current run phase (`phase` label: `warmup`, `backlog_build`, `backlog_drain`, `measure`), else 0 |
 
+Each driver process serves one workload run, so its metrics carry `run_id` and `driver` (the
+driver configuration's `name`) labels. Match `run_id` to the `runId` of the JSON result to find
+the workload.
+
 The driver's send-completion point depends on its broker and configuration; it is not always a
 broker acknowledgement. See [Publish latency](../methodology/latency-and-backlog.md#publish-latency).
 Timers expose `_count`, `_sum` and `_max` series. A minimal Prometheus scrape configuration:
@@ -67,7 +71,60 @@ GC-pause distribution, and heap is not resident memory.
 For broker-independent resource measurements, profiling, and repeatable baseline comparisons,
 see [Framework resource efficiency](../development/framework-performance.md).
 
-In local mode there is no worker HTTP server; use the JSON result and the logs.
+In local mode there is no worker HTTP server; use the JSON result and the logs, or push the
+metrics with OpenTelemetry.
+
+## OpenTelemetry export
+
+Workers can also push the same metrics to an OpenTelemetry collector over OTLP/HTTP, which suits
+short-lived Kubernetes jobs that a scraper can miss. It is off by default and adds nothing when
+off; `/metrics` keeps working when it is on. Enable it on every worker (or on the coordinator in
+local mode) with:
+
+```bash
+export OMB_METRICS_OTLP=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+export OTEL_RESOURCE_ATTRIBUTES=service.instance.id=worker-1
+```
+
+The supervisor and every driver process it starts push their own metrics, configured with the
+standard OpenTelemetry variables:
+
+|                      Variable                       |                        Default                        |
+|-----------------------------------------------------|-------------------------------------------------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                       | `http://localhost:4318` (`/v1/metrics` is appended)   |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`               | Full metrics URL; overrides the one above             |
+| `OTEL_EXPORTER_OTLP_HEADERS`                        | None; for example `authorization=Bearer ...`          |
+| `OTEL_METRIC_EXPORT_INTERVAL`                       | `10000` milliseconds                                  |
+| `OTEL_SERVICE_NAME`                                 | `omb-worker`                                          |
+| `OTEL_RESOURCE_ATTRIBUTES`                          | None; set `service.instance.id` to tell workers apart |
+| `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | `cumulative`                                          |
+
+On Kubernetes, set `service.instance.id` from the pod name with the downward API. Metric names and
+the `run_id`, `driver`, `phase` and `role` attributes are the same as on `/metrics`. A driver
+process pushes its last interval when it stops, so a run's final counts arrive even when the job
+ends right after it.
+
+Timers export count, sum and max only. Use the JSON result for latency percentiles.
+
+A minimal collector configuration that receives OTLP and serves it to Prometheus, for example as the
+data source of a Grafana dashboard:
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus]
+```
 
 ## Logs
 

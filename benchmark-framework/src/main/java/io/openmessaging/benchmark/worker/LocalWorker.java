@@ -17,6 +17,7 @@ import static io.openmessaging.benchmark.driver.Failures.append;
 import static io.openmessaging.benchmark.driver.Failures.unwrap;
 import static java.util.stream.Collectors.toList;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.driver.AbandonableCreation;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
@@ -93,7 +94,7 @@ public final class LocalWorker implements Worker {
         this(new PrometheusMeterRegistry(l -> null));
     }
 
-    public LocalWorker(PrometheusMeterRegistry statsLogger) {
+    public LocalWorker(MeterRegistry statsLogger) {
         this(
                 new WorkerStats(statsLogger),
                 DEFAULT_SHUTDOWN_TIMEOUT,
@@ -102,8 +103,7 @@ public final class LocalWorker implements Worker {
                 DEFAULT_RESOURCE_CLOSE_TIMEOUT);
     }
 
-    LocalWorker(
-            PrometheusMeterRegistry statsLogger, Duration shutdownTimeout, Duration probeTimeout) {
+    LocalWorker(MeterRegistry statsLogger, Duration shutdownTimeout, Duration probeTimeout) {
         this(new WorkerStats(statsLogger), shutdownTimeout, probeTimeout, DEFAULT_RESET_TIMEOUT);
     }
 

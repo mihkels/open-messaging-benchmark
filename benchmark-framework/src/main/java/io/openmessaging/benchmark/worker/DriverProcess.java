@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -91,12 +92,13 @@ final class DriverProcess {
      * Starts the JVM and waits until it serves the worker API.
      *
      * @param classpath the driver process classpath
+     * @param metricTags common tags of every metric of the process, such as the run id
      * @param closed whether the owning worker was closed meanwhile, in which case the process is told
      *     to exit
      * @throws IOException if the work directory or argument file cannot be written
      * @throws InterruptedException if interrupted while waiting for the process
      */
-    void start(List<Path> classpath, BooleanSupplier closed)
+    void start(List<Path> classpath, Map<String, String> metricTags, BooleanSupplier closed)
             throws IOException, InterruptedException {
         workDir = SecureTempFiles.createDirectory("omb-driver-");
         Path portFile = workDir.resolve(DriverProcessServer.PORT_FILE);
@@ -125,6 +127,10 @@ final class DriverProcess {
         jvmArgs.add(portFile.toString());
         jvmArgs.add("--token-file");
         jvmArgs.add(tokenFile.toString());
+        metricTags.forEach((key, value) -> {
+            jvmArgs.add("--tag");
+            jvmArgs.add(key + "=" + value);
+        });
         // An argument file keeps long classpaths clear of command line length limits
         Files.write(
                 argFile,

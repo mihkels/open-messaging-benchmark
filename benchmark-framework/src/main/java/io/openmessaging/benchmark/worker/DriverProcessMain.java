@@ -14,14 +14,19 @@
 package io.openmessaging.benchmark.worker;
 
 import io.javalin.Javalin;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.openmessaging.benchmark.metrics.otlp.OtlpExport;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +35,9 @@ import org.slf4j.LoggerFactory;
  * Entry point of a driver process started by {@link ProcessWorker}. Runs a {@link LocalWorker} on
  * the driver's own classpath and serves it over HTTP on a loopback port, which is written to the
  * file given with {@code --port-file}. Every request must carry the token the supervisor wrote to
- * the file given with {@code --token-file}, which is deleted once read. The process exits when its
- * standard input is closed, so it never outlives its supervisor.
+ * the file given with {@code --token-file}, which is deleted once read. Each {@code --tag
+ * key=value} becomes a common tag of every metric. The process exits when its standard input is
+ * closed, so it never outlives its supervisor.
  */
 public final class DriverProcessMain {
 
@@ -46,6 +52,7 @@ public final class DriverProcessMain {
     public static void main(String[] args) throws Exception {
         Path portFile = null;
         Path tokenFile = null;
+        List<String> tags = new ArrayList<>();
         int i = 0;
         while (i < args.length) {
             if ("--port-file".equals(args[i]) && i + 1 < args.length) {
@@ -53,6 +60,9 @@ public final class DriverProcessMain {
                 i += 2;
             } else if ("--token-file".equals(args[i]) && i + 1 < args.length) {
                 tokenFile = Path.of(args[i + 1]);
+                i += 2;
+            } else if ("--tag".equals(args[i]) && i + 1 < args.length) {
+                tags.add(args[i + 1]);
                 i += 2;
             } else {
                 i++;
@@ -75,10 +85,14 @@ public final class DriverProcessMain {
                         .name("driver-supervisor-monitor")
                         .start(DriverProcessMain::exitWhenSupervisorDisconnects);
 
-        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        PrometheusMeterRegistry prometheus = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        MeterRegistry registry = OtlpExport.withOtlp(prometheus, System.getenv());
+        // Common tags only reach meters registered after them, so they are set before any meter
+        registry.config().commonTags(commonTags(tags));
         new JvmResourceMetrics().bindTo(registry, "driver");
         LocalWorker worker = new LocalWorker(registry);
-        DriverProcessServer handler = new DriverProcessServer(worker, registry::scrape, token, workDir);
+        DriverProcessServer handler =
+                new DriverProcessServer(worker, prometheus::scrape, token, workDir);
         Javalin app =
                 Javalin.create(config -> {
                     config.startup.showJavalinBanner = false;
@@ -99,6 +113,8 @@ public final class DriverProcessMain {
                         log.warn("Failed to close worker", e);
                     }
                     app.stop();
+                    // Publishes the last OTLP step of a short run
+                    registry.close();
                 };
         Runtime.getRuntime().addShutdownHook(new Thread(shutdown, "driver-process-shutdown"));
 
@@ -108,6 +124,25 @@ public final class DriverProcessMain {
         log.info("Driver process listening on 127.0.0.1:{}", app.port());
 
         supervisorMonitor.join();
+    }
+
+    /**
+     * Parses {@code key=value} tag arguments.
+     *
+     * @param tags the arguments
+     * @return the tags
+     * @throws IllegalArgumentException if an argument has no {@code =} or an empty key
+     */
+    static Tags commonTags(List<String> tags) {
+        Tags result = Tags.empty();
+        for (String tag : tags) {
+            int separator = tag.indexOf('=');
+            if (separator <= 0) {
+                throw new IllegalArgumentException("Tag must be key=value: " + tag);
+            }
+            result = result.and(tag.substring(0, separator), tag.substring(separator + 1));
+        }
+        return result;
     }
 
     // DriverProcessMain is excluded from coverage, so renaming the unused catch variable would add

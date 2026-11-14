@@ -69,6 +69,11 @@
             <artifactId>netty-all</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.openmessaging.benchmark</groupId>
+            <artifactId>metrics-otlp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>prometheus-metrics-exposition-formats</artifactId>
         </dependency>

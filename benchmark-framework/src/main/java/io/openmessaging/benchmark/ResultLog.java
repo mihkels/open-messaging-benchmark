@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import io.openmessaging.benchmark.utils.PaddingDecimalFormat;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import java.text.DecimalFormat;
+import java.util.concurrent.atomic.AtomicLong;
 import org.HdrHistogram.Histogram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,10 +29,18 @@ final class ResultLog {
     private static final DecimalFormat throughputFormat = new PaddingDecimalFormat("0.0", 4);
     private static final DecimalFormat dec = new PaddingDecimalFormat("0.0", 4);
 
+    // Counts report intervals logged, the run progress the coordinator's watchdog watches
+    private static final AtomicLong periods = new AtomicLong();
+
     private ResultLog() {}
+
+    static long periodsLogged() {
+        return periods.get();
+    }
 
     @SuppressWarnings("checkstyle:LineLength")
     static void period(PeriodReport period) {
+        periods.incrementAndGet();
         Histogram publish = period.publishLatency();
         Histogram delay = period.publishDelayLatency();
         Histogram schedule = period.publishScheduleLatency();

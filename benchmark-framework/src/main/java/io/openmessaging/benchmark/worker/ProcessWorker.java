@@ -25,6 +25,8 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth.DriverState;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -74,6 +76,8 @@ public class ProcessWorker implements Worker {
     private volatile boolean initializing;
     private volatile @Nullable String runId;
     private volatile @Nullable RunPhase phase;
+    // The last driver failure, reported by health() until the next driver initializes
+    private volatile @Nullable String lastError;
     // The current driver process, kept until it is fully stopped so that termination can be retried
     private volatile @Nullable DriverProcess current;
 
@@ -164,8 +168,10 @@ public class ProcessWorker implements Worker {
             }
             starting.authorizeConfig(driverConfigFile);
             client.initializeDriverFromLocalPath(driverConfigFile);
+            lastError = null;
         } catch (Exception e) {
             String failure = starting.describeFailure(e);
+            lastError = "Failed to initialize driver " + description + ": " + failure;
             cleanUpFailedStart(starting, e);
             if (e instanceof InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -290,8 +296,11 @@ public class ProcessWorker implements Worker {
         } catch (RuntimeException e) {
             // A failed call is often the first sign of a crashed process; give it time to be reaped
             if (running.awaitExit(CRASH_DETECTION_TIMEOUT)) {
-                throw running.crashed(e);
+                IllegalStateException crash = running.crashed(e);
+                lastError = crash.getMessage();
+                throw crash;
             }
+            lastError = running.describeFailure(e);
             throw e;
         }
     }
@@ -397,6 +406,24 @@ public class ProcessWorker implements Worker {
             }
             throw failure;
         }
+    }
+
+    // Reads only volatile fields: initializeDriver holds the monitor while the child starts
+    @Override
+    public WorkerHealth health() {
+        boolean ready = !closed && !unusable;
+        String error = lastError;
+        DriverProcess running = current;
+        if (running == null) {
+            return new WorkerHealth(ready, DriverState.NOT_STARTED, null, error);
+        }
+        Integer exitCode = running.exitCode();
+        if (exitCode != null) {
+            return new WorkerHealth(ready, DriverState.EXITED, exitCode, error);
+        }
+        DriverState state =
+                initializing || running.client() == null ? DriverState.INITIALIZING : DriverState.RUNNING;
+        return new WorkerHealth(ready, state, null, error);
     }
 
     @Override

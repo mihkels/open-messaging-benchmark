@@ -22,17 +22,19 @@ artifact coordinates and reports conflicts; see [Packaging a plugin](../developm
 
 ## Environment variables
 
-|               Variable               |          Default           |             Applies to             |                                                 Description                                                 |
-|--------------------------------------|----------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| `HEAP_OPTS`                          | `-Xms4G -Xmx4G`            | Driver JVM                         | Heap options                                                                                                |
-| `JVM_OPTS`                           | empty                      | Driver JVM                         | Extra options appended to the defaults, for example GC logging                                              |
-| `OMB_DRIVER_JVM_OPTS`                | derived                    | Driver JVM                         | Replaces **all** driver JVM options, including `HEAP_OPTS`, `JVM_OPTS` and the required `--add-opens` flags |
-| `SUPERVISOR_HEAP_OPTS`               | `-Xmx1G`                   | Supervisor JVM                     | Heap options; also the place for supervisor `-D` system properties                                          |
-| `OMB_HOME`                           | the distribution directory | Supervisor                         | Directory searched for plugins                                                                              |
-| `OMB_PLUGIN_PATH`                    | empty                      | Supervisor                         | Extra plugin locations, separated by `:`                                                                    |
-| `OMB_WORKER_REQUEST_TIMEOUT_SECONDS` | `600`                      | Coordinator, worker and driver JVM | How long a worker request may take; see below                                                               |
-| `OMB_WORKER_STOP_TIMEOUT_SECONDS`    | `180`                      | Coordinator, worker and driver JVM | How long `/stop-all`, which closes every producer and consumer, may take                                    |
-| `OMB_STALL_TIMEOUT_SECONDS`          | `300`                      | Coordinator                        | How long a backlog build or drain may go without its counter moving before the workload fails; see below    |
+|                Variable                 |          Default           |             Applies to             |                                                            Description                                                            |
+|-----------------------------------------|----------------------------|------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `HEAP_OPTS`                             | `-Xms4G -Xmx4G`            | Driver JVM                         | Heap options                                                                                                                      |
+| `JVM_OPTS`                              | empty                      | Driver JVM                         | Extra options appended to the defaults, for example GC logging                                                                    |
+| `OMB_DRIVER_JVM_OPTS`                   | derived                    | Driver JVM                         | Replaces **all** driver JVM options, including `HEAP_OPTS`, `JVM_OPTS` and the required `--add-opens` flags                       |
+| `SUPERVISOR_HEAP_OPTS`                  | `-Xmx1G`                   | Supervisor JVM                     | Heap options; also the place for supervisor `-D` system properties                                                                |
+| `OMB_HOME`                              | the distribution directory | Supervisor                         | Directory searched for plugins                                                                                                    |
+| `OMB_PLUGIN_PATH`                       | empty                      | Supervisor                         | Extra plugin locations, separated by `:`                                                                                          |
+| `OMB_WORKER_REQUEST_TIMEOUT_SECONDS`    | `600`                      | Coordinator, worker and driver JVM | How long a worker request may take; see below                                                                                     |
+| `OMB_WORKER_STOP_TIMEOUT_SECONDS`       | `180`                      | Coordinator, worker and driver JVM | How long `/stop-all`, which closes every producer and consumer, may take                                                          |
+| `OMB_STALL_TIMEOUT_SECONDS`             | `300`                      | Coordinator                        | How long a backlog build or drain may go without its counter moving before the workload fails; see below                          |
+| `OMB_WATCHDOG_HEALTH_INTERVAL_SECONDS`  | `10`                       | Coordinator                        | How often the watchdog polls each worker's `/health` during a run; see [Monitoring](../guides/monitoring.md#coordinator-watchdog) |
+| `OMB_WATCHDOG_PROGRESS_TIMEOUT_SECONDS` | `300`                      | Coordinator                        | How long a run may log no report interval before the coordinator logs its thread dump                                             |
 
 When `OMB_DRIVER_JVM_OPTS` is not set, the scripts build it as
 `-server $HEAP_OPTS -XX:+UseG1GC <defaults> $JVM_OPTS`. Prefer `HEAP_OPTS` and `JVM_OPTS`; set

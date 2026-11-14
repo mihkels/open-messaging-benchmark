@@ -83,6 +83,20 @@ before it lists the counters of each worker, so the worker whose count stands st
 check. If the drain is slow but still moving between checks, raise `OMB_STALL_TIMEOUT_SECONDS` on
 the coordinator; see [Runtime and plugins](../reference/runtime-and-plugins.md#environment-variables).
 
+**`Worker http://worker:8080 is unhealthy: driver process is EXITED with exit code 137`**
+
+The coordinator's watchdog found that worker's driver process dead during the run and failed the
+workload; it also logs every worker's counters next to it. Exit code 137 usually means the driver
+was killed for running out of memory: raise the worker memory limit or lower `HEAP_OPTS`. For other
+codes, check that worker's log, or `curl` its `/health` with the token for the last error. A
+reason of `unreachable after 3 health checks` means the worker itself went away, for example a
+restarted pod. See [Monitoring](monitoring.md#coordinator-watchdog).
+
+**`No workload progress for 300 s; coordinator thread dump`**
+
+No report interval was logged for that long. The `main` thread's stack shows what the coordinator
+is waiting on, often a worker request; check that worker's log for the same call.
+
 **`Cannot probe producer sustainable rate when building backlog`**
 
 `producerRate: 0` cannot be combined with `consumerBacklogSizeGB`. Set a fixed rate.

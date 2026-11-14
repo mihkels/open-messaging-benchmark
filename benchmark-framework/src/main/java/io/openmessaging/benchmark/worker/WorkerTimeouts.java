@@ -19,6 +19,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * How long a worker HTTP request may take. Both sides read the same settings: the client gives up
  * after the timeout, and the worker's HTTP server keeps a busy request open at least that long.
+ * Also holds the intervals of the coordinator's {@link WorkerWatchdog}.
  */
 public final class WorkerTimeouts {
     public static final String REQUEST_PROPERTY = "omb.worker.requestTimeoutSeconds";
@@ -28,9 +29,16 @@ public final class WorkerTimeouts {
     public static final String STALL_PROPERTY = "omb.stallTimeoutSeconds";
     public static final String STALL_ENV = "OMB_STALL_TIMEOUT_SECONDS";
 
+    public static final String HEALTH_INTERVAL_PROPERTY = "omb.watchdog.healthIntervalSeconds";
+    public static final String HEALTH_INTERVAL_ENV = "OMB_WATCHDOG_HEALTH_INTERVAL_SECONDS";
+    public static final String PROGRESS_PROPERTY = "omb.watchdog.progressTimeoutSeconds";
+    public static final String PROGRESS_ENV = "OMB_WATCHDOG_PROGRESS_TIMEOUT_SECONDS";
+
     static final Duration DEFAULT_REQUEST = Duration.ofMinutes(10);
     static final Duration DEFAULT_STOP = Duration.ofMinutes(3);
     static final Duration DEFAULT_STALL = Duration.ofMinutes(5);
+    static final Duration DEFAULT_HEALTH_INTERVAL = Duration.ofSeconds(10);
+    static final Duration DEFAULT_PROGRESS = Duration.ofMinutes(5);
 
     private WorkerTimeouts() {}
 
@@ -66,6 +74,29 @@ public final class WorkerTimeouts {
      */
     public static Duration stall() {
         return configured(STALL_PROPERTY, STALL_ENV, DEFAULT_STALL);
+    }
+
+    /**
+     * How often the coordinator's watchdog polls every worker's {@code /health} during a run.
+     *
+     * @return the {@value #HEALTH_INTERVAL_PROPERTY} property, else the {@value #HEALTH_INTERVAL_ENV}
+     *     variable, else 10 seconds
+     * @throws IllegalArgumentException if the configured value is not a positive whole number
+     */
+    public static Duration healthInterval() {
+        return configured(HEALTH_INTERVAL_PROPERTY, HEALTH_INTERVAL_ENV, DEFAULT_HEALTH_INTERVAL);
+    }
+
+    /**
+     * How long a run may go without a new report interval before the coordinator logs its thread
+     * dump.
+     *
+     * @return the {@value #PROGRESS_PROPERTY} property, else the {@value #PROGRESS_ENV} variable,
+     *     else 5 minutes
+     * @throws IllegalArgumentException if the configured value is not a positive whole number
+     */
+    public static Duration progressTimeout() {
+        return configured(PROGRESS_PROPERTY, PROGRESS_ENV, DEFAULT_PROGRESS);
     }
 
     /**

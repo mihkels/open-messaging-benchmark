@@ -20,6 +20,7 @@ import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -73,6 +74,16 @@ public interface Worker extends AutoCloseable {
      */
     default boolean canReuseAfterFailure() {
         return false;
+    }
+
+    /**
+     * Reports whether this worker and its driver are alive. Must answer quickly and never block on a
+     * driver call, since the coordinator's watchdog and Kubernetes probes poll it.
+     *
+     * @return the health; by default a worker whose driver is always running
+     */
+    default WorkerHealth health() {
+        return WorkerHealth.RUNNING;
     }
 
     String id();

@@ -165,8 +165,14 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 ```
 
 `/metrics` stays open unless `workers.auth.protectMetrics=true`; then Prometheus must send the token
-too, for example with `authorization.credentials_file` in its scrape configuration. Readiness and
-liveness probes are TCP checks and are not affected.
+too, for example with `authorization.credentials_file` in its scrape configuration. Probes are not
+affected: `/health` needs no token.
+
+Worker readiness is an HTTP GET of [`/health`](monitoring.md#worker-health), which answers 503 once
+the worker can no longer take a driver. Only ready workers are listed by the headless Service, so
+`--expected-workers` discovery waits for them too. A worker whose driver crashed stays ready, since
+the next run starts a fresh driver; the coordinator's watchdog fails the running workload instead.
+Liveness stays a cheap TCP check, so a crashed driver never restarts the worker pod under a run.
 Broker addresses in the driver configuration must be reachable from the worker pods.
 
 For meaningful numbers, schedule workers on dedicated nodes, away from the brokers, with CPU

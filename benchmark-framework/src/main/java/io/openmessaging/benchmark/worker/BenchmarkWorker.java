@@ -100,7 +100,10 @@ public final class BenchmarkWorker {
         return BearerTokenAuth.resolveToken(environment, arguments.tokenFile)
                 .map(token ->
                         new BearerTokenAuth(
-                                token, arguments.protectMetrics ? Set.of() : Set.of(HttpWorkerClient.METRICS_PATH)))
+                                token,
+                                arguments.protectMetrics
+                                        ? Set.of(WorkerHandler.HEALTH)
+                                        : Set.of(WorkerHandler.HEALTH, HttpWorkerClient.METRICS_PATH)))
                 .orElse(null);
     }
 
@@ -142,9 +145,14 @@ public final class BenchmarkWorker {
                     arguments.getHttpPort());
         } else if (arguments.protectMetrics) {
             log.info(
-                    "Bearer token required on every request, including {}", HttpWorkerClient.METRICS_PATH);
+                    "Bearer token required on every request except {}, including {}",
+                    WorkerHandler.HEALTH,
+                    HttpWorkerClient.METRICS_PATH);
         } else {
-            log.info("Bearer token required on every request except {}", HttpWorkerClient.METRICS_PATH);
+            log.info(
+                    "Bearer token required on every request except {} and {}",
+                    WorkerHandler.HEALTH,
+                    HttpWorkerClient.METRICS_PATH);
         }
 
         // Dump configuration variables

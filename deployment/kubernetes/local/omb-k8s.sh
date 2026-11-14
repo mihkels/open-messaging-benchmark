@@ -497,6 +497,9 @@ cmd_lint() {
     grep -q -- '--protect-metrics' "$rendered/auth.yaml" || die "auth.yaml has no --protect-metrics"
     grep -q 'kind: Secret' "$rendered/auth-existing.yaml" && die "existingSecret must not create a Secret"
     grep -q 'OMB_WORKER_TOKEN' "$rendered/default.yaml" && die "auth must be off by default"
+    for f in default auth; do
+        grep -q 'path: /health' "$rendered/$f.yaml" || die "$f.yaml readiness probe is not GET /health"
+    done
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm template "$RELEASE" "$CHART_DIR" -f "$values" > "$rendered/values-$(basename "$values")"
     done

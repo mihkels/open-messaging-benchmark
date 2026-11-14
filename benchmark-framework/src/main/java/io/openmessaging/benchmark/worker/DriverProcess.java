@@ -224,6 +224,16 @@ final class DriverProcess {
     }
 
     /**
+     * The exit code of a process that has exited.
+     *
+     * @return the exit code, or {@code null} while the process runs or before it starts
+     */
+    @Nullable Integer exitCode() {
+        Process current = process;
+        return current == null || current.isAlive() ? null : current.exitValue();
+    }
+
+    /**
      * Waits briefly for the process to exit, since a failed call is often the first sign of a crash.
      *
      * @param timeout how long to wait

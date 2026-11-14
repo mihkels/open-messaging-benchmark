@@ -69,7 +69,8 @@ workers:
   affinity: {}
   # Shared bearer token on the worker HTTP API. When enabled, workers get it as OMB_WORKER_TOKEN and
   # answer 401 to requests without "Authorization: Bearer <token>"; the coordinator gets the same
-  # variable and sends it. Readiness and liveness probes are TCP checks and keep working.
+  # variable and sends it. Probes keep working: readiness is an HTTP GET of /health, which needs no
+  # token, and liveness is a TCP check.
   auth:
     enabled: false
     # Name of an existing Secret with the token. When empty, the chart creates

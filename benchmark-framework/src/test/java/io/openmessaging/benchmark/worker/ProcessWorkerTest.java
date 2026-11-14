@@ -24,6 +24,8 @@ import io.openmessaging.benchmark.plugin.HostRuntime;
 import io.openmessaging.benchmark.plugin.PluginRegistry;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth.DriverState;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -266,10 +268,25 @@ class ProcessWorkerTest {
                     .hasMessageContaining("exited with code 42");
             assertThatThrownBy(worker::getCountersStats).hasMessageContaining("exited with code 42");
             assertThatThrownBy(worker::scrapeMetrics).hasMessageContaining("exited with code 42");
+            WorkerHealth crashed = worker.health();
+            assertThat(crashed.ready()).isTrue();
+            assertThat(crashed.driver()).isEqualTo(DriverState.EXITED);
+            assertThat(crashed.exitCode()).isEqualTo(42);
+            assertThat(crashed.lastError()).contains("exited with code 42");
 
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.health()).isEqualTo(WorkerHealth.RUNNING);
             assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
         }
+    }
+
+    @Test
+    void reportsHealthBeforeStartAndAfterClose() {
+        ProcessWorker worker = newWorker();
+        assertThat(worker.health())
+                .isEqualTo(new WorkerHealth(true, DriverState.NOT_STARTED, null, null));
+        worker.close();
+        assertThat(worker.health().ready()).isFalse();
     }
 
     @Test

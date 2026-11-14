@@ -24,6 +24,8 @@ import com.beust.jcommander.JCommander;
 import io.javalin.Javalin;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth;
+import io.openmessaging.benchmark.worker.commands.WorkerHealth.DriverState;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -135,6 +137,37 @@ class AuthenticatedWorkerHttpTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("HTTP get " + host + HttpWorkerClient.METRICS_PATH)
                     .hasMessageContaining("failed with code 401");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "--protect-metrics"})
+    void servesHealthWithoutTokenButHidesTheLastError(String flag) throws Exception {
+        start(flag.isEmpty() ? new String[0] : new String[] {flag});
+        when(worker.health())
+                .thenReturn(new WorkerHealth(true, DriverState.EXITED, 42, "broker-1:9092 refused"));
+        HttpResponse<String> open = send(get(WorkerHandler.HEALTH), null);
+        assertThat(open.statusCode()).isEqualTo(200);
+        assertThat(open.headers().firstValue("Content-Type"))
+                .hasValueSatisfying(type -> assertThat(type).startsWith("application/json"));
+        assertThat(open.body())
+                .containsPattern("\"driver\"\\s*:\\s*\"EXITED\"")
+                .containsPattern("\"exitCode\"\\s*:\\s*42")
+                .doesNotContain("broker-1");
+        assertThat(send(get(WorkerHandler.HEALTH), "Bearer wrong").body()).doesNotContain("broker-1");
+        try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
+            assertThat(client.health())
+                    .isEqualTo(new WorkerHealth(true, DriverState.EXITED, 42, "broker-1:9092 refused"));
+        }
+    }
+
+    @Test
+    void healthAnswers503WhenTheWorkerCannotTakeADriver() throws Exception {
+        start();
+        when(worker.health()).thenReturn(new WorkerHealth(false, DriverState.NOT_STARTED, null, null));
+        assertThat(send(get(WorkerHandler.HEALTH), null).statusCode()).isEqualTo(503);
+        try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
+            assertThatThrownBy(client::health).hasMessageContaining("failed with code 503");
         }
     }
 

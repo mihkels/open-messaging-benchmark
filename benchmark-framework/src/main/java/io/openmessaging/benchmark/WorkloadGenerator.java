@@ -22,7 +22,9 @@ import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.payload.CompressiblePayloads;
 import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
+import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.WorkerTimeouts;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -48,6 +50,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.LongSupplier;
+import java.util.function.ToLongFunction;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +73,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     private final long reportIntervalNanos;
     private final long controlPeriodMillis;
     private final long shutdownTimeoutNanos;
+    private final long stallTimeoutNanos = WorkerTimeouts.stall().toNanos();
 
     private volatile boolean runCompleted = false;
     private volatile boolean needToWaitForBacklogDraining = false;
@@ -212,7 +216,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             needToWaitForBacklogDraining = true;
             startController(
                     "backlog",
-                    () -> buildAndDrainBacklog(workload.testDurationMinutes),
+                    () -> buildAndDrainBacklog(workload.testDurationMinutes, System::nanoTime, 1000, 100),
                     () -> needToWaitForBacklogDraining = false);
         }
 
@@ -370,14 +374,19 @@ public final class WorkloadGenerator implements WorkloadRun {
         // consumerBacklogSizeGB's drain rule, floored at the backlog in flight before the pause
         long drained =
                 Math.max(steady, Math.max(1000L, (long) ((1.0 - workload.backlogDrainRatio) * peak)));
+        var watch = new StallWatch("Pause drain", "messages received", CountersStats::messagesReceived);
         while (!runCompleted) {
-            if (backlog(worker.getCountersStats()) <= drained) {
-                double seconds = (clock.getAsLong() - resumed) / 1e9;
+            CountersStats stats = worker.getCountersStats();
+            long now = clock.getAsLong();
+            long backlog = backlog(stats);
+            if (backlog <= drained) {
+                double seconds = (now - resumed) / 1e9;
                 pauseDrainSeconds = seconds;
                 log.info("--- Drained the paused backlog in {} s ---", seconds);
                 enterPhase(RunPhase.MEASURE);
                 return;
             }
+            watch.check(now, stats, "backlog " + backlog + " messages, target <= " + drained);
             Thread.sleep(tickMillis);
         }
     }
@@ -550,23 +559,39 @@ public final class WorkloadGenerator implements WorkloadRun {
         log.info("Created {} producers in {} ms", fullListOfTopics.size(), timer.elapsedMillis());
     }
 
-    private void buildAndDrainBacklog(int testDurationMinutes) throws InterruptedException {
+    /**
+     * Pauses consumers until the backlog reaches the workload's size, then resumes them and waits for
+     * it to drain. Fails if the sent (build) or received (drain) counter stops moving for the stall
+     * window.
+     *
+     * @param testDurationMinutes how long to keep the controller alive once the backlog has drained
+     * @param clock the nanosecond clock stalls and progress logs are measured against
+     * @param buildTickMillis how often the backlog is checked while it builds
+     * @param drainTickMillis how often the backlog is checked while it drains
+     */
+    void buildAndDrainBacklog(
+            int testDurationMinutes, LongSupplier clock, long buildTickMillis, long drainTickMillis)
+            throws InterruptedException {
         Timer timer = new Timer();
         log.info("Stopping all consumers to build backlog");
         worker.pauseConsumers();
 
         int effectiveMessageSize = workload.effectiveMessageSize();
         long requestedBacklogSize = workload.consumerBacklogSizeGB * 1024 * 1024 * 1024;
+        long backlogMessageCapacity = requestedBacklogSize / effectiveMessageSize;
 
+        var build = new StallWatch("Backlog build", "messages sent", CountersStats::messagesSent);
         while (true) {
             CountersStats stats = worker.getCountersStats();
-            long currentBacklogSize = backlog(stats) * effectiveMessageSize;
-
-            if (currentBacklogSize >= requestedBacklogSize) {
+            long backlog = backlog(stats);
+            if (backlog * effectiveMessageSize >= requestedBacklogSize) {
                 break;
             }
-
-            Thread.sleep(1000);
+            build.check(
+                    clock.getAsLong(),
+                    stats,
+                    "backlog " + backlog + " messages, target >= " + backlogMessageCapacity);
+            Thread.sleep(buildTickMillis);
         }
 
         log.info("--- Completed backlog build in {} s ---", timer.elapsedSeconds());
@@ -576,13 +601,15 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         worker.resumeConsumers();
 
-        long backlogMessageCapacity = requestedBacklogSize / effectiveMessageSize;
         long backlogEmptyLevel = (long) ((1.0 - workload.backlogDrainRatio) * backlogMessageCapacity);
         final long minBacklog = Math.max(1000L, backlogEmptyLevel);
 
+        var drain =
+                new StallWatch("Backlog drain", "messages received", CountersStats::messagesReceived);
         while (true) {
             CountersStats stats = worker.getCountersStats();
-            if (backlog(stats) <= minBacklog) {
+            long backlog = backlog(stats);
+            if (backlog <= minBacklog) {
                 log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
                 enterPhase(RunPhase.MEASURE);
 
@@ -590,8 +617,68 @@ public final class WorkloadGenerator implements WorkloadRun {
 
                 return;
             }
+            drain.check(
+                    clock.getAsLong(), stats, "backlog " + backlog + " messages, target <= " + minBacklog);
+            Thread.sleep(drainTickMillis);
+        }
+    }
 
-            Thread.sleep(100);
+    // Fails a wait loop whose counter has not moved for the stall window, and logs its progress
+    // about every 30 s so a slow wait is not silent
+    private final class StallWatch {
+        private final String phase;
+        private final String counterName;
+        private final ToLongFunction<CountersStats> counter;
+        private boolean started;
+        private long last;
+        private long movedAt;
+        private long loggedAt;
+
+        StallWatch(String phase, String counterName, ToLongFunction<CountersStats> counter) {
+            this.phase = phase;
+            this.counterName = counterName;
+            this.counter = counter;
+        }
+
+        void check(long now, CountersStats stats, String progress) {
+            long value = counter.applyAsLong(stats);
+            if (!started) {
+                started = true;
+                last = value;
+                movedAt = now;
+                loggedAt = now;
+                return;
+            }
+            if (value != last) {
+                last = value;
+                movedAt = now;
+            } else if (now - movedAt >= stallTimeoutNanos) {
+                String message =
+                        String.format(
+                                "%s stalled: %s has not moved for %d s (%s; sent %d, received %d); set %s or %s"
+                                        + " to change the stall window",
+                                phase,
+                                counterName,
+                                TimeUnit.NANOSECONDS.toSeconds(now - movedAt),
+                                progress,
+                                stats.messagesSent(),
+                                stats.messagesReceived(),
+                                WorkerTimeouts.STALL_ENV,
+                                WorkerTimeouts.STALL_PROPERTY);
+                if (worker instanceof DistributedWorkersEnsemble ensemble) {
+                    ensemble.logCountersPerWorker(message);
+                }
+                throw new IllegalStateException(message);
+            }
+            if (now - loggedAt >= PROGRESS_LOG_NANOS) {
+                loggedAt = now;
+                log.info(
+                        "{}: {} (sent {}, received {})",
+                        phase,
+                        progress,
+                        stats.messagesSent(),
+                        stats.messagesReceived());
+            }
         }
     }
 
@@ -704,5 +791,6 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
     }
 
+    private static final long PROGRESS_LOG_NANOS = TimeUnit.SECONDS.toNanos(30);
     private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
 }

@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -390,9 +392,88 @@ class WorkloadGeneratorLifecycleTest {
         assertThat(result.phase)
                 .containsExactly(
                         RunPhase.MEASURE, RunPhase.BACKLOG_BUILD, RunPhase.BACKLOG_DRAIN, RunPhase.MEASURE);
-        // Resume read the clock at 4 minutes and the drained check at 5
+        // Resume read the clock at 4 minutes, the first drain check at 5 and the drained check at 6
         assertThat(result.consumerPause)
-                .isEqualTo(new TestResult.ConsumerPauseResult(1, 1, 5_000, 60.0));
+                .isEqualTo(new TestResult.ConsumerPauseResult(1, 1, 5_000, 120.0));
+    }
+
+    @Test
+    void consumerPauseFailsWhenTheDrainStalls() {
+        Worker worker = worker();
+        // Received stops at 1000 once consumers resume
+        when(worker.getCountersStats())
+                .thenReturn(
+                        new CountersStats(100, 0, 90),
+                        new CountersStats(6_000, 0, 1_000),
+                        new CountersStats(7_000, 0, 1_000));
+        Workload workload = pausedWorkload();
+        AtomicLong reads = new AtomicLong();
+        try (WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2))) {
+            assertThatThrownBy(() ->
+                            generator.pauseConsumersMidRun(
+                                    workload.consumerPause,
+                                    () -> TimeUnit.MINUTES.toNanos(reads.getAndIncrement()),
+                                    1))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Pause drain stalled: messages received has not moved for 300 s")
+                    .hasMessageContaining("received 1000");
+        }
+    }
+
+    @Test
+    void backlogBuildFailsWhenSentStopsMoving() {
+        Worker worker = worker();
+        when(worker.getCountersStats()).thenReturn(new CountersStats(100, 0, 0));
+        AtomicLong reads = new AtomicLong();
+        try (WorkloadGenerator generator =
+                generator(backlogWorkload(), worker, Duration.ofSeconds(2))) {
+            assertThatThrownBy(() ->
+                            generator.buildAndDrainBacklog(
+                                    0, () -> TimeUnit.MINUTES.toNanos(reads.getAndIncrement()), 1, 1))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Backlog build stalled: messages sent has not moved for 300 s")
+                    .hasMessageContaining("backlog 100 messages, target >= 1048576");
+        }
+        verify(worker, never()).resumeConsumers();
+    }
+
+    @Test
+    void backlogDrainStallLogsCountersPerWorker() {
+        DistributedWorkersEnsemble worker = mock(DistributedWorkersEnsemble.class);
+        when(worker.getCountersStats())
+                .thenReturn(new CountersStats(2_000_000, 0, 0), new CountersStats(2_000_000, 0, 10));
+        AtomicLong reads = new AtomicLong();
+        try (WorkloadGenerator generator =
+                generator(backlogWorkload(), worker, Duration.ofSeconds(2))) {
+            assertThatThrownBy(() ->
+                            generator.buildAndDrainBacklog(
+                                    0, () -> TimeUnit.MINUTES.toNanos(reads.getAndIncrement()), 1, 1))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Backlog drain stalled: messages received has not moved");
+        }
+        verify(worker).logCountersPerWorker(contains("Backlog drain stalled"));
+    }
+
+    @Test
+    void slowButMovingBacklogDoesNotStall() throws Exception {
+        Worker worker = worker();
+        // Each read is 4 minutes after the last; sent then received move on every read
+        AtomicInteger counterReads = new AtomicInteger();
+        when(worker.getCountersStats())
+                .thenAnswer(invocation -> {
+                    long read = counterReads.incrementAndGet();
+                    long sent = Math.min(read * 100_000, 1_100_000);
+                    long received = read > 11 ? Math.min((read - 11) * 200_000, sent) : 0;
+                    return new CountersStats(sent, 0, received);
+                });
+        AtomicLong reads = new AtomicLong();
+        try (WorkloadGenerator generator =
+                generator(backlogWorkload(), worker, Duration.ofSeconds(2))) {
+            generator.buildAndDrainBacklog(
+                    0, () -> TimeUnit.MINUTES.toNanos(4 * reads.getAndIncrement()), 1, 1);
+        }
+        verify(worker).resumeConsumers();
+        verify(worker).setPhase(RunPhase.MEASURE);
     }
 
     @Test
@@ -771,6 +852,15 @@ class WorkloadGeneratorLifecycleTest {
         workload.producerRate = 1;
         workload.warmupDurationMinutes = 0;
         workload.testDurationMinutes = 1;
+        return workload;
+    }
+
+    // 1 GB of 1 KiB messages: the build target is 1048576 messages, the drain target 1000
+    private static Workload backlogWorkload() {
+        Workload workload = workload();
+        workload.subscriptionsPerTopic = 1;
+        workload.messageSize = 1024;
+        workload.consumerBacklogSizeGB = 1;
         return workload;
     }
 

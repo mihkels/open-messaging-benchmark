@@ -263,6 +263,7 @@ class DistributedWorkersEnsembleTest {
     void pollsEveryWorkersCountersWhenAWorkerCallFails() throws Exception {
         List<Worker> workers = workers(2);
         var failure = new IllegalStateException("timed out");
+        when(workers.get(0).getPeriodStats()).thenReturn(new PeriodStats());
         when(workers.get(1).getPeriodStats()).thenThrow(failure);
         try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
             assertThat(catchThrowable(ensemble::getPeriodStats)).isSameAs(failure);

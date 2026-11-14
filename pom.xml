@@ -60,7 +60,7 @@
         <bytebuddy.version>1.18.17</bytebuddy.version>
         <commons.lang3.version>3.21.0</commons.lang3.version>
         <jackson.version>3.2.4</jackson.version>
-        <jackson.annotations.version>2.22</jackson.annotations.version>
+        <jackson.annotations.version>2.23</jackson.annotations.version>
         <!-- Keep at least the version async-http-client is built against -->
         <netty.version>4.2.20.Final</netty.version>
         <log4j.version>2.26.1</log4j.version>

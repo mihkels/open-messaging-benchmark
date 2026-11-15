@@ -134,4 +134,49 @@ class ThresholdsTest {
         assertThat(read.checks.get("minThroughputRatio").passed()).isTrue();
         assertThat(mapper.writeValueAsString(read)).isEqualTo(json);
     }
+
+    @Test
+    void gatesOnLostAndDuplicatedMessages() {
+        Thresholds thresholds = new Thresholds();
+        thresholds.maxLostMessages = 0L;
+        thresholds.maxDuplicatedMessages = 5L;
+        TestResult result = new TestResult();
+        result.delivery = new Delivery(100, 99, 1, 5, 0);
+
+        Thresholds.Result evaluation = thresholds.evaluate(result);
+
+        assertThat(evaluation.checks.get("maxLostMessages").observed).isEqualTo(1.0);
+        assertThat(evaluation.checks.get("maxLostMessages").status).isEqualTo(Thresholds.Status.FAIL);
+        assertThat(evaluation.checks.get("maxDuplicatedMessages").status)
+                .isEqualTo(Thresholds.Status.PASS);
+    }
+
+    @Test
+    void deliveryLimitsFailWithoutDeliveryCounts() {
+        Thresholds thresholds = new Thresholds();
+        thresholds.maxLostMessages = 10L;
+        thresholds.maxDuplicatedMessages = 10L;
+
+        Thresholds.Result evaluation = thresholds.evaluate(new TestResult());
+
+        assertThat(evaluation.checks.get("maxLostMessages").status).isEqualTo(Thresholds.Status.FAIL);
+        assertThat(evaluation.checks.get("maxDuplicatedMessages").status)
+                .isEqualTo(Thresholds.Status.FAIL);
+    }
+
+    @Test
+    void deliveryLimitsNeedVerifyDeliveryAndANonNegativeValue() {
+        Workload workload = new Workload();
+        Thresholds lost = new Thresholds();
+        lost.maxLostMessages = 0L;
+        Thresholds negative = new Thresholds();
+        negative.maxDuplicatedMessages = -1L;
+
+        assertThatThrownBy(() -> lost.validate(workload))
+                .hasMessageContaining("requires verifyDelivery");
+        workload.verifyDelivery = true;
+        lost.validate(workload);
+        assertThatThrownBy(() -> negative.validate(workload))
+                .hasMessageContaining("must not be negative");
+    }
 }

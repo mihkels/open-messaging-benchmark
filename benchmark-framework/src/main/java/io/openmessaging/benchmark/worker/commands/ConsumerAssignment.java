@@ -13,9 +13,14 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ConsumerAssignment {
     public List<TopicSubscription> topicsSubscriptions = new ArrayList<>();
+
+    /** Whether consumers check the delivery stamp of each message; see {@code verifyDelivery}. */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public boolean verifyDelivery;
 }

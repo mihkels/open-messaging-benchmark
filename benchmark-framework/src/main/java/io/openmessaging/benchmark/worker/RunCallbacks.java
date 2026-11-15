@@ -64,6 +64,16 @@ final class RunCallbacks implements ConsumerCallback {
             long sendTime,
             LongSupplier nanoClock,
             @Nullable Throwable failure) {
+        completeSend(payloadLength, intendedSendTime, sendTime, nanoClock, failure, false);
+    }
+
+    void completeSend(
+            long payloadLength,
+            long intendedSendTime,
+            long sendTime,
+            LongSupplier nanoClock,
+            @Nullable Throwable failure,
+            boolean stamped) {
         try {
             gate.readLock().lock();
             try {
@@ -71,6 +81,9 @@ final class RunCallbacks implements ConsumerCallback {
                     if (failure == null) {
                         stats.recordProducerSuccess(
                                 payloadLength, intendedSendTime, sendTime, nanoClock.getAsLong());
+                        if (stamped) {
+                            stats.recordVerifiedSend();
+                        }
                     } else {
                         stats.recordProducerFailure(failure);
                     }

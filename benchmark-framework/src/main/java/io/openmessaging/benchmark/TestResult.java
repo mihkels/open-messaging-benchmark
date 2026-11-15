@@ -153,6 +153,10 @@ public class TestResult {
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<RateProbeStep> rateProbe = new ArrayList<>();
 
+    /** Lost, duplicated and reordered messages; only for workloads with verifyDelivery. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable Delivery delivery;
+
     /** The mid-run consumer pause; only for workloads with a consumerPause that reached it. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable ConsumerPauseResult consumerPause;

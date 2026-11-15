@@ -111,7 +111,7 @@ class ProducerWorkAssignmentTest {
         assertThat(assignment)
                 .hasToString(
                         "ProducerWorkAssignment[payloads=1 templates, sizes [3], weights [7], publishRate=10.0, "
-                                + "keyDistributorType=NO_KEY, keyDistribution=null]");
+                                + "keyDistributorType=NO_KEY, keyDistribution=null, verifyDelivery=false]");
     }
 
     @Test
@@ -153,5 +153,37 @@ class ProducerWorkAssignmentTest {
         assertThat(json).contains("\"keyDistribution\":{\"keys\":37,\"exponent\":1.2}");
         assertThat(mapper.readValue(json, ProducerWorkAssignment.class)).isEqualTo(assignment);
         assertThat(assignment.withPublishRate(20).keyDistribution()).isEqualTo(config);
+    }
+
+    @Test
+    void carriesVerifyDeliveryOnWireAndRateChange() {
+        var assignment =
+                new ProducerWorkAssignment(
+                        io.openmessaging.benchmark.utils.payload.PayloadTemplates.of(
+                                List.of(new byte[] {1}), null),
+                        10,
+                        KeyDistributorType.NO_KEY,
+                        null,
+                        true);
+        ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+        String json = mapper.writeValueAsString(assignment);
+        assertThat(json).endsWith(",\"verifyDelivery\":true}");
+        assertThat(mapper.readValue(json, ProducerWorkAssignment.class)).isEqualTo(assignment);
+        assertThat(assignment.withPublishRate(20).verifyDelivery()).isTrue();
+    }
+
+    @Test
+    void readsCountersWithoutDeliveryFieldsFromOlderWorkers() {
+        ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+        CountersStats old =
+                mapper.readValue(
+                        "{\"messagesSent\":3,\"messageSendErrors\":1,\"messagesReceived\":2}",
+                        CountersStats.class);
+        CountersStats verified = new CountersStats(3, 1, 2, 3, 2, 1, 1);
+
+        assertThat(old).isEqualTo(new CountersStats(3, 1, 2));
+        assertThat(mapper.readValue(mapper.writeValueAsString(verified), CountersStats.class))
+                .isEqualTo(verified);
+        assertThat(old.plus(verified)).isEqualTo(new CountersStats(6, 2, 4, 3, 2, 1, 1));
     }
 }

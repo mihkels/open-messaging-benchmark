@@ -39,6 +39,10 @@ throughput ratio is average measured publish rate divided by `producerRate`; rat
 workloads (`producerRate: 0`) cannot use this check. Warm-up measurements are discarded before
 threshold evaluation.
 
+To also gate on delivery correctness, add `verifyDelivery: true` and limit the lost and duplicated
+messages it counts with `maxLostMessages` and `maxDuplicatedMessages`; see
+[Delivery verification](results.md#delivery-verification).
+
 Run the workload as usual in CI and use its process status as the gate:
 
 ```bash

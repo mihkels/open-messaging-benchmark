@@ -85,6 +85,19 @@ first attempt succeeded. Files written before retries existed have neither field
 `retried` warning finding: its numbers are valid, but the system under test or a worker failed at
 least once.
 
+## Delivery
+
+`delivery` is present when the workload sets `verifyDelivery: true`. The counts cover the whole
+run, warm-up included; see [Delivery verification](../guides/results.md#delivery-verification).
+
+|    Field     |  Type   |                               Description                               |
+|--------------|---------|-------------------------------------------------------------------------|
+| `sent`       | integer | Acknowledged messages that carried a delivery stamp                     |
+| `received`   | integer | Stamped messages received for the first time, summed over subscriptions |
+| `lost`       | integer | `sent` × subscriptions per topic − `received`, at least 0               |
+| `duplicated` | integer | Stamped messages received again on the same subscription                |
+| `outOfOrder` | integer | Stamped messages received after a later message from the same producer  |
+
 ## Consumer pause
 
 `consumerPause` is present when the workload has a [`consumerPause`](../guides/workloads.md#consumer-pause)

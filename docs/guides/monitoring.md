@@ -70,18 +70,25 @@ curl http://worker-1:8080/metrics
 The response combines the worker supervisor's registry with the metrics of its current driver
 process. Once a driver is initialized, it includes:
 
-|               Metric               |  Type   |                                                  Meaning                                                   |
-|------------------------------------|---------|------------------------------------------------------------------------------------------------------------|
-| `messages_sent_total`              | Counter | Sends completed successfully by the driver                                                                 |
-| `message_send_errors_total`        | Counter | Failed sends                                                                                               |
-| `bytes_sent_total`                 | Counter | Payload bytes sent                                                                                         |
-| `messages_recv_total`              | Counter | Messages received by consumers                                                                             |
-| `bytes_recv_total`                 | Counter | Payload bytes received                                                                                     |
-| `produce_latency_seconds`          | Timer   | Publish latency                                                                                            |
-| `producer_delay_latency_seconds`   | Timer   | Delay between the scheduled and actual send                                                                |
-| `produce_schedule_latency_seconds` | Timer   | Intended send to successful completion (schedule-corrected publish latency)                                |
-| `e2e_latency_seconds`              | Timer   | End-to-end latency                                                                                         |
-| `benchmark_phase`                  | Gauge   | 1 for the current run phase (`phase` label: `warmup`, `backlog_build`, `backlog_drain`, `measure`), else 0 |
+|               Metric               |  Type   |                                                           Meaning                                                            |
+|------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------|
+| `messages_sent_total`              | Counter | Sends completed successfully by the driver                                                                                   |
+| `message_send_errors_total`        | Counter | Failed sends                                                                                                                 |
+| `bytes_sent_total`                 | Counter | Payload bytes sent                                                                                                           |
+| `messages_recv_total`              | Counter | Messages received by consumers                                                                                               |
+| `bytes_recv_total`                 | Counter | Payload bytes received                                                                                                       |
+| `produce_latency_seconds`          | Timer   | Publish latency                                                                                                              |
+| `producer_delay_latency_seconds`   | Timer   | Delay between the scheduled and actual send                                                                                  |
+| `produce_schedule_latency_seconds` | Timer   | Intended send to successful completion (schedule-corrected publish latency)                                                  |
+| `e2e_latency_seconds`              | Timer   | End-to-end latency                                                                                                           |
+| `delivery_sent_total`              | Counter | With `verifyDelivery`: acknowledged stamped messages                                                                         |
+| `delivery_received_total`          | Counter | With `verifyDelivery`: stamped messages received for the first time per subscription                                         |
+| `delivery_duplicated_total`        | Counter | With `verifyDelivery`: stamped messages received again on the same subscription                                              |
+| `delivery_out_of_order_total`      | Counter | With `verifyDelivery`: stamped messages received after a later one from the same producer                                    |
+| `benchmark_phase`                  | Gauge   | 1 for the current run phase (`phase` label: `warmup`, `backlog_build`, `backlog_drain`, `measure`, `delivery_drain`), else 0 |
+
+Lost messages are not a worker metric: a message is lost when no worker received it, so the
+coordinator derives `lost` from all workers' counts after the run and writes it to the result.
 
 Each driver process serves one workload run, so its metrics carry `run_id` and `driver` (the
 driver configuration's `name`) labels. Match `run_id` to the `runId` of the JSON result to find

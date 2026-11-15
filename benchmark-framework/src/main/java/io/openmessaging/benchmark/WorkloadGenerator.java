@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import static io.openmessaging.benchmark.driver.Failures.append;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 import io.openmessaging.benchmark.driver.Failures;
@@ -60,6 +61,9 @@ import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 
 public final class WorkloadGenerator implements WorkloadRun {
+
+    // Receive counters unchanged this long end the delivery drain; the rest counts as lost
+    private static final long DELIVERY_QUIET_NANOS = TimeUnit.SECONDS.toNanos(10);
 
     private final String driverName;
     private final Workload workload;
@@ -188,7 +192,11 @@ public final class WorkloadGenerator implements WorkloadRun {
         PayloadTemplates payloads = PayloadFactory.create(workload);
         var producerWorkAssignment =
                 new ProducerWorkAssignment(
-                        payloads, targetPublishRate, workload.keyDistributor, workload.keyDistribution);
+                        payloads,
+                        targetPublishRate,
+                        workload.keyDistributor,
+                        workload.keyDistribution,
+                        workload.verifyDelivery);
         log.info(
                 "Prepared {} payloads from {} in {} ms",
                 payloads.size(),
@@ -239,7 +247,49 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         collect(result, measuredMinutes, TimeUnit.MINUTES, true);
         checkControllerFailure();
+        if (workload.verifyDelivery) {
+            result.delivery = drainForDelivery(System::nanoTime, 100, DELIVERY_QUIET_NANOS);
+            checkControllerFailure();
+        }
         return result;
+    }
+
+    /**
+     * Stops the producers and waits until consumers have received every acknowledged message, or
+     * until the counters stop moving for {@code quietNanos}, then counts what was lost.
+     *
+     * @param clock the nanosecond clock the quiet period is measured against
+     * @param tickMillis how often the counters are read
+     * @param quietNanos how long the counters must stay unchanged before the rest counts as lost
+     * @return the delivery counts
+     */
+    Delivery drainForDelivery(LongSupplier clock, long tickMillis, long quietNanos)
+            throws IOException, InterruptedException {
+        enterPhase(RunPhase.DELIVERY_DRAIN);
+        log.info("--- Producers stopped, waiting for consumers to receive what was sent ---");
+        CountersStats last = worker.getCountersStats();
+        long lastChange = clock.getAsLong();
+        while (true) {
+            MILLISECONDS.sleep(tickMillis);
+            CountersStats stats = worker.getCountersStats();
+            long now = clock.getAsLong();
+            if (!stats.equals(last)) {
+                last = stats;
+                lastChange = now;
+            } else if (stats.delivered() >= stats.verifiedSent() * workload.subscriptionsPerTopic
+                    || now - lastChange >= quietNanos) {
+                // Two equal reads in a row, so no send or receive was still settling
+                Delivery delivery = Delivery.of(stats, workload.subscriptionsPerTopic);
+                log.info(
+                        "Delivery: {} sent, {} received, {} lost, {} duplicated, {} out of order",
+                        delivery.sent(),
+                        delivery.received(),
+                        delivery.lost(),
+                        delivery.duplicated(),
+                        delivery.outOfOrder());
+                return delivery;
+            }
+        }
     }
 
     private void ensureTopicsAreReady() throws IOException, InterruptedException {
@@ -571,6 +621,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
 
         Collections.shuffle(consumerAssignment.topicsSubscriptions);
+        consumerAssignment.verifyDelivery = workload.verifyDelivery;
 
         Timer timer = new Timer();
 

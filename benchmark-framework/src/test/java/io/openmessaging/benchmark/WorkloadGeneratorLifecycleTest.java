@@ -422,6 +422,41 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void deliveryDrainEndsOnceEveryCopyArrivedAndStayedStill() throws Exception {
+        Worker worker = worker();
+        Workload workload = workload();
+        workload.subscriptionsPerTopic = 2;
+        when(worker.getCountersStats())
+                .thenReturn(
+                        new CountersStats(10, 0, 10, 10, 10, 0, 0),
+                        new CountersStats(10, 0, 20, 10, 20, 1, 0),
+                        new CountersStats(10, 0, 20, 10, 20, 1, 0));
+        try (WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2))) {
+            Delivery delivery = generator.drainForDelivery(() -> 0, 1, Long.MAX_VALUE);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 20, 0, 1, 0));
+        }
+        verify(worker).setPhase(RunPhase.DELIVERY_DRAIN);
+        verify(worker, times(3)).getCountersStats();
+    }
+
+    @Test
+    void deliveryDrainCountsTheRestAsLostOnceCountersGoQuiet() throws Exception {
+        Worker worker = worker();
+        Workload workload = workload();
+        workload.subscriptionsPerTopic = 1;
+        when(worker.getCountersStats()).thenReturn(new CountersStats(10, 0, 7, 10, 7, 0, 2));
+        AtomicLong now = new AtomicLong();
+        try (WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2))) {
+            Delivery delivery = generator.drainForDelivery(() -> now.getAndAdd(4), 1, 10);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 7, 3, 0, 2));
+        }
+        // Reads at 4, 8 and 12 ns after the start at 0; the last is past the 10 ns quiet period
+        verify(worker, times(4)).getCountersStats();
+    }
+
+    @Test
     void backlogBuildFailsWhenSentStopsMoving() {
         Worker worker = worker();
         when(worker.getCountersStats()).thenReturn(new CountersStats(100, 0, 0));

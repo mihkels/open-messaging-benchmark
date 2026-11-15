@@ -58,6 +58,7 @@ class WorkloadSetGeneratorTest {
                                                 "thresholds",
                                                 "checks",
                                                 "repeat",
+                                                "verifyDelivery",
                                                 "consumerPause"))
                                 .toList());
     }

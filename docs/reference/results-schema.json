@@ -159,6 +159,34 @@
       },
       "additionalProperties": false
     },
+    "delivery": {
+      "description": "Lost, duplicated and reordered messages for the whole run. Present only for workloads with verifyDelivery.",
+      "type": "object",
+      "required": ["sent", "received", "lost", "duplicated", "outOfOrder"],
+      "properties": {
+        "sent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "received": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outOfOrder": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "consumerPause": {
       "description": "Mid-run consumer pause. Present only for workloads with consumerPause that reached the pause.",
       "type": "object",

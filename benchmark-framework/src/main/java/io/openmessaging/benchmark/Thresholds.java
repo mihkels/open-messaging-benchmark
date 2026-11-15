@@ -24,10 +24,21 @@ public class Thresholds {
     public @Nullable Double maxPublishLatency99Ms;
     public @Nullable Double minThroughputRatio;
 
+    /** Most lost messages allowed; needs verifyDelivery. */
+    public @Nullable Long maxLostMessages;
+
+    /** Most duplicated messages allowed; needs verifyDelivery. */
+    public @Nullable Long maxDuplicatedMessages;
+
     void validate(Workload workload) {
-        if (maxPublishLatency99Ms == null && minThroughputRatio == null) {
+        if (maxPublishLatency99Ms == null
+                && minThroughputRatio == null
+                && maxLostMessages == null
+                && maxDuplicatedMessages == null) {
             throw new IllegalArgumentException("At least one threshold must be specified");
         }
+        validateDeliveryLimit("maxLostMessages", maxLostMessages, workload);
+        validateDeliveryLimit("maxDuplicatedMessages", maxDuplicatedMessages, workload);
         if (maxPublishLatency99Ms != null
                 && (!Double.isFinite(maxPublishLatency99Ms) || maxPublishLatency99Ms < 0)) {
             throw new IllegalArgumentException(
@@ -44,12 +55,43 @@ public class Thresholds {
         }
     }
 
+    private static void validateDeliveryLimit(String name, @Nullable Long limit, Workload workload) {
+        if (limit == null) {
+            return;
+        }
+        if (limit < 0) {
+            throw new IllegalArgumentException(name + " must not be negative");
+        }
+        if (!workload.verifyDelivery) {
+            throw new IllegalArgumentException(name + " requires verifyDelivery: true");
+        }
+    }
+
     Result evaluate(TestResult result) {
-        return evaluate(
-                result.aggregatedPublishLatency99pct,
-                result.summary.totalMessagesSent(),
-                result.summary.publishRateAvg(),
-                result.summary.targetRate());
+        Result evaluated =
+                evaluate(
+                        result.aggregatedPublishLatency99pct,
+                        result.summary.totalMessagesSent(),
+                        result.summary.publishRateAvg(),
+                        result.summary.targetRate());
+        Delivery delivery = result.delivery;
+        // No delivery counts means verification did not finish, which must not pass
+        if (maxLostMessages != null) {
+            long lost = delivery != null ? delivery.lost() : 0;
+            evaluated.checks.put(
+                    "maxLostMessages",
+                    new Check(maxLostMessages, lost, delivery != null && lost <= maxLostMessages));
+        }
+        if (maxDuplicatedMessages != null) {
+            long duplicated = delivery != null ? delivery.duplicated() : 0;
+            evaluated.checks.put(
+                    "maxDuplicatedMessages",
+                    new Check(
+                            maxDuplicatedMessages,
+                            duplicated,
+                            delivery != null && duplicated <= maxDuplicatedMessages));
+        }
+        return evaluated;
     }
 
     // Also used with the medians of repeated runs

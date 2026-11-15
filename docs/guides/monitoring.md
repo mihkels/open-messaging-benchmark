@@ -213,6 +213,33 @@ Long GC pauses in the driver process show up as publish delay and latency spikes
 to do with the broker. See [Runtime and plugins](../reference/runtime-and-plugins.md) for heap
 settings.
 
+## Load-generator saturation
+
+When a worker runs out of CPU or spends much of its time in GC pauses, throughput flattens and
+latency climbs as if the broker had reached its limit. Each worker reports its process CPU use,
+as a share of its available cores, and its GC pause time, as a share of the period, with every
+period's stats. The coordinator records the highest values across workers in the result's
+`workerHealth` series.
+
+When any measured period goes over `checks.maxWorkerCpu` (default `0.85`) or `checks.maxWorkerGc`
+(default `0.1`), the `generatorSaturation` [run check](results.md#run-checks) logs a warning and
+adds a finding, which makes the [validity verdict](results.md#validity-verdict) `warning`:
+
+```text
+Run check generatorSaturation (WARNING): Worker CPU use reached 93% in the measured window, above 85%; results may be limited by the load generator, add workers
+```
+
+Add workers or give them more cores, then rerun. Workers older than this check send no load, so
+the series is absent and the check does not run.
+
+The max-rate probe for `producerRate: 0` logs every step at info level, with the rate it chose,
+the backlogs, the latest p99 publish delay and why it ramped up or backed off, and records the same
+steps in the result's `rateProbe`:
+
+```text
+Rate probe at 30 s: 80000 -> 52000 msg/s (receiveBacklog; receive backlog 41000, publish backlog 0, publish delay p99 850 us)
+```
+
 ## Hosts and brokers
 
 Collect at least:

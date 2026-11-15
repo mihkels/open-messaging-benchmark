@@ -170,6 +170,44 @@ class PeriodStatsTest {
         assertThat(mapper.readValue(json, PeriodStats.class)).isEqualTo(failing);
     }
 
+    @Test
+    void loadIsOptionalInJsonAndAggregatesToTheMaximum() throws Exception {
+        var mapper = ObjectMappers.DEFAULT.mapper();
+        assertThat(mapper.writeValueAsString(new PeriodStats())).doesNotContain("\"load\"");
+        // An older worker sends no load field
+        assertThat(
+                        mapper
+                                .readValue(mapper.writeValueAsString(new PeriodStats()), PeriodStats.class)
+                                .load())
+                .isNull();
+
+        PeriodStats busy = withLoad(new WorkerLoad(0.9, 0.02));
+        PeriodStats gc = withLoad(new WorkerLoad(0.3, 0.15));
+        assertThat(mapper.readValue(mapper.writeValueAsString(busy), PeriodStats.class))
+                .isEqualTo(busy);
+        assertThat(PeriodStats.aggregate(List.of(busy, gc, new PeriodStats())).load())
+                .isEqualTo(new WorkerLoad(0.9, 0.15));
+        assertThat(busy.plus(new PeriodStats()).load()).isEqualTo(busy.load());
+        assertThat(busy.withWorkerId("w0").load()).isEqualTo(busy.load());
+    }
+
+    @Test
+    void workerLoadNormalisesToCoresAndRejectsMissingReadings() {
+        // 2 s of CPU over 1 s on 4 cores is half the machine; 100 ms of GC is a tenth
+        assertThat(WorkerLoad.of(2_000_000_000L, 100, 1_000_000_000L, 4))
+                .isEqualTo(new WorkerLoad(0.5, 0.1));
+        assertThat(WorkerLoad.of(9_000_000_000L, 5_000, 1_000_000_000L, 4))
+                .isEqualTo(new WorkerLoad(1, 1));
+        assertThat(WorkerLoad.of(-1, 0, 1, 1)).isNull();
+        assertThat(WorkerLoad.of(0, -1, 1, 1)).isNull();
+        assertThat(WorkerLoad.of(0, 0, 0, 1)).isNull();
+        assertThat(WorkerLoad.of(0, 0, 1, 0)).isNull();
+    }
+
+    private static PeriodStats withLoad(WorkerLoad load) {
+        return new PeriodStats(0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null, Map.of(), load);
+    }
+
     private static PeriodStats withReasons(Map<String, String> reasons) {
         return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, reasons);
     }

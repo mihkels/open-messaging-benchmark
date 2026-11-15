@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.within;
 import io.openmessaging.benchmark.Finding.Severity;
 import io.openmessaging.benchmark.worker.WorkerClock;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -296,6 +297,49 @@ class RunChecksTest {
 
         workload.checks = new RunChecks();
         workload.checks.maxRunToRunCv = Double.NaN;
+        assertThatThrownBy(workload::validate).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void flagsSaturatedWorkerCpuOrGcInTheMeasuredWindow() {
+        TestResult result = healthy();
+        result.workerHealth = new ArrayList<>(Collections.nCopies(PERIODS, new WorkerLoad(0.5, 0.01)));
+        assertThat(new RunChecks().evaluate(workload(), result)).isEmpty();
+
+        result.workerHealth.set(5, new WorkerLoad(0.93, 0.01));
+        Finding cpu = only(new RunChecks().evaluate(workload(), result));
+        assertThat(cpu.check()).isEqualTo("generatorSaturation");
+        assertThat(cpu.severity()).isEqualTo(Severity.WARNING);
+        assertThat(cpu.message()).contains("CPU use reached 93%", "above 85%", "add workers");
+        assertThat(cpu.value()).isEqualTo(0.93);
+        assertThat(cpu.limit()).isEqualTo(0.85);
+        assertThat(Validity.of(List.of(cpu)).status()).isEqualTo(Validity.Status.WARNING);
+
+        result.workerHealth.set(6, new WorkerLoad(0.5, 0.2));
+        assertThat(new RunChecks().evaluate(workload(), result))
+                .extracting(Finding::value)
+                .containsExactly(0.93, 0.2);
+    }
+
+    @Test
+    void generatorSaturationIgnoresWarmupAndHonoursLimits() {
+        TestResult result = healthy();
+        result.workerHealth = new ArrayList<>(Collections.nCopies(PERIODS, new WorkerLoad(0.5, 0.01)));
+        // The warm-up period is saturated, the measured window is not
+        result.workerHealth.set(0, new WorkerLoad(1, 0.5));
+        assertThat(new RunChecks().evaluate(workload(), result)).isEmpty();
+
+        result.workerHealth.set(3, new WorkerLoad(0.9, 0.01));
+        RunChecks relaxed = new RunChecks();
+        relaxed.maxWorkerCpu = 0.95;
+        assertThat(relaxed.evaluate(workload(), result)).isEmpty();
+        RunChecks disabled = new RunChecks();
+        disabled.disabled = List.of("generatorSaturation");
+        assertThat(disabled.evaluate(workload(), result)).isEmpty();
+
+        Workload workload = workload();
+        workload.checks = new RunChecks();
+        workload.checks.maxWorkerGc = -0.1;
         assertThatThrownBy(workload::validate).isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -30,11 +30,14 @@ class RateControllerTest {
         // no backlog
         rate = rateController.nextRate(rate, periodNanos, 10_000, 10_000);
         assertThat(rate).isEqualTo(20_000);
+        assertThat(rateController.decision()).isEqualTo("rampUp");
         assertThat(rateController.getRampingFactor()).isEqualTo(1);
 
         // receive backlog
         rate = rateController.nextRate(rate, periodNanos, 20_000, 15_000);
         assertThat(rate).isEqualTo(5_000);
+        assertThat(rateController.decision()).isEqualTo("receiveBacklog");
+        assertThat(rateController.receiveBacklog()).isEqualTo(5_000);
         assertThat(rateController.getRampingFactor()).isEqualTo(0.5);
     }
 
@@ -50,6 +53,8 @@ class RateControllerTest {
         // publish backlog
         rate = rateController.nextRate(rate, periodNanos, 15_000, 20_000);
         assertThat(rate).isEqualTo(5_000);
+        assertThat(rateController.decision()).isEqualTo("publishBacklog");
+        assertThat(rateController.publishBacklog()).isEqualTo(15_000);
         assertThat(rateController.getRampingFactor()).isEqualTo(0.5);
     }
 

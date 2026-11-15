@@ -18,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -118,6 +119,39 @@ public class TestResult {
      */
     public record ConsumerPauseResult(
             int startPeriod, int endPeriod, long peakBacklog, @Nullable Double drainSeconds) {}
+
+    /**
+     * The highest worker CPU and GC load in each period, across workers; absent when the workers do
+     * not report it.
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<WorkerLoad> workerHealth = new ArrayList<>();
+
+    /**
+     * One step of the max-rate probe that runs for {@code producerRate: 0}.
+     *
+     * @param seconds the time since the probe started
+     * @param rate the publish rate before the step, in msg/s
+     * @param nextRate the publish rate the step chose, in msg/s
+     * @param receiveBacklog messages published but not yet received
+     * @param publishBacklog messages the producers fell short of the rate by in the step
+     * @param publishDelayLatency99pct the p99 publish delay of the latest period in microseconds, or
+     *     null before the first period
+     * @param decision {@code rampUp}, or the backlog that made it back off: {@code receiveBacklog} or
+     *     {@code publishBacklog}
+     */
+    public record RateProbeStep(
+            double seconds,
+            double rate,
+            double nextRate,
+            long receiveBacklog,
+            long publishBacklog,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Long publishDelayLatency99pct,
+            String decision) {}
+
+    /** The max-rate probe's steps; only for {@code producerRate: 0} runs. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<RateProbeStep> rateProbe = new ArrayList<>();
 
     /** The mid-run consumer pause; only for workloads with a consumerPause that reached it. */
     @JsonInclude(JsonInclude.Include.NON_NULL)

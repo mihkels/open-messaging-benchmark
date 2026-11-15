@@ -65,6 +65,10 @@
   <p class="note">Per reporting period. Schedule-corrected latency counts from when the message was due, so it includes coordinated omission.</p>
   <div id="latency" class="chart"></div>
 
+  <h2 id="load-title">Load generator</h2>
+  <p class="note" id="load-note">Highest worker CPU use (share of its cores) and GC pause time per period, and the rate each step of the max-rate probe chose for <code>producerRate: 0</code> runs.</p>
+  <div id="load" class="chart"></div>
+
   <h2 id="capacity-title">Throughput vs p99 latency</h2>
   <p class="note" id="capacity-note">One point per run, ordered by throughput, to show where latency bends upward.</p>
   <div id="capacity" class="chart"></div>
@@ -273,7 +277,34 @@
     return option;
   });
 
-  // ---- 4. Capacity curve ----
+  // ---- 4. Load generator health and rate probe ----
+  if (runs.some(function (e) { return has(e[1].workerHealth) || has(e[1].rateProbe); })) {
+    draw("load", function () {
+      var series = [];
+      runs.forEach(function (e) {
+        var r = e[1];
+        if (has(r.workerHealth)) {
+          series.push(line(label(e[0], "worker CPU %"), overTime(r.workerHealth.map(function (h) { return h.cpu * 100; }))));
+          series.push(line(label(e[0], "worker GC %"), overTime(r.workerHealth.map(function (h) { return h.gc * 100; }))));
+        }
+        if (has(r.rateProbe)) {
+          series.push(line(label(e[0], "probe rate msg/s"), r.rateProbe.map(function (p) {
+            return { name: p.decision, value: [p.seconds, p.nextRate] };
+          }), { yAxisIndex: 1, showSymbol: true, step: "end" }));
+        }
+      });
+      var option = base("Worker CPU and GC (left), max-rate probe (right)");
+      option.xAxis = { type: "value", name: "seconds", nameLocation: "middle", nameGap: 30 };
+      option.yAxis = [{ type: "value", name: "%", min: 0, max: 100 }, { type: "value", name: "msg/s", splitLine: { show: false } }];
+      option.dataZoom = [{ type: "inside" }, { type: "slider", bottom: 8, height: 18 }];
+      option.series = series;
+      return option;
+    });
+  } else {
+    ["load-title", "load-note", "load"].forEach(function (id) { document.getElementById(id).hidden = true; });
+  }
+
+  // ---- 5. Capacity curve ----
   if (runs.length > 1) {
     draw("capacity", function () {
       var points = runs.map(function (e) {

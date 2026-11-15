@@ -40,6 +40,7 @@ The page embeds the results as JSON and loads [Apache ECharts](https://echarts.a
 | Latency percentile spectrum      | Aggregated publish latency, publish delay and end-to-end latency by percentile. The x axis gives each extra nine (90, 99, 99.9, …) the same width, so the tail is visible. One line per run. |
 | Throughput and backlog over time | Publish and consume rate per 10-second period, with the target rate as a dashed line; MB/s lines are in the legend, off by default. Below: backlog and publish errors per second.            |
 | Latency over time                | Publish p50, p99, p99.9 and max per period, schedule-corrected publish latency, and publish delay on a second axis. More series are in the legend.                                           |
+| Load generator                   | Shown when a result has `workerHealth` or `rateProbe`: worker CPU and GC per period, and the rate each max-rate probe step chose, to spot a saturated load generator.                        |
 | Throughput vs p99 latency        | Shown with two or more runs: one point per run, ordered by publish rate, to show where latency bends upward.                                                                                 |
 
 Click legend entries to hide or show series, drag on a chart or use the slider to zoom, and use the

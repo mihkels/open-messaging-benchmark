@@ -103,7 +103,7 @@
   "publishLatency99pct" : [ 40.0 ],
   "publishLatencyAvg" : [ 11.5 ],
   "publishLatencyMax" : [ 40.0 ],
-  "schemaVersion" : 2,
+  "schemaVersion" : 3,
   "summary" : {
     "maxBacklog" : 20,
     "targetRate" : 0.0,

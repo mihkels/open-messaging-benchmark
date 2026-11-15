@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +66,7 @@ public class ResultsToCsv {
             lines.add(
                     "topics,partitions,message-size,producers-per-topic,consumers-per-topic,"
                             + "prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,"
-                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max");
+                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity");
 
             List<TestResult> results = new ArrayList<>();
             for (File file : directoryListing) {
@@ -107,7 +108,10 @@ public class ResultsToCsv {
                         tr.consumersPerTopic)
                 + rateStatistics(TestResult.measured(tr.phase, tr.publishRate))
                 + ","
-                + rateStatistics(TestResult.measured(tr.phase, tr.consumeRate));
+                + rateStatistics(TestResult.measured(tr.phase, tr.consumeRate))
+                + ","
+                // empty for files older than schema version 3
+                + (tr.validity == null ? "" : tr.validity.status().name().toLowerCase(Locale.ROOT));
     }
 
     // min,avg,std-dev,max of the period rates; empty fields when there are no periods

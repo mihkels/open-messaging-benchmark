@@ -39,7 +39,7 @@
   .run h3 { font-size: 14px; margin: 0 0 8px; word-break: break-all; }
   .run table { border-collapse: collapse; width: 100%; }
   .run th { text-align: left; color: var(--muted); font-weight: normal; padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; }
-  .run td { padding: 2px 0; word-break: break-word; }
+  .run td { padding: 2px 0; word-break: break-word; white-space: pre-line; }
   .run pre { margin: 0; font-size: 12px; white-space: pre-wrap; }
   .chart { width: 100%; height: 420px; }
   .chart.tall { height: 620px; }
@@ -103,6 +103,8 @@
       ["Topics / partitions", r.topics == null ? null : r.topics + " / " + r.partitions],
       ["Producers / consumers per topic", r.producersPerTopic == null ? null : r.producersPerTopic + " / " + r.consumersPerTopic],
       ["Target rate", r.summary ? positive(r.summary.targetRate) : null],
+      ["Validity", r.validity ? [r.validity.status].concat(r.validity.findings.filter(function (f) { return f.severity !== "info"; })
+        .map(function (f) { return f.check + " (" + f.severity + "): " + f.message; })).join("\n") : null],
       ["Run ID", m.runId], ["Started (UTC)", m.startedAtUtc], ["Finished (UTC)", m.finishedAtUtc],
       ["OMB version", m.ombVersion], ["Git commit", m.gitCommit], ["JDK", m.jdk],
       ["JVM options", m.jvmOptions], ["Workers", m.workerCount], ["Driver config", m.driverConfig]

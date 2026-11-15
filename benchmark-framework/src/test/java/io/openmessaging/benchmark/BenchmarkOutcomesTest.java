@@ -279,12 +279,15 @@ class BenchmarkOutcomesTest {
                                 Map.of("retried", workload("retried")),
                                 worker,
                                 (d, w, ignored) -> attempts.removeFirst()))
-                .isTrue();
+                .isZero();
         JsonNode json = new ObjectMapper().readTree(Path.of(arguments.output).toFile());
         assertThat(json.get("attempts").asInt()).isEqualTo(2);
         assertThat(json.get("failedAttempts")).hasSize(1);
         assertThat(json.get("failedAttempts").get(0).asString())
                 .contains("timed out after 200 ms", "caused by java.util.concurrent.TimeoutException");
+        assertThat(json.get("validity").get("status").asString()).isEqualTo("warning");
+        assertThat(json.get("validity").get("findings").findValuesAsString("check"))
+                .contains("retried");
         verify(worker, times(2)).initializeDriver(any());
         verify(timedOut).close();
         verify(success).close();
@@ -346,7 +349,7 @@ class BenchmarkOutcomesTest {
                                 Map.of("recovered", workload("recovered")),
                                 worker,
                                 (d, w, ignored) -> attempts.removeFirst()))
-                .isTrue();
+                .isZero();
         assertThat(Files.readString(Path.of(arguments.output)))
                 .contains("recovered", "workload stalled");
         verify(worker, times(2)).stopAll();
@@ -421,11 +424,11 @@ class BenchmarkOutcomesTest {
         Benchmark.Arguments arguments = arguments();
         Path driver = Path.of(arguments.drivers.getFirst());
         Path output = directory.resolve("child-result.json");
-        ProbeResult success = exitProbe(driver, output, false, false);
+        ProbeResult success = exitProbe(driver, output, false, false, false);
         assertThat(success.exitCode()).as(success.output()).isZero();
         assertThat(Files.exists(output)).isTrue();
 
-        ProbeResult failure = exitProbe(driver, output, true, false);
+        ProbeResult failure = exitProbe(driver, output, true, false, false);
         assertThat(failure.exitCode()).as(failure.output()).isNotZero();
         assertThat(failure.output()).contains("fixture workload failure");
         assertThat(Files.exists(output)).isTrue();
@@ -460,7 +463,7 @@ class BenchmarkOutcomesTest {
                                 workloads,
                                 worker,
                                 (driver, workload, ignored) -> workload.name.equals("first") ? first : second))
-                .isFalse();
+                .isEqualTo(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
         assertThat(Files.readString(Path.of(arguments.output))).contains("second", "PASS");
         // Both runs went to the same --output file, so the report keeps the last under its name
         assertThat(Files.readString(Path.of(arguments.reportHtml)))
@@ -477,7 +480,7 @@ class BenchmarkOutcomesTest {
         Path driver = Path.of(arguments.drivers.getFirst());
         Path output = directory.resolve("threshold-result.json");
 
-        ProbeResult result = exitProbe(driver, output, false, true);
+        ProbeResult result = exitProbe(driver, output, false, true, false);
 
         assertThat(result.exitCode())
                 .as(result.output())
@@ -491,6 +494,24 @@ class BenchmarkOutcomesTest {
         assertThat(thresholds.get("checks").get("minThroughputRatio").get("status").stringValue())
                 .isEqualTo("FAIL");
         assertThat(result.output()).contains("Thresholds: FAIL", "minThroughputRatio");
+    }
+
+    @Test
+    void forcedRateShortfallIsInvalidAndFailsWithValidityExitCode() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Path driver = Path.of(arguments.drivers.getFirst());
+        Path output = directory.resolve("invalid-result.json");
+
+        // The fixture publishes 80 msg/s against a target of 100 and also fails its threshold
+        ProbeResult result = exitProbe(driver, output, false, true, true);
+
+        assertThat(result.exitCode())
+                .as(result.output())
+                .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
+        JsonNode validity = new ObjectMapper().readTree(Files.readString(output)).get("validity");
+        assertThat(validity.get("status").stringValue()).isEqualTo("invalid");
+        assertThat(validity.get("findings").findValuesAsString("check")).contains("rateShortfall");
+        assertThat(result.output()).contains("VALIDITY", "invalid (rateShortfall");
     }
 
     @Test
@@ -527,7 +548,8 @@ class BenchmarkOutcomesTest {
         assertThat(Files.readString(output)).isEqualTo("previous successful result");
     }
 
-    private ProbeResult exitProbe(Path driver, Path output, boolean fail, boolean thresholdFailure)
+    private ProbeResult exitProbe(
+            Path driver, Path output, boolean fail, boolean thresholdFailure, boolean failOnInvalid)
             throws Exception {
         String classpath =
                 System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
@@ -540,7 +562,8 @@ class BenchmarkOutcomesTest {
                         driver.toString(),
                         output.toString(),
                         Boolean.toString(fail),
-                        Boolean.toString(thresholdFailure));
+                        Boolean.toString(thresholdFailure),
+                        Boolean.toString(failOnInvalid));
         return waitForProbe(builder, directory.resolve("child-" + fail + ".log"));
     }
 
@@ -613,13 +636,14 @@ class BenchmarkOutcomesTest {
             arguments.output = args[1];
             boolean fail = Boolean.parseBoolean(args[2]);
             boolean thresholdFailure = Boolean.parseBoolean(args[3]);
+            arguments.failOnInvalid = Boolean.parseBoolean(args[4]);
             Workload workload = workload("fixture");
             if (thresholdFailure) {
                 workload.producerRate = 100;
                 workload.thresholds = new Thresholds();
                 workload.thresholds.minThroughputRatio = 0.9;
             }
-            boolean thresholdsPassed =
+            int exitCode =
                     Benchmark.runWorkloads(
                             arguments,
                             Map.of("fixture", workload),
@@ -648,8 +672,8 @@ class BenchmarkOutcomesTest {
                                             // The fixture run holds no resources
                                         }
                                     });
-            if (!thresholdsPassed) {
-                System.exit(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
+            if (exitCode != 0) {
+                System.exit(exitCode);
             }
         }
     }

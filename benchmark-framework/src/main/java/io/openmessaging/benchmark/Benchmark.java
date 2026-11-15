@@ -52,6 +52,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,9 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 
 public final class Benchmark {
     static final int THRESHOLD_FAILURE_EXIT_CODE = 2;
+
+    /** Exit code for --fail-on-invalid and --fail-on-warning; wins over a threshold failure. */
+    static final int VALIDITY_FAILURE_EXIT_CODE = 3;
 
     static class Arguments {
 
@@ -156,6 +160,17 @@ public final class Benchmark {
                         "Rerun a driver and workload combination up to this many times after a worker,"
                                 + " IO or timeout failure; 0 disables retries")
         public int retries = 3;
+
+        @Parameter(
+                names = "--fail-on-invalid",
+                description = "Exit with status 3 when a completed run's validity verdict is invalid")
+        public boolean failOnInvalid;
+
+        @Parameter(
+                names = "--fail-on-warning",
+                description =
+                        "Exit with status 3 when a completed run's validity verdict is warning or invalid")
+        public boolean failOnWarning;
     }
 
     // Accepts 30s, 5m, 1h30m and the like
@@ -196,8 +211,9 @@ public final class Benchmark {
         }
 
         Worker worker = createWorker(arguments);
-        if (!runWorkloads(arguments, workloads, worker, WorkloadGenerator::new)) {
-            System.exit(THRESHOLD_FAILURE_EXIT_CODE);
+        int exitCode = runWorkloads(arguments, workloads, worker, WorkloadGenerator::new);
+        if (exitCode != 0) {
+            System.exit(exitCode);
         }
     }
 
@@ -344,9 +360,9 @@ public final class Benchmark {
 
     // Throwable is caught on purpose here and in the helpers below: a failed workload, including an
     // Error, is recorded and the worker is still stopped and closed before the failures are rethrown.
-    // Returns whether every threshold check passed
+    // Returns the process exit code: 3 for a validity failure, 2 for a threshold failure, else 0
     @SuppressWarnings("java:S1181")
-    static boolean runWorkloads(
+    static int runWorkloads(
             Arguments arguments,
             Map<String, Workload> workloads,
             Worker worker,
@@ -371,6 +387,7 @@ public final class Benchmark {
                 thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
             }
+            printVerdicts(written);
             writeHtmlReport(arguments.reportHtml, written);
         } catch (Throwable e) {
             failures = append(failures, e);
@@ -382,7 +399,44 @@ public final class Benchmark {
             throw new IllegalStateException(
                     "One or more workloads or required cleanup operations failed", failures);
         }
-        return !thresholdFailed;
+        return exitCode(arguments, written, thresholdFailed);
+    }
+
+    // An invalid measurement makes a threshold verdict meaningless, so the validity code wins
+    static int exitCode(
+            Arguments arguments, Map<String, TestResult> written, boolean thresholdFailed) {
+        if (arguments.failOnInvalid || arguments.failOnWarning) {
+            Validity.Status failAt =
+                    arguments.failOnWarning ? Validity.Status.WARNING : Validity.Status.INVALID;
+            for (TestResult result : written.values()) {
+                if (result.validity != null && result.validity.status().compareTo(failAt) >= 0) {
+                    return VALIDITY_FAILURE_EXIT_CODE;
+                }
+            }
+        }
+        return thresholdFailed ? THRESHOLD_FAILURE_EXIT_CODE : 0;
+    }
+
+    // One line per written result with its verdict and the checks behind it
+    static void printVerdicts(Map<String, TestResult> written) {
+        if (written.isEmpty()) {
+            return;
+        }
+        log.info("--------------- VALIDITY ---------------");
+        written.forEach((file, result) -> {
+            Validity validity = Objects.requireNonNull(result.validity, "validity");
+            String checks =
+                    validity.findings().stream()
+                            .filter(f -> f.severity() != Finding.Severity.INFO)
+                            .map(Finding::check)
+                            .distinct()
+                            .collect(Collectors.joining(", "));
+            log.info(
+                    "{}: {}{}",
+                    file,
+                    validity.status().name().toLowerCase(Locale.ROOT),
+                    checks.isEmpty() ? "" : " (" + checks + ")");
+        });
     }
 
     // Writes the HTML report of the results written so far, when --report-html is given
@@ -583,7 +637,7 @@ public final class Benchmark {
             generator.includeHistograms(includeHistograms);
             TestResult result = runWatched(generator, worker);
             measured = true;
-            result.schemaVersion = 2;
+            result.schemaVersion = 3;
             result.attempts = failedAttempts.size() + 1;
             result.failedAttempts = List.copyOf(failedAttempts);
             result.metadata =
@@ -597,6 +651,7 @@ public final class Benchmark {
             result.findings =
                     Objects.requireNonNullElseGet(workload.checks, RunChecks::new).evaluate(workload, result);
             RunChecks.print(result.findings);
+            result.validity = Validity.of(result.findings);
             if (workload.thresholds != null) {
                 result.thresholds = workload.thresholds.evaluate(result);
                 result.thresholds.print();

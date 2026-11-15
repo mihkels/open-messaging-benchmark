@@ -33,6 +33,7 @@ public class RunChecks {
     static final String TAIL_SAMPLES = "tailSamples";
     static final String SEND_ERRORS = "sendErrors";
     static final String PUBLISH_DELAY_GROWTH = "publishDelayGrowth";
+    static final String RETRIED = "retried";
     static final List<String> NAMES =
             List.of(
                     RATE_SHORTFALL,
@@ -40,7 +41,8 @@ public class RunChecks {
                     SHORT_WINDOW,
                     TAIL_SAMPLES,
                     SEND_ERRORS,
-                    PUBLISH_DELAY_GROWTH);
+                    PUBLISH_DELAY_GROWTH,
+                    RETRIED);
 
     // Reported tail percentiles and the inverse of the fraction of samples above each
     private static final List<String> TAIL_PERCENTILES = List.of("p99", "p99.9", "p99.99");
@@ -101,6 +103,7 @@ public class RunChecks {
         tailSamples(summary, findings);
         sendErrors(summary, result.sendErrorReasons, findings);
         publishDelayGrowth(result, findings);
+        retried(result, findings);
         return findings;
     }
 
@@ -114,7 +117,8 @@ public class RunChecks {
                 findings.add(
                         new Finding(
                                 RATE_SHORTFALL,
-                                Severity.WARNING,
+                                // the run did not measure the load it was asked to
+                                Severity.INVALID,
                                 String.format(
                                         "Average publish rate %.1f msg/s is %.1f%% below the target %.1f msg/s",
                                         summary.publishRateAvg(), shortfall * 100, summary.targetRate()),
@@ -228,6 +232,21 @@ public class RunChecks {
                                     maxPublishDelayGrowthMs));
                 }
             }
+        }
+    }
+
+    private void retried(TestResult result, List<Finding> findings) {
+        if (enabled(RETRIED) && result.attempts != null && result.attempts > 1) {
+            findings.add(
+                    new Finding(
+                            RETRIED,
+                            Severity.WARNING,
+                            "The run needed "
+                                    + result.attempts
+                                    + " attempts; earlier failures: "
+                                    + String.join("; ", result.failedAttempts),
+                            (double) result.attempts,
+                            1.0));
         }
     }
 

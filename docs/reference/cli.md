@@ -39,12 +39,27 @@ bin/benchmark [options] <workload.yaml>...
 | `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                                                                |
 | `--include-histograms`  |                       | Include compressed aggregated latency histograms in the result JSON                                                                                                                              |
 | `--retries`             | Count                 | Rerun a combination up to this many times after a worker, IO, timeout or stall failure; default `3` (up to 4 attempts), `0` disables. See [Behavior](#behavior)                                  |
+| `--fail-on-invalid`     |                       | Exit with status `3` when a completed run's [validity](../guides/results.md#validity-verdict) is `invalid`. See [Exit codes](#exit-codes)                                                        |
+| `--fail-on-warning`     |                       | Exit with status `3` when a completed run's validity is `warning` or `invalid`                                                                                                                   |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                                                                 |
 | `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                                                              |
 | `-h`, `--help`          |                       | Print usage and exit                                                                                                                                                                             |
 
 Positional arguments are workload files. `--legacy-driver-name` is accepted as a deprecated alias of
 `--driver-location`.
+
+### Exit codes
+
+| Status |                                                           Meaning                                                           |
+|--------|-----------------------------------------------------------------------------------------------------------------------------|
+| `0`    | Every combination completed, passed its thresholds and, with `--fail-on-*`, met the validity bar                            |
+| `2`    | A completed run failed a workload threshold                                                                                 |
+| `3`    | With `--fail-on-invalid`, a completed run is `invalid`; with `--fail-on-warning`, a completed run is `warning` or `invalid` |
+| other  | A run, cleanup or configuration failed, or the command line is invalid                                                      |
+
+When a run both fails a threshold and fails the validity bar, the status is `3`: a measurement that
+is not trustworthy makes its threshold result meaningless. A failed run or cleanup wins over both,
+because the coordinator then exits with an exception.
 
 ### Behavior
 
@@ -69,7 +84,7 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
   next combination when it is safe to do so. The process exits with a non-zero status if any
   combination or required cleanup fails; results from successful combinations remain available.
   A completed run that fails a workload threshold exits with status `2`, distinct from a run or
-  configuration error. See [CI gating](../guides/ci-gating.md).
+  configuration error. See [Exit codes](#exit-codes) and [CI gating](../guides/ci-gating.md).
 - **Retries.** A combination that fails with a worker, IO, HTTP timeout, connection, stall or
   health-watchdog failure is rerun from the start, up to `--retries` more times: the coordinator
   stops every worker, initializes the driver again and logs

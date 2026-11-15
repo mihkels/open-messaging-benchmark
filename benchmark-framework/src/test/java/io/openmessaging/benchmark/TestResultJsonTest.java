@@ -118,7 +118,29 @@ class TestResultJsonTest {
 
         assertThat(result.workload).isEqualTo("golden");
         assertThat(result.aggregatedPublishLatency99pct).isEqualTo(40.0);
-        assertThat(result.schemaVersion).isEqualTo(2);
+        assertThat(result.schemaVersion).isEqualTo(3);
+    }
+
+    @Test
+    void readsVersion2WithoutValidityAndRoundTripsVersion3() throws Exception {
+        ObjectNode version2 = (ObjectNode) golden();
+        version2.put("schemaVersion", 2);
+        TestResult read = mapper.treeToValue(version2, TestResult.class);
+        assertThat(read.schemaVersion).isEqualTo(2);
+        assertThat(read.validity).isNull();
+
+        read.schemaVersion = 3;
+        read.validity =
+                Validity.of(
+                        List.of(new Finding("rateShortfall", Finding.Severity.INVALID, "short", 0.4, 0.05)));
+        ObjectNode written = toTree(read);
+        assertThat(written.get("validity").get("status").stringValue()).isEqualTo("invalid");
+        assertThat(written.get("validity").get("findings").get(0).get("severity").stringValue())
+                .isEqualTo("invalid");
+
+        TestResult reread = mapper.treeToValue(written, TestResult.class);
+        assertThat(reread.schemaVersion).isEqualTo(3);
+        assertThat(reread.validity).isEqualTo(read.validity);
     }
 
     @Test

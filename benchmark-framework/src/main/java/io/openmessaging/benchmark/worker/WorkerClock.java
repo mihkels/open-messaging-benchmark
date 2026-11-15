@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.worker;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,19 +88,24 @@ public record WorkerClock(
         long bestOffset = 0;
         for (int i = 0; i < ROUND_TRIPS; i++) {
             long sent = coordinatorMicros.getAsLong();
-            @Nullable WorkerHealth health;
+            @Nullable Long workerMicros;
             try {
-                health = worker.health();
+                workerMicros = worker.health().clockMicros();
             } catch (RuntimeException e) {
-                log.warn("Cannot probe the clock of worker {}: {}", worker.id(), e.toString());
+                // Probing is best effort: a failure leaves the worker out, never fails the run
+                log.atWarn()
+                        .setMessage("Cannot probe the clock of worker {}: {}")
+                        .addArgument(worker::id)
+                        .addArgument(e::toString)
+                        .log();
                 return null;
             }
             long received = coordinatorMicros.getAsLong();
-            // Worker implementations other than the HTTP client may report no health at all
-            Long workerMicros = health == null ? null : health.clockMicros();
             if (workerMicros == null) {
-                log.warn(
-                        "Worker {} does not report its clock; upgrade it to measure clock offset", worker.id());
+                log.atWarn()
+                        .setMessage("Worker {} does not report its clock; upgrade it to measure clock offset")
+                        .addArgument(worker::id)
+                        .log();
                 return null;
             }
             long rtt = received - sent;

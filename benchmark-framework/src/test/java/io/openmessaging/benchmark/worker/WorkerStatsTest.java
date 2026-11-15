@@ -28,6 +28,23 @@ import org.junit.jupiter.api.Test;
 class WorkerStatsTest {
 
     @Test
+    void periodStatsCarryThisJvmsCpuAndGcLoad() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            stats.toPeriodStats();
+            // HotSpot reports both readings, so every later snapshot has a load between 0 and 1
+            assertThat(stats.toPeriodStats().load())
+                    .satisfies(load -> {
+                        assertThat(load.cpu()).isBetween(0.0, 1.0);
+                        assertThat(load.gc()).isBetween(0.0, 1.0);
+                    });
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
     void phaseGaugeMarksOnlyTheCurrentPhase() {
         PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
         try {

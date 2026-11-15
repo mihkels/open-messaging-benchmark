@@ -186,6 +186,8 @@ checks:
   maxPublishDelayGrowthMs: 10   # publishDelayGrowth
   maxClockOffsetFraction: 0.1   # clockOffset: worker clock spread as a fraction of p50 end-to-end
   maxRunToRunCv: 0.1            # runToRunVariance: coefficient of variation across --repeat runs
+  maxWorkerCpu: 0.85            # generatorSaturation: worker CPU as a fraction of its cores
+  maxWorkerGc: 0.1              # generatorSaturation: worker GC pause time as a fraction of a period
 ```
 
 `minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown

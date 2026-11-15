@@ -15,6 +15,7 @@ package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -76,6 +77,20 @@ class HtmlReportTest {
                 .containsPattern("integrity=\"sha384-[A-Za-z0-9+/=]+\"")
                 .contains(
                         "id=\"spectrum-publish\"", "id=\"throughput\"", "id=\"latency\"", "id=\"capacity\"");
+    }
+
+    @Test
+    void embedsWorkerHealthAndRateProbeForTheLoadChart() {
+        TestResult result = result("A", 1);
+        result.workerHealth = List.of(new WorkerLoad(0.9, 0.02));
+        result.rateProbe = List.of(new TestResult.RateProbeStep(3, 100, 200, 0, 0, 50L, "rampUp"));
+
+        String html = HtmlReport.render(Map.of("r.json", result));
+
+        assertThat(html).contains("id=\"load\"", "r.workerHealth", "r.rateProbe");
+        JsonNode run = data(html).get("r.json");
+        assertThat(run.get("workerHealth").get(0).get("cpu").doubleValue()).isEqualTo(0.9);
+        assertThat(run.get("rateProbe").get(0).get("decision").stringValue()).isEqualTo("rampUp");
     }
 
     @Test

@@ -37,7 +37,9 @@ public record PeriodStats(
         @JsonProperty("publishScheduleLatency") Histogram publishScheduleLatency,
         // Last send failure per worker id; omitted when empty so older readers see the old shape
         @JsonProperty("sendErrorReasons") @JsonInclude(JsonInclude.Include.NON_EMPTY)
-                Map<String, String> sendErrorReasons) {
+                Map<String, String> sendErrorReasons,
+        // Worker CPU and GC load; absent from older workers
+        @JsonProperty("load") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable WorkerLoad load) {
 
     // Defensive copy constructor
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -54,7 +56,8 @@ public record PeriodStats(
             @Nullable Histogram publishDelayLatency,
             @Nullable Histogram endToEndLatency,
             @Nullable Histogram publishScheduleLatency,
-            @Nullable Map<String, String> sendErrorReasons) {
+            @Nullable Map<String, String> sendErrorReasons,
+            @Nullable WorkerLoad load) {
         this.messagesSent = messagesSent;
         this.messageSendErrors = messageSendErrors;
         this.bytesSent = bytesSent;
@@ -70,6 +73,39 @@ public record PeriodStats(
         this.publishScheduleLatency =
                 publishScheduleLatency != null ? publishScheduleLatency.copy() : new Histogram(5);
         this.sendErrorReasons = sendErrorReasons != null ? Map.copyOf(sendErrorReasons) : Map.of();
+        this.load = load;
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PeriodStats(
+            long messagesSent,
+            long messageSendErrors,
+            long bytesSent,
+            long messagesReceived,
+            long bytesReceived,
+            long totalMessagesSent,
+            long totalMessageSendErrors,
+            long totalMessagesReceived,
+            @Nullable Histogram publishLatency,
+            @Nullable Histogram publishDelayLatency,
+            @Nullable Histogram endToEndLatency,
+            @Nullable Histogram publishScheduleLatency,
+            @Nullable Map<String, String> sendErrorReasons) {
+        this(
+                messagesSent,
+                messageSendErrors,
+                bytesSent,
+                messagesReceived,
+                bytesReceived,
+                totalMessagesSent,
+                totalMessageSendErrors,
+                totalMessagesReceived,
+                publishLatency,
+                publishDelayLatency,
+                endToEndLatency,
+                publishScheduleLatency,
+                sendErrorReasons,
+                null);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -173,7 +209,8 @@ public record PeriodStats(
                 publishDelayLatency,
                 endToEndLatency,
                 publishScheduleLatency,
-                Map.of(workerId, String.join("; ", sendErrorReasons.values())));
+                Map.of(workerId, String.join("; ", sendErrorReasons.values())),
+                load);
     }
 
     /**
@@ -196,7 +233,8 @@ public record PeriodStats(
                 combine(this.publishDelayLatency, other.publishDelayLatency),
                 combine(this.endToEndLatency, other.endToEndLatency),
                 combine(this.publishScheduleLatency, other.publishScheduleLatency),
-                merge(List.of(this, other)));
+                merge(List.of(this, other)),
+                WorkerLoad.max(this.load, other.load));
     }
 
     private static Histogram combine(Histogram first, Histogram second) {
@@ -229,6 +267,7 @@ public record PeriodStats(
         Histogram delay = new Histogram(5);
         Histogram schedule = new Histogram(5);
         Histogram endToEnd = new Histogram(5);
+        WorkerLoad load = null;
         for (PeriodStats snapshot : snapshots) {
             sent += snapshot.messagesSent;
             errors += snapshot.messageSendErrors;
@@ -242,6 +281,7 @@ public record PeriodStats(
             delay.add(snapshot.publishDelayLatency);
             schedule.add(snapshot.publishScheduleLatency);
             endToEnd.add(snapshot.endToEndLatency);
+            load = WorkerLoad.max(load, snapshot.load);
         }
         return new PeriodStats(
                 sent,
@@ -256,6 +296,7 @@ public record PeriodStats(
                 delay,
                 endToEnd,
                 schedule,
-                merge(snapshots));
+                merge(snapshots),
+                load);
     }
 }

@@ -15,6 +15,7 @@ package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.Finding.Severity;
 import io.openmessaging.benchmark.worker.WorkerClock;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ public class RunChecks {
     static final String RETRIED = "retried";
     static final String CLOCK_OFFSET = "clockOffset";
     static final String RUN_TO_RUN_VARIANCE = "runToRunVariance";
+    static final String GENERATOR_SATURATION = "generatorSaturation";
     static final String DELIVERY = "delivery";
     static final List<String> NAMES =
             List.of(
@@ -50,6 +52,7 @@ public class RunChecks {
                     RETRIED,
                     CLOCK_OFFSET,
                     RUN_TO_RUN_VARIANCE,
+                    GENERATOR_SATURATION,
                     DELIVERY);
 
     // Reported tail percentiles and the inverse of the fraction of samples above each
@@ -88,6 +91,12 @@ public class RunChecks {
     /** Largest tolerated coefficient of variation of a metric across {@code --repeat} runs. */
     public double maxRunToRunCv = 0.1;
 
+    /** Highest tolerated worker CPU use in a measured period, as a fraction of its cores. */
+    public double maxWorkerCpu = 0.85;
+
+    /** Highest tolerated worker GC pause time in a measured period, as a fraction of the period. */
+    public double maxWorkerGc = 0.1;
+
     void validate() {
         for (String name : disabled) {
             if (!NAMES.contains(name)) {
@@ -99,13 +108,17 @@ public class RunChecks {
                         && maxBacklogGrowthSeconds >= 0
                         && maxPublishDelayGrowthMs >= 0
                         && maxClockOffsetFraction >= 0
-                        && maxRunToRunCv >= 0)
+                        && maxRunToRunCv >= 0
+                        && maxWorkerCpu >= 0
+                        && maxWorkerGc >= 0)
                 || !Double.isFinite(
                         maxRateShortfall
                                 + maxBacklogGrowthSeconds
                                 + maxPublishDelayGrowthMs
                                 + maxClockOffsetFraction
-                                + maxRunToRunCv)) {
+                                + maxRunToRunCv
+                                + maxWorkerCpu
+                                + maxWorkerGc)) {
             throw new IllegalArgumentException("checks limits must be finite non-negative numbers");
         }
         if (minMeasuredMinutes < 0 || minTailSamples < 0 || maxSendErrors < 0) {
@@ -131,6 +144,7 @@ public class RunChecks {
         publishDelayGrowth(result, findings);
         retried(result, findings);
         clockOffset(result, findings);
+        generatorSaturation(result, findings);
         delivery(workload, result.delivery, findings);
         return findings;
     }
@@ -335,6 +349,32 @@ public class RunChecks {
                                 limit));
             }
         }
+    }
+
+    private void generatorSaturation(TestResult result, List<Finding> findings) {
+        if (enabled(GENERATOR_SATURATION)) {
+            List<WorkerLoad> loads = TestResult.measured(result.phase, result.workerHealth);
+            double cpu = loads.stream().mapToDouble(WorkerLoad::cpu).max().orElse(0);
+            double gc = loads.stream().mapToDouble(WorkerLoad::gc).max().orElse(0);
+            if (cpu > maxWorkerCpu) {
+                findings.add(saturation("CPU use", cpu, maxWorkerCpu));
+            }
+            if (gc > maxWorkerGc) {
+                findings.add(saturation("GC pause time", gc, maxWorkerGc));
+            }
+        }
+    }
+
+    private static Finding saturation(String what, double value, double limit) {
+        return new Finding(
+                GENERATOR_SATURATION,
+                Severity.WARNING,
+                String.format(
+                        "Worker %s reached %.0f%% in the measured window, above %.0f%%; results may be"
+                                + " limited by the load generator, add workers",
+                        what, value * 100, limit * 100),
+                value,
+                limit);
     }
 
     /**

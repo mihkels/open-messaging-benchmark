@@ -21,6 +21,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +70,11 @@ public class WorkerStats {
     private volatile @Nullable RunPhase phase;
     // Last send failure as "class: message"; kept until reset so every period reports it.
     private volatile @Nullable String lastSendError;
+
+    // Readings at the previous snapshot, for the per-interval CPU and GC load
+    private long lastLoadNanos = System.nanoTime();
+    private long lastCpuNanos = JvmResourceMetrics.processCpuNanos();
+    private long lastGcMillis = JvmResourceMetrics.gcPauseMillis();
 
     WorkerStats(MeterRegistry registry) {
         this.registry = registry;
@@ -170,7 +176,26 @@ public class WorkerStats {
                 publishDelayLatency.takeInterval(),
                 endToEndLatency.takeInterval(),
                 publishScheduleLatency.takeInterval(),
-                lastSendError == null ? Map.of() : Map.of(LocalWorker.ID, lastSendError));
+                lastSendError == null ? Map.of() : Map.of(LocalWorker.ID, lastSendError),
+                sampleLoad());
+    }
+
+    private synchronized @Nullable WorkerLoad sampleLoad() {
+        long now = System.nanoTime();
+        long cpu = JvmResourceMetrics.processCpuNanos();
+        long gc = JvmResourceMetrics.gcPauseMillis();
+        WorkerLoad load =
+                cpu < 0 || gc < 0 || lastCpuNanos < 0 || lastGcMillis < 0
+                        ? null
+                        : WorkerLoad.of(
+                                cpu - lastCpuNanos,
+                                gc - lastGcMillis,
+                                now - lastLoadNanos,
+                                Runtime.getRuntime().availableProcessors());
+        lastLoadNanos = now;
+        lastCpuNanos = cpu;
+        lastGcMillis = gc;
+        return load;
     }
 
     public CumulativeLatencies toCumulativeLatencies() {

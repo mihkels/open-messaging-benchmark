@@ -34,6 +34,7 @@ import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -80,6 +82,9 @@ public final class WorkloadGenerator implements WorkloadRun {
     private final long stallTimeoutNanos = WorkerTimeouts.stall().toNanos();
 
     private volatile boolean runCompleted = false;
+    // Written by the max-rate probe thread, copied into the result when the run finishes
+    private final List<TestResult.RateProbeStep> rateProbe = new CopyOnWriteArrayList<>();
+    private volatile @Nullable Long lastPublishDelay99pct;
     private volatile boolean needToWaitForBacklogDraining = false;
     private volatile boolean closed;
     private volatile boolean quiescentAfterClose;
@@ -326,6 +331,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      */
     private void findMaximumSustainableRate(double currentRate) throws InterruptedException {
         long lastControlTimestamp = System.nanoTime();
+        long probeStart = lastControlTimestamp;
 
         RateController rateController = new RateController();
 
@@ -343,11 +349,43 @@ public final class WorkloadGenerator implements WorkloadRun {
             lastControlTimestamp = currentTime;
 
             currentRate =
-                    rateController.nextRate(
-                            currentRate, periodNanos, stats.messagesSent(), stats.messagesReceived());
-            targetPublishRate = currentRate;
-            worker.adjustPublishRate(currentRate);
+                    probeStep(
+                            rateController, currentRate, periodNanos, (currentTime - probeStart) / 1e9, stats);
         }
+    }
+
+    // One max-rate probe step: picks the next rate, records it in the trace and applies it
+    double probeStep(
+            RateController controller,
+            double rate,
+            long periodNanos,
+            double seconds,
+            CountersStats stats) {
+        double next =
+                controller.nextRate(rate, periodNanos, stats.messagesSent(), stats.messagesReceived());
+        var step =
+                new TestResult.RateProbeStep(
+                        seconds,
+                        rate,
+                        next,
+                        controller.receiveBacklog(),
+                        controller.publishBacklog(),
+                        lastPublishDelay99pct,
+                        controller.decision());
+        rateProbe.add(step);
+        log.info(
+                "Rate probe at {} s: {} -> {} msg/s ({}; receive backlog {}, publish backlog {},"
+                        + " publish delay p99 {} us)",
+                Math.round(seconds),
+                Math.round(rate),
+                Math.round(next),
+                step.decision(),
+                step.receiveBacklog(),
+                step.publishBacklog(),
+                step.publishDelayLatency99pct());
+        targetPublishRate = next;
+        worker.adjustPublishRate(next);
+        return next;
     }
 
     /**
@@ -800,6 +838,11 @@ public final class WorkloadGenerator implements WorkloadRun {
                 ResultLog.period(period);
             }
             result.recordPeriod(period, current, targetPublishRate, workload.usesStages() ? stage : null);
+            WorkerLoad load = stats.load();
+            if (load != null) {
+                result.workerHealth.add(load);
+            }
+            lastPublishDelay99pct = period.publishDelayLatency().getValueAtPercentile(99);
 
             if (now >= endTime && !(measured && needToWaitForBacklogDraining)) {
                 if (measured) {
@@ -843,6 +886,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         if (includeHistograms) {
             result.recordHistogramData(aggregate);
         }
+        result.rateProbe = new ArrayList<>(rateProbe);
     }
 
     private static final long PROGRESS_LOG_NANOS = TimeUnit.SECONDS.toNanos(30);

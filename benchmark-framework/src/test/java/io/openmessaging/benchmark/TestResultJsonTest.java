@@ -21,6 +21,7 @@ import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,6 +101,28 @@ class TestResultJsonTest {
         removeScheduleFields(written);
         TIMING_DEPENDENT_SUMMARY.forEach(((ObjectNode) written.get("summary"))::remove);
         assertThat(written).isEqualTo(golden);
+    }
+
+    @Test
+    void workerHealthAndRateProbeAreOptionalAndSurviveARoundTrip() throws Exception {
+        assertThat(toTree(new TestResult()).has("workerHealth")).isFalse();
+        assertThat(toTree(new TestResult()).has("rateProbe")).isFalse();
+        assertThat(mapper.treeToValue(toTree(new TestResult()), TestResult.class).rateProbe).isEmpty();
+
+        TestResult result = new TestResult();
+        result.workerHealth = List.of(new WorkerLoad(0.4, 0.01), new WorkerLoad(0.9, 0.02));
+        result.rateProbe =
+                List.of(
+                        new TestResult.RateProbeStep(3, 10_000, 20_000, 0, 0, null, "rampUp"),
+                        new TestResult.RateProbeStep(6, 20_000, 9_000, 5_000, 0, 1_200L, "receiveBacklog"));
+
+        ObjectNode json = toTree(result);
+        TestResult read = mapper.treeToValue(json, TestResult.class);
+
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
+        assertThat(json.get("rateProbe").get(0).has("publishDelayLatency99pct")).isFalse();
+        assertThat(read.workerHealth).isEqualTo(result.workerHealth);
+        assertThat(read.rateProbe).isEqualTo(result.rateProbe);
     }
 
     @Test

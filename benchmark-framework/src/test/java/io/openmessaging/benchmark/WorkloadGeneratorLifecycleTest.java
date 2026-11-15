@@ -36,6 +36,7 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -636,6 +637,55 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void maxRateProbeStepsAreRecordedInTheResult() throws Exception {
+        Worker worker = worker();
+        Histogram delay = new Histogram(5);
+        delay.recordValue(1_500);
+        when(worker.getPeriodStats())
+                .thenReturn(new PeriodStats(0, 0, 0, 0, 0, 0, 0, 0, null, delay, null, null));
+        Workload workload = workload();
+        workload.producerRate = 0;
+        TestResult result = new TestResult();
+        long second = TimeUnit.SECONDS.toNanos(1);
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            RateController controller = new RateController();
+            double rate =
+                    generator.probeStep(controller, 10_000, second, 3, new CountersStats(10_000, 0, 10_000));
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+            generator.probeStep(controller, rate, second, 6, new CountersStats(30_000, 0, 20_000));
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
+        }
+
+        verify(worker).adjustPublishRate(20_000.0);
+        assertThat(result.rateProbe)
+                .extracting(TestResult.RateProbeStep::decision)
+                .containsExactly("rampUp", "receiveBacklog");
+        TestResult.RateProbeStep backOff = result.rateProbe.get(1);
+        assertThat(backOff.rate()).isEqualTo(20_000);
+        assertThat(backOff.receiveBacklog()).isEqualTo(10_000);
+        assertThat(result.rateProbe.get(0).publishDelayLatency99pct()).isNull();
+        assertThat(backOff.publishDelayLatency99pct()).isBetween(1_400L, 1_600L);
+    }
+
+    @Test
+    void recordsTheHighestWorkerLoadPerPeriodWhenWorkersReportIt() throws Exception {
+        Worker worker = worker();
+        WorkerLoad load = new WorkerLoad(0.9, 0.05);
+        when(worker.getPeriodStats())
+                .thenReturn(
+                        new PeriodStats(0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null, null, load),
+                        new PeriodStats());
+        TestResult result = new TestResult();
+        try (WorkloadGenerator generator = fastGenerator(workload(), worker)) {
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, false);
+        }
+
+        assertThat(result.phase).hasSize(2);
+        assertThat(result.workerHealth).containsExactly(load);
+    }
+
+    @Test
     void runsProducerOnlyAndConsumerOnlyWorkloads() throws Exception {
         Worker consumerOnlyWorker = worker();
         when(consumerOnlyWorker.getCountersStats()).thenReturn(new CountersStats(0, 0, 1));
@@ -906,6 +956,16 @@ class WorkloadGeneratorLifecycleTest {
         workload.consumerPause = new Workload.ConsumerPause(1, 2);
         workload.validate();
         return workload;
+    }
+
+    private static WorkloadGenerator fastGenerator(Workload workload, Worker worker) {
+        return new WorkloadGenerator(
+                "driver",
+                workload,
+                worker,
+                Duration.ofMillis(10),
+                Duration.ofMillis(10),
+                Duration.ofSeconds(2));
     }
 
     private static WorkloadGenerator generator(Workload workload, Worker worker, Duration timeout) {

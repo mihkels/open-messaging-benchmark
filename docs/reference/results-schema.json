@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mihkels.github.io/open-messaging-benchmark/reference/results-schema.json",
   "title": "OpenMessaging Benchmark result",
-  "description": "Version 2 result document. Version 1 files omit schemaVersion, metadata, summary and histograms.",
+  "description": "Version 3 result document. Version 2 files omit validity; version 1 files also omit schemaVersion, metadata, summary and histograms.",
   "type": "object",
   "required": ["schemaVersion", "metadata", "summary"],
   "properties": {
     "schemaVersion": {
-      "const": 2
+      "const": 3
     },
     "metadata": {
       "type": "object",
@@ -234,6 +234,20 @@
         },
         "additionalProperties": false
       }
+    },
+    "validity": {
+      "description": "The verdict of the findings: invalid with any invalid finding, else warning with any warning finding, else valid.",
+      "type": "object",
+      "required": ["status", "findings"],
+      "properties": {
+        "status": {
+          "enum": ["valid", "warning", "invalid"]
+        },
+        "findings": {
+          "$ref": "#/properties/findings"
+        }
+      },
+      "additionalProperties": false
     },
     "failedAttempts": {
       "description": "Reason each failed attempt was retried, oldest first. Absent when the first attempt succeeded.",

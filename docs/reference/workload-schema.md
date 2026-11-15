@@ -170,8 +170,9 @@ checks:
 ```
 
 `minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown
-check names and negative limits are rejected before the run starts. Findings never fail a run on
-their own.
+check names and negative limits are rejected before the run starts. `retried` has no limit; disable it
+to keep a retried run `valid`. Findings fail a run only with `--fail-on-invalid` or
+`--fail-on-warning` (see [Exit codes](cli.md#exit-codes)).
 
 ## Example
 

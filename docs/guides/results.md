@@ -77,15 +77,35 @@ compares a number with a limit. The built-in checks are:
 
 |        Check         |             Severity             |                                                            Finds                                                            |
 |----------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `rateShortfall`      | warning                          | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                   |
+| `rateShortfall`      | invalid                          | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                   |
 | `backlogGrowth`      | warning                          | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                  |
 | `shortWindow`        | warning                          | Measured window shorter than the minimum, in minutes                                                                        |
 | `tailSamples`        | warning, or info for p99.99 only | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs |
 | `sendErrors`         | warning                          | Failed sends in the measured window, with the last reason reported by each worker                                           |
 | `publishDelayGrowth` | warning                          | Rise in average publish delay from the first to the second half of the measured window, in ms                               |
+| `retried`            | warning                          | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures             |
 
 Runs that stall or lose a worker fail outright instead of producing a finding. Tune or disable the
 checks with the workload's [`checks`](../reference/workload-schema.md#run-checks) block.
+
+## Validity verdict
+
+`validity` combines the findings into one verdict, so a script or CI job does not have to inspect
+each check:
+
+```json
+"validity": {
+  "status": "invalid",
+  "findings": [ ... ]
+}
+```
+
+`status` is `invalid` when any finding is `invalid`, otherwise `warning` when any finding is
+`warning`, otherwise `valid`; `info` findings do not change it. `findings` repeats the findings the
+verdict is based on. After the last run the coordinator logs one verdict line per result file, for
+example `result.json: invalid (rateShortfall, shortWindow)`. Gate on it with
+[`--fail-on-invalid` or `--fail-on-warning`](../reference/cli.md#exit-codes). Files older than
+schema version 3 have no `validity`.
 
 ## Converting to CSV
 
@@ -99,10 +119,11 @@ bin/benchmark --csv results/
 The output is `results-<epoch seconds>.csv` in the current directory, with one row per result:
 
 ```text
-topics,partitions,message-size,producers-per-topic,consumers-per-topic,prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max
+topics,partitions,message-size,producers-per-topic,consumers-per-topic,prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity
 ```
 
-The CSV contains rates only. For latency, read the JSON files directly.
+The CSV contains rates and the validity `status`, empty for files older than schema version 3. For
+latency, read the JSON files directly.
 
 Result files include run metadata and a measured-window summary. Add `--include-histograms` to
 `bin/benchmark` to include compressed raw latency histograms; they are omitted by default to keep

@@ -136,7 +136,7 @@ class BenchmarkCoordinatorTest {
         assertThat(json.get("workload").stringValue()).isEqualTo("workload");
         assertThat(json.get("driver").stringValue()).isEqualTo("fixture");
         assertThat(json.get("publishRate").get(0).doubleValue()).isEqualTo(42.5);
-        assertThat(json.get("schemaVersion").intValue()).isEqualTo(2);
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
         assertThat(json.get("metadata").get("runId").stringValue())
                 .matches("[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
         assertThat(json.get("metadata").get("driverConfig").get("password").stringValue())

@@ -52,6 +52,11 @@ result JSON is written before the threshold exit and includes a `thresholds` obj
 status and each check's limit, observed value and status. The coordinator also prints a pass/fail
 table. Without a `thresholds` block, behavior is unchanged.
 
+Thresholds trust the measurement. Add `--fail-on-invalid` to also fail with status `3` when the
+run's [validity verdict](results.md#validity-verdict) is `invalid`, for example because the publish
+rate fell short of the target, or `--fail-on-warning` to fail on `warning` as well. Status `3` wins
+when a threshold also failed; see [Exit codes](../reference/cli.md#exit-codes).
+
 Keep the workload, driver configuration and result JSON as CI artifacts to make regressions
 reproducible. To gate on a change relative to an earlier run, rather than on a fixed limit, compare
 the result files with `bin/benchmark-report diff --fail-on-regression`; see

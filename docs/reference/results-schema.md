@@ -17,15 +17,16 @@ limitations under the License.
 Each workload and driver combination writes one JSON file. See [Results](../guides/results.md) for
 how to read and chart it.
 
-New files use schema version 2. Existing metric fields remain unchanged, and readers can continue to
-read version 1 files, which have no `schemaVersion`, `metadata`, or `summary` fields. The
-[JSON Schema](results-schema.json) describes the version 2 document.
+New files use schema version 3, which adds [`validity`](#validity) to version 2. Existing metric
+fields remain unchanged, and readers can continue to read version 2 files, which have no `validity`,
+and version 1 files, which also have no `schemaVersion`, `metadata`, or `summary` fields. The
+[JSON Schema](results-schema.json) describes the version 3 document.
 
 ## Version and run metadata
 
 |          Field           |  Type   |                                                   Description                                                    |
 |--------------------------|---------|------------------------------------------------------------------------------------------------------------------|
-| `schemaVersion`          | integer | Result schema version; currently `2`                                                                             |
+| `schemaVersion`          | integer | Result schema version; currently `3`                                                                             |
 | `metadata.runId`         | string  | UUID version 7 created by the coordinator and propagated to workers                                              |
 | `metadata.startedAtUtc`  | string  | Run start time in UTC, ISO 8601 format                                                                           |
 | `metadata.finishedAtUtc` | string  | Run finish time in UTC, ISO 8601 format                                                                          |
@@ -67,12 +68,21 @@ milliseconds; the throughput ratio is measured average publish rate divided by t
 `check`, `severity` (`info`, `warning` or `invalid`), `message` and, for numeric checks, `value` and
 `limit`. It is omitted when nothing was found and in files written before the checks existed.
 
+## Validity
+
+`validity` is the run's verdict: `status` is `valid`, `warning` or `invalid`, and `findings` lists
+the findings it is based on, in the same form as `findings`. Any `invalid` finding makes the run
+`invalid`; otherwise any `warning` finding makes it `warning`. See
+[Validity verdict](../guides/results.md#validity-verdict). Files older than version 3 have no
+`validity`.
+
 ## Retries
 
 `attempts` is how many attempts the run took with [`--retries`](cli.md); the last one produced the
 file. `failedAttempts` lists why each earlier attempt failed, oldest first, and is omitted when the
-first attempt succeeded. Files written before retries existed have neither field. Treat a retried run
-as a warning: its numbers are valid, but the system under test or a worker failed at least once.
+first attempt succeeded. Files written before retries existed have neither field. A retried run gets a
+`retried` warning finding: its numbers are valid, but the system under test or a worker failed at
+least once.
 
 ## Consumer pause
 

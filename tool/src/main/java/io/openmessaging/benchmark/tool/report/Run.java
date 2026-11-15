@@ -40,8 +40,9 @@ record Run(String name, TestResult result) {
     }
 
     /**
-     * Whether the file has the run metadata and summary of schema version 2. {@code schemaVersion}
-     * cannot tell, because a version 1 file without the field reads back as the default 2.
+     * Whether the file has the run metadata and summary of schema version 2 or later. {@code
+     * schemaVersion} cannot tell, because a version 1 file without the field reads back as the
+     * current default.
      */
     boolean hasMetadata() {
         return result.metadata != null;

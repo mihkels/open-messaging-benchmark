@@ -44,7 +44,7 @@ public class TestResult {
 
     private static final double[] PERCENTILES = {50, 75, 95, 99, 99.9, 99.99};
 
-    public int schemaVersion = 2;
+    public int schemaVersion = 3;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable ResultMetadata metadata;
@@ -60,6 +60,10 @@ public class TestResult {
     /** What the built-in run checks found; absent when they found nothing or in older files. */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<Finding> findings = new ArrayList<>();
+
+    /** The verdict of the findings; absent in files older than schema version 3. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable Validity validity;
 
     /** The last send failure reason per worker id in the measured window; not written. */
     @JsonIgnore Map<String, String> sendErrorReasons = new TreeMap<>();

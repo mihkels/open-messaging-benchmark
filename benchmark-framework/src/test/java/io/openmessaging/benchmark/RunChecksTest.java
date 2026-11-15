@@ -41,9 +41,38 @@ class RunChecksTest {
         Finding finding = only(new RunChecks().evaluate(workload(), result));
 
         assertThat(finding.check()).isEqualTo("rateShortfall");
-        assertThat(finding.severity()).isEqualTo(Severity.WARNING);
+        assertThat(finding.severity()).isEqualTo(Severity.INVALID);
         assertThat(finding.value()).isEqualTo(0.4, within(1e-9));
         assertThat(finding.limit()).isEqualTo(0.05);
+    }
+
+    @Test
+    void flagsRetriedRunWithEarlierFailures() {
+        TestResult result = healthy();
+        result.attempts = 3;
+        result.failedAttempts = List.of("worker timed out", "connection refused");
+
+        Finding finding = only(new RunChecks().evaluate(workload(), result));
+
+        assertThat(finding.check()).isEqualTo("retried");
+        assertThat(finding.severity()).isEqualTo(Severity.WARNING);
+        assertThat(finding.message()).contains("3 attempts", "worker timed out; connection refused");
+        assertThat(Validity.of(List.of(finding)).status()).isEqualTo(Validity.Status.WARNING);
+    }
+
+    @Test
+    void verdictIsTheWorstFindingSeverity() {
+        Finding info = new Finding("tailSamples", Severity.INFO, "few", null, null);
+        Finding warning = new Finding("shortWindow", Severity.WARNING, "short", null, null);
+        Finding invalid = new Finding("rateShortfall", Severity.INVALID, "slow", null, null);
+
+        assertThat(Validity.of(new RunChecks().evaluate(workload(), healthy())).status())
+                .isEqualTo(Validity.Status.VALID);
+        assertThat(Validity.of(List.of(info)).status()).isEqualTo(Validity.Status.VALID);
+        assertThat(Validity.of(List.of(info, warning)).status()).isEqualTo(Validity.Status.WARNING);
+        assertThat(Validity.of(List.of(invalid, warning)).findings()).containsExactly(invalid, warning);
+        assertThat(Validity.of(List.of(warning, invalid, info)).status())
+                .isEqualTo(Validity.Status.INVALID);
     }
 
     @Test

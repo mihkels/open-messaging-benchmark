@@ -56,6 +56,7 @@ class WorkloadSetGeneratorTest {
                                                 "payloadGenerator",
                                                 "backlogDrainRatio",
                                                 "thresholds",
+                                                "checks",
                                                 "consumerPause"))
                                 .toList());
     }
@@ -86,6 +87,7 @@ class WorkloadSetGeneratorTest {
                     assertThat(workload.messageSizeDistribution).isNull();
                     assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
                     assertThat(workload.thresholds).isNull();
+                    assertThat(workload.checks).isNull();
                 });
     }
 

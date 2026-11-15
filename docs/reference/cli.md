@@ -41,6 +41,7 @@ bin/benchmark [options] <workload.yaml>...
 | `--retries`             | Count                 | Rerun a combination up to this many times after a worker, IO, timeout or stall failure; default `3` (up to 4 attempts), `0` disables. See [Behavior](#behavior)                                  |
 | `--fail-on-invalid`     |                       | Exit with status `3` when a completed run's [validity](../guides/results.md#validity-verdict) is `invalid`. See [Exit codes](#exit-codes)                                                        |
 | `--fail-on-warning`     |                       | Exit with status `3` when a completed run's validity is `warning` or `invalid`                                                                                                                   |
+| `--repeat`              | Count                 | Run each combination this many times and write a summary of the run-to-run spread; overrides the workload's `repeat`. Default `1`. See [Behavior](#behavior)                                     |
 | `-c`, `--csv`           | Directory             | Convert all `*.json` results in the directory to `results-<epoch seconds>.csv` in the current directory and exit                                                                                 |
 | `--driver-location`     | Path                  | Local mode only: load the driver from this plugin bundle directory, driver module directory or jar instead of the installed plugins                                                              |
 | `-h`, `--help`          |                       | Print usage and exit                                                                                                                                                                             |
@@ -60,6 +61,11 @@ Positional arguments are workload files. `--legacy-driver-name` is accepted as a
 When a run both fails a threshold and fails the validity bar, the status is `3`: a measurement that
 is not trustworthy makes its threshold result meaningless. A failed run or cleanup wins over both,
 because the coordinator then exits with an exception.
+
+With `--repeat`, `--fail-on-*` judges each repetition's result and the
+[repetition summary](../guides/results.md#repeated-runs) verdict, which is the worst of its
+repetitions plus its `runToRunVariance` and `failedRepetitions` findings. Thresholds use only the
+summary's medians.
 
 ### Behavior
 
@@ -96,8 +102,20 @@ because the coordinator then exits with an exception.
   that already produced its measurement is not rerun when only its cleanup fails. When every attempt
   fails, the coordinator continues with the next combination if the workers stopped cleanly.
   Treat a retried result as a warning rather than a clean pass.
+- **Repetitions.** With `--repeat N` (or `repeat: N` in the workload) above 1, each combination
+  runs N times in a row. Every repetition creates its own topics, producers and consumers and
+  removes them when it ends, and gets its own `--retries`. Each repetition writes its own result:
+  `-o result.json --repeat 3` writes `result-1.json`, `result-2.json` and `result-3.json`, and
+  without `-o` the generated name gets the suffix, as in
+  `<workload>-<driver>-<timestamp>-2.json`. After the last repetition the coordinator writes
+  `result-summary.json` (or `<workload>-<driver>-<timestamp>-summary.json`) with the median, min,
+  max and coefficient of variation of the main metrics; see
+  [Repeated runs](../guides/results.md#repeated-runs). A repetition that fails after its retries
+  is listed as failed in the summary and left out of the statistics, and the process still exits
+  with a non-zero status. Workload thresholds decide the exit status from the medians, not from
+  each repetition. `--repeat 1` behaves exactly like a run without it.
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
-  workload files, no `--drivers`, `--expected-workers` below 2, negative `--retries`, or a workload that fails
+  workload files, no `--drivers`, `--expected-workers` below 2, negative `--retries`, `--repeat` below 1, or a workload that fails
   validation (pool size, size distribution, backlog settings) print a message and exit with a
   non-zero status before any broker resources are created. Payload file errors (missing file, length mismatch) are detected only after topics,
   producers and consumers have been created. `--help` prints usage and exits successfully.

@@ -33,10 +33,10 @@ class BenchmarkExitCodeTest {
     void failOnInvalidFailsOnlyInvalidRuns() {
         Benchmark.Arguments arguments = arguments(true, false);
 
-        assertThat(Benchmark.exitCode(arguments, written(INVALID), false))
+        assertThat(Benchmark.exitCode(arguments, written(INVALID), Map.of(), false))
                 .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
-        assertThat(Benchmark.exitCode(arguments, written(WARNING), false)).isZero();
-        assertThat(Benchmark.exitCode(arguments, written(WARNING), true))
+        assertThat(Benchmark.exitCode(arguments, written(WARNING), Map.of(), false)).isZero();
+        assertThat(Benchmark.exitCode(arguments, written(WARNING), Map.of(), true))
                 .isEqualTo(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
     }
 
@@ -44,16 +44,16 @@ class BenchmarkExitCodeTest {
     void failOnWarningFailsWarningAndInvalidRuns() {
         Benchmark.Arguments arguments = arguments(false, true);
 
-        assertThat(Benchmark.exitCode(arguments, written(WARNING), false))
+        assertThat(Benchmark.exitCode(arguments, written(WARNING), Map.of(), false))
                 .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
-        assertThat(Benchmark.exitCode(arguments, written(INVALID), false))
+        assertThat(Benchmark.exitCode(arguments, written(INVALID), Map.of(), false))
                 .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
-        assertThat(Benchmark.exitCode(arguments, written(INFO), false)).isZero();
+        assertThat(Benchmark.exitCode(arguments, written(INFO), Map.of(), false)).isZero();
     }
 
     @Test
     void validityFailureWinsOverThresholdFailure() {
-        assertThat(Benchmark.exitCode(arguments(true, false), written(INVALID), true))
+        assertThat(Benchmark.exitCode(arguments(true, false), written(INVALID), Map.of(), true))
                 .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
     }
 
@@ -61,10 +61,21 @@ class BenchmarkExitCodeTest {
     void resultWithoutValidityAndRunsWithoutFlagsDoNotFail() {
         Map<String, TestResult> legacy = Map.of("old.json", new TestResult());
 
-        assertThat(Benchmark.exitCode(arguments(true, true), legacy, false)).isZero();
-        assertThat(Benchmark.exitCode(arguments(false, false), written(INVALID), false)).isZero();
-        assertThat(Benchmark.exitCode(arguments(false, false), written(INVALID), true))
+        assertThat(Benchmark.exitCode(arguments(true, true), legacy, Map.of(), false)).isZero();
+        assertThat(Benchmark.exitCode(arguments(false, false), written(INVALID), Map.of(), false))
+                .isZero();
+        assertThat(Benchmark.exitCode(arguments(false, false), written(INVALID), Map.of(), true))
                 .isEqualTo(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
+    }
+
+    @Test
+    void failOnWarningAlsoJudgesRepetitionSummaries() {
+        Map<String, Validity> summaries = Map.of("result-summary.json", Validity.of(List.of(WARNING)));
+
+        assertThat(Benchmark.exitCode(arguments(false, true), written(INFO), summaries, false))
+                .isEqualTo(Benchmark.VALIDITY_FAILURE_EXIT_CODE);
+        assertThat(Benchmark.exitCode(arguments(true, false), written(INFO), summaries, false))
+                .isZero();
     }
 
     @Test

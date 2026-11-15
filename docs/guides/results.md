@@ -31,7 +31,8 @@ of the driver configuration. Give each driver configuration a distinct `name` (f
 `Kafka-acks-all` and `Kafka-acks-1`) so results and charts can be told apart.
 
 `-o <file>` writes to a fixed path. Use it only for a single workload and driver, because each
-combination overwrites the same file.
+combination overwrites the same file. With `--repeat`, each repetition adds its number before the
+extension and the summary adds `-summary`; see [Repeated runs](#repeated-runs).
 
 ## Inspecting a result
 
@@ -75,16 +76,18 @@ at the end of the run. The field is omitted when nothing was found:
 `severity` is `info`, `warning` or `invalid`; `value` and `limit` are present when the check
 compares a number with a limit. The built-in checks are:
 
-|        Check         |             Severity             |                                                            Finds                                                            |
-|----------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `rateShortfall`      | invalid                          | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                   |
-| `backlogGrowth`      | warning                          | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                  |
-| `shortWindow`        | warning                          | Measured window shorter than the minimum, in minutes                                                                        |
-| `tailSamples`        | warning, or info for p99.99 only | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs |
-| `sendErrors`         | warning                          | Failed sends in the measured window, with the last reason reported by each worker                                           |
-| `publishDelayGrowth` | warning                          | Rise in average publish delay from the first to the second half of the measured window, in ms                               |
-| `retried`            | warning                          | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures             |
-| `clockOffset`        | warning                          | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms      |
+|        Check         |               Severity                |                                                            Finds                                                             |
+|----------------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| `rateShortfall`      | invalid                               | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                    |
+| `backlogGrowth`      | warning                               | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                   |
+| `shortWindow`        | warning                               | Measured window shorter than the minimum, in minutes                                                                         |
+| `tailSamples`        | warning, or info for p99.99 only      | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs  |
+| `sendErrors`         | warning                               | Failed sends in the measured window, with the last reason reported by each worker                                            |
+| `publishDelayGrowth` | warning                               | Rise in average publish delay from the first to the second half of the measured window, in ms                                |
+| `retried`            | warning                               | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures              |
+| `clockOffset`        | warning                               | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms       |
+| `runToRunVariance`   | warning                               | In a [repetition summary](#repeated-runs) only: a metric whose coefficient of variation across repetitions exceeds the limit |
+| `failedRepetitions`  | warning, or invalid if none succeeded | In a [repetition summary](#repeated-runs) only: repetitions that failed after their retries or were skipped                  |
 
 The `clockOffset` check reads the per-worker offsets the coordinator measures in distributed runs,
 recorded in `metadata.clockOffsets`; [Clock offset](../methodology/latency-and-backlog.md#clock-offset)
@@ -111,6 +114,58 @@ verdict is based on. After the last run the coordinator logs one verdict line pe
 example `result.json: invalid (rateShortfall, shortWindow)`. Gate on it with
 [`--fail-on-invalid` or `--fail-on-warning`](../reference/cli.md#exit-codes). Files older than
 schema version 3 have no `validity`.
+
+## Repeated runs
+
+`--repeat N` (or `repeat: N` in the workload) runs each combination N times and writes one result
+per repetition plus a summary of the spread:
+
+|        Without `--repeat`         |                                     With `--repeat 3`                                      |
+|-----------------------------------|--------------------------------------------------------------------------------------------|
+| `-o result.json`: `result.json`   | `result-1.json` … `result-3.json`, `result-summary.json`                                   |
+| `<workload>-<driver>-<time>.json` | `<workload>-<driver>-<time>-1.json` … `-3.json`, `<workload>-<driver>-<time>-summary.json` |
+
+The summary has this shape:
+
+```json
+{
+  "workload": "1-topic-1-partition-1kb",
+  "driver": "Kafka",
+  "repetitions": 3,
+  "succeeded": 2,
+  "results": [
+    {"repetition": 1, "succeeded": true, "file": "result-1.json", "validity": "valid"},
+    {"repetition": 2, "succeeded": false, "failure": "java.io.IOException: ..."},
+    {"repetition": 3, "succeeded": true, "file": "result-3.json", "validity": "valid"}
+  ],
+  "metrics": {
+    "publishRateAvg": {"median": 9998.1, "min": 9990.2, "max": 10006.0, "cv": 0.0011},
+    "aggregatedPublishLatency99pct": {"median": 12.4, "min": 11.9, "max": 12.9, "cv": 0.057}
+  },
+  "thresholds": {"checks": {"maxPublishLatency99Ms": {"limit": 25.0, "observed": 12.4, "status": "PASS"}}, "status": "PASS"},
+  "findings": [
+    {"check": "failedRepetitions", "severity": "warning", "message": "...", "value": 1.0, "limit": 0.0}
+  ],
+  "validity": {"status": "warning", "findings": [ ... ]}
+}
+```
+
+|     Field     |                                                                                                                                  Meaning                                                                                                                                   |
+|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `repetitions` | Repetitions requested                                                                                                                                                                                                                                                      |
+| `succeeded`   | Repetitions that produced a result after their retries; fewer than `repetitions` when one failed or the rest were skipped because a worker could not be reused                                                                                                             |
+| `results`     | One entry per repetition that ran: its number, whether it `succeeded`, its result `file` (relative to the summary) and `validity` status, or the `failure` that ended it                                                                                                   |
+| `metrics`     | `median`, `min`, `max` and `cv` over the successful repetitions of `publishRateAvg`, `consumeRateAvg`, `throughputMbSec` and the p50, p99 and p99.9 publish and end-to-end latencies (ms), named as in the result file. Absent when none succeeded                         |
+| `cv`          | Coefficient of variation: sample standard deviation divided by the mean. Absent with fewer than two successful repetitions or a mean of zero                                                                                                                               |
+| `thresholds`  | The workload thresholds evaluated against the medians; they decide the exit status instead of the per-repetition results                                                                                                                                                   |
+| `findings`    | The summary's own findings: a `runToRunVariance` warning for each metric whose `cv` exceeds `checks.maxRunToRunCv` (default `0.1`), and a `failedRepetitions` finding when a repetition failed or was skipped (`invalid` when none succeeded); omitted when there are none |
+| `validity`    | The summary verdict, worst-of: the summary's own findings plus every finding of each successful repetition, whose messages start with `repetition <n>:`. The same rule as a result's [validity](#validity-verdict)                                                         |
+
+Each repetition's own result file still has its own `findings`, `validity` and `thresholds`.
+`--fail-on-invalid` and `--fail-on-warning` judge every repetition's result and the summary; as the
+summary verdict is never better than any repetition's, a `runToRunVariance` warning alone fails a
+run with `--fail-on-warning`. See
+[Reproducibility](../methodology/reproducibility.md#repeat-runs) for when to repeat.
 
 ## Converting to CSV
 

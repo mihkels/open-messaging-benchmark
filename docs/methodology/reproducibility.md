@@ -49,10 +49,38 @@ Keep these with every set of result files:
 
 Run each combination at least three times and report the spread, not only the best run. Large
 differences between repeats point to an uncontrolled factor such as disk caches, background
-compaction or other load.
+compaction, JIT warm-up, garbage collection or noisy neighbours on shared cloud machines. A single
+run gives one number with no sense of its noise, so two single runs cannot tell a real difference
+from variance.
 
-Results files carry a timestamp in their name, so repeated runs do not overwrite each other unless
-you use `--output`.
+`--repeat N`, or `repeat: N` in the workload, does this for you:
+
+```bash
+bin/benchmark --drivers driver-kafka/kafka.yaml --repeat 3 -o result.json workloads/simple-workload.yaml
+```
+
+Each repetition creates fresh topics and removes them afterwards, so no repetition reads another's
+data. The coordinator writes `result-1.json` to `result-3.json` and a `result-summary.json` with the
+median, min, max and coefficient of variation (CV) of throughput and the main latency percentiles;
+see [Repeated runs](../guides/results.md#repeated-runs).
+
+- **Read the median.** It ignores one outlier repetition, so workload thresholds are judged on the
+  medians when repeating.
+- **Check the CV.** A metric with a CV above `checks.maxRunToRunCv` (default `0.1`, 10%) gets a
+  `runToRunVariance` warning in the summary. Differences between two setups smaller than that
+  spread are noise. Tail percentiles such as p99.9 vary more than averages; raise the limit or run
+  longer rather than ignore the warning.
+- **Failed repetitions.** `--retries` applies inside each repetition. A repetition that still fails
+  is listed in the summary and left out of the statistics; with fewer than two successes the
+  summary reports no CV.
+- **Verdict.** The summary has its own `validity`: the worst of every repetition's verdict, the
+  `runToRunVariance` warnings and a `failedRepetitions` finding. `--fail-on-warning` therefore fails
+  a noisy repeated run even when each repetition is valid on its own.
+- **How many.** Three repetitions show whether results are stable; use five or more when the
+  difference you want to detect is close to the CV.
+
+Without `--repeat`, results files carry a timestamp in their name, so separate invocations do not
+overwrite each other unless you use `--output`.
 
 ## Order effects
 

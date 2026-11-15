@@ -91,6 +91,12 @@ public class Workload {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable Thresholds thresholds;
 
+    /**
+     * Times to run the workload with each driver; {@code --repeat} overrides it. Absent runs once.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable Integer repeat;
+
     /** Optional limits for the built-in run checks; absent uses the defaults. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable RunChecks checks;
@@ -154,6 +160,9 @@ public class Workload {
      * @throws IllegalArgumentException if the workload is invalid
      */
     public void validate() {
+        if (repeat != null && repeat < 1) {
+            throw new IllegalArgumentException("repeat must be at least 1");
+        }
         if (thresholds != null) {
             thresholds.validate(this);
         }

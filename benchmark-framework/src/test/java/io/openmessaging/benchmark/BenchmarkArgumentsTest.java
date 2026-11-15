@@ -64,4 +64,15 @@ class BenchmarkArgumentsTest {
         arguments.retries = -1;
         assertThat(Benchmark.usageError(arguments)).isEqualTo("--retries must be 0 or more");
     }
+
+    @Test
+    void rejectsRepeatBelowOne() {
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        arguments.workloads = List.of("w1.yaml");
+        arguments.drivers = List.of("a.yaml");
+        arguments.repeat = 1;
+        assertThat(Benchmark.usageError(arguments)).isNull();
+        arguments.repeat = 0;
+        assertThat(Benchmark.usageError(arguments)).isEqualTo("--repeat must be at least 1");
+    }
 }

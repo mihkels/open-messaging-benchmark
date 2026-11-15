@@ -257,6 +257,29 @@ class RunChecksTest {
     }
 
     @Test
+    void runToRunVarianceFlagsOnlyNoisyMetricsAndCanBeDisabled() {
+        var metrics =
+                Map.of(
+                        "publishRateAvg", RepeatSummary.stats(new double[] {100, 1000, 100}),
+                        "aggregatedPublishLatency99pct", RepeatSummary.stats(new double[] {5, 5, 5}),
+                        "single", RepeatSummary.stats(new double[] {5}));
+        RunChecks checks = new RunChecks();
+
+        Finding finding = only(checks.runToRunVariance(metrics));
+        assertThat(finding.check()).isEqualTo("runToRunVariance");
+        assertThat(finding.severity()).isEqualTo(Severity.WARNING);
+        assertThat(finding.value()).isEqualTo(1.299, within(1e-3));
+        assertThat(finding.limit()).isEqualTo(0.1);
+        assertThat(RepeatSummary.stats(new double[] {5}).cv()).isNull();
+
+        checks.maxRunToRunCv = 2;
+        assertThat(checks.runToRunVariance(metrics)).isEmpty();
+        checks.maxRunToRunCv = 0.1;
+        checks.disabled = List.of("runToRunVariance");
+        assertThat(checks.runToRunVariance(metrics)).isEmpty();
+    }
+
+    @Test
     void rejectsUnknownAndNegativeSettings() {
         Workload workload = workload();
         workload.checks = new RunChecks();
@@ -269,6 +292,10 @@ class RunChecksTest {
 
         workload.checks = new RunChecks();
         workload.checks.minTailSamples = -1;
+        assertThatThrownBy(workload::validate).isInstanceOf(IllegalArgumentException.class);
+
+        workload.checks = new RunChecks();
+        workload.checks.maxRunToRunCv = Double.NaN;
         assertThatThrownBy(workload::validate).isInstanceOf(IllegalArgumentException.class);
     }
 

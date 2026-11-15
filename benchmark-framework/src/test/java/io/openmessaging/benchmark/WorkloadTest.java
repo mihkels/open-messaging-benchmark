@@ -60,6 +60,13 @@ class WorkloadTest {
     }
 
     @Test
+    void rejectsRepeatBelowOne() {
+        Workload workload = new Workload();
+        workload.repeat = 0;
+        assertThatThrownBy(workload::validate).hasMessage("repeat must be at least 1");
+    }
+
+    @Test
     void rejectsAnEmptyRandomizedPayloadPool() {
         Workload workload = new Workload();
         workload.messageSize = 1024;

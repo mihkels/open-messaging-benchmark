@@ -45,22 +45,28 @@ public class Thresholds {
     }
 
     Result evaluate(TestResult result) {
+        return evaluate(
+                result.aggregatedPublishLatency99pct,
+                result.summary.totalMessagesSent(),
+                result.summary.publishRateAvg(),
+                result.summary.targetRate());
+    }
+
+    // Also used with the medians of repeated runs
+    Result evaluate(
+            double publishLatency99Ms, long totalMessagesSent, double publishRateAvg, double targetRate) {
         Map<String, Check> checks = new LinkedHashMap<>();
         if (maxPublishLatency99Ms != null) {
             checks.put(
                     "maxPublishLatency99Ms",
                     new Check(
                             maxPublishLatency99Ms,
-                            result.aggregatedPublishLatency99pct,
+                            publishLatency99Ms,
                             // An empty publish histogram reports p99 = 0, so nothing sent must not pass
-                            result.summary.totalMessagesSent() > 0
-                                    && result.aggregatedPublishLatency99pct <= maxPublishLatency99Ms));
+                            totalMessagesSent > 0 && publishLatency99Ms <= maxPublishLatency99Ms));
         }
         if (minThroughputRatio != null) {
-            double ratio =
-                    result.summary.targetRate() > 0
-                            ? result.summary.publishRateAvg() / result.summary.targetRate()
-                            : 0;
+            double ratio = targetRate > 0 ? publishRateAvg / targetRate : 0;
             checks.put(
                     "minThroughputRatio", new Check(minThroughputRatio, ratio, ratio >= minThroughputRatio));
         }

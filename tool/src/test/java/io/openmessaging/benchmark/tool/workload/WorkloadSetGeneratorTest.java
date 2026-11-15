@@ -57,6 +57,7 @@ class WorkloadSetGeneratorTest {
                                                 "backlogDrainRatio",
                                                 "thresholds",
                                                 "checks",
+                                                "repeat",
                                                 "consumerPause"))
                                 .toList());
     }

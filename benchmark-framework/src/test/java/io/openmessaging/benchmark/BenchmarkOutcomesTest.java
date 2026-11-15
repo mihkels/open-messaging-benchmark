@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -581,6 +582,293 @@ class BenchmarkOutcomesTest {
     }
 
     private record ProbeResult(int exitCode, String output) {}
+
+    @Test
+    void repeatWritesEachRepetitionAndASummary() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 3;
+        Worker worker = mock(Worker.class);
+        List<WorkloadRun> runs = new ArrayList<>();
+        for (double rate : new double[] {1000, 1010, 990}) {
+            WorkloadRun run = mock(WorkloadRun.class);
+            TestResult result = result("repeated");
+            result.summary = new ResultSummary(rate, rate, 1, 1, 0, 0, 1000);
+            result.aggregatedPublishLatency99pct = 5;
+            when(run.run()).thenReturn(result);
+            runs.add(run);
+        }
+        List<WorkloadRun> pending = new ArrayList<>(runs);
+
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("repeated", workload("repeated")),
+                                worker,
+                                (d, w, ignored) -> pending.removeFirst()))
+                .isZero();
+
+        try (var files = Files.list(directory)) {
+            assertThat(files.map(f -> f.getFileName().toString()))
+                    .containsExactlyInAnyOrder(
+                            "driver.yaml",
+                            "result-1.json",
+                            "result-2.json",
+                            "result-3.json",
+                            "result-summary.json");
+        }
+        assertThat(Files.readString(directory.resolve("result-2.json"))).contains("1010");
+        JsonNode summary =
+                new ObjectMapper().readTree(directory.resolve("result-summary.json").toFile());
+        assertThat(summary.get("workload").asString()).isEqualTo("repeated");
+        assertThat(summary.get("driver").asString()).isEqualTo("fixture");
+        assertThat(summary.get("repetitions").asInt()).isEqualTo(3);
+        assertThat(summary.get("succeeded").asInt()).isEqualTo(3);
+        assertThat(summary.get("results").get(0).get("file").asString()).isEqualTo("result-1.json");
+        assertThat(summary.get("results").get(0).get("succeeded").asBoolean()).isTrue();
+        JsonNode rate = summary.get("metrics").get("publishRateAvg");
+        assertThat(rate.get("median").asDouble()).isEqualTo(1000);
+        assertThat(rate.get("min").asDouble()).isEqualTo(990);
+        assertThat(rate.get("max").asDouble()).isEqualTo(1010);
+        assertThat(rate.get("cv").asDouble()).isEqualTo(0.01, within(1e-9));
+        assertThat(summary.get("metrics").get("aggregatedPublishLatency99pct").get("cv").asDouble())
+                .isZero();
+        // Zero end-to-end latency has no meaningful spread
+        assertThat(summary.get("metrics").get("aggregatedEndToEndLatency99pct").has("cv")).isFalse();
+        assertThat(summary.has("findings")).isFalse();
+        // Each repetition has its own verdict; the summary's is the worst of them, tagged by number
+        JsonNode second = new ObjectMapper().readTree(directory.resolve("result-2.json").toFile());
+        String secondStatus = second.get("validity").get("status").asString();
+        assertThat(summary.get("results").get(1).get("validity").asString()).isEqualTo(secondStatus);
+        assertThat(summary.get("validity").get("status").asString()).isEqualTo(secondStatus);
+        assertThat(summary.get("validity").get("findings"))
+                .extracting(f -> f.get("message").asString())
+                .anyMatch(m -> m.startsWith("repetition 2: "));
+        verify(worker, times(3)).initializeDriver(any());
+        for (WorkloadRun run : runs) {
+            verify(run).close();
+        }
+    }
+
+    @Test
+    void failedRepetitionIsRecordedAndLeftOutOfTheSpread() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 3;
+        Worker worker = mock(Worker.class);
+        WorkloadRun first = mock(WorkloadRun.class);
+        WorkloadRun failed = mock(WorkloadRun.class);
+        WorkloadRun third = mock(WorkloadRun.class);
+        TestResult firstResult = result("flaky");
+        firstResult.summary = new ResultSummary(100, 100, 1, 1, 0, 0, 0);
+        TestResult thirdResult = result("flaky");
+        thirdResult.summary = new ResultSummary(100, 100, 1, 1, 0, 0, 0);
+        when(first.run()).thenReturn(firstResult);
+        when(failed.run()).thenThrow(new IOException("repetition failed"));
+        when(third.run()).thenReturn(thirdResult);
+        List<WorkloadRun> pending = new ArrayList<>(List.of(first, failed, third));
+
+        Throwable failure =
+                catchThrowable(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("flaky", workload("flaky")),
+                                worker,
+                                (d, w, ignored) -> pending.removeFirst()));
+
+        assertThat(messages(failure)).contains("repetition failed");
+        assertThat(directory.resolve("result-2.json")).doesNotExist();
+        JsonNode summary =
+                new ObjectMapper().readTree(directory.resolve("result-summary.json").toFile());
+        assertThat(summary.get("succeeded").asInt()).isEqualTo(2);
+        JsonNode second = summary.get("results").get(1);
+        assertThat(second.get("succeeded").asBoolean()).isFalse();
+        assertThat(second.has("file")).isFalse();
+        assertThat(second.get("failure").asString()).contains("repetition failed");
+        JsonNode rate = summary.get("metrics").get("publishRateAvg");
+        assertThat(rate.get("median").asDouble()).isEqualTo(100);
+        assertThat(rate.get("cv").asDouble()).isZero();
+        assertThat(summary.get("findings"))
+                .singleElement()
+                .satisfies(f -> {
+                    assertThat(f.get("check").asString()).isEqualTo("failedRepetitions");
+                    assertThat(f.get("severity").asString()).isEqualTo("warning");
+                    assertThat(f.get("value").asDouble()).isEqualTo(1);
+                });
+        assertThat(summary.get("validity").get("status").asString()).isIn("warning", "invalid");
+    }
+
+    @Test
+    void noSuccessfulRepetitionMakesTheSummaryInvalid() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 2;
+        WorkloadRun failed = mock(WorkloadRun.class);
+        when(failed.run()).thenThrow(new IOException("repetition failed"));
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("broken", workload("broken")),
+                                mock(Worker.class),
+                                (d, w, ignored) -> failed))
+                .hasRootCauseMessage("repetition failed");
+
+        JsonNode summary =
+                new ObjectMapper().readTree(directory.resolve("result-summary.json").toFile());
+        assertThat(summary.get("succeeded").asInt()).isZero();
+        assertThat(summary.has("metrics")).isFalse();
+        assertThat(summary.get("findings").get(0).get("severity").asString()).isEqualTo("invalid");
+        assertThat(summary.get("validity").get("status").asString()).isEqualTo("invalid");
+    }
+
+    @Test
+    void failOnWarningJudgesTheRepetitionSummary() throws Exception {
+        for (boolean failOnWarning : new boolean[] {false, true}) {
+            Benchmark.Arguments arguments = arguments();
+            arguments.repeat = 3;
+            arguments.failOnInvalid = true;
+            arguments.failOnWarning = failOnWarning;
+            List<WorkloadRun> pending = new ArrayList<>();
+            for (double rate : new double[] {100, 1000, 100}) {
+                WorkloadRun run = mock(WorkloadRun.class);
+                TestResult result = result("noisy");
+                result.summary = new ResultSummary(rate, rate, 1, 1, 0, 0, 0);
+                when(run.run()).thenReturn(result);
+                pending.add(run);
+            }
+            // Every repetition alone is valid, so only the summary's variance warning can fail the run
+            Workload workload = workload("noisy");
+            workload.checks = new RunChecks();
+            workload.checks.disabled =
+                    RunChecks.NAMES.stream().filter(n -> !n.equals("runToRunVariance")).toList();
+
+            int exitCode =
+                    Benchmark.runWorkloads(
+                            arguments,
+                            Map.of("noisy", workload),
+                            mock(Worker.class),
+                            (d, w, ignored) -> pending.removeFirst());
+
+            assertThat(
+                            new ObjectMapper()
+                                    .readTree(directory.resolve("result-1.json").toFile())
+                                    .get("validity")
+                                    .get("status")
+                                    .asString())
+                    .isEqualTo("valid");
+            assertThat(exitCode).isEqualTo(failOnWarning ? Benchmark.VALIDITY_FAILURE_EXIT_CODE : 0);
+        }
+    }
+
+    @Test
+    void singleSuccessfulRepetitionReportsNoVariance() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 2;
+        WorkloadRun success = mock(WorkloadRun.class);
+        WorkloadRun failed = mock(WorkloadRun.class);
+        TestResult result = result("once");
+        result.summary = new ResultSummary(100, 100, 1, 1, 0, 0, 0);
+        when(success.run()).thenReturn(result);
+        when(failed.run()).thenThrow(new IOException("repetition failed"));
+        List<WorkloadRun> pending = new ArrayList<>(List.of(success, failed));
+
+        assertThatThrownBy(() ->
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("once", workload("once")),
+                                mock(Worker.class),
+                                (d, w, ignored) -> pending.removeFirst()))
+                .hasRootCauseMessage("repetition failed");
+
+        JsonNode summary =
+                new ObjectMapper().readTree(directory.resolve("result-summary.json").toFile());
+        assertThat(summary.get("succeeded").asInt()).isEqualTo(1);
+        assertThat(summary.get("metrics").get("publishRateAvg").get("median").asDouble())
+                .isEqualTo(100);
+        assertThat(summary.get("metrics").get("publishRateAvg").has("cv")).isFalse();
+    }
+
+    @Test
+    void highRunToRunVarianceAddsAWarning() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        Worker worker = mock(Worker.class);
+        List<WorkloadRun> pending = new ArrayList<>();
+        for (double rate : new double[] {100, 1000, 100}) {
+            WorkloadRun run = mock(WorkloadRun.class);
+            TestResult result = result("noisy");
+            result.summary = new ResultSummary(rate, rate, 1, 1, 0, 0, 0);
+            when(run.run()).thenReturn(result);
+            pending.add(run);
+        }
+        // The workload's repeat applies without --repeat
+        Workload workload = workload("noisy");
+        workload.repeat = 3;
+
+        Benchmark.runWorkloads(
+                arguments, Map.of("noisy", workload), worker, (d, w, ignored) -> pending.removeFirst());
+
+        JsonNode summary =
+                new ObjectMapper().readTree(directory.resolve("result-summary.json").toFile());
+        assertThat(summary.get("findings"))
+                .anySatisfy(finding -> {
+                    assertThat(finding.get("check").asString()).isEqualTo("runToRunVariance");
+                    assertThat(finding.get("severity").asString()).isEqualTo("warning");
+                    assertThat(finding.get("message").asString()).startsWith("publishRateAvg varies");
+                    assertThat(finding.get("limit").asDouble()).isEqualTo(0.1);
+                });
+    }
+
+    @Test
+    void thresholdsJudgeTheMedianWhenRepeating() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 3;
+        List<WorkloadRun> pending = new ArrayList<>();
+        for (double p99 : new double[] {5, 20, 8}) {
+            WorkloadRun run = mock(WorkloadRun.class);
+            TestResult result = result("slo");
+            result.summary = new ResultSummary(100, 100, 1, 1, 0, 0, 0);
+            result.aggregatedPublishLatency99pct = p99;
+            when(run.run()).thenReturn(result);
+            pending.add(run);
+        }
+        Workload workload = workload("slo");
+        workload.thresholds = new Thresholds();
+        workload.thresholds.maxPublishLatency99Ms = 10.0;
+
+        // The second repetition alone fails, but the median of 8 ms passes
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("slo", workload),
+                                mock(Worker.class),
+                                (d, w, ignored) -> pending.removeFirst()))
+                .isZero();
+        assertThat(Files.readString(directory.resolve("result-2.json"))).contains("FAIL");
+        JsonNode thresholds =
+                new ObjectMapper()
+                        .readTree(directory.resolve("result-summary.json").toFile())
+                        .get("thresholds");
+        assertThat(thresholds.get("status").asString()).isEqualTo("PASS");
+        assertThat(thresholds.get("checks").get("maxPublishLatency99Ms").get("observed").asDouble())
+                .isEqualTo(8);
+    }
+
+    @Test
+    void repeatOneKeepsTheSingleResultFile() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 1;
+        WorkloadRun run = mock(WorkloadRun.class);
+        when(run.run()).thenReturn(result("single"));
+        Workload workload = workload("single");
+        workload.repeat = 3;
+
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments, Map.of("single", workload), mock(Worker.class), (d, w, i) -> run))
+                .isZero();
+        try (var files = Files.list(directory)) {
+            assertThat(files.map(f -> f.getFileName().toString()))
+                    .containsExactlyInAnyOrder("driver.yaml", "result.json");
+        }
+    }
 
     private Benchmark.Arguments arguments() throws IOException {
         Path config = directory.resolve("driver.yaml");

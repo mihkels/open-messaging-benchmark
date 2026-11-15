@@ -36,6 +36,7 @@ public class RunChecks {
     static final String PUBLISH_DELAY_GROWTH = "publishDelayGrowth";
     static final String RETRIED = "retried";
     static final String CLOCK_OFFSET = "clockOffset";
+    static final String RUN_TO_RUN_VARIANCE = "runToRunVariance";
     static final List<String> NAMES =
             List.of(
                     RATE_SHORTFALL,
@@ -45,7 +46,8 @@ public class RunChecks {
                     SEND_ERRORS,
                     PUBLISH_DELAY_GROWTH,
                     RETRIED,
-                    CLOCK_OFFSET);
+                    CLOCK_OFFSET,
+                    RUN_TO_RUN_VARIANCE);
 
     // Reported tail percentiles and the inverse of the fraction of samples above each
     private static final List<String> TAIL_PERCENTILES = List.of("p99", "p99.9", "p99.99");
@@ -80,6 +82,9 @@ public class RunChecks {
      */
     public double maxClockOffsetFraction = 0.1;
 
+    /** Largest tolerated coefficient of variation of a metric across {@code --repeat} runs. */
+    public double maxRunToRunCv = 0.1;
+
     void validate() {
         for (String name : disabled) {
             if (!NAMES.contains(name)) {
@@ -90,12 +95,14 @@ public class RunChecks {
         if (!(maxRateShortfall >= 0
                         && maxBacklogGrowthSeconds >= 0
                         && maxPublishDelayGrowthMs >= 0
-                        && maxClockOffsetFraction >= 0)
+                        && maxClockOffsetFraction >= 0
+                        && maxRunToRunCv >= 0)
                 || !Double.isFinite(
                         maxRateShortfall
                                 + maxBacklogGrowthSeconds
                                 + maxPublishDelayGrowthMs
-                                + maxClockOffsetFraction)) {
+                                + maxClockOffsetFraction
+                                + maxRunToRunCv)) {
             throw new IllegalArgumentException("checks limits must be finite non-negative numbers");
         }
         if (minMeasuredMinutes < 0 || minTailSamples < 0 || maxSendErrors < 0) {
@@ -286,6 +293,34 @@ public class RunChecks {
                                 limit));
             }
         }
+    }
+
+    /**
+     * Flags metrics that vary too much between repetitions to compare.
+     *
+     * @param metrics the spread of each metric across the successful repetitions
+     * @return one finding per metric whose coefficient of variation exceeds the limit
+     */
+    List<Finding> runToRunVariance(Map<String, RepeatSummary.Stats> metrics) {
+        List<Finding> findings = new ArrayList<>();
+        if (enabled(RUN_TO_RUN_VARIANCE)) {
+            metrics.forEach((name, stats) -> {
+                Double cv = stats.cv();
+                if (cv != null && cv > maxRunToRunCv) {
+                    findings.add(
+                            new Finding(
+                                    RUN_TO_RUN_VARIANCE,
+                                    Severity.WARNING,
+                                    String.format(
+                                            "%s varies by %.1f%% between repetitions (min %.2f, max %.2f); the run is"
+                                                    + " too noisy to compare",
+                                            name, cv * 100, stats.min(), stats.max()),
+                                    cv,
+                                    maxRunToRunCv));
+                }
+            });
+        }
+        return findings;
     }
 
     private boolean enabled(String check) {

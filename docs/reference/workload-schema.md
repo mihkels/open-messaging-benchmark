@@ -45,6 +45,7 @@ for explanations and examples.
 | `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                                                  |
 | `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                                                |
 | `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
+| `repeat`                    | int     | 1        | Run the workload this many times with each driver and summarize the spread; `--repeat` overrides it. See [Repeated runs](../guides/results.md#repeated-runs)                                                  |
 | `checks`                    | object  | defaults | Limits for the built-in run checks that write `findings` to the result; see [Run checks](#run-checks)                                                                                                         |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
@@ -138,6 +139,7 @@ messageSizeDistribution:
 | A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`                                      |
 | `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`                                       |
 | `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`                                  |
+| `repeat` below 1                                                                                    | `repeat must be at least 1`                                                            |
 
 ## Thresholds
 
@@ -168,6 +170,7 @@ checks:
   maxSendErrors: 0              # sendErrors
   maxPublishDelayGrowthMs: 10   # publishDelayGrowth
   maxClockOffsetFraction: 0.1   # clockOffset: worker clock spread as a fraction of p50 end-to-end
+  maxRunToRunCv: 0.1            # runToRunVariance: coefficient of variation across --repeat runs
 ```
 
 `minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown

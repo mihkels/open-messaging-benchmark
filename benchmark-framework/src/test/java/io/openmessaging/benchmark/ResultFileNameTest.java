@@ -22,23 +22,35 @@ class ResultFileNameTest {
 
     @Test
     void explicitOutputWinsOverResultsDirectory() {
-        assertThat(Benchmark.resultFileName("out.json", "workload", "Kafka", "/results"))
+        assertThat(Benchmark.resultFileName("out.json", "workload", "Kafka", "/results", null))
                 .isEqualTo("out.json");
     }
 
     @Test
     void generatedNameIsRelativeWithoutResultsDirectory() {
-        assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null))
+        assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null, null))
                 .matches("workload-Kafka-\\d{4}(-\\d{2}){5}\\.json");
-        assertThat(Benchmark.resultFileName("", "workload", "Kafka", ""))
+        assertThat(Benchmark.resultFileName("", "workload", "Kafka", "", null))
                 .matches("workload-Kafka-\\d{4}(-\\d{2}){5}\\.json");
     }
 
     @Test
     void generatedNameIsPlacedInResultsDirectory() {
-        Path file = Path.of(Benchmark.resultFileName(null, "workload", "Kafka", "/results"));
+        Path file = Path.of(Benchmark.resultFileName(null, "workload", "Kafka", "/results", null));
 
         assertThat(file).hasParentRaw(Path.of("/results"));
         assertThat(file.getFileName().toString()).startsWith("workload-Kafka-").endsWith(".json");
+    }
+
+    @Test
+    void suffixGoesBeforeTheExtension() {
+        assertThat(Benchmark.resultFileName("out/result.json", "w", "Kafka", null, "2"))
+                .isEqualTo("out/result-2.json");
+        assertThat(Benchmark.resultFileName("result", "w", "Kafka", null, "summary"))
+                .isEqualTo("result-summary");
+        assertThat(Benchmark.resultFileName("out.d/result", "w", "Kafka", null, "1"))
+                .isEqualTo("out.d/result-1");
+        assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null, "3"))
+                .matches("workload-Kafka-\\d{4}(-\\d{2}){5}-3\\.json");
     }
 }

@@ -47,6 +47,7 @@ for explanations and examples.
 | `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
 | `repeat`                    | int     | 1        | Run the workload this many times with each driver and summarize the spread; `--repeat` overrides it. See [Repeated runs](../guides/results.md#repeated-runs)                                                  |
 | `checks`                    | object  | defaults | Limits for the built-in run checks that write `findings` to the result; see [Run checks](#run-checks)                                                                                                         |
+| `verifyDelivery`            | boolean | false    | Stamp each message with its producer and sequence number and count lost, duplicated and reordered messages; see [Delivery verification](../guides/results.md#delivery-verification)                           |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -140,6 +141,9 @@ messageSizeDistribution:
 | `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`                                       |
 | `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`                                  |
 | `repeat` below 1                                                                                    | `repeat must be at least 1`                                                            |
+| `verifyDelivery: true` with no producers or subscriptions per topic                                 | `verifyDelivery needs at least one producer and one subscription per topic`            |
+| `verifyDelivery: true` with a payload shorter than 20 bytes                                         | `verifyDelivery needs payloads of at least 20 bytes` when the load starts              |
+| `thresholds.maxLostMessages` or `maxDuplicatedMessages` without `verifyDelivery: true`              | `maxLostMessages requires verifyDelivery: true`                                        |
 
 ## Thresholds
 
@@ -154,6 +158,17 @@ thresholds:
 `maxPublishLatency99Ms` is compared with the aggregated measured publish p99 latency in milliseconds.
 `minThroughputRatio` is the minimum measured average publish rate divided by the configured
 `producerRate`; it requires a positive `producerRate`. Warm-up statistics are excluded.
+
+With [`verifyDelivery: true`](../guides/results.md#delivery-verification), `maxLostMessages` and
+`maxDuplicatedMessages` limit the `delivery.lost` and `delivery.duplicated` counts of the result.
+They cover the whole run, warm-up included, and fail when no delivery counts were recorded:
+
+```yaml
+verifyDelivery: true
+thresholds:
+  maxLostMessages: 0
+  maxDuplicatedMessages: 0
+```
 
 ## Run checks
 
@@ -174,8 +189,8 @@ checks:
 ```
 
 `minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown
-check names and negative limits are rejected before the run starts. `retried` has no limit; disable it
-to keep a retried run `valid`. Findings fail a run only with `--fail-on-invalid` or
+check names and negative limits are rejected before the run starts. `retried` and `delivery` have no
+limit; disable `retried` to keep a retried run `valid`. Findings fail a run only with `--fail-on-invalid` or
 `--fail-on-warning` (see [Exit codes](cli.md#exit-codes)).
 
 ## Example

@@ -43,6 +43,10 @@ public class WorkerStats {
     private final Counter bytesSentCounter;
     private final Counter messagesReceivedCounter;
     private final Counter bytesReceivedCounter;
+    private final Counter verifiedSentCounter;
+    private final Counter deliveredCounter;
+    private final Counter duplicatedCounter;
+    private final Counter outOfOrderCounter;
 
     // Local accumulators used for periodic snapshots
     private final LongAdder messagesSent = new LongAdder();
@@ -55,6 +59,12 @@ public class WorkerStats {
     private final LongAdder totalMessagesSent = new LongAdder();
     private final LongAdder totalMessageSendErrors = new LongAdder();
     private final LongAdder totalMessagesReceived = new LongAdder();
+
+    // verifyDelivery totals for the whole run, warm-up included; resetLatencies keeps them
+    private final LongAdder verifiedSent = new LongAdder();
+    private final LongAdder delivered = new LongAdder();
+    private final LongAdder duplicated = new LongAdder();
+    private final LongAdder outOfOrder = new LongAdder();
 
     private volatile @Nullable RunPhase phase;
     // Last send failure as "class: message"; kept until reset so every period reports it.
@@ -84,6 +94,22 @@ public class WorkerStats {
                         .register(registry);
         this.bytesReceivedCounter =
                 Counter.builder("bytes_recv").description("Consumer bytes received").register(registry);
+        this.verifiedSentCounter =
+                Counter.builder("delivery_sent")
+                        .description("Acknowledged messages stamped by verifyDelivery")
+                        .register(registry);
+        this.deliveredCounter =
+                Counter.builder("delivery_received")
+                        .description("Stamped messages received for the first time per subscription")
+                        .register(registry);
+        this.duplicatedCounter =
+                Counter.builder("delivery_duplicated")
+                        .description("Stamped messages received again on the same subscription")
+                        .register(registry);
+        this.outOfOrderCounter =
+                Counter.builder("delivery_out_of_order")
+                        .description("Stamped messages received after a later one from the same producer")
+                        .register(registry);
 
         this.publishLatency =
                 LatencyMetric.clamped(
@@ -158,7 +184,32 @@ public class WorkerStats {
 
     public CountersStats toCountersStats() {
         return new CountersStats(
-                totalMessagesSent.sum(), totalMessageSendErrors.sum(), totalMessagesReceived.sum());
+                totalMessagesSent.sum(),
+                totalMessageSendErrors.sum(),
+                totalMessagesReceived.sum(),
+                verifiedSent.sum(),
+                delivered.sum(),
+                duplicated.sum(),
+                outOfOrder.sum());
+    }
+
+    void recordVerifiedSend() {
+        verifiedSent.increment();
+        verifiedSentCounter.increment();
+    }
+
+    void recordDelivery(DeliveryVerifier.Outcome outcome) {
+        if (outcome == DeliveryVerifier.Outcome.DUPLICATE) {
+            duplicated.increment();
+            duplicatedCounter.increment();
+            return;
+        }
+        delivered.increment();
+        deliveredCounter.increment();
+        if (outcome == DeliveryVerifier.Outcome.NEW_OUT_OF_ORDER) {
+            outOfOrder.increment();
+            outOfOrderCounter.increment();
+        }
     }
 
     public void resetLatencies() {
@@ -178,6 +229,10 @@ public class WorkerStats {
         totalMessagesSent.reset();
         totalMessageSendErrors.reset();
         totalMessagesReceived.reset();
+        verifiedSent.reset();
+        delivered.reset();
+        duplicated.reset();
+        outOfOrder.reset();
         lastSendError = null;
     }
 

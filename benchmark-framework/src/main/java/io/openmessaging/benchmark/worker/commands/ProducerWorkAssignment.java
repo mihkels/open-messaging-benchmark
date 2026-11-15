@@ -33,19 +33,30 @@ import org.jspecify.annotations.Nullable;
  * @param publishRate the assigned publish rate
  * @param keyDistributorType the message key distribution strategy
  * @param keyDistribution optional Zipfian distribution parameters
+ * @param verifyDelivery whether producers stamp each payload for delivery verification
  */
 @JsonPropertyOrder({
     "payloadData",
     "publishRate",
     "keyDistributorType",
     "payloadWeights",
-    "keyDistribution"
+    "keyDistribution",
+    "verifyDelivery"
 })
 public record ProducerWorkAssignment(
         @JsonIgnore PayloadTemplates payloads,
         double publishRate,
         KeyDistributorType keyDistributorType,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable KeyDistribution keyDistribution) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable KeyDistribution keyDistribution,
+        @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean verifyDelivery) {
+
+    public ProducerWorkAssignment(
+            PayloadTemplates payloads,
+            double publishRate,
+            KeyDistributorType keyDistributorType,
+            @Nullable KeyDistribution keyDistribution) {
+        this(payloads, publishRate, keyDistributorType, keyDistribution, false);
+    }
 
     public ProducerWorkAssignment(
             List<byte[]> payloadData, double publishRate, KeyDistributorType keyDistributorType) {
@@ -66,12 +77,14 @@ public record ProducerWorkAssignment(
             @JsonProperty("publishRate") double publishRate,
             @JsonProperty("keyDistributorType") KeyDistributorType keyDistributorType,
             @JsonProperty("payloadWeights") int @Nullable [] payloadWeights,
-            @JsonProperty("keyDistribution") @Nullable KeyDistribution keyDistribution) {
+            @JsonProperty("keyDistribution") @Nullable KeyDistribution keyDistribution,
+            @JsonProperty("verifyDelivery") boolean verifyDelivery) {
         this(
                 PayloadTemplates.of(payloadData, payloadWeights),
                 publishRate,
                 keyDistributorType,
-                keyDistribution);
+                keyDistribution,
+                verifyDelivery);
     }
 
     /**
@@ -101,6 +114,7 @@ public record ProducerWorkAssignment(
      * @return the assignment
      */
     public ProducerWorkAssignment withPublishRate(double publishRate) {
-        return new ProducerWorkAssignment(payloads, publishRate, keyDistributorType, keyDistribution);
+        return new ProducerWorkAssignment(
+                payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery);
     }
 }

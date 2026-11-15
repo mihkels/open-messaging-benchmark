@@ -15,13 +15,32 @@ package io.openmessaging.benchmark.worker.commands;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * Run totals. The delivery counters are zero unless the workload sets {@code verifyDelivery}.
+ *
+ * @param messagesSent messages acknowledged, including readiness probes
+ * @param messageSendErrors sends that failed
+ * @param messagesReceived messages received, one per subscription
+ * @param verifiedSent acknowledged messages that carry a delivery stamp
+ * @param delivered stamped messages received for the first time on their subscription
+ * @param duplicated stamped messages received again on the same subscription
+ * @param outOfOrder stamped messages received after a later one from the same producer
+ */
 public record CountersStats(
         @JsonProperty("messagesSent") long messagesSent,
         @JsonProperty("messageSendErrors") long messageSendErrors,
-        @JsonProperty("messagesReceived") long messagesReceived) {
+        @JsonProperty("messagesReceived") long messagesReceived,
+        @JsonProperty("verifiedSent") long verifiedSent,
+        @JsonProperty("delivered") long delivered,
+        @JsonProperty("duplicated") long duplicated,
+        @JsonProperty("outOfOrder") long outOfOrder) {
 
     public CountersStats() {
         this(0, 0, 0);
+    }
+
+    public CountersStats(long messagesSent, long messageSendErrors, long messagesReceived) {
+        this(messagesSent, messageSendErrors, messagesReceived, 0, 0, 0, 0);
     }
 
     /**
@@ -34,6 +53,10 @@ public record CountersStats(
         return new CountersStats(
                 this.messagesSent + other.messagesSent,
                 this.messageSendErrors + other.messageSendErrors,
-                this.messagesReceived + other.messagesReceived);
+                this.messagesReceived + other.messagesReceived,
+                this.verifiedSent + other.verifiedSent,
+                this.delivered + other.delivered,
+                this.duplicated + other.duplicated,
+                this.outOfOrder + other.outOfOrder);
     }
 }

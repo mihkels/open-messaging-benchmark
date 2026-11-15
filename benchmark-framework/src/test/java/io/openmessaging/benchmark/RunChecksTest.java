@@ -15,6 +15,7 @@ package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.within;
 
 import io.openmessaging.benchmark.Finding.Severity;
@@ -313,6 +314,49 @@ class RunChecksTest {
         assertThat(json).contains("\"severity\":\"warning\"").doesNotContain("sendErrorReasons");
         assertThat(read.findings).isEqualTo(result.findings);
         assertThat(mapper.writeValueAsString(new TestResult())).doesNotContain("findings");
+    }
+
+    @Test
+    void lostMessagesAreInvalidAndDuplicatesAWarning() {
+        TestResult result = healthy();
+        result.delivery = new Delivery(100, 97, 3, 2, 0);
+
+        List<Finding> findings = new RunChecks().evaluate(workload(), result);
+
+        assertThat(findings)
+                .extracting(Finding::check, Finding::severity, Finding::value)
+                .containsExactly(
+                        tuple("delivery", Severity.INVALID, 3.0), tuple("delivery", Severity.WARNING, 2.0));
+        assertThat(Validity.of(findings).status()).isEqualTo(Validity.Status.INVALID);
+    }
+
+    @Test
+    void reorderingIsAWarningOnlyWhenOrderingIsExpected() {
+        TestResult result = healthy();
+        result.delivery = new Delivery(100, 100, 0, 0, 4);
+        Workload ordered = workload();
+        ordered.partitionsPerTopic = 1;
+        Workload partitioned = workload();
+        partitioned.partitionsPerTopic = 8;
+
+        assertThat(only(new RunChecks().evaluate(ordered, result)).severity())
+                .isEqualTo(Severity.WARNING);
+        Finding expected = only(new RunChecks().evaluate(partitioned, result));
+        assertThat(expected.severity()).isEqualTo(Severity.INFO);
+        assertThat(expected.message()).contains("expected with several partitions");
+    }
+
+    @Test
+    void cleanDeliveryAndDisabledCheckHaveNoFindings() {
+        TestResult clean = healthy();
+        clean.delivery = new Delivery(100, 100, 0, 0, 0);
+        TestResult lossy = healthy();
+        lossy.delivery = new Delivery(100, 90, 10, 0, 0);
+        RunChecks disabled = new RunChecks();
+        disabled.disabled = List.of("delivery");
+
+        assertThat(new RunChecks().evaluate(workload(), clean)).isEmpty();
+        assertThat(disabled.evaluate(workload(), lossy)).isEmpty();
     }
 
     private static Finding only(List<Finding> findings) {

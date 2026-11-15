@@ -49,6 +49,22 @@ public class MessageProducer {
 
     public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload)
             throws InterruptedException {
+        sendMessage(producer, key, payload, false);
+    }
+
+    /**
+     * Sends one message once the rate limiter allows it.
+     *
+     * @param producer the producer to send with
+     * @param key the message key
+     * @param payload the payload
+     * @param stamped whether the payload carries a {@link DeliveryStamp}, so its acknowledgement
+     *     counts towards the verified sends
+     * @throws InterruptedException if interrupted while waiting for the send slot
+     */
+    public void sendMessage(
+            BenchmarkProducer producer, Optional<String> key, byte[] payload, boolean stamped)
+            throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();
         interruptibleSleepNs(intendedSendTime);
         if (!callbacks.beginSend()) {
@@ -59,7 +75,8 @@ public class MessageProducer {
             CompletableFuture<Void> send =
                     Objects.requireNonNull(producer.sendAsync(key, payload), "sendAsync returned null");
             send.whenComplete((ignored, failure) ->
-                    callbacks.completeSend(payload.length, intendedSendTime, sendTime, nanoClock, failure));
+                    callbacks.completeSend(
+                            payload.length, intendedSendTime, sendTime, nanoClock, failure, stamped));
         } catch (Throwable t) {
             callbacks.abortSend();
             throw t;

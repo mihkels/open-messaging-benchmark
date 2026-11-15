@@ -38,6 +38,30 @@ class WorkloadTest {
     }
 
     @Test
+    void verifyDeliveryNeedsProducersAndSubscriptions() {
+        Workload workload = new Workload();
+        workload.verifyDelivery = true;
+        workload.producersPerTopic = 1;
+
+        assertThatThrownBy(workload::validate).hasMessageContaining("verifyDelivery needs");
+        workload.subscriptionsPerTopic = 1;
+        workload.validate();
+    }
+
+    @Test
+    void expectsOrderingOnlyForOnePartitionAndOneConsumer() {
+        Workload workload = new Workload();
+        workload.partitionsPerTopic = 1;
+        workload.consumerPerSubscription = 1;
+        assertThat(workload.expectsOrdering()).isTrue();
+        workload.consumerPerSubscription = 2;
+        assertThat(workload.expectsOrdering()).isFalse();
+        workload.consumerPerSubscription = 1;
+        workload.partitionsPerTopic = 4;
+        assertThat(workload.expectsOrdering()).isFalse();
+    }
+
+    @Test
     void rejectsRateDiscoveryWhileBuildingABacklog() {
         Workload workload = new Workload();
         workload.messageSize = 1024;

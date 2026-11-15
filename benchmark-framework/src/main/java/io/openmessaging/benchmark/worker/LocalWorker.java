@@ -27,6 +27,7 @@ import io.openmessaging.benchmark.driver.BenchmarkDriver.ProducerInfo;
 import io.openmessaging.benchmark.driver.BenchmarkDriver.TopicInfo;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConfiguredClasses;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import io.openmessaging.benchmark.driver.SecretRedaction;
@@ -40,6 +41,7 @@ import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
+import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -202,6 +204,11 @@ public final class LocalWorker implements Worker {
     public void setPhase(RunPhase phase) {
         log.info("Run phase: {}", phase);
         stats.setPhase(phase);
+        Run current = run;
+        if (phase == RunPhase.DELIVERY_DRAIN && current != null) {
+            // Producer tasks finish their current send and exit, so consumers can catch up
+            current.sendsStopped = true;
+        }
     }
 
     @Override
@@ -264,6 +271,7 @@ public final class LocalWorker implements Worker {
         Run current = requireRun();
         Timer timer = new Timer();
         AtomicInteger index = new AtomicInteger();
+        boolean verify = consumerAssignment.verifyDelivery;
 
         create(
                 current,
@@ -273,11 +281,7 @@ public final class LocalWorker implements Worker {
                                 .requireDriver()
                                 .createConsumers(
                                         consumerAssignment.topicsSubscriptions.stream()
-                                                .map(c -> {
-                                                    int consumerIndex = index.getAndIncrement();
-                                                    return new ConsumerInfo(
-                                                            consumerIndex, c.topic, c.subscription, current.callbacks);
-                                                })
+                                                .map(c -> current.consumerInfo(index.getAndIncrement(), c, verify))
                                                 .toList()),
                 created -> {
                     validateResources(created, "consumer");
@@ -310,11 +314,27 @@ public final class LocalWorker implements Worker {
         Supplier<KeyDistributor> keyDistributors =
                 KeyDistributor.supplier(
                         producerWorkAssignment.keyDistributorType(), producerWorkAssignment.keyDistribution());
+        if (producerWorkAssignment.verifyDelivery()) {
+            for (byte[] template : producerWorkAssignment.payloadData()) {
+                if (template.length < DeliveryStamp.LENGTH) {
+                    throw new IllegalArgumentException(
+                            "verifyDelivery needs payloads of at least "
+                                    + DeliveryStamp.LENGTH
+                                    + " bytes, got "
+                                    + template.length);
+                }
+            }
+        }
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());
         for (BenchmarkProducer producer : producers) {
-            startProducer(current, producer, keyDistributors.get(), payloads);
+            startProducer(
+                    current,
+                    producer,
+                    keyDistributors.get(),
+                    payloads,
+                    producerWorkAssignment.verifyDelivery() ? new DeliveryStamp() : null);
         }
     }
 
@@ -396,7 +416,8 @@ public final class LocalWorker implements Worker {
             Run current,
             BenchmarkProducer producer,
             KeyDistributor keyDistributor,
-            PayloadSampler payloads) {
+            PayloadSampler payloads,
+            @Nullable DeliveryStamp stamp) {
         submit(
                 current,
                 "producer task",
@@ -404,9 +425,14 @@ public final class LocalWorker implements Worker {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
                         MessageProducer messageProducer = current.messageProducer;
-                        while (!current.stopping) {
+                        while (!current.stopping && !current.sendsStopped) {
                             Optional<String> key = Optional.ofNullable(keyDistributor.next());
-                            messageProducer.sendMessage(producer, key, payloads.next(random));
+                            if (stamp == null) {
+                                messageProducer.sendMessage(producer, key, payloads.next(random));
+                            } else {
+                                messageProducer.sendMessage(
+                                        producer, key, stamp.stamp(payloads.next(random)), true);
+                            }
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -855,6 +881,10 @@ public final class LocalWorker implements Worker {
         private final List<BenchmarkConsumer> consumers = new ArrayList<>();
         private final RunCallbacks callbacks = new RunCallbacks(stats, this::recordFailure);
         private volatile boolean stopping;
+        // Set by the delivery drain phase; producer tasks exit while consumers keep running
+        private volatile boolean sendsStopped;
+        private final DeliveryVerifier verifier = new DeliveryVerifier(stats);
+
         // startLoad sets the real rate before any producer task sends
         private final MessageProducer messageProducer =
                 new MessageProducer(new UniformRateLimiter(1.0), callbacks);
@@ -865,6 +895,14 @@ public final class LocalWorker implements Worker {
         private @Nullable Throwable failure;
         private boolean failureReported;
         private @Nullable Throwable cleanupFailure;
+
+        private ConsumerInfo consumerInfo(int index, TopicSubscription subscription, boolean verify) {
+            ConsumerCallback callback =
+                    verify
+                            ? verifier.callback(subscription.topic, subscription.subscription, callbacks)
+                            : callbacks;
+            return new ConsumerInfo(index, subscription.topic, subscription.subscription, callback);
+        }
 
         // Keeps a newly constructed driver unless stopping has begun. Returns false if the caller
         // still owns the driver and must close it.

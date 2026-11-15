@@ -103,6 +103,20 @@ class TestResultJsonTest {
     }
 
     @Test
+    void deliverySurvivesARoundTripAndIsAbsentWithoutVerification() throws Exception {
+        TestResult result = new TestResult();
+        assertThat(toTree(result).has("delivery")).isFalse();
+        result.delivery = new Delivery(100, 97, 3, 2, 1);
+
+        ObjectNode written = toTree(result);
+        TestResult read = mapper.treeToValue(written, TestResult.class);
+
+        assertThat(written.get("delivery").get("lost").longValue()).isEqualTo(3);
+        assertThat(written.get("schemaVersion").intValue()).isEqualTo(3);
+        assertThat(read.delivery).isEqualTo(result.delivery);
+    }
+
+    @Test
     void consumerPauseSurvivesARoundTrip() throws Exception {
         TestResult result = new TestResult();
         result.consumerPause = new TestResult.ConsumerPauseResult(2, 5, 40_000, null);

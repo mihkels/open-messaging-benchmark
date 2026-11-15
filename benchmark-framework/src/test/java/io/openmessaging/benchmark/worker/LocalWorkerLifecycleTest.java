@@ -37,9 +37,12 @@ import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
+import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -48,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1089,6 +1093,97 @@ class LocalWorkerLifecycleTest {
         assertThatThrownBy(() -> initialize(worker, afterClose))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
+    }
+
+    @Test
+    void countsDroppedDuplicatedAndReorderedMessagesExactly() throws Exception {
+        Scenario scenario = new Scenario(List.of());
+        scenario.consumers = List.of(mock(BenchmarkConsumer.class));
+        AtomicReference<LocalWorker> running = new AtomicReference<>();
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<byte[]> held = new AtomicReference<>();
+        // Of every ten sends: #3 is dropped, #5 delivered twice, #7 delivered after #8
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsync(any(), any())).thenAnswer(invocation -> {
+            byte[] payload = invocation.getArgument(1);
+            int call = calls.getAndIncrement();
+            ConsumerCallback consumer = scenario.callback;
+            switch (call % 10) {
+                case 3 -> {}
+                case 5 -> {
+                    consumer.messageReceived(payload, System.currentTimeMillis());
+                    consumer.messageReceived(ByteBuffer.wrap(payload), System.currentTimeMillis());
+                }
+                case 7 -> held.set(payload);
+                case 8 -> {
+                    consumer.messageReceived(payload, System.currentTimeMillis());
+                    consumer.messageReceived(held.getAndSet(null), System.currentTimeMillis());
+                }
+                default -> consumer.messageReceived(payload, System.currentTimeMillis());
+            }
+            if (call == 100) {
+                // Ends the load from the producer thread, so exactly 101 messages are sent
+                running.get().setPhase(RunPhase.DELIVERY_DRAIN);
+            }
+            return CompletableFuture.completedFuture(null);
+        });
+        scenario.createProducers = () -> CompletableFuture.completedFuture(List.of(producer));
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        try (LocalWorker worker = new LocalWorker(registry, Duration.ofSeconds(2), Duration.ofSeconds(2))) {
+            initialize(worker, scenario);
+            running.set(worker);
+            ConsumerAssignment consumers = assignmentForConsumer();
+            consumers.verifyDelivery = true;
+            worker.createConsumers(consumers);
+            // The readiness probe is not stamped, so it is received but not verified
+            scenario.callback.messageReceived(new byte[10], System.currentTimeMillis());
+            worker.createProducers(List.of("topic"));
+            worker.startLoad(verifiedAssignment(new byte[32]));
+            waitUntil(() -> worker.getCountersStats().verifiedSent() == 101);
+
+            CountersStats stats = worker.getCountersStats();
+            assertThat(stats.delivered()).isEqualTo(91);
+            assertThat(stats.duplicated()).isEqualTo(10);
+            assertThat(stats.outOfOrder()).isEqualTo(10);
+            assertThat(stats.messagesReceived()).isEqualTo(1 + 91 + 10);
+            assertThat(calls.get()).isEqualTo(101);
+            assertThat(registry.scrape()).contains("delivery_duplicated_total", "delivery_out_of_order_total");
+        }
+    }
+
+    @Test
+    void leavesPayloadsUnchangedWithoutVerifyDelivery() throws Exception {
+        byte[] template = new byte[32];
+        List<byte[]> sent = new CopyOnWriteArrayList<>();
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsync(any(), any())).thenAnswer(invocation -> {
+            sent.add(invocation.getArgument(1));
+            return CompletableFuture.completedFuture(null);
+        });
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            worker.startLoad(new ProducerWorkAssignment(List.of(template), 10_000, KeyDistributorType.NO_KEY));
+            waitUntil(() -> sent.size() >= 3);
+            assertThat(sent).allSatisfy(payload -> assertThat(payload).isEqualTo(template));
+            assertThat(worker.getCountersStats().verifiedSent()).isZero();
+        }
+    }
+
+    @Test
+    void rejectsPayloadsTooShortForTheDeliveryStamp() throws Exception {
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            assertThatThrownBy(() -> worker.startLoad(verifiedAssignment(new byte[DeliveryStamp.LENGTH - 1])))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("at least 20 bytes");
+            verify(producer, times(0)).sendAsync(any(), any());
+        }
+    }
+
+    private static ProducerWorkAssignment verifiedAssignment(byte[] template) {
+        return new ProducerWorkAssignment(
+                PayloadTemplates.of(List.of(template), null), 100_000, KeyDistributorType.NO_KEY, null, true);
     }
 
     private LocalWorker worker(Scenario scenario, Duration timeout) throws Exception {

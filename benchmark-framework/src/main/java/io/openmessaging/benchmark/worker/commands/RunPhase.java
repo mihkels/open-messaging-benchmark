@@ -22,5 +22,7 @@ public enum RunPhase {
     /** Consumers resumed and draining the backlog. */
     BACKLOG_DRAIN,
     /** The measured window. */
-    MEASURE
+    MEASURE,
+    /** Producers stopped after the measured window while consumers catch up, for verifyDelivery. */
+    DELIVERY_DRAIN
 }

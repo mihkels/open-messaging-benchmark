@@ -97,6 +97,14 @@ public class Workload {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable Integer repeat;
 
+    /**
+     * Stamps each message with its producer and sequence number in the first {@link
+     * io.openmessaging.benchmark.worker.DeliveryStamp#LENGTH} payload bytes, and counts lost,
+     * duplicated and reordered messages. Off by default, which leaves payloads untouched.
+     */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public boolean verifyDelivery;
+
     /** Optional limits for the built-in run checks; absent uses the defaults. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable RunChecks checks;
@@ -191,6 +199,20 @@ public class Workload {
         if (consumerBacklogSizeGB > 0) {
             validateBacklog();
         }
+        if (verifyDelivery && (producersPerTopic <= 0 || subscriptionsPerTopic <= 0)) {
+            throw new IllegalArgumentException(
+                    "verifyDelivery needs at least one producer and one subscription per topic");
+        }
+    }
+
+    /**
+     * Whether a correct driver keeps each producer's messages in order for every subscription: a
+     * single partition read by a single consumer.
+     *
+     * @return true if reordering is a defect rather than expected
+     */
+    public boolean expectsOrdering() {
+        return partitionsPerTopic <= 1 && consumerPerSubscription <= 1;
     }
 
     private void validatePayloadGenerator(PayloadGenerator generator) {

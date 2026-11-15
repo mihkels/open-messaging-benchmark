@@ -86,6 +86,7 @@ compares a number with a limit. The built-in checks are:
 | `publishDelayGrowth` | warning                               | Rise in average publish delay from the first to the second half of the measured window, in ms                                |
 | `retried`            | warning                               | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures              |
 | `clockOffset`        | warning                               | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms       |
+| `delivery`           | invalid, warning or info              | With [`verifyDelivery`](#delivery-verification): messages lost, duplicated or received out of order                          |
 | `runToRunVariance`   | warning                               | In a [repetition summary](#repeated-runs) only: a metric whose coefficient of variation across repetitions exceeds the limit |
 | `failedRepetitions`  | warning, or invalid if none succeeded | In a [repetition summary](#repeated-runs) only: repetitions that failed after their retries or were skipped                  |
 
@@ -95,6 +96,71 @@ explains how to read them.
 
 Runs that stall or lose a worker fail outright instead of producing a finding. Tune or disable the
 checks with the workload's [`checks`](../reference/workload-schema.md#run-checks) block.
+
+## Delivery verification
+
+Throughput and latency say nothing about whether every message arrived. A driver or broker setup
+that drops or duplicates messages, for example `acks=1` during a leader change or at-least-once
+redelivery after a rebalance, can look faster than a correct one. Set `verifyDelivery: true` in the
+workload to check delivery:
+
+```yaml
+verifyDelivery: true
+```
+
+Each producer then writes a 20-byte stamp over the start of every payload: a 4-byte marker, a
+random 64-bit producer id and a sequence number that counts up from 0. Consumers look up the last
+sequence numbers seen for that producer on their subscription. After the measured window the
+coordinator stops the producers and waits until every acknowledged message has reached every
+subscription, or until the receive counters stop moving for 10 seconds, then writes `delivery` to
+the result:
+
+```json
+"delivery": {
+  "sent": 600000,
+  "received": 599998,
+  "lost": 2,
+  "duplicated": 41,
+  "outOfOrder": 0
+}
+```
+
+|    Field     |                                                    Meaning                                                    |
+|--------------|---------------------------------------------------------------------------------------------------------------|
+| `sent`       | Acknowledged stamped messages; failed sends do not count                                                      |
+| `received`   | Stamped messages received for the first time, summed over subscriptions                                       |
+| `lost`       | `sent` × `subscriptionsPerTopic` − `received`: copies acknowledged but never received by the end of the drain |
+| `duplicated` | Messages received again on the same subscription                                                              |
+| `outOfOrder` | Messages received after a later message from the same producer on the same subscription                       |
+
+The counts cover the whole run, warm-up included. Lost messages are an `invalid`
+[finding](#run-checks), duplicates a `warning`. Reordering is a `warning` when the workload expects
+order, with one partition per topic and one consumer per subscription, and `info` otherwise,
+because messages of one producer spread over partitions or consumers may legitimately arrive out of
+order. Gate on the counts with the `maxLostMessages` and `maxDuplicatedMessages`
+[thresholds](../reference/workload-schema.md#thresholds). Workers also export the counts as
+`delivery_*` [metrics](monitoring.md#worker-metrics).
+
+Things to know before turning it on:
+
+- **Payload bytes change.** The stamp replaces the first 20 bytes of each payload, so payloads must
+  be at least 20 bytes long. Message sizes, `bytes_sent`, `bytes_recv` and throughput in MB/s are
+  unchanged. Because every stamp is different, payloads compress slightly worse: a
+  [`payloadGenerator`](payloads-and-keys.md#4-payloads-with-a-target-compression-ratio) target or
+  the `payloadCompressionRatio` of the result no longer describe the first 20 bytes, and a payload
+  of zeros is no longer all zeros. Compare compressed throughput only between runs with the same
+  `verifyDelivery` setting.
+- **Each send copies its payload.** Producers stamp a copy instead of sending the shared template, and
+  consumers do a map lookup per message. With `verifyDelivery: false`, the default, payloads are sent
+  unchanged and none of this runs.
+- **Memory is bounded.** Each worker keeps 8 KiB per producer and subscription it consumes from. A
+  message more than 65,536 sequence numbers behind the newest one from its producer counts as a
+  duplicate, because it can no longer be told apart from one.
+- **Duplicates across workers are not seen.** When the consumers of one subscription run on
+  different workers, each worker checks only the messages it received, so a message delivered once
+  to each counts as received twice instead of as a duplicate, and can hide a lost message.
+- **The stamp is in the payload,** not in a message header, and ordering is checked per producer, not
+  per key or partition, because drivers do not report either.
 
 ## Validity verdict
 

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,7 @@ public class RunChecks {
     static final String RETRIED = "retried";
     static final String CLOCK_OFFSET = "clockOffset";
     static final String RUN_TO_RUN_VARIANCE = "runToRunVariance";
+    static final String DELIVERY = "delivery";
     static final List<String> NAMES =
             List.of(
                     RATE_SHORTFALL,
@@ -47,7 +49,8 @@ public class RunChecks {
                     PUBLISH_DELAY_GROWTH,
                     RETRIED,
                     CLOCK_OFFSET,
-                    RUN_TO_RUN_VARIANCE);
+                    RUN_TO_RUN_VARIANCE,
+                    DELIVERY);
 
     // Reported tail percentiles and the inverse of the fraction of samples above each
     private static final List<String> TAIL_PERCENTILES = List.of("p99", "p99.9", "p99.99");
@@ -128,6 +131,7 @@ public class RunChecks {
         publishDelayGrowth(result, findings);
         retried(result, findings);
         clockOffset(result, findings);
+        delivery(workload, result.delivery, findings);
         return findings;
     }
 
@@ -271,6 +275,44 @@ public class RunChecks {
                                     + String.join("; ", result.failedAttempts),
                             (double) result.attempts,
                             1.0));
+        }
+    }
+
+    private void delivery(Workload workload, @Nullable Delivery delivery, List<Finding> findings) {
+        if (!enabled(DELIVERY) || delivery == null) {
+            return;
+        }
+        if (delivery.lost() > 0) {
+            findings.add(
+                    new Finding(
+                            DELIVERY,
+                            Severity.INVALID,
+                            delivery.lost() + " acknowledged messages were never received by a subscription",
+                            (double) delivery.lost(),
+                            0.0));
+        }
+        if (delivery.duplicated() > 0) {
+            findings.add(
+                    new Finding(
+                            DELIVERY,
+                            Severity.WARNING,
+                            delivery.duplicated() + " messages were received more than once",
+                            (double) delivery.duplicated(),
+                            0.0));
+        }
+        if (delivery.outOfOrder() > 0) {
+            boolean expected = workload.expectsOrdering();
+            findings.add(
+                    new Finding(
+                            DELIVERY,
+                            expected ? Severity.WARNING : Severity.INFO,
+                            delivery.outOfOrder()
+                                    + " messages arrived after a later message from the same producer"
+                                    + (expected
+                                            ? ""
+                                            : "; expected with several partitions or consumers per subscription"),
+                            (double) delivery.outOfOrder(),
+                            0.0));
         }
     }
 

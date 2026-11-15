@@ -91,6 +91,10 @@ public class Workload {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable Thresholds thresholds;
 
+    /** Optional limits for the built-in run checks; absent uses the defaults. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable RunChecks checks;
+
     /**
      * One step of a rate profile: the rate moves linearly from the previous stage's target to this
      * one over the duration. The first stage starts at its own target, so it holds.
@@ -152,6 +156,9 @@ public class Workload {
     public void validate() {
         if (thresholds != null) {
             thresholds.validate(this);
+        }
+        if (checks != null) {
+            checks.validate();
         }
         PayloadGenerator generator = payloadGenerator;
         if (generator != null) {

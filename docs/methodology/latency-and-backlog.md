@@ -39,7 +39,8 @@ publish latency. Publish delay helps expose this form of coordinated omission.
 
 Low delay and an achieved publish rate close to the target suggest producers are keeping up with
 their schedule. Large or growing delay signals that sends are starting late, but does not by itself
-prove the broker is saturated: inspect worker CPU, GC, errors and backlog too.
+prove the broker is saturated: inspect worker CPU, GC, errors and backlog too. The result reports
+`publishDelayGrowth` and `rateShortfall` [findings](../guides/results.md#run-checks) for these cases.
 
 ## Schedule-corrected publish latency
 
@@ -94,7 +95,8 @@ including warm-up and the readiness probe; resetting statistics for measurement 
 latency histograms.
 
 It is reported every 10 seconds in the console and in the result's `backlog` series. A backlog that
-grows during a fixed-rate run means consumers cannot keep up with that rate.
+grows during a fixed-rate run means consumers cannot keep up with that rate; the result reports it
+as a `backlogGrowth` [finding](../guides/results.md#run-checks).
 
 ## Backlog workloads
 

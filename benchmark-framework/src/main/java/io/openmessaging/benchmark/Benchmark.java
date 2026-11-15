@@ -25,6 +25,7 @@ import io.openmessaging.benchmark.worker.DriverConfiguration;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.WorkerClock;
 import io.openmessaging.benchmark.worker.WorkerWatchdog;
 import java.io.File;
 import java.io.IOException;
@@ -635,6 +636,7 @@ public final class Benchmark {
             worker.initializeDriver(Path.of(combination.driverConfig()));
             generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
             generator.includeHistograms(includeHistograms);
+            List<WorkerClock> clocksAtStart = WorkerClock.probe(worker);
             TestResult result = runWatched(generator, worker);
             measured = true;
             result.schemaVersion = 3;
@@ -647,7 +649,8 @@ public final class Benchmark {
                             Instant.now(),
                             worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                             workload,
-                            driverConfig);
+                            driverConfig,
+                            WorkerClock.withDrift(clocksAtStart, WorkerClock.probe(worker)));
             result.findings =
                     Objects.requireNonNullElseGet(workload.checks, RunChecks::new).evaluate(workload, result);
             RunChecks.print(result.findings);

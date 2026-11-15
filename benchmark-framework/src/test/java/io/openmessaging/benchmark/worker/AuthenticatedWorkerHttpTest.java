@@ -156,8 +156,14 @@ class AuthenticatedWorkerHttpTest {
                 .doesNotContain("broker-1");
         assertThat(send(get(WorkerHandler.HEALTH), "Bearer wrong").body()).doesNotContain("broker-1");
         try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
-            assertThat(client.health())
-                    .isEqualTo(new WorkerHealth(true, DriverState.EXITED, 42, "broker-1:9092 refused"));
+            long before = WorkerClock.nowMicros();
+            WorkerHealth health = client.health();
+            long after = WorkerClock.nowMicros();
+            assertThat(health.clockMicros()).isBetween(before, after);
+            assertThat(health)
+                    .isEqualTo(
+                            new WorkerHealth(
+                                    true, DriverState.EXITED, 42, "broker-1:9092 refused", health.clockMicros()));
         }
     }
 

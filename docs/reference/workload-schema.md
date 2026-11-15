@@ -167,6 +167,7 @@ checks:
   minTailSamples: 10            # tailSamples: samples beyond each reported percentile
   maxSendErrors: 0              # sendErrors
   maxPublishDelayGrowthMs: 10   # publishDelayGrowth
+  maxClockOffsetFraction: 0.1   # clockOffset: worker clock spread as a fraction of p50 end-to-end
 ```
 
 `minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown

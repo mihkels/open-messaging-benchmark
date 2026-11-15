@@ -70,7 +70,8 @@ Consequences:
 
 - **Clock synchronization.** In distributed runs, producer and consumer are usually on different
   machines. Any clock offset between them is added to or subtracted from every value. Synchronize
-  clocks with NTP or chrony and check the offset before trusting sub-10 ms results.
+  clocks with NTP or chrony; the coordinator also measures the offset, see
+  [Clock offset](#clock-offset).
 - **Millisecond resolution.** Values are whole milliseconds. Messages delivered within the same
   millisecond have a latency of 0 and are recorded. Negative values from clock skew are dropped.
   A zero sample cannot distinguish sub-millisecond delivery times; use publish latency for
@@ -81,6 +82,35 @@ Consequences:
   end-to-end latency excludes the producer-to-server leg and is not comparable to other drivers.
 - **Range.** End-to-end values are capped at 12 hours, so backlog drains are measured without an
   oversized value failing the run. All three producer latency metrics are capped at 60 seconds.
+
+### Clock offset
+
+In distributed runs the coordinator estimates each worker's wall-clock offset from its own clock,
+once after the driver is set up and again when the run ends. Each estimate makes five NTP-style
+round trips to the worker's [`/health`](../guides/monitoring.md#worker-health), which reports the
+worker's clock, and keeps the round trip with the lowest round-trip time. The result records them
+in `metadata.clockOffsets`, one entry per worker:
+
+```json
+"clockOffsets": [
+  { "worker": "http://worker-1:8080", "role": "producer", "offsetMs": 0.42, "rttMs": 0.31, "driftMs": 0.02 },
+  { "worker": "http://worker-2:8080", "role": "consumer", "offsetMs": -1.87, "rttMs": 0.29, "driftMs": -0.05 }
+]
+```
+
+- `offsetMs` is the worker's clock minus the coordinator's at setup. The true offset is within
+  `rttMs / 2` of it, so a large `rttMs` makes the estimate coarse.
+- `driftMs` is how much the offset changed by the end of the run; it is missing when the end
+  probe failed.
+- End-to-end latency from a producer to a consumer is shifted by the consumer's offset minus the
+  producer's. In the example, values from worker-1 to worker-2 read about 2.3 ms too low.
+
+The coordinator itself never produces or consumes, so only differences between workers matter. A
+local run records one `local` entry with zeros, since producer and consumer share one clock. A
+worker that cannot be probed, such as one running an older release without the clock in `/health`,
+is left out with a warning in the log. When the largest producer-to-consumer difference, at setup
+or at the end, exceeds a fraction of the p50 end-to-end latency, the run gets a `clockOffset`
+[finding](../guides/results.md#run-checks).
 
 ## Backlog
 

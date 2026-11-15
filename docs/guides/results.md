@@ -84,6 +84,11 @@ compares a number with a limit. The built-in checks are:
 | `sendErrors`         | warning                          | Failed sends in the measured window, with the last reason reported by each worker                                           |
 | `publishDelayGrowth` | warning                          | Rise in average publish delay from the first to the second half of the measured window, in ms                               |
 | `retried`            | warning                          | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures             |
+| `clockOffset`        | warning                          | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms      |
+
+The `clockOffset` check reads the per-worker offsets the coordinator measures in distributed runs,
+recorded in `metadata.clockOffsets`; [Clock offset](../methodology/latency-and-backlog.md#clock-offset)
+explains how to read them.
 
 Runs that stall or lose a worker fail outright instead of producing a finding. Tune or disable the
 checks with the workload's [`checks`](../reference/workload-schema.md#run-checks) block.

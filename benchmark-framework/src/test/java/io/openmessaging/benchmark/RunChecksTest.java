@@ -18,10 +18,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import io.openmessaging.benchmark.Finding.Severity;
+import io.openmessaging.benchmark.worker.WorkerClock;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -180,6 +182,56 @@ class RunChecksTest {
     }
 
     @Test
+    void flagsClockOffsetSpreadAboveTheFractionOfP50EndToEnd() {
+        TestResult result = healthy();
+        result.aggregatedEndToEndLatency50pct = 5;
+        result.metadata =
+                metadata(
+                        new WorkerClock("p", "producer", 0, 0.4, 0.5),
+                        new WorkerClock("c", "consumer", 2, 0.4, 0.0));
+
+        List<Finding> findings = new RunChecks().evaluate(workload(), result);
+        Finding finding = only(findings);
+
+        assertThat(Validity.of(findings).status()).isEqualTo(Validity.Status.WARNING);
+        assertThat(finding.check()).isEqualTo("clockOffset");
+        assertThat(finding.severity()).isEqualTo(Severity.WARNING);
+        assertThat(finding.message()).startsWith("End-to-end latency is unreliable");
+        assertThat(finding.value()).isEqualTo(2.0);
+        assertThat(finding.limit()).isCloseTo(0.5, within(1e-9));
+    }
+
+    @Test
+    void smallClockOffsetOrLocalRunIsNotFlagged() {
+        TestResult result = healthy();
+        result.aggregatedEndToEndLatency50pct = 5;
+        result.metadata =
+                metadata(
+                        new WorkerClock("p", "producer", 0, 0.4, 0.0),
+                        new WorkerClock("c", "consumer", 0.3, 0.4, 0.0));
+        assertThat(new RunChecks().evaluate(workload(), result)).isEmpty();
+
+        result.metadata = metadata(new WorkerClock("local", "local", 0, 0, 0.0));
+        assertThat(new RunChecks().evaluate(workload(), result)).isEmpty();
+    }
+
+    @Test
+    void clockOffsetsRoundTripAndOldResultsReadWithNone() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ResultMetadata metadata = metadata(new WorkerClock("p", "producer", 1.5, 0.4, null));
+
+        String json = mapper.writeValueAsString(metadata);
+
+        assertThat(json).contains("\"clockOffsets\"").doesNotContain("driftMs");
+        assertThat(mapper.readValue(json, ResultMetadata.class).clockOffsets())
+                .isEqualTo(metadata.clockOffsets());
+        String old = json.replaceAll(",\"clockOffsets\":\\[.*\\]", "");
+        assertThat(old).doesNotContain("clockOffsets");
+        assertThat(mapper.readValue(old, ResultMetadata.class).clockOffsets()).isEmpty();
+        assertThat(mapper.writeValueAsString(metadata())).doesNotContain("clockOffsets");
+    }
+
+    @Test
     void disabledChecksStayQuiet() {
         Workload workload = workload();
         workload.testDurationMinutes = 2;
@@ -239,6 +291,21 @@ class RunChecksTest {
     private static Finding only(List<Finding> findings) {
         assertThat(findings).hasSize(1);
         return findings.get(0);
+    }
+
+    private static ResultMetadata metadata(WorkerClock... clocks) {
+        return new ResultMetadata(
+                "run",
+                "start",
+                "end",
+                "1.2.3",
+                "abc",
+                "25",
+                "",
+                2,
+                new Workload(),
+                Map.of(),
+                List.of(clocks));
     }
 
     private static Workload workload() {

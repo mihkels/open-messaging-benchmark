@@ -59,6 +59,32 @@
         "driverConfig": {
           "type": "object",
           "description": "Resolved driver YAML with credential-like keys redacted."
+        },
+        "clockOffsets": {
+          "description": "Each worker's clock offset from the coordinator. Absent in older results.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["worker", "role", "offsetMs", "rttMs"],
+            "properties": {
+              "worker": {
+                "type": "string"
+              },
+              "role": {
+                "enum": ["producer", "consumer", "local"]
+              },
+              "offsetMs": {
+                "type": "number"
+              },
+              "rttMs": {
+                "type": "number"
+              },
+              "driftMs": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false

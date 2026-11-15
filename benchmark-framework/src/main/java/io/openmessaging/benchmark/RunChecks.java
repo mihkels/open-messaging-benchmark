@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark;
 
 import io.openmessaging.benchmark.Finding.Severity;
+import io.openmessaging.benchmark.worker.WorkerClock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ public class RunChecks {
     static final String SEND_ERRORS = "sendErrors";
     static final String PUBLISH_DELAY_GROWTH = "publishDelayGrowth";
     static final String RETRIED = "retried";
+    static final String CLOCK_OFFSET = "clockOffset";
     static final List<String> NAMES =
             List.of(
                     RATE_SHORTFALL,
@@ -42,7 +44,8 @@ public class RunChecks {
                     TAIL_SAMPLES,
                     SEND_ERRORS,
                     PUBLISH_DELAY_GROWTH,
-                    RETRIED);
+                    RETRIED,
+                    CLOCK_OFFSET);
 
     // Reported tail percentiles and the inverse of the fraction of samples above each
     private static final List<String> TAIL_PERCENTILES = List.of("p99", "p99.9", "p99.99");
@@ -71,6 +74,12 @@ public class RunChecks {
     /** Largest tolerated rise in average publish delay from the first to the second half, in ms. */
     public double maxPublishDelayGrowthMs = 10;
 
+    /**
+     * Largest tolerated clock-offset spread between producer and consumer workers, as a fraction of
+     * the p50 end-to-end latency.
+     */
+    public double maxClockOffsetFraction = 0.1;
+
     void validate() {
         for (String name : disabled) {
             if (!NAMES.contains(name)) {
@@ -78,8 +87,15 @@ public class RunChecks {
                         "Unknown check '" + name + "' in checks.disabled; known checks: " + NAMES);
             }
         }
-        if (!(maxRateShortfall >= 0 && maxBacklogGrowthSeconds >= 0 && maxPublishDelayGrowthMs >= 0)
-                || !Double.isFinite(maxRateShortfall + maxBacklogGrowthSeconds + maxPublishDelayGrowthMs)) {
+        if (!(maxRateShortfall >= 0
+                        && maxBacklogGrowthSeconds >= 0
+                        && maxPublishDelayGrowthMs >= 0
+                        && maxClockOffsetFraction >= 0)
+                || !Double.isFinite(
+                        maxRateShortfall
+                                + maxBacklogGrowthSeconds
+                                + maxPublishDelayGrowthMs
+                                + maxClockOffsetFraction)) {
             throw new IllegalArgumentException("checks limits must be finite non-negative numbers");
         }
         if (minMeasuredMinutes < 0 || minTailSamples < 0 || maxSendErrors < 0) {
@@ -104,6 +120,7 @@ public class RunChecks {
         sendErrors(summary, result.sendErrorReasons, findings);
         publishDelayGrowth(result, findings);
         retried(result, findings);
+        clockOffset(result, findings);
         return findings;
     }
 
@@ -247,6 +264,27 @@ public class RunChecks {
                                     + String.join("; ", result.failedAttempts),
                             (double) result.attempts,
                             1.0));
+        }
+    }
+
+    private void clockOffset(TestResult result, List<Finding> findings) {
+        double p50 = result.aggregatedEndToEndLatency50pct;
+        if (enabled(CLOCK_OFFSET) && result.metadata != null && p50 > 0) {
+            double spread = WorkerClock.spreadMs(result.metadata.clockOffsets());
+            double limit = maxClockOffsetFraction * p50;
+            if (spread > limit) {
+                findings.add(
+                        new Finding(
+                                CLOCK_OFFSET,
+                                Severity.WARNING,
+                                String.format(
+                                        "End-to-end latency is unreliable: producer and consumer worker clocks"
+                                                + " differ by up to %.3f ms, %.0f%% of the p50 end-to-end latency of"
+                                                + " %.3f ms",
+                                        spread, spread / p50 * 100, p50),
+                                spread,
+                                limit));
+            }
         }
     }
 

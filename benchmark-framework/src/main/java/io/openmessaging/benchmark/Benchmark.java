@@ -403,7 +403,7 @@ public final class Benchmark {
     }
 
     // An invalid measurement makes a threshold verdict meaningless, so the validity code wins
-    private static int exitCode(
+    static int exitCode(
             Arguments arguments, Map<String, TestResult> written, boolean thresholdFailed) {
         if (arguments.failOnInvalid || arguments.failOnWarning) {
             Validity.Status failAt =
@@ -418,7 +418,7 @@ public final class Benchmark {
     }
 
     // One line per written result with its verdict and the checks behind it
-    private static void printVerdicts(Map<String, TestResult> written) {
+    static void printVerdicts(Map<String, TestResult> written) {
         if (written.isEmpty()) {
             return;
         }

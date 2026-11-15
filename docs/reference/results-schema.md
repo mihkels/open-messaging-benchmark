@@ -61,6 +61,12 @@ the overall `status` (`PASS` or `FAIL`) and one entry per configured check with 
 `observed` value and individual `status`. The latency check uses aggregated publish p99 in
 milliseconds; the throughput ratio is measured average publish rate divided by target rate.
 
+## Findings
+
+`findings` lists what the built-in [run checks](../guides/results.md#run-checks) found, each with
+`check`, `severity` (`info`, `warning` or `invalid`), `message` and, for numeric checks, `value` and
+`limit`. It is omitted when nothing was found and in files written before the checks existed.
+
 ## Retries
 
 `attempts` is how many attempts the run took with [`--retries`](cli.md); the last one produced the

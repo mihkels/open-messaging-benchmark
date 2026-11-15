@@ -738,6 +738,9 @@ public final class WorkloadGenerator implements WorkloadRun {
 
             PeriodStats stats = worker.getPeriodStats();
             logNewSendErrors(stats);
+            if (measured) {
+                result.sendErrorReasons.putAll(stats.sendErrorReasons());
+            }
             long now = System.nanoTime();
             PeriodReport period =
                     PeriodReport.of(stats, (now - oldTime) / 1e9, workload.subscriptionsPerTopic);

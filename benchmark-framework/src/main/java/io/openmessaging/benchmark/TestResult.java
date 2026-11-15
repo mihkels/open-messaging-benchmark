@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -55,6 +56,13 @@ public class TestResult {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable Map<String, String> histograms;
+
+    /** What the built-in run checks found; absent when they found nothing or in older files. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<Finding> findings = new ArrayList<>();
+
+    /** The last send failure reason per worker id in the measured window; not written. */
+    @JsonIgnore Map<String, String> sendErrorReasons = new TreeMap<>();
 
     /** How many attempts the run took, the last one being this result; absent in older files. */
     @JsonInclude(JsonInclude.Include.NON_NULL)

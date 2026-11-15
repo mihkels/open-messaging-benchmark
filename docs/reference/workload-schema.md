@@ -45,6 +45,7 @@ for explanations and examples.
 | `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                                                  |
 | `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                                                |
 | `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
+| `checks`                    | object  | defaults | Limits for the built-in run checks that write `findings` to the result; see [Run checks](#run-checks)                                                                                                         |
 
 Set the topology and duration fields explicitly. In particular, a missing or non-positive
 `testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
@@ -151,6 +152,26 @@ thresholds:
 `maxPublishLatency99Ms` is compared with the aggregated measured publish p99 latency in milliseconds.
 `minThroughputRatio` is the minimum measured average publish rate divided by the configured
 `producerRate`; it requires a positive `producerRate`. Warm-up statistics are excluded.
+
+## Run checks
+
+The built-in run checks (see [Results](../guides/results.md#run-checks)) always run with these
+defaults. Set any of them in an optional `checks` block, or list checks to skip in `disabled`:
+
+```yaml
+checks:
+  disabled: [shortWindow]
+  maxRateShortfall: 0.05        # rateShortfall: fraction below a fixed producerRate
+  maxBacklogGrowthSeconds: 10   # backlogGrowth: growth in seconds of publishing
+  minMeasuredMinutes: 5         # shortWindow
+  minTailSamples: 10            # tailSamples: samples beyond each reported percentile
+  maxSendErrors: 0              # sendErrors
+  maxPublishDelayGrowthMs: 10   # publishDelayGrowth
+```
+
+`minTailSamples: 10` means p99 needs 1,000 messages, p99.9 10,000 and p99.99 100,000. Unknown
+check names and negative limits are rejected before the run starts. Findings never fail a run on
+their own.
 
 ## Example
 

@@ -105,7 +105,8 @@ To vary the rate during the run, with ramps, holds and bursts, use `stages` inst
 
 Use longer runs for tail percentiles and for systems with periodic background work such as log
 compaction, segment rolling or garbage collection. See
-[Benchmark design](../methodology/benchmark-design.md).
+[Benchmark design](../methodology/benchmark-design.md). The result reports a `shortWindow` or
+`tailSamples` [finding](results.md#run-checks) when the window or message count is too small.
 
 ## Backlog workloads
 

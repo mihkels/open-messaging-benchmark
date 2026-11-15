@@ -594,6 +594,9 @@ public final class Benchmark {
                             worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                             workload,
                             driverConfig);
+            result.findings =
+                    Objects.requireNonNullElseGet(workload.checks, RunChecks::new).evaluate(workload, result);
+            RunChecks.print(result.findings);
             if (workload.thresholds != null) {
                 result.thresholds = workload.thresholds.evaluate(result);
                 result.thresholds.print();

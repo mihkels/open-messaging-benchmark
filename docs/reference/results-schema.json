@@ -209,6 +209,32 @@
       "type": "integer",
       "minimum": 1
     },
+    "findings": {
+      "description": "What the built-in run checks found. Absent when they found nothing.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "severity", "message"],
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": ["info", "warning", "invalid"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "failedAttempts": {
       "description": "Reason each failed attempt was retried, oldest first. Absent when the first attempt succeeded.",
       "type": "array",

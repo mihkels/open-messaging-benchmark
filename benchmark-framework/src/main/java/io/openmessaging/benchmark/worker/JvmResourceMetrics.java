@@ -66,6 +66,39 @@ public final class JvmResourceMetrics {
                                         / 1000.0);
     }
 
+    /**
+     * Process CPU time of this JVM.
+     *
+     * @return the CPU time in nanoseconds, or -1 when the platform does not report it
+     */
+    public static long processCpuNanos() {
+        return ManagementFactory.getOperatingSystemMXBean() instanceof OperatingSystemMXBean bean
+                ? bean.getProcessCpuTime()
+                : -1;
+    }
+
+    /**
+     * GC pause time of this JVM, leaving out collectors that run concurrently with the application.
+     *
+     * @return the pause time in milliseconds, or -1 when a collector does not report it
+     */
+    public static long gcPauseMillis() {
+        long total = 0;
+        for (GarbageCollectorMXBean collector : ManagementFactory.getGarbageCollectorMXBeans()) {
+            String name = collector.getName();
+            // G1 Concurrent GC and ZGC/Shenandoah Cycles count background work, not pauses
+            if (name.contains("Concurrent") || name.contains("Cycles")) {
+                continue;
+            }
+            long time = collector.getCollectionTime();
+            if (time < 0) {
+                return -1;
+            }
+            total += time;
+        }
+        return total;
+    }
+
     public void bindTo(MeterRegistry registry, String role) {
         readings.forEach((name, reading) ->
                 Gauge.builder("omb_resource_" + name, reading, DoubleSupplier::getAsDouble)

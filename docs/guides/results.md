@@ -76,22 +76,29 @@ at the end of the run. The field is omitted when nothing was found:
 `severity` is `info`, `warning` or `invalid`; `value` and `limit` are present when the check
 compares a number with a limit. The built-in checks are:
 
-|        Check         |               Severity                |                                                            Finds                                                             |
-|----------------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| `rateShortfall`      | invalid                               | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                    |
-| `backlogGrowth`      | warning                               | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                   |
-| `shortWindow`        | warning                               | Measured window shorter than the minimum, in minutes                                                                         |
-| `tailSamples`        | warning, or info for p99.99 only      | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs  |
-| `sendErrors`         | warning                               | Failed sends in the measured window, with the last reason reported by each worker                                            |
-| `publishDelayGrowth` | warning                               | Rise in average publish delay from the first to the second half of the measured window, in ms                                |
-| `retried`            | warning                               | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures              |
-| `clockOffset`        | warning                               | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms       |
-| `runToRunVariance`   | warning                               | In a [repetition summary](#repeated-runs) only: a metric whose coefficient of variation across repetitions exceeds the limit |
-| `failedRepetitions`  | warning, or invalid if none succeeded | In a [repetition summary](#repeated-runs) only: repetitions that failed after their retries or were skipped                  |
+|         Check         |               Severity                |                                                                   Finds                                                                    |
+|-----------------------|---------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `rateShortfall`       | invalid                               | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                                  |
+| `backlogGrowth`       | warning                               | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                                 |
+| `shortWindow`         | warning                               | Measured window shorter than the minimum, in minutes                                                                                       |
+| `tailSamples`         | warning, or info for p99.99 only      | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs                |
+| `sendErrors`          | warning                               | Failed sends in the measured window, with the last reason reported by each worker                                                          |
+| `publishDelayGrowth`  | warning                               | Rise in average publish delay from the first to the second half of the measured window, in ms                                              |
+| `retried`             | warning                               | The run needed more than one [`--retries`](../reference/cli.md) attempt; the message lists the earlier failures                            |
+| `clockOffset`         | warning                               | End-to-end latency is unreliable: producer and consumer worker clocks differ by more than a fraction of the p50, in ms                     |
+| `generatorSaturation` | warning                               | A worker's CPU use or GC pause time in a measured period above the limit; the result may show the load generator's limit, not the broker's |
+| `runToRunVariance`    | warning                               | In a [repetition summary](#repeated-runs) only: a metric whose coefficient of variation across repetitions exceeds the limit               |
+| `failedRepetitions`   | warning, or invalid if none succeeded | In a [repetition summary](#repeated-runs) only: repetitions that failed after their retries or were skipped                                |
 
 The `clockOffset` check reads the per-worker offsets the coordinator measures in distributed runs,
 recorded in `metadata.clockOffsets`; [Clock offset](../methodology/latency-and-backlog.md#clock-offset)
 explains how to read them.
+
+The `generatorSaturation` check reads `workerHealth`, the highest worker CPU and GC load in each
+period; [Monitoring](monitoring.md#load-generator-saturation) explains it. For `producerRate: 0`
+runs, `rateProbe` records each step of the max-rate probe, so the rate it settled on can be
+explained; see the [results schema](../reference/results-schema.md#rate-probe). The
+[HTML report](html-report.md) charts both.
 
 Runs that stall or lose a worker fail outright instead of producing a finding. Tune or disable the
 checks with the workload's [`checks`](../reference/workload-schema.md#run-checks) block.

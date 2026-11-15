@@ -16,12 +16,8 @@ package io.openmessaging.benchmark;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 import io.openmessaging.benchmark.utils.Env;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class RateController {
-    private static final Logger log = LoggerFactory.getLogger(RateController.class);
-
     private static final long ONE_SECOND_IN_NANOS = SECONDS.toNanos(1);
     private final long publishBacklogLimit;
     private final long receiveBacklogLimit;
@@ -32,6 +28,11 @@ class RateController {
 
     private long previousTotalPublished = 0;
     private long previousTotalReceived = 0;
+
+    // What the last step saw and decided, for the result's rate-probe trace
+    private String decision = "";
+    private long receiveBacklog;
+    private long publishBacklog;
 
     RateController() {
         publishBacklogLimit = Env.getLong("PUBLISH_BACKLOG_LIMIT", 1_000);
@@ -53,31 +54,40 @@ class RateController {
         previousTotalPublished = totalPublished;
         previousTotalReceived = totalReceived;
 
-        if (log.isDebugEnabled()) {
-            log.debug(
-                    "Current rate: {} -- Publish rate {} -- Receive Rate: {}",
-                    rate,
-                    rate(published, periodNanos),
-                    rate(received, periodNanos));
-        }
-
-        long receiveBacklog = totalPublished - totalReceived;
+        receiveBacklog = totalPublished - totalReceived;
+        publishBacklog = expected - published;
         if (receiveBacklog > receiveBacklogLimit) {
-            return nextRate(periodNanos, received, expected, receiveBacklog, "Receive");
+            decision = "receiveBacklog";
+            return nextRate(periodNanos, received, expected, receiveBacklog);
         }
 
-        long publishBacklog = expected - published;
         if (publishBacklog > publishBacklogLimit) {
-            return nextRate(periodNanos, published, expected, publishBacklog, "Publish");
+            decision = "publishBacklog";
+            return nextRate(periodNanos, published, expected, publishBacklog);
         }
 
+        decision = "rampUp";
         rampUp();
 
         return rate + (rate * rampingFactor);
     }
 
-    private double nextRate(long periodNanos, long actual, long expected, long backlog, String type) {
-        log.debug("{} backlog: {}", type, backlog);
+    // How the last step chose its rate: rampUp, receiveBacklog or publishBacklog
+    String decision() {
+        return decision;
+    }
+
+    // Messages published but not yet received at the last step
+    long receiveBacklog() {
+        return receiveBacklog;
+    }
+
+    // Messages the last step expected to publish but did not
+    long publishBacklog() {
+        return publishBacklog;
+    }
+
+    private double nextRate(long periodNanos, long actual, long expected, long backlog) {
         rampDown();
         long nextExpected = Math.max(0, expected - backlog);
         double nextExpectedRate = rate(nextExpected, periodNanos);

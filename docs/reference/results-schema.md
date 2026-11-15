@@ -97,6 +97,21 @@ and the run reached it.
 | `peakBacklog`  | integer        | Backlog in messages when consumers resumed                                             |
 | `drainSeconds` | number or null | Seconds from resume until the backlog drained; `null` if it had not drained by the end |
 
+## Rate probe
+
+`rateProbe` is present for `producerRate: 0` runs, which search for the highest sustainable rate.
+It has one entry per probe step, every few seconds, warm-up included.
+
+|           Field            |      Type       |                                             Description                                             |
+|----------------------------|-----------------|-----------------------------------------------------------------------------------------------------|
+| `seconds`                  | number          | Seconds since the probe started                                                                     |
+| `rate`                     | number          | Publish rate in msg/s before the step                                                               |
+| `nextRate`                 | number          | Publish rate in msg/s the step chose                                                                |
+| `receiveBacklog`           | integer         | Messages published but not yet received                                                             |
+| `publishBacklog`           | integer         | Messages the producers fell short of `rate` by in the step                                          |
+| `publishDelayLatency99pct` | integer, absent | p99 publish delay in µs of the latest period; absent before the first period                        |
+| `decision`                 | string          | `rampUp`, or the backlog over its limit that made it back off: `receiveBacklog` or `publishBacklog` |
+
 ## Optional histograms
 
 `histograms` is omitted unless the coordinator is run with `--include-histograms`. When present, it
@@ -142,6 +157,7 @@ existed have no warm-up periods.
 | `phase`                                                                  | string list  | Run phase of the period: `WARMUP`, `BACKLOG_BUILD`, `BACKLOG_DRAIN` or `MEASURE`                                                                      |
 | `targetRate`                                                             | number list  | Target publish rate in msg/s at the end of the period; absent in older files                                                                          |
 | `stage`                                                                  | int list     | Index of the running workload [stage](../guides/rate-profiles.md); only present for staged workloads                                                  |
+| `workerHealth`                                                           | object list  | Highest worker `cpu` (share of its cores) and `gc` (share of the period in GC pauses), 0 to 1; absent when workers do not report it                   |
 | `publishRate`                                                            | number list  | Messages published per second                                                                                                                         |
 | `publishErrorRate`                                                       | number list  | Failed publishes per second                                                                                                                           |
 | `consumeRate`                                                            | number list  | Messages received per second, across all subscriptions                                                                                                |

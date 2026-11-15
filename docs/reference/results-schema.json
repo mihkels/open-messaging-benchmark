@@ -301,6 +301,61 @@
       "description": "Target publish rate in msg/s at the end of each period. Absent in files written before it was recorded.",
       "$ref": "#/$defs/numberSeries"
     },
+    "workerHealth": {
+      "description": "Highest worker load in each period, across workers. Absent when the workers do not report it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cpu", "gc"],
+        "properties": {
+          "cpu": {
+            "description": "Process CPU time as a fraction of the period times the worker's available cores.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "gc": {
+            "description": "GC pause time as a fraction of the period.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rateProbe": {
+      "description": "Steps of the max-rate probe. Present only for producerRate: 0 runs.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seconds", "rate", "nextRate", "receiveBacklog", "publishBacklog", "decision"],
+        "properties": {
+          "seconds": {
+            "type": "number"
+          },
+          "rate": {
+            "type": "number"
+          },
+          "nextRate": {
+            "type": "number"
+          },
+          "receiveBacklog": {
+            "type": "integer"
+          },
+          "publishBacklog": {
+            "type": "integer"
+          },
+          "publishDelayLatency99pct": {
+            "type": "integer"
+          },
+          "decision": {
+            "enum": ["rampUp", "receiveBacklog", "publishBacklog"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "stage": {
       "description": "Index of the running workload stage in each period. Present only for workloads with stages.",
       "type": "array",

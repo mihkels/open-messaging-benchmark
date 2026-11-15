@@ -75,14 +75,14 @@ at the end of the run. The field is omitted when nothing was found:
 `severity` is `info`, `warning` or `invalid`; `value` and `limit` are present when the check
 compares a number with a limit. The built-in checks are:
 
-|        Check         | Severity          | Finds                                                                                                     |
-|----------------------|-------------------|-----------------------------------------------------------------------------------------------------------|
-| `rateShortfall`      | warning           | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction |
-| `backlogGrowth`      | warning           | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads |
-| `shortWindow`        | warning           | Measured window shorter than the minimum, in minutes                                                      |
+|        Check         |             Severity             |                                                            Finds                                                            |
+|----------------------|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `rateShortfall`      | warning                          | Average publish rate below a fixed `producerRate` by more than the limit; value is the shortfall fraction                   |
+| `backlogGrowth`      | warning                          | Backlog growth over the measured window, in seconds of publishing; skipped for backlog and pause workloads                  |
+| `shortWindow`        | warning                          | Measured window shorter than the minimum, in minutes                                                                        |
 | `tailSamples`        | warning, or info for p99.99 only | Too few messages for the reported tail percentiles; value is the samples, limit what the lowest unreliable percentile needs |
-| `sendErrors`         | warning           | Failed sends in the measured window, with the last reason reported by each worker                         |
-| `publishDelayGrowth` | warning           | Rise in average publish delay from the first to the second half of the measured window, in ms             |
+| `sendErrors`         | warning                          | Failed sends in the measured window, with the last reason reported by each worker                                           |
+| `publishDelayGrowth` | warning                          | Rise in average publish delay from the first to the second half of the measured window, in ms                               |
 
 Runs that stall or lose a worker fail outright instead of producing a finding. Tune or disable the
 checks with the workload's [`checks`](../reference/workload-schema.md#run-checks) block.

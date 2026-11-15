@@ -262,8 +262,12 @@ public final class DistributedWorkersEnsemble implements Worker {
                 .log();
     }
 
+    String role(Worker worker) {
+        return producerWorkers.contains(worker) ? "producer" : "consumer";
+    }
+
     private WorkerCounters countersOf(Worker worker) {
-        String role = producerWorkers.contains(worker) ? "producer" : "consumer";
+        String role = role(worker);
         try {
             return new WorkerCounters(worker.id(), role, worker.getCountersStats(), null);
         } catch (Exception e) {

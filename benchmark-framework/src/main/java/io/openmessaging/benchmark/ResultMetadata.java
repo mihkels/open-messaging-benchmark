@@ -13,7 +13,9 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.driver.SecretRedaction;
+import io.openmessaging.benchmark.worker.WorkerClock;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
@@ -37,10 +39,13 @@ public record ResultMetadata(
         String jvmOptions,
         int workerCount,
         Workload workload,
-        Map<String, Object> driverConfig) {
+        Map<String, Object> driverConfig,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<WorkerClock> clockOffsets) {
     /** Masks credentials in the driver configuration once, into an unmodifiable map. */
     public ResultMetadata {
         driverConfig = Collections.unmodifiableMap(SecretRedaction.redactMap(driverConfig));
+        // Absent in results written before clock offsets were recorded
+        clockOffsets = clockOffsets == null ? List.of() : List.copyOf(clockOffsets);
     }
 
     private static final String UNKNOWN = "unknown";
@@ -54,7 +59,8 @@ public record ResultMetadata(
             Instant finishedAt,
             int workerCount,
             Workload workload,
-            Map<String, Object> driverConfig) {
+            Map<String, Object> driverConfig,
+            List<WorkerClock> clockOffsets) {
         String ombVersion =
                 System.getProperty(
                         "omb.version",
@@ -77,7 +83,8 @@ public record ResultMetadata(
                 jvmOptions,
                 workerCount,
                 workload,
-                driverConfig);
+                driverConfig,
+                clockOffsets);
     }
 
     /** The commit of this JVM's run, resolved on first use and then reused for every result. */

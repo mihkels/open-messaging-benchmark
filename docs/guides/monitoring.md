@@ -27,15 +27,16 @@ curl http://worker-1:8080/health
 ```
 
 ```json
-{ "ready" : true, "driver" : "EXITED", "exitCode" : 137, "lastError" : null }
+{ "ready" : true, "driver" : "EXITED", "exitCode" : 137, "lastError" : null, "clockMicros" : 1763200000123456 }
 ```
 
-|    Field    |                                                     Meaning                                                     |
-|-------------|-----------------------------------------------------------------------------------------------------------------|
-| `ready`     | The worker can take a driver; `false`, with status 503, once it is shutting down or failed to clean up a driver |
-| `driver`    | `NOT_STARTED`, `INITIALIZING`, `RUNNING` or `EXITED`                                                            |
-| `exitCode`  | Exit code of a driver process that has exited                                                                   |
-| `lastError` | The last driver failure; only sent with a valid bearer token, since it can name brokers and configuration       |
+|     Field     |                                                                             Meaning                                                                             |
+|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ready`       | The worker can take a driver; `false`, with status 503, once it is shutting down or failed to clean up a driver                                                 |
+| `driver`      | `NOT_STARTED`, `INITIALIZING`, `RUNNING` or `EXITED`                                                                                                            |
+| `exitCode`    | Exit code of a driver process that has exited                                                                                                                   |
+| `lastError`   | The last driver failure; only sent with a valid bearer token, since it can name brokers and configuration                                                       |
+| `clockMicros` | The worker's wall clock, in microseconds since the epoch; the coordinator uses it to [measure clock offset](../methodology/latency-and-backlog.md#clock-offset) |
 
 `/health` needs no token even with `OMB_WORKER_TOKEN` or `--token-file` set, so load balancers and
 Kubernetes probes can use it; without the token it shows only the state and exit code.

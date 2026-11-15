@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.worker.commands;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.jspecify.annotations.Nullable;
 
@@ -23,12 +24,22 @@ import org.jspecify.annotations.Nullable;
  * @param driver the state of the driver process
  * @param exitCode the driver process's exit code once it has exited, else {@code null}
  * @param lastError the last driver failure, or {@code null}; only sent to callers with the token
+ * @param clockMicros the worker's wall clock in microseconds since the epoch, sampled while
+ *     answering the request, or {@code null} when not reported (in-process or older workers)
  */
 public record WorkerHealth(
         @JsonProperty("ready") boolean ready,
         @JsonProperty("driver") DriverState driver,
         @JsonProperty("exitCode") @Nullable Integer exitCode,
-        @JsonProperty("lastError") @Nullable String lastError) {
+        @JsonProperty("lastError") @Nullable String lastError,
+        @JsonProperty("clockMicros") @JsonInclude(JsonInclude.Include.NON_NULL)
+                @Nullable Long clockMicros) {
+
+    /** Health without a clock reading. */
+    public WorkerHealth(
+            boolean ready, DriverState driver, @Nullable Integer exitCode, @Nullable String lastError) {
+        this(ready, driver, exitCode, lastError, null);
+    }
 
     /** Health of a worker whose driver runs in-process and is always available. */
     public static final WorkerHealth RUNNING =
@@ -48,6 +59,16 @@ public record WorkerHealth(
      * @return the redacted health
      */
     public WorkerHealth withoutError() {
-        return new WorkerHealth(ready, driver, exitCode, null);
+        return new WorkerHealth(ready, driver, exitCode, null, clockMicros);
+    }
+
+    /**
+     * This health with the given wall-clock reading.
+     *
+     * @param micros the wall clock in microseconds since the epoch
+     * @return the health with {@link #clockMicros()} set
+     */
+    public WorkerHealth withClockMicros(long micros) {
+        return new WorkerHealth(ready, driver, exitCode, lastError, micros);
     }
 }

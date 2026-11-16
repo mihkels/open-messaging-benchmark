@@ -45,12 +45,9 @@ class JsonLoggingTest {
         try {
             context.setConfigLocation(
                     Objects.requireNonNull(JsonLoggingTest.class.getResource("/log4j2.xml")).toURI());
-            MDC.put("run_id", "run-1");
             WorkloadGenerator generator;
-            try {
+            try (var _ = MDC.putCloseable("run_id", "run-1")) {
                 generator = new WorkloadGenerator("driver", new Workload(), mock(Worker.class));
-            } finally {
-                MDC.remove("run_id");
             }
             // The run context comes from the generator's creator, not the logging thread
             try (generator) {

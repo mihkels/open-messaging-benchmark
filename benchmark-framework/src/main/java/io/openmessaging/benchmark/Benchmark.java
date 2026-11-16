@@ -191,7 +191,7 @@ public final class Benchmark {
                 if (!duration.isNegative() && !duration.isZero()) {
                     return duration;
                 }
-            } catch (DateTimeParseException e) {
+            } catch (DateTimeParseException _) {
                 // reported below
             }
             throw new ParameterException(
@@ -602,10 +602,8 @@ public final class Benchmark {
             log.info("Writing repetition summary into {}", fileName);
             writer.writeValue(new File(fileName), summary);
             summaries.put(new File(fileName).getName(), summary.validity());
-            log.info(
-                    "{}: {}",
-                    new File(fileName).getName(),
-                    summary.validity().status().name().toLowerCase(Locale.ROOT));
+            String status = summary.validity().status().name().toLowerCase(Locale.ROOT);
+            log.info("{}: {}", new File(fileName).getName(), status);
         } catch (RuntimeException e) {
             log.error("Failed to write the repetition summary", e);
             failures = append(failures, e);
@@ -886,7 +884,7 @@ public final class Benchmark {
     private static boolean isQuiescent(WorkloadRun generator) {
         try {
             return generator.isQuiescentAfterClose();
-        } catch (Throwable e) {
+        } catch (Throwable _) {
             return false;
         }
     }

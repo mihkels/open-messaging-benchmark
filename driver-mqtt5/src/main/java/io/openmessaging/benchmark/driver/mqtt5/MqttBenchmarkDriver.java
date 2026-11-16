@@ -55,16 +55,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MqttBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBenchmarkDriver.class);
-    private static final Pattern server_uri_pattern =
-            Pattern.compile("(?:([^:]*+)://)?+([^:]++)(?::(\\w++))?+");
     public static final MqttUtf8String USER_PROPERTY_KEY_PUBLISH_TIMESTAMP =
             MqttUtf8String.of("benchmark-publish-timestamp");
 
@@ -375,19 +371,21 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     }
 
     static HostAndPort parseServerUri(String serverUri) {
-        Matcher matcher = server_uri_pattern.matcher(serverUri);
-        if (matcher.find()) {
-            String scheme = matcher.group(1);
-            String host = matcher.group(2);
-            String portStr = matcher.group(3);
-            boolean tls =
-                    scheme != null && Set.of("ssl", "tls", "mqtts").contains(scheme.toLowerCase(Locale.ROOT));
-            int port =
-                    portStr != null && !portStr.isEmpty() ? Integer.parseInt(portStr) : tls ? 8883 : 1883;
-            return HostAndPort.fromParts(host, port);
-        } else {
+        int separator = serverUri.indexOf("://");
+        String scheme = separator >= 0 ? serverUri.substring(0, separator) : "";
+        boolean tls = Set.of("ssl", "tls", "mqtts").contains(scheme.toLowerCase(Locale.ROOT));
+        HostAndPort address;
+        try {
+            address =
+                    HostAndPort.fromString(serverUri.substring(separator >= 0 ? separator + 3 : 0))
+                            .withDefaultPort(tls ? 8883 : 1883);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid serverUri: " + serverUri, e);
+        }
+        if (address.getHost().isEmpty()) {
             throw new IllegalArgumentException("Invalid serverUri: " + serverUri);
         }
+        return address;
     }
 
     private static String clientId(String role) {

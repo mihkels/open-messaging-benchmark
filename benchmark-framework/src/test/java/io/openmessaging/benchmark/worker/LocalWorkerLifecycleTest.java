@@ -1109,7 +1109,9 @@ class LocalWorkerLifecycleTest {
             int call = calls.getAndIncrement();
             ConsumerCallback consumer = scenario.callback;
             switch (call % 10) {
-                case 3 -> {}
+                case 3 -> {
+                    // dropped: never delivered
+                }
                 case 5 -> {
                     consumer.messageReceived(payload, System.currentTimeMillis());
                     consumer.messageReceived(ByteBuffer.wrap(payload), System.currentTimeMillis());
@@ -1174,7 +1176,8 @@ class LocalWorkerLifecycleTest {
         BenchmarkProducer producer = mock(BenchmarkProducer.class);
         try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
             worker.createProducers(List.of("topic"));
-            assertThatThrownBy(() -> worker.startLoad(verifiedAssignment(new byte[DeliveryStamp.LENGTH - 1])))
+            ProducerWorkAssignment assignment = verifiedAssignment(new byte[DeliveryStamp.LENGTH - 1]);
+            assertThatThrownBy(() -> worker.startLoad(assignment))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("at least 20 bytes");
             verify(producer, times(0)).sendAsync(any(), any());

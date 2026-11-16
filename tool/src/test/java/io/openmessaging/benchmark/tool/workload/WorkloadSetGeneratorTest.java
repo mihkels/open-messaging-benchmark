@@ -252,7 +252,8 @@ class WorkloadSetGeneratorTest {
                         0,
                         null);
 
-        assertThatThrownBy(() -> new WorkloadSetGenerator(template).generate())
+        WorkloadSetGenerator generator = new WorkloadSetGenerator(template);
+        assertThatThrownBy(generator::generate)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Duplicate workload name '1-topics'");
     }

@@ -258,7 +258,8 @@ class HttpWorkerClientLifecycleTest {
                                 Duration.ofSeconds(2),
                                 Duration.ofMillis(200),
                                 Duration.ofSeconds(2))) {
-                    assertThatThrownBy(() -> remote.createProducers(List.of("topic")))
+                    List<String> topics = List.of("topic");
+                    assertThatThrownBy(() -> remote.createProducers(topics))
                             .isInstanceOf(IllegalStateException.class)
                             .hasMessage("HTTP post " + host + "/create-producers timed out after 200 ms")
                             .hasCauseInstanceOf(TimeoutException.class);

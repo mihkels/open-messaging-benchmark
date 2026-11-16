@@ -240,7 +240,7 @@ public final class DistributedWorkersEnsemble implements Worker {
     public List<WorkerCounters> countersPerWorker() {
         try {
             return callAll(workers, this::countersOf);
-        } catch (Exception e) {
+        } catch (Exception _) {
             // Only an interruption gets here, since countersOf catches every worker failure.
             return List.of();
         }

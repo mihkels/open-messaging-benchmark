@@ -92,18 +92,19 @@ public record RepeatSummary(
             @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Double cv) {}
 
     // Throughput and the main latency percentiles, in milliseconds, keyed as in the result file
-    private static final Map<String, ToDoubleFunction<TestResult>> METRICS = new LinkedHashMap<>();
+    private static final Map<String, ToDoubleFunction<TestResult>> TRACKED_METRICS =
+            new LinkedHashMap<>();
 
     static {
-        METRICS.put("publishRateAvg", r -> r.summary.publishRateAvg());
-        METRICS.put("consumeRateAvg", r -> r.summary.consumeRateAvg());
-        METRICS.put("throughputMbSec", r -> r.summary.throughputMbSec());
-        METRICS.put("aggregatedPublishLatency50pct", r -> r.aggregatedPublishLatency50pct);
-        METRICS.put("aggregatedPublishLatency99pct", r -> r.aggregatedPublishLatency99pct);
-        METRICS.put("aggregatedPublishLatency999pct", r -> r.aggregatedPublishLatency999pct);
-        METRICS.put("aggregatedEndToEndLatency50pct", r -> r.aggregatedEndToEndLatency50pct);
-        METRICS.put("aggregatedEndToEndLatency99pct", r -> r.aggregatedEndToEndLatency99pct);
-        METRICS.put("aggregatedEndToEndLatency999pct", r -> r.aggregatedEndToEndLatency999pct);
+        TRACKED_METRICS.put("publishRateAvg", r -> r.summary.publishRateAvg());
+        TRACKED_METRICS.put("consumeRateAvg", r -> r.summary.consumeRateAvg());
+        TRACKED_METRICS.put("throughputMbSec", r -> r.summary.throughputMbSec());
+        TRACKED_METRICS.put("aggregatedPublishLatency50pct", r -> r.aggregatedPublishLatency50pct);
+        TRACKED_METRICS.put("aggregatedPublishLatency99pct", r -> r.aggregatedPublishLatency99pct);
+        TRACKED_METRICS.put("aggregatedPublishLatency999pct", r -> r.aggregatedPublishLatency999pct);
+        TRACKED_METRICS.put("aggregatedEndToEndLatency50pct", r -> r.aggregatedEndToEndLatency50pct);
+        TRACKED_METRICS.put("aggregatedEndToEndLatency99pct", r -> r.aggregatedEndToEndLatency99pct);
+        TRACKED_METRICS.put("aggregatedEndToEndLatency999pct", r -> r.aggregatedEndToEndLatency999pct);
     }
 
     /**
@@ -126,7 +127,7 @@ public record RepeatSummary(
         List<Finding> findings = new ArrayList<>();
         Thresholds.Result evaluated = null;
         if (!successes.isEmpty()) {
-            METRICS.forEach((name, metric) ->
+            TRACKED_METRICS.forEach((name, metric) ->
                     metrics.put(name, stats(successes.stream().mapToDouble(metric).toArray())));
             findings.addAll(
                     Objects.requireNonNullElseGet(workload.checks, RunChecks::new).runToRunVariance(metrics));

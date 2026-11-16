@@ -80,7 +80,7 @@ public class Thresholds {
             long lost = delivery != null ? delivery.lost() : 0;
             evaluated.checks.put(
                     "maxLostMessages",
-                    new Check(maxLostMessages, lost, delivery != null && lost <= maxLostMessages));
+                    new Check(maxLostMessages, (double) lost, delivery != null && lost <= maxLostMessages));
         }
         if (maxDuplicatedMessages != null) {
             long duplicated = delivery != null ? delivery.duplicated() : 0;
@@ -88,7 +88,7 @@ public class Thresholds {
                     "maxDuplicatedMessages",
                     new Check(
                             maxDuplicatedMessages,
-                            duplicated,
+                            (double) duplicated,
                             delivery != null && duplicated <= maxDuplicatedMessages));
         }
         return evaluated;

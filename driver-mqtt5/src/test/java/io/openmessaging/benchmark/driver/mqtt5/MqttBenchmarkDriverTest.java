@@ -78,6 +78,14 @@ class MqttBenchmarkDriverTest {
     }
 
     @Test
+    void serverUriWithBadPortOrNoHostIsRejected() {
+        assertThatThrownBy(() -> MqttBenchmarkDriver.parseServerUri("tcp://broker:abc"))
+                .hasMessage("Invalid serverUri: tcp://broker:abc");
+        assertThatThrownBy(() -> MqttBenchmarkDriver.parseServerUri("tcp://:1883"))
+                .hasMessage("Invalid serverUri: tcp://:1883");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void realClientBuilderPathSubscribesAfterConnectWithManualAcknowledgements() throws Exception {
         Mqtt5AsyncClient client = mock(Mqtt5AsyncClient.class);

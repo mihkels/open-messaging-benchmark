@@ -197,11 +197,9 @@ public final class WorkloadGenerator implements WorkloadRun {
                         workload.keyDistributor,
                         workload.keyDistribution,
                         workload.verifyDelivery);
+        String source = payloadSource();
         log.info(
-                "Prepared {} payloads from {} in {} ms",
-                payloads.size(),
-                payloadSource(),
-                timer.elapsedMillis());
+                "Prepared {} payloads from {} in {} ms", payloads.size(), source, timer.elapsedMillis());
         PayloadGenerator generator = workload.payloadGenerator;
         Double compressionRatio = null;
         if (generator != null) {
@@ -264,7 +262,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      * @return the delivery counts
      */
     Delivery drainForDelivery(LongSupplier clock, long tickMillis, long quietNanos)
-            throws IOException, InterruptedException {
+            throws InterruptedException {
         enterPhase(RunPhase.DELIVERY_DRAIN);
         log.info("--- Producers stopped, waiting for consumers to receive what was sent ---");
         CountersStats last = worker.getCountersStats();
@@ -474,7 +472,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                 enterPhase(RunPhase.MEASURE);
                 return;
             }
-            watch.check(now, stats, "backlog " + backlog + " messages, target <= " + drained);
+            watch.check(now, stats, backlogProgress(backlog, "<=", drained));
             Thread.sleep(tickMillis);
         }
     }
@@ -676,10 +674,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             if (backlog * effectiveMessageSize >= requestedBacklogSize) {
                 break;
             }
-            build.check(
-                    clock.getAsLong(),
-                    stats,
-                    "backlog " + backlog + " messages, target >= " + backlogMessageCapacity);
+            build.check(clock.getAsLong(), stats, backlogProgress(backlog, ">=", backlogMessageCapacity));
             Thread.sleep(buildTickMillis);
         }
 
@@ -706,8 +701,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
                 return;
             }
-            drain.check(
-                    clock.getAsLong(), stats, "backlog " + backlog + " messages, target <= " + minBacklog);
+            drain.check(clock.getAsLong(), stats, backlogProgress(backlog, "<=", minBacklog));
             Thread.sleep(drainTickMillis);
         }
     }
@@ -715,24 +709,24 @@ public final class WorkloadGenerator implements WorkloadRun {
     // Fails a wait loop whose counter has not moved for the stall window, and logs its progress
     // about every 30 s so a slow wait is not silent
     private final class StallWatch {
-        private final String phase;
+        private final String waitName;
         private final String counterName;
         private final ToLongFunction<CountersStats> counter;
-        private boolean started;
+        private boolean primed;
         private long last;
         private long movedAt;
         private long loggedAt;
 
-        StallWatch(String phase, String counterName, ToLongFunction<CountersStats> counter) {
-            this.phase = phase;
+        StallWatch(String waitName, String counterName, ToLongFunction<CountersStats> counter) {
+            this.waitName = waitName;
             this.counterName = counterName;
             this.counter = counter;
         }
 
         void check(long now, CountersStats stats, String progress) {
             long value = counter.applyAsLong(stats);
-            if (!started) {
-                started = true;
+            if (!primed) {
+                primed = true;
                 last = value;
                 movedAt = now;
                 loggedAt = now;
@@ -746,7 +740,7 @@ public final class WorkloadGenerator implements WorkloadRun {
                         String.format(
                                 "%s stalled: %s has not moved for %d s (%s; sent %d, received %d); set %s or %s"
                                         + " to change the stall window",
-                                phase,
+                                waitName,
                                 counterName,
                                 TimeUnit.NANOSECONDS.toSeconds(now - movedAt),
                                 progress,
@@ -763,12 +757,16 @@ public final class WorkloadGenerator implements WorkloadRun {
                 loggedAt = now;
                 log.info(
                         "{}: {} (sent {}, received {})",
-                        phase,
+                        waitName,
                         progress,
                         stats.messagesSent(),
                         stats.messagesReceived());
             }
         }
+    }
+
+    private static String backlogProgress(long backlog, String comparison, long target) {
+        return "backlog " + backlog + " messages, target " + comparison + " " + target;
     }
 
     // Messages published but not yet consumed, counting one copy per subscription
@@ -785,7 +783,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         for (Map.Entry<String, String> entry : logContext.entrySet()) {
             event = event.addKeyValue(entry.getKey(), entry.getValue());
         }
-        event.addKeyValue("event", "phase").addKeyValue("phase", next.name()).log();
+        event.addKeyValue("event", PHASE_KEY).addKeyValue(PHASE_KEY, next.name()).log();
     }
 
     TestResult printAndCollectStats(long testDurations, TimeUnit unit)
@@ -834,7 +832,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             PeriodReport period =
                     PeriodReport.of(stats, (now - oldTime) / 1e9, workload.subscriptionsPerTopic);
             RunPhase current = phase;
-            try (var ignored = MDC.putCloseable("phase", current.name())) {
+            try (var _ = MDC.putCloseable(PHASE_KEY, current.name())) {
                 ResultLog.period(period);
             }
             result.recordPeriod(period, current, targetPublishRate, workload.usesStages() ? stage : null);
@@ -889,6 +887,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         result.rateProbe = new ArrayList<>(rateProbe);
     }
 
+    private static final String PHASE_KEY = "phase";
     private static final long PROGRESS_LOG_NANOS = TimeUnit.SECONDS.toNanos(30);
     private static final Logger log = LoggerFactory.getLogger(WorkloadGenerator.class);
 }

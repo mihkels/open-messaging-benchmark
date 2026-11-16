@@ -160,7 +160,7 @@ public final class WorkerWatchdog implements AutoCloseable {
                     lastProgressAt = now;
                 }
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             // Closed; the interrupt ends the poller thread
             Thread.currentThread().interrupt();
         }

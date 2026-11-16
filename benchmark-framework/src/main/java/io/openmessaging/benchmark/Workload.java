@@ -177,17 +177,7 @@ public class Workload {
         if (checks != null) {
             checks.validate();
         }
-        PayloadGenerator generator = payloadGenerator;
-        if (generator != null) {
-            validatePayloadGenerator(generator);
-        }
-        if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
-            throw new IllegalArgumentException("Randomized payload pool size must be positive");
-        }
-        Map<String, Integer> distribution = messageSizeDistribution;
-        if (distribution != null && !distribution.isEmpty()) {
-            new MessageSizeDistribution(distribution);
-        }
+        validatePayloads();
         List<Stage> profile = stages;
         if (profile != null && !profile.isEmpty()) {
             validateStages(profile);
@@ -202,6 +192,20 @@ public class Workload {
         if (verifyDelivery && (producersPerTopic <= 0 || subscriptionsPerTopic <= 0)) {
             throw new IllegalArgumentException(
                     "verifyDelivery needs at least one producer and one subscription per topic");
+        }
+    }
+
+    private void validatePayloads() {
+        PayloadGenerator generator = payloadGenerator;
+        if (generator != null) {
+            validatePayloadGenerator(generator);
+        }
+        if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
+            throw new IllegalArgumentException("Randomized payload pool size must be positive");
+        }
+        Map<String, Integer> distribution = messageSizeDistribution;
+        if (distribution != null && !distribution.isEmpty()) {
+            new MessageSizeDistribution(distribution);
         }
     }
 

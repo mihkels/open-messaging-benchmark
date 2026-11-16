@@ -30,9 +30,11 @@ class DriverProcessMainTest {
 
     @Test
     void rejectsTagsWithoutKey() {
-        assertThatThrownBy(() -> DriverProcessMain.commonTags(List.of("=value")))
+        List<String> withoutKey = List.of("=value");
+        List<String> withoutSeparator = List.of("novalue");
+        assertThatThrownBy(() -> DriverProcessMain.commonTags(withoutKey))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> DriverProcessMain.commonTags(List.of("novalue")))
+        assertThatThrownBy(() -> DriverProcessMain.commonTags(withoutSeparator))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

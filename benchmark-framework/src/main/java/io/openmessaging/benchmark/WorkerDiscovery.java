@@ -101,7 +101,7 @@ final class WorkerDiscovery {
                     && uri.getRawFragment() == null) {
                 return uri;
             }
-        } catch (URISyntaxException e) {
+        } catch (URISyntaxException _) {
             // reported below
         }
         throw new IllegalArgumentException(
@@ -113,7 +113,7 @@ final class WorkerDiscovery {
         InetAddress[] addresses;
         try {
             addresses = resolver.resolve(host);
-        } catch (UnknownHostException e) {
+        } catch (UnknownHostException _) {
             // A headless Service has no records until its first pod is ready
             return List.of();
         }

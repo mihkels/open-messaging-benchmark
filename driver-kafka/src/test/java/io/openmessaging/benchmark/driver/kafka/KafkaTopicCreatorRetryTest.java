@@ -89,7 +89,8 @@ class KafkaTopicCreatorRetryTest {
         failEveryAttempt();
         listTopicsThrows(new ExecutionException(new IllegalStateException("metadata unavailable")));
 
-        assertThatThrownBy(() -> creator().createWithRetry(TOPICS))
+        KafkaTopicCreator creator = creator();
+        assertThatThrownBy(() -> creator.createWithRetry(TOPICS))
                 .hasMessageStartingWith("Failed to create topics after 6 attempts")
                 .cause()
                 .isInstanceOf(IllegalStateException.class)

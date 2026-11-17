@@ -61,7 +61,9 @@ Base images are pinned by digest and updated by Dependabot.
   `OMB_RESULTS_DIR=/results`. Mount writable volumes there.
 - `JAVA_TOOL_OPTIONS` sets `-XX:+ExitOnOutOfMemoryError -XX:+DisableAttachMechanism` and moves the
   Java temporary directory and user home to `/tmp`.
-- The default command is a shell; pass `bin/benchmark-worker -p 8080` or `bin/benchmark ...`.
+- The default command is a shell; pass `bin/benchmark-worker -p 8080` or `bin/benchmark ...`. The
+  worker listens on `0.0.0.0` and needs `OMB_WORKER_TOKEN` (pass the same value to the coordinator)
+  or `--insecure-no-auth`; see the [CLI reference](../docs/reference/cli.md#authentication).
 - JMS provider jars go into `/benchmark/drivers/driver-jms/ext`; mount a volume there.
 
 For the broker-backed driver regression suite, see

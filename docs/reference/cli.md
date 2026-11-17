@@ -150,11 +150,13 @@ bin/benchmark-worker [options]
 | `-b`, `--bind`        | 0.0.0.0 | Address to listen on; `127.0.0.1` accepts only local connections                                                        |
 | `--token-file`        |         | File with the bearer token every request must send; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication) |
 | `--protect-metrics`   |         | Require the token on `/metrics` too; it is open by default                                                              |
+| `--insecure-no-auth`  |         | Start without a token on a non-loopback `--bind`; the API is then open to anyone who reaches the port                   |
 | `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed                                                                        |
 | `-h`, `--help`        |         | Print usage and exit                                                                                                    |
 
-Keep the default `0.0.0.0` for distributed workers that a coordinator on another host must reach.
-Use `--bind 127.0.0.1` when the coordinator runs on the same host.
+Keep the default `0.0.0.0` for distributed workers that a coordinator on another host must reach;
+it needs a token (see [Authentication](#authentication)). Use `--bind 127.0.0.1` when the
+coordinator runs on the same host.
 
 The worker keeps running until it is stopped. Initializing a different driver stops the previous
 driver process. Stopping the worker stops its driver process.
@@ -185,7 +187,7 @@ same version on all of them.
 
 ### Authentication
 
-Workers can require a shared bearer token. Give the worker the token in the `OMB_WORKER_TOKEN`
+Workers require a shared bearer token unless they listen only on a loopback address. Give the worker the token in the `OMB_WORKER_TOKEN`
 environment variable or in a file named by `--token-file` (which wins when both are set);
 surrounding whitespace is trimmed. There is no option that takes the token itself, so it never shows
 in the process list. With a token, every request without `Authorization: Bearer <token>` gets
@@ -203,7 +205,9 @@ bin/benchmark-worker                                        # on each worker hos
 bin/benchmark -d driver-kafka/kafka-latency.yaml -w http://w1:8080,http://w2:8080 workloads/simple.yaml
 ```
 
-Without a token the API is unauthenticated, and the worker logs a warning at startup. Either way,
+A worker without a token refuses to start on a non-loopback `--bind` address, such as the default
+`0.0.0.0`, and names the fix. On a loopback address, or with `--insecure-no-auth`, it starts with an
+unauthenticated API and logs a warning. Either way,
 the token travels in clear text over HTTP: run workers on a trusted network and keep the port closed
 to everything but the coordinator (and Prometheus). The supervisor's own channel to its driver
 process on `127.0.0.1` does not use this token, and the driver process does not get it.

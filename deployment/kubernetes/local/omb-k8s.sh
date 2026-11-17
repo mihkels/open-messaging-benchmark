@@ -496,7 +496,9 @@ cmd_lint() {
     grep -q 'name: OMB_WORKER_TOKEN' "$rendered/auth.yaml" || die "auth.yaml has no OMB_WORKER_TOKEN"
     grep -q -- '--protect-metrics' "$rendered/auth.yaml" || die "auth.yaml has no --protect-metrics"
     grep -q 'kind: Secret' "$rendered/auth-existing.yaml" && die "existingSecret must not create a Secret"
-    grep -q 'OMB_WORKER_TOKEN' "$rendered/default.yaml" && die "auth must be off by default"
+    grep -q 'name: OMB_WORKER_TOKEN' "$rendered/default.yaml" || die "auth must be on by default"
+    helm template "$RELEASE" "$CHART_DIR" --set workers.auth.enabled=false > "$rendered/no-auth.yaml"
+    grep -q -- '--insecure-no-auth' "$rendered/no-auth.yaml" || die "no-auth.yaml has no --insecure-no-auth"
     for f in default auth; do
         grep -q 'path: /health' "$rendered/$f.yaml" || die "$f.yaml readiness probe is not GET /health"
     done

@@ -39,7 +39,8 @@ result JSON between `OMB RESULT BEGIN/END` markers in its log.
 
 Security defaults: non-root (uid 10001), read-only root file system, all capabilities dropped,
 `RuntimeDefault` seccomp profile, no service account token, and a NetworkPolicy that only lets the
-coordinator reach the unauthenticated worker API. Broker addresses in the driver configuration
+coordinator reach the worker API, which requires a generated bearer token
+(`workers.auth.enabled`, on by default). Broker addresses in the driver configuration
 must be reachable from the worker pods (egress is not restricted).
 
 See [`values.yaml`](open-messaging-benchmark-chart/values.yaml) for all values, and

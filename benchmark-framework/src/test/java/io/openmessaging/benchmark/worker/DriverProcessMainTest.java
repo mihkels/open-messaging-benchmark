@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.micrometer.core.instrument.Tags;
+import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +48,15 @@ class DriverProcessMainTest {
                 System.setProperty(key, before);
             }
         }
+    }
+
+    @Test
+    void rejectsARepeatedFileFlag() {
+        Path first = DriverProcessMain.once(null, "--port-file", "/tmp/a");
+        assertThat(first).isEqualTo(Path.of("/tmp/a"));
+        assertThatThrownBy(() -> DriverProcessMain.once(first, "--port-file", "/tmp/b"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("--port-file");
     }
 
     @Test

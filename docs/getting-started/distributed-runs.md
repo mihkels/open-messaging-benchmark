@@ -45,11 +45,12 @@ Workers list - consumers: http://w4:8080,http://w3:8080
 On each worker host, from a distribution directory or the Docker image:
 
 ```bash
+export OMB_WORKER_TOKEN=<shared-token>   # same value on every worker and the coordinator
 bin/benchmark-worker --port 8080
 ```
 
 ```bash
-docker run -d --name omb-worker -p 8080:8080 openmessaging-benchmark:local \
+docker run -d --name omb-worker -p 8080:8080 -e OMB_WORKER_TOKEN openmessaging-benchmark:local \
   bin/benchmark-worker --port 8080
 ```
 

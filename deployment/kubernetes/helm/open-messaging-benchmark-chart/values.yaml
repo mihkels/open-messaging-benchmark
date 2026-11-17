@@ -67,12 +67,13 @@ workers:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  # Shared bearer token on the worker HTTP API. When enabled, workers get it as OMB_WORKER_TOKEN and
+  # Shared bearer token on the worker HTTP API, on by default. Workers get it as OMB_WORKER_TOKEN and
   # answer 401 to requests without "Authorization: Bearer <token>"; the coordinator gets the same
   # variable and sends it. Probes keep working: readiness is an HTTP GET of /health, which needs no
-  # token, and liveness is a TCP check.
+  # token, and liveness is a TCP check. Setting this to false starts workers with --insecure-no-auth
+  # and leaves the API open to anything the NetworkPolicy lets in.
   auth:
-    enabled: false
+    enabled: true
     # Name of an existing Secret with the token. When empty, the chart creates
     # <fullname>-worker-token with a random token that stays the same across upgrades
     existingSecret: ""
@@ -119,8 +120,7 @@ workloadConfig: ""
 resultsSizeLimit: 1Gi
 
 # Restrict ingress to the worker port 8080 to the coordinator of this release. The worker API loads
-# arbitrary driver configurations and is unauthenticated unless workers.auth.enabled is true; keep
-# this on either way.
+# arbitrary driver configurations; keep this on even with workers.auth.enabled, as defense in depth.
 networkPolicy:
   enabled: true
   # Additional NetworkPolicy peers allowed to reach port 8080, for example a Prometheus namespace

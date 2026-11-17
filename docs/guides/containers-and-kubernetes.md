@@ -51,25 +51,23 @@ mounted read-only with writable volumes on those two paths.
 The image's default command is a shell. Pass the command to run:
 
 ```bash
+# Shared worker token, kept out of your shell history
+printf 'OMB_WORKER_TOKEN=%s\n' "$(openssl rand -hex 32)" > omb-token.env
+
 # Worker
-docker run -d --name omb-worker -p 8080:8080 \
+docker run -d --name omb-worker -p 8080:8080 --env-file omb-token.env \
   -e HEAP_OPTS="-Xms4G -Xmx4G" openmessaging-benchmark:local bin/benchmark-worker
 
 # Coordinator with configuration from the host; --user lets it write the result there
-docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD/config:/config" openmessaging-benchmark:local \
+docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD/config:/config" --env-file omb-token.env \
+  openmessaging-benchmark:local \
   bin/benchmark --drivers /config/kafka.yaml --workers http://w1:8080,http://w2:8080 \
   -o /config/result.json /config/workload.yaml
 ```
 
-To require a [bearer token](../reference/cli.md#authentication) on the worker API, pass the same
-`OMB_WORKER_TOKEN` to the workers and the coordinator, for example with `--env-file` so the token
-stays out of your shell history:
-
-```bash
-printf 'OMB_WORKER_TOKEN=%s\n' "$(openssl rand -hex 32)" > omb-token.env
-docker run -d --name omb-worker -p 8080:8080 --env-file omb-token.env \
-  openmessaging-benchmark:local bin/benchmark-worker
-```
+A worker in a container listens on `0.0.0.0`, so it refuses to start without a
+[bearer token](../reference/cli.md#authentication): pass the same `OMB_WORKER_TOKEN` to the workers
+and the coordinator, as above, or start the worker with `--insecure-no-auth` on a network you trust.
 
 Each worker container runs a supervisor JVM (`SUPERVISOR_HEAP_OPTS`, default `-Xmx1G`) and one
 driver JVM (`HEAP_OPTS`, default 4 GiB). Give the container more memory than the sum; otherwise it is
@@ -122,7 +120,7 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `coordinator.mode`                                                     | `interactive`                                                                 | `job` runs the workload once and prints the result JSON to the Job log                 |
 | `driverConfig` / `workloadConfig`                                      | empty                                                                         | YAML text (use `--set-file`), mounted at `/config` and used instead of the paths below |
 | `driver` / `workload`                                                  | `driver-kafka/kafka-latency.yaml`, `workloads/1-topic-16-partitions-1kb.yaml` | Paths in the image                                                                     |
-| `workers.auth.enabled`                                                 | `false`                                                                       | Require a bearer token on the worker API; the coordinator sends it. See below          |
+| `workers.auth.enabled`                                                 | `true`                                                                        | Require a bearer token on the worker API; `false` adds `--insecure-no-auth`. See below |
 | `workers.auth.existingSecret` / `workers.auth.secretKey`               | empty, `token`                                                                | Secret holding the token. When empty, the chart creates `<fullname>-worker-token`      |
 | `workers.auth.token`                                                   | empty                                                                         | Fixed token for the created Secret; set it or `existingSecret` for GitOps renders      |
 | `workers.auth.protectMetrics`                                          | `false`                                                                       | Require the token on `/metrics` too                                                    |
@@ -154,7 +152,7 @@ The pods run as a non-root user with a read-only root file system, no Linux capa
 configuration it receives, so the chart's NetworkPolicy only lets the coordinator of the release
 reach it; `networkPolicy.metricsFrom` adds peers such as Prometheus.
 
-With `workers.auth.enabled=true` the worker API also requires a bearer token. The chart injects
+By default (`workers.auth.enabled=true`) the worker API also requires a bearer token. The chart injects
 `OMB_WORKER_TOKEN` from a Secret into the workers and the coordinator, so `benchmark` in the
 coordinator sends it without extra arguments. Without `workers.auth.existingSecret`, the chart
 creates a Secret with a random token and reuses it on `helm upgrade`; `helm template`,
@@ -165,12 +163,13 @@ fixed `workers.auth.token`. To bring your own Secret:
 ```bash
 kubectl create secret generic omb-worker-token --from-literal=token="$(openssl rand -hex 32)"
 helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart --version <version> \
-  --set workers.auth.enabled=true --set workers.auth.existingSecret=omb-worker-token
+  --set workers.auth.existingSecret=omb-worker-token
 ```
 
 `/metrics` stays open unless `workers.auth.protectMetrics=true`; then Prometheus must send the token
 too, for example with `authorization.credentials_file` in its scrape configuration. Probes are not
-affected: `/health` needs no token.
+affected: `/health` needs no token. `workers.auth.enabled=false` starts the workers with
+`--insecure-no-auth`, which leaves only the NetworkPolicy in front of the API.
 
 Worker readiness is an HTTP GET of [`/health`](monitoring.md#worker-health), which answers 503 once
 the worker can no longer take a driver. Only ready workers are listed by the headless Service, so

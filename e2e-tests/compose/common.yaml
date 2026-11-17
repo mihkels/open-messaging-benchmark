@@ -22,6 +22,8 @@ x-omb: &omb
   environment:
     HEAP_OPTS: "-Xms128m -Xmx768m"
     SUPERVISOR_HEAP_OPTS: "-Xmx256m"
+    # Workers refuse to listen on 0.0.0.0 without a token; the runner sends the same one
+    OMB_WORKER_TOKEN: e2e-test-token
   volumes:
     - ${OMB_E2E_JMS_EXT:?OMB_E2E_JMS_EXT must be set}:/benchmark/drivers/driver-jms/ext:ro
 
@@ -55,6 +57,7 @@ services:
     profiles: ["runner"]
     environment:
       HEAP_OPTS: "-Xmx512m"
+      OMB_WORKER_TOKEN: e2e-test-token
     volumes:
       - ${OMB_E2E_JMS_EXT}:/benchmark/drivers/driver-jms/ext:ro
       - ${OMB_E2E_SUITE_DIR:?OMB_E2E_SUITE_DIR must be set}:/e2e:ro

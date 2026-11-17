@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.beust.jcommander.JCommander;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -43,5 +44,32 @@ class BenchmarkWorkerArgumentsTest {
 
         assertThat(arguments.getBindAddress()).isEqualTo("127.0.0.1");
         assertThat(arguments.getHttpPort()).isEqualTo(18081);
+    }
+
+    @Test
+    void acceptsInsecureNoAuth() throws Exception {
+        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--insecure-no-auth"), null)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"127.0.0.1", "localhost", "::1"})
+    void allowsNoTokenOnLoopback(String bind) throws Exception {
+        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--bind", bind), null)).isNull();
+    }
+
+    @Test
+    void refusesNoTokenOnAllInterfaces() throws Exception {
+        assertThat(BenchmarkWorker.refuseUnauthenticated(parse(), null))
+                .contains("OMB_WORKER_TOKEN", "--token-file", "--insecure-no-auth");
+    }
+
+    @Test
+    void allowsATokenOnAllInterfaces() throws Exception {
+        BenchmarkWorker.Arguments arguments = parse();
+        BearerTokenAuth auth =
+                BenchmarkWorker.authFor(arguments, Map.of(BearerTokenAuth.TOKEN_ENV, "secret"));
+
+        assertThat(auth).isNotNull();
+        assertThat(BenchmarkWorker.refuseUnauthenticated(arguments, auth)).isNull();
     }
 }

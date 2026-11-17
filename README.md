@@ -51,6 +51,7 @@ This README is also shipped in the distribution tarball. From its directory, wit
 reachable broker:
 
 ```bash
+export OMB_WORKER_TOKEN=<shared-token>        # same on every worker and the coordinator
 bin/benchmark-worker -p 8080                  # on each worker machine, or skip for local mode
 bin/benchmark --drivers driver-kafka/kafka-latency.yaml \
   --workers http://host1:8080,http://host2:8080 \

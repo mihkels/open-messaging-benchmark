@@ -21,6 +21,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.metrics.otlp.OtlpExport;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
@@ -68,8 +70,16 @@ public final class BenchmarkWorker {
                 description =
                         "File holding the shared bearer token that every request must send; overrides the "
                                 + BearerTokenAuth.TOKEN_ENV
-                                + " environment variable. Without either, the API is unauthenticated")
+                                + " environment variable. Required unless --bind is a loopback address or"
+                                + " --insecure-no-auth is set")
         private @Nullable Path tokenFile;
+
+        @Parameter(
+                names = "--insecure-no-auth",
+                description =
+                        "Allow an unauthenticated API on a non-loopback --bind address; anyone who can reach"
+                                + " the port can run arbitrary driver configurations on this worker")
+        private boolean insecureNoAuth;
 
         @Parameter(
                 names = "--protect-metrics",
@@ -107,9 +117,34 @@ public final class BenchmarkWorker {
                 .orElse(null);
     }
 
+    /**
+     * Checks that a worker without a token is reachable only from this host, unless the operator
+     * opted out with {@code --insecure-no-auth}.
+     *
+     * @param arguments the parsed command line
+     * @param auth the authenticator from {@link #authFor}, or {@code null} when no token is
+     *     configured
+     * @return {@code null} when the worker may start, otherwise the reason it may not
+     * @throws UnknownHostException when the bind address does not resolve
+     */
+    static @Nullable String refuseUnauthenticated(Arguments arguments, @Nullable BearerTokenAuth auth)
+            throws UnknownHostException {
+        if (auth != null
+                || arguments.insecureNoAuth
+                || InetAddress.getByName(arguments.bindAddress).isLoopbackAddress()) {
+            return null;
+        }
+        return "No worker token configured and --bind "
+                + arguments.bindAddress
+                + " is not a loopback address. Set "
+                + BearerTokenAuth.TOKEN_ENV
+                + " or --token-file, bind to 127.0.0.1, or pass --insecure-no-auth to run the API"
+                + " unauthenticated";
+    }
+
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
-    static void main(String[] args) throws InterruptedException {
+    static void main(String[] args) throws InterruptedException, UnknownHostException {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("benchmark-worker");
@@ -137,6 +172,11 @@ public final class BenchmarkWorker {
         new JvmResourceMetrics().bindTo(registry, "supervisor");
 
         BearerTokenAuth auth = authFor(arguments, System.getenv());
+        String refusal = refuseUnauthenticated(arguments, auth);
+        if (refusal != null) {
+            System.err.println(refusal);
+            System.exit(-1);
+        }
         if (auth == null) {
             log.warn(
                     "No worker token configured (set {} or --token-file); anyone who can reach port {}"

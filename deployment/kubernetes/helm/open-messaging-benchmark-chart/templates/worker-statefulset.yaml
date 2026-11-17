@@ -59,7 +59,9 @@ spec:
             - benchmark-worker
             - -p
             - "8080"
-            {{- if and .Values.workers.auth.enabled .Values.workers.auth.protectMetrics }}
+            {{- if not .Values.workers.auth.enabled }}
+            - --insecure-no-auth
+            {{- else if .Values.workers.auth.protectMetrics }}
             - --protect-metrics
             {{- end }}
           env:

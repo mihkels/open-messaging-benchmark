@@ -66,11 +66,14 @@ public class ResultsToCsv {
             lines.add(
                     "topics,partitions,message-size,producers-per-topic,consumers-per-topic,"
                             + "prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,"
-                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity");
+                            + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity,workload,driver");
 
             List<TestResult> results = new ArrayList<>();
             for (File file : directoryListing) {
-                if (file.isFile() && file.getAbsolutePath().endsWith(".json")) {
+                // --repeat summaries sit next to the results but are not results
+                if (file.isFile()
+                        && file.getName().endsWith(".json")
+                        && !file.getName().endsWith("-summary.json")) {
                     TestResult tr = MAPPER.readValue(new File(file.getAbsolutePath()), TestResult.class);
                     results.add(tr);
                 }
@@ -99,7 +102,7 @@ public class ResultsToCsv {
     }
 
     public String extractResults(TestResult tr) {
-        return MessageFormat.format(
+        return format(
                         "{0,number,#},{1,number,#},{2,number,#},{3,number,#},{4,number,#},",
                         tr.topics,
                         tr.partitions,
@@ -111,7 +114,11 @@ public class ResultsToCsv {
                 + rateStatistics(TestResult.measured(tr.phase, tr.consumeRate))
                 + ","
                 // empty for files older than schema version 3
-                + (tr.validity == null ? "" : tr.validity.status().name().toLowerCase(Locale.ROOT));
+                + (tr.validity == null ? "" : tr.validity.status().name().toLowerCase(Locale.ROOT))
+                + ","
+                + csvField(tr.workload)
+                + ","
+                + csvField(tr.driver);
     }
 
     // min,avg,std-dev,max of the period rates; empty fields when there are no periods
@@ -124,11 +131,30 @@ public class ResultsToCsv {
         double mean = stats.getAverage();
         double squaredDeviations =
                 rates.stream().mapToDouble(rate -> (rate - mean) * (rate - mean)).sum();
-        return MessageFormat.format(
+        return format(
                 "{0,number,#},{1,number,#},{2,number,#.##},{3,number,#}",
                 stats.getMin(),
                 mean,
                 Math.sqrt(squaredDeviations / stats.getCount()),
                 stats.getMax());
+    }
+
+    // Locale.ROOT, so a decimal comma never adds a column
+    private static String format(String pattern, Object... arguments) {
+        return new MessageFormat(pattern, Locale.ROOT).format(arguments);
+    }
+
+    // RFC 4180 quoting for free-text fields such as the workload name
+    private static String csvField(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",")
+                || value.contains("\"")
+                || value.contains("\n")
+                || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }

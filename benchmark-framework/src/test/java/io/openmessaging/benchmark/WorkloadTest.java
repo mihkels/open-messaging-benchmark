@@ -148,6 +148,30 @@ class WorkloadTest {
     }
 
     @Test
+    void workloadFilesWithTheSameNameInDifferentDirectoriesAreRejected(@TempDir Path dir)
+            throws Exception {
+        String yaml = "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n";
+        Path a = Files.createDirectory(dir.resolve("a")).resolve("max-rate.yaml");
+        Path b = Files.createDirectory(dir.resolve("b")).resolve("max-rate.yaml");
+        Files.writeString(a, yaml);
+        Files.writeString(b, yaml);
+
+        List<String> paths = List.of(a.toString(), b.toString());
+
+        assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(b.toString());
+    }
+
+    @Test
+    void workloadFileWithoutExtensionIsKeyedByItsWholeName(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("plain");
+        Files.writeString(file, "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+
+        assertThat(Benchmark.readWorkloads(List.of(file.toString()))).containsOnlyKeys("plain");
+    }
+
+    @Test
     void loadingANamedWorkloadFileKeysItByFileName(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("named.yaml");
         Files.writeString(file, "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n");

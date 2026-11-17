@@ -252,10 +252,11 @@ bin/benchmark --csv results/
 The output is `results-<epoch seconds>.csv` in the current directory, with one row per result:
 
 ```text
-topics,partitions,message-size,producers-per-topic,consumers-per-topic,prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity
+topics,partitions,message-size,producers-per-topic,consumers-per-topic,prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity,workload,driver
 ```
 
-The CSV contains rates and the validity `status`, empty for files older than schema version 3. For
+The CSV contains rates, the validity `status` (empty for files older than schema version 3), and
+the workload and driver names. `*-summary.json` files written by `--repeat` are skipped. For
 latency, read the JSON files directly.
 
 Result files include run metadata and a measured-window summary. Add `--include-histograms` to

@@ -29,6 +29,27 @@ class DriverProcessMainTest {
     }
 
     @Test
+    void disablesKafkaConfigProvidersUnlessTheOperatorSetThem() {
+        String key = DriverProcessMain.KAFKA_CONFIG_PROVIDERS;
+        String before = System.getProperty(key);
+        try {
+            System.clearProperty(key);
+            DriverProcessMain.disableKafkaConfigProviders();
+            assertThat(System.getProperty(key)).isEqualTo("none");
+
+            System.setProperty(key, "org.example.Provider");
+            DriverProcessMain.disableKafkaConfigProviders();
+            assertThat(System.getProperty(key)).isEqualTo("org.example.Provider");
+        } finally {
+            if (before == null) {
+                System.clearProperty(key);
+            } else {
+                System.setProperty(key, before);
+            }
+        }
+    }
+
+    @Test
     void rejectsTagsWithoutKey() {
         List<String> withoutKey = List.of("=value");
         List<String> withoutSeparator = List.of("novalue");

@@ -44,12 +44,25 @@ public final class DriverProcessMain {
     private static final Logger log = LoggerFactory.getLogger(DriverProcessMain.class);
     static final String INITIALIZE_DRIVER_LOCAL = "/initialize-driver-local";
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
+    static final String KAFKA_CONFIG_PROVIDERS = "org.apache.kafka.automatic.config.providers";
 
     private DriverProcessMain() {}
+
+    /**
+     * Driver configs arrive over the worker API, so Kafka clients must not resolve {@code
+     * config.providers} references: those read local files and send them to a broker of the caller's
+     * choice. An operator can still opt in by setting the property in {@code OMB_DRIVER_JVM_OPTS}.
+     */
+    static void disableKafkaConfigProviders() {
+        if (System.getProperty(KAFKA_CONFIG_PROVIDERS) == null) {
+            System.setProperty(KAFKA_CONFIG_PROVIDERS, "none");
+        }
+    }
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
     public static void main(String[] args) throws Exception {
+        disableKafkaConfigProviders();
         Path portFile = null;
         Path tokenFile = null;
         List<String> tags = new ArrayList<>();

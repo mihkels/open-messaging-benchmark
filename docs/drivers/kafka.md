@@ -170,6 +170,11 @@ are ignored.
 "Required" for the four properties blocks means that initialization fails with a
 `NullPointerException` when the key is missing; an empty value such as `topicConfig: ""` is accepted.
 
+Kafka [config providers](https://kafka.apache.org/documentation/#config_providers)
+(`config.providers`) are refused in driver JVMs: initialization fails with `ConfigException: … is not
+allowed`. Put secrets in the driver YAML directly, or see
+[Runtime and plugins](../reference/runtime-and-plugins.md#system-properties) to allow a provider.
+
 The driver always sets these properties, overriding your values:
 
 - producers: `key.serializer` is `StringSerializer` and `value.serializer` is `ByteArraySerializer`;

@@ -76,6 +76,13 @@ Pass these to the supervisor through `SUPERVISOR_HEAP_OPTS`, for example
 `log4j.configurationFile`, `log4j2.configurationFile` and `zone.id` are forwarded from the
 supervisor to the driver JVM.
 
+The driver JVM sets `org.apache.kafka.automatic.config.providers=none` unless
+`OMB_DRIVER_JVM_OPTS` sets it, so Kafka clients refuse `config.providers` in a driver config. Driver
+configs arrive over the worker API, and a config provider would read local files on the worker host.
+To allow a provider anyway, add for example
+`-Dorg.apache.kafka.automatic.config.providers=org.apache.kafka.common.config.provider.EnvVarConfigProvider`
+to `OMB_DRIVER_JVM_OPTS`.
+
 ## Plugin discovery
 
 Plugins are collected from all of these locations. Two bundles with the same `id`, or two bundles

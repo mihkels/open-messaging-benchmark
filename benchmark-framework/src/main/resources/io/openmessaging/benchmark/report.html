@@ -185,7 +185,7 @@
       if (!series.length) { return null; }
       var option = base(title);
       option.tooltip = { trigger: "item", confine: true, formatter: function (p) {
-        return p.seriesName + "<br>p" + (+p.data.percentile.toPrecision(8)) + ": " + p.data.value[1] + " " + unit;
+        return echarts.format.encodeHTML(p.seriesName) + "<br>p" + (+p.data.percentile.toPrecision(8)) + ": " + p.data.value[1] + " " + unit;
       } };
       option.xAxis = { type: "value", name: "percentile", nameLocation: "middle", nameGap: 30, min: 0, interval: 1,
                        axisLabel: { formatter: NINES } };
@@ -321,7 +321,7 @@
       if (!series.length) { return null; }
       var option = base("Throughput vs p99 latency");
       option.tooltip = { trigger: "item", confine: true, formatter: function (p) {
-        return p.data.name + "<br>" + p.seriesName + ": " + p.data.value[1] + " ms at " + Math.round(p.data.value[0]) + " msg/s";
+        return echarts.format.encodeHTML(p.data.name) + "<br>" + echarts.format.encodeHTML(p.seriesName) + ": " + p.data.value[1] + " ms at " + Math.round(p.data.value[0]) + " msg/s";
       } };
       option.xAxis = { type: "value", name: "publish msg/s", nameLocation: "middle", nameGap: 30, scale: true };
       option.yAxis = { type: "log", name: "ms" };

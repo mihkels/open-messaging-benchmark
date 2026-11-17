@@ -212,6 +212,11 @@ the token travels in clear text over HTTP: run workers on a trusted network and 
 to everything but the coordinator (and Prometheus). The supervisor's own channel to its driver
 process on `127.0.0.1` does not use this token, and the driver process does not get it.
 
+The worker rejects any request with an `Origin` header with `403 Forbidden`, because only browsers
+send one. A worker without a token also rejects a `Host` that is not an IP address or `localhost`,
+which stops a web page from reaching it through DNS rebinding. Address a tokenless worker by IP,
+for example `-w http://10.0.0.5:8080`, not by host name.
+
 ## bin/benchmark-report
 
 ```text

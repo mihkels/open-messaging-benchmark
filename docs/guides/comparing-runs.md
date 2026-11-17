@@ -134,7 +134,9 @@ A benchmark tracker can ingest them directly:
 | `2`    | At least one metric regressed by `--fail-on-regression` or more                 |
 
 `--fail-on-regression 10%` (or `10`) makes the tool exit with status `2` when any `regressed` row
-changed by at least 10%. A regression from a zero baseline always counts. The report is written
+changed by at least 10%. A regression from a zero baseline always counts. A threshold below
+`--min-change` also lowers `--min-change` to the threshold, so a smaller gate is never hidden by
+`unchanged` rows. The report is written
 first, and the failing metrics are listed on stderr. This matches the threshold exit status of
 `bin/benchmark` described in [CI performance gates](ci-gating.md).
 

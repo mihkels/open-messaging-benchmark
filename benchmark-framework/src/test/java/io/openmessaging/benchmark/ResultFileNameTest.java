@@ -15,10 +15,13 @@ package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -76,5 +79,28 @@ class ResultFileNameTest {
         assertThatThrownBy(
                         () -> Benchmark.createResultDirectory(file.resolve("run.json").toString(), null))
                 .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void emptyOutputFallsBackToResultsDirectory(@TempDir Path temp) throws IOException {
+        Path results = temp.resolve("results");
+        Benchmark.createResultDirectory("", results.toString());
+        assertThat(results).isDirectory();
+
+        // Nothing to create: the generated name is relative to the working directory
+        Benchmark.createResultDirectory("", "");
+    }
+
+    @Test
+    void rejectsReadOnlyResultDirectory(@TempDir Path temp) throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path readOnly = Files.createDirectory(temp.resolve("read-only"));
+        Files.setPosixFilePermissions(readOnly, PosixFilePermissions.fromString("r-xr-xr-x"));
+        // Root can write anyway
+        assumeTrue(!Files.isWritable(readOnly));
+
+        assertThatThrownBy(() -> Benchmark.createResultDirectory(null, readOnly.toString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("not writable");
     }
 }

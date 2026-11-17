@@ -216,7 +216,10 @@ The child JVM options come from the `omb.driver.jvmOpts` system property or the
 apply only when the supervisor is started without the scripts; they are defined in `JvmOptions`. The
 supervisor forwards its `log4j.configurationFile`, `log4j2.configurationFile` and `zone.id` system
 properties. It also sets `omb.log.name=benchmark-driver`, so the driver process logs
-to `benchmark-driver.log` instead of `benchmark-worker.log`. All settings are listed in
+to `benchmark-driver.log` instead of `benchmark-worker.log`. `DriverProcessMain` sets
+`org.apache.kafka.automatic.config.providers=none` unless the driver JVM options already set it,
+because driver configs arrive over the worker API and Kafka config providers would let them read
+local files. All settings are listed in
 [Runtime and plugins](../reference/runtime-and-plugins.md).
 
 [`DriverProcessMain`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/DriverProcessMain.java)

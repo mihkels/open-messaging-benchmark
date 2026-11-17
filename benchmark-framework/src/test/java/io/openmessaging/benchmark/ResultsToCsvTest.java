@@ -21,6 +21,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -38,6 +39,8 @@ class ResultsToCsvTest {
                 withRates(
                         golden.replace("\"messageSize\" : 1024", "\"messageSize\" : 512"), 10, 20, 8, 12));
         Files.writeString(results.resolve("ignored.txt"), "not JSON");
+        // A --repeat summary is not a result and must not become a row
+        Files.writeString(results.resolve("test-result-summary.json"), "{\"repetitions\":3}");
 
         Path csv = tempDir.resolve("results.csv");
         new ResultsToCsv().writeAllResultFiles(results.toString(), csv.toFile());
@@ -48,11 +51,11 @@ class ResultsToCsvTest {
                 .isEqualTo(
                         "topics,partitions,message-size,producers-per-topic,consumers-per-topic,"
                                 + "prod-rate-min,prod-rate-avg,prod-rate-std-dev,prod-rate-max,"
-                                + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity");
+                                + "con-rate-min,con-rate-avg,con-rate-std-dev,con-rate-max,validity,workload,driver");
         assertThat(lines.get(1)).startsWith("2,3,512,1,2,");
-        assertThat(lines.get(1).split(",", -1)).hasSize(14);
+        assertThat(lines.get(1).split(",", -1)).hasSize(16);
         assertThat(lines.get(2)).startsWith("2,3,1024,1,2,");
-        assertThat(lines.get(2).split(",", -1)).hasSize(14);
+        assertThat(lines.get(2).split(",", -1)).hasSize(16);
     }
 
     @Test
@@ -62,10 +65,27 @@ class ResultsToCsvTest {
         result.consumeRate = List.of();
 
         assertThat(new ResultsToCsv().extractResults(result))
-                .isEqualTo("0,0,0,0,0,70000,6035000,5965000,12000000,,,,,");
+                .isEqualTo("0,0,0,0,0,70000,6035000,5965000,12000000,,,,,,,");
 
         result.validity = Validity.of(List.of());
-        assertThat(new ResultsToCsv().extractResults(result)).endsWith(",,,,,valid");
+        result.workload = "1 topic, 16 partitions \"max\"";
+        result.driver = "Kafka";
+        assertThat(new ResultsToCsv().extractResults(result))
+                .endsWith(",,,,,valid,\"1 topic, 16 partitions \"\"max\"\"\",Kafka");
+    }
+
+    @Test
+    void decimalsDoNotFollowTheDefaultLocale() {
+        TestResult result = new TestResult();
+        result.publishRate = List.of(1.0, 2.0);
+        result.consumeRate = List.of();
+        Locale previous = Locale.getDefault(Locale.Category.FORMAT);
+        Locale.setDefault(Locale.Category.FORMAT, Locale.GERMANY);
+        try {
+            assertThat(new ResultsToCsv().extractResults(result)).contains(",0.5,");
+        } finally {
+            Locale.setDefault(Locale.Category.FORMAT, previous);
+        }
     }
 
     @Test

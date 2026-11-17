@@ -32,6 +32,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,7 @@ public class WorkerHandler implements AutoCloseable {
 
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
+    private static final Pattern IPV4 = Pattern.compile("\\d{1,3}(\\.\\d{1,3}){3}");
 
     public static final String INITIALIZE_DRIVER = "/initialize-driver";
     public static final String SET_RUN_ID = "/set-run-id";
@@ -115,6 +117,9 @@ public class WorkerHandler implements AutoCloseable {
         if (auth != null) {
             routes.before(auth);
         }
+        // Blocks web pages, including ones that reach a tokenless worker through DNS rebinding
+        boolean checkHost = auth == null;
+        routes.before(ctx -> rejectBrowserRequests(ctx, checkHost));
         // Applies to every POST, including routes that callers add after these, such as the
         // driver process's /initialize-driver-local
         routes.before(WorkerHandler::rejectUnsupportedPostTypes);
@@ -141,6 +146,40 @@ public class WorkerHandler implements AutoCloseable {
     @Override
     public void close() throws Exception {
         worker.close();
+    }
+
+    /**
+     * Rejects requests a browser sends on a web page's behalf. The coordinator, the driver process
+     * client, kubelet and Prometheus never send {@code Origin}. Without a token, a page can also
+     * become same-origin with the worker by rebinding its own host name to the worker's address, so
+     * the {@code Host} must then be an IP literal or {@code localhost}.
+     *
+     * @param ctx the request
+     * @param checkHost whether to check the {@code Host} header
+     */
+    static void rejectBrowserRequests(Context ctx, boolean checkHost) {
+        String reason = null;
+        if (ctx.header("Origin") != null) {
+            reason = "Requests with an Origin header are not accepted";
+        } else if (checkHost && !isAddressHost(ctx.header("Host"))) {
+            reason = "Without a worker token, the Host must be an IP address or localhost";
+        }
+        if (reason != null) {
+            ctx.status(HttpStatus.FORBIDDEN).result(reason);
+            ctx.skipRemainingHandlers();
+        }
+    }
+
+    static boolean isAddressHost(@Nullable String host) {
+        if (host == null) {
+            return true; // HTTP/1.0 clients; browsers always send Host
+        }
+        if (host.startsWith("[")) {
+            return host.indexOf(']') > 1; // bracketed IPv6 literal
+        }
+        int colon = host.indexOf(':');
+        String name = colon < 0 ? host : host.substring(0, colon);
+        return name.equalsIgnoreCase("localhost") || IPV4.matcher(name).matches();
     }
 
     static void rejectUnsupportedPostTypes(Context ctx) {

@@ -115,9 +115,12 @@ final class DiffCommand {
             return 1;
         }
 
+        // A gate below --min-change would never fire, since smaller changes are marked unchanged
+        Double threshold = failOnRegression;
+        double reportedChange = threshold == null ? minChange : Math.min(minChange, threshold);
         DiffReport report;
         try {
-            report = DiffReport.of(baselineRuns, candidateRuns, minChange, mismatches);
+            report = DiffReport.of(baselineRuns, candidateRuns, reportedChange, mismatches);
         } catch (IllegalArgumentException e) {
             err.println("Cannot compare: " + e.getMessage());
             return 1;
@@ -125,7 +128,6 @@ final class DiffCommand {
         if (!write(format.render(report), out, err)) {
             return 1;
         }
-        Double threshold = failOnRegression;
         return threshold == null ? 0 : checkRegressions(report, threshold, err);
     }
 

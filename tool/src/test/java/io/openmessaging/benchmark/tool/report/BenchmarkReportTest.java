@@ -182,6 +182,20 @@ class BenchmarkReportTest {
     }
 
     @Test
+    void failsOnARegressionSmallerThanTheMinimumChange() throws Exception {
+        Path baseline =
+                Fixtures.withHistograms("baseline-1.json", Files.createDirectory(tempDir.resolve("a")), 1);
+        Path candidate =
+                Fixtures.withHistograms(
+                        "baseline-1.json", Files.createDirectory(tempDir.resolve("b")), 1.008);
+        // 0.8% is below the default --min-change of 1%, but past the 0.5% gate
+        int exit =
+                run("diff", baseline.toString(), candidate.toString(), "--fail-on-regression", "0.5%");
+        assertThat(exit).isEqualTo(2);
+        assertThat(err()).contains("Publish latency p50 (ms) +0.8%");
+    }
+
+    @Test
     void comparesRawHistogramsWhenBothSidesHaveThem() {
         Path baseline = Fixtures.withHistograms("baseline-1.json", tempDir, 1);
         Path candidate = Fixtures.withHistograms("baseline-2.json", tempDir, 2);

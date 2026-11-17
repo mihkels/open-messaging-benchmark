@@ -136,9 +136,18 @@ final class JvmOptions {
      * Quotes one argument for a {@code java @argfile}.
      *
      * @param argument the argument
-     * @return the argument in double quotes, with backslashes and double quotes escaped
+     * @return the argument in double quotes, with backslashes, double quotes, line feeds and carriage
+     *     returns escaped
      */
     static String quoteForArgumentFile(String argument) {
-        return "\"" + argument.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        // The launcher ends a token at a raw line break even inside quotes, which would split the
+        // argument in two; it decodes \n and \r escapes inside quotes back to the original characters.
+        return "\""
+                + argument
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r")
+                + "\"";
     }
 }

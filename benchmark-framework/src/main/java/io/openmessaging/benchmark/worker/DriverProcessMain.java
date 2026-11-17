@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +60,23 @@ public final class DriverProcessMain {
         }
     }
 
+    /**
+     * Parses a flag that may appear only once. The supervisor writes its own {@code --port-file} and
+     * {@code --token-file} first, so a repeated one can only come from a forged argument.
+     *
+     * @param current the value parsed so far, or {@code null}
+     * @param flag the flag name, for the error message
+     * @param value the flag's argument
+     * @return the parsed path
+     * @throws IllegalArgumentException if the flag was already given
+     */
+    static Path once(@Nullable Path current, String flag, String value) {
+        if (current != null) {
+            throw new IllegalArgumentException(flag + " given more than once");
+        }
+        return Path.of(value);
+    }
+
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
     public static void main(String[] args) throws Exception {
@@ -69,10 +87,10 @@ public final class DriverProcessMain {
         int i = 0;
         while (i < args.length) {
             if ("--port-file".equals(args[i]) && i + 1 < args.length) {
-                portFile = Path.of(args[i + 1]);
+                portFile = once(portFile, "--port-file", args[i + 1]);
                 i += 2;
             } else if ("--token-file".equals(args[i]) && i + 1 < args.length) {
-                tokenFile = Path.of(args[i + 1]);
+                tokenFile = once(tokenFile, "--token-file", args[i + 1]);
                 i += 2;
             } else if ("--tag".equals(args[i]) && i + 1 < args.length) {
                 tags.add(args[i + 1]);

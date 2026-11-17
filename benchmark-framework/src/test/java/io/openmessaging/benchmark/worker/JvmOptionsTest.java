@@ -16,7 +16,12 @@ package io.openmessaging.benchmark.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
@@ -63,6 +68,30 @@ class JvmOptionsTest {
     void quotesArgumentsForAnArgumentFile() {
         assertThat(JvmOptions.quoteForArgumentFile("C:\\dir\\a \"b\""))
                 .isEqualTo("\"C:\\\\dir\\\\a \\\"b\\\"\"");
+    }
+
+    @Test
+    void escapesLineBreaksSoTheLauncherKeepsOneArgument(@TempDir Path dir) throws Exception {
+        String forged = "driver=kafka\n--token-file\r\n/etc/passwd";
+        assertThat(JvmOptions.quoteForArgumentFile(forged)).doesNotContain("\n", "\r");
+
+        // Run a real launcher over the argfile: the program must see exactly the original argument
+        Path echo = dir.resolve("Echo.java");
+        Files.writeString(
+                echo,
+                "public class Echo { public static void main(String[] a) {"
+                        + " System.out.print(a.length + \":\" + String.join(\"|\", a)); } }");
+        Path argFile = dir.resolve("java.args");
+        Files.write(
+                argFile,
+                List.of(
+                        JvmOptions.quoteForArgumentFile(echo.toString()),
+                        JvmOptions.quoteForArgumentFile(forged)));
+        String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        Process process = new ProcessBuilder(java, "@" + argFile).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertThat(process.waitFor()).as(output).isZero();
+        assertThat(output).isEqualTo("1:" + forged);
     }
 
     @Test

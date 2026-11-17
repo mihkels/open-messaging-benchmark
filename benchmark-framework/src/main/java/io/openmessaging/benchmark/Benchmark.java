@@ -336,7 +336,9 @@ public final class Benchmark {
         Map<String, Workload> workloads = new TreeMap<>();
         for (String path : paths) {
             File file = new File(path);
-            String name = file.getName().substring(0, file.getName().lastIndexOf('.'));
+            String fileName = file.getName();
+            int dot = fileName.lastIndexOf('.');
+            String name = dot > 0 ? fileName.substring(0, dot) : fileName;
 
             Workload workload = workloadReader.readValue(file);
             try {
@@ -347,7 +349,11 @@ public final class Benchmark {
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Invalid workload " + path + ": " + e.getMessage(), e);
             }
-            workloads.put(name, workload);
+            if (workloads.putIfAbsent(name, workload) != null) {
+                // Result files are named after the workload file, so two with the same name collide
+                throw new IllegalArgumentException(
+                        "Workload " + path + " has the same file name as another workload: " + name);
+            }
         }
         return workloads;
     }

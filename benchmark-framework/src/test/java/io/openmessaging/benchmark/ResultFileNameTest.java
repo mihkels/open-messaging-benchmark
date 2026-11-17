@@ -14,9 +14,13 @@
 package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ResultFileNameTest {
 
@@ -52,5 +56,25 @@ class ResultFileNameTest {
                 .isEqualTo("out.d/result-1");
         assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null, "3"))
                 .matches("workload-Kafka-\\d{4}(-\\d{2}){5}-3\\.json");
+    }
+
+    @Test
+    void createsMissingResultDirectories(@TempDir Path temp) throws IOException {
+        Path output = temp.resolve("a/b/run.json");
+        Benchmark.createResultDirectory(output.toString(), "/ignored-when-output-is-set");
+        assertThat(output.getParent()).isDirectory();
+
+        Path results = temp.resolve("results/nested");
+        Benchmark.createResultDirectory(null, results.toString());
+        assertThat(results).isDirectory();
+    }
+
+    @Test
+    void rejectsResultDirectoryThatIsAFile(@TempDir Path temp) throws IOException {
+        Path file = Files.createFile(temp.resolve("taken"));
+
+        assertThatThrownBy(
+                        () -> Benchmark.createResultDirectory(file.resolve("run.json").toString(), null))
+                .isInstanceOf(IOException.class);
     }
 }

@@ -206,6 +206,13 @@ public final class Benchmark {
 
     static void main(String[] args) throws Exception {
         final Arguments arguments = parseArguments(args);
+        // Results are written only after the run, so a bad path must fail now, not hours later
+        try {
+            createResultDirectory(arguments.output, System.getenv(RESULTS_DIR_ENV));
+        } catch (IOException e) {
+            log.error("Cannot write results: {}", e.toString());
+            System.exit(-1);
+        }
         resolveWorkers(arguments);
 
         // Dump configuration variables
@@ -858,6 +865,24 @@ public final class Benchmark {
             return fileName;
         }
         return Path.of(resultsDirectory, fileName).toString();
+    }
+
+    // Creates the directory resultFileName writes into and checks it is writable
+    static void createResultDirectory(@Nullable String output, @Nullable String resultsDirectory)
+            throws IOException {
+        Path directory = null;
+        if (output != null && !output.isEmpty()) {
+            directory = Path.of(output).toAbsolutePath().getParent();
+        } else if (resultsDirectory != null && !resultsDirectory.isEmpty()) {
+            directory = Path.of(resultsDirectory);
+        }
+        if (directory == null) {
+            return;
+        }
+        Files.createDirectories(directory);
+        if (!Files.isWritable(directory)) {
+            throw new IOException("Results directory " + directory + " is not writable");
+        }
     }
 
     @FunctionalInterface

@@ -14,8 +14,11 @@
 package io.openmessaging.benchmark;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,24 +77,30 @@ public class Thresholds {
                         result.summary.totalMessagesSent(),
                         result.summary.publishRateAvg(),
                         result.summary.targetRate());
-        Delivery delivery = result.delivery;
+        evaluateDelivery(evaluated, Collections.singletonList(result.delivery));
+        return evaluated;
+    }
+
+    // Adds the delivery checks on the worst count; repeated runs pass every repetition's delivery
+    void evaluateDelivery(Result evaluated, List<@Nullable Delivery> deliveries) {
         // No delivery counts means verification did not finish, which must not pass
+        boolean complete = deliveries.stream().allMatch(Objects::nonNull);
+        List<Delivery> present = deliveries.stream().filter(Objects::nonNull).toList();
         if (maxLostMessages != null) {
-            long lost = delivery != null ? delivery.lost() : 0;
+            long lost = present.stream().mapToLong(Delivery::lost).max().orElse(0);
             evaluated.checks.put(
                     "maxLostMessages",
-                    new Check(maxLostMessages, (double) lost, delivery != null && lost <= maxLostMessages));
+                    new Check(maxLostMessages, (double) lost, complete && lost <= maxLostMessages));
         }
         if (maxDuplicatedMessages != null) {
-            long duplicated = delivery != null ? delivery.duplicated() : 0;
+            long duplicated = present.stream().mapToLong(Delivery::duplicated).max().orElse(0);
             evaluated.checks.put(
                     "maxDuplicatedMessages",
                     new Check(
                             maxDuplicatedMessages,
                             (double) duplicated,
-                            delivery != null && duplicated <= maxDuplicatedMessages));
+                            complete && duplicated <= maxDuplicatedMessages));
         }
-        return evaluated;
     }
 
     // Also used with the medians of repeated runs

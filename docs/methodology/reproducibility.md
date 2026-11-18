@@ -65,7 +65,8 @@ median, min, max and coefficient of variation (CV) of throughput and the main la
 see [Repeated runs](../guides/results.md#repeated-runs).
 
 - **Read the median.** It ignores one outlier repetition, so workload thresholds are judged on the
-  medians when repeating.
+  medians when repeating. `maxLostMessages` and `maxDuplicatedMessages` are the exception: they
+  judge the worst repetition, so one lossy run still fails.
 - **Check the CV.** A metric with a CV above `checks.maxRunToRunCv` (default `0.1`, 10%) gets a
   `runToRunVariance` warning in the summary. Differences between two setups smaller than that
   spread are noise. Tail percentiles such as p99.9 vary more than averages; raise the limit or run

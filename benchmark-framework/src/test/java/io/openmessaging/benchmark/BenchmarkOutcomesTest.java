@@ -852,6 +852,42 @@ class BenchmarkOutcomesTest {
     }
 
     @Test
+    void lostMessagesInAnyRepetitionFailTheRepeatedRun() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.repeat = 3;
+        List<WorkloadRun> pending = new ArrayList<>();
+        for (long lost : new long[] {0, 500, 0}) {
+            WorkloadRun run = mock(WorkloadRun.class);
+            TestResult result = result("lossy");
+            result.summary = new ResultSummary(100, 100, 1, 1, 0, 0, 0);
+            result.delivery = new Delivery(1000, 1000 - lost, lost, 0, 0);
+            when(run.run()).thenReturn(result);
+            pending.add(run);
+        }
+        Workload workload = workload("lossy");
+        workload.verifyDelivery = true;
+        workload.thresholds = new Thresholds();
+        workload.thresholds.maxLostMessages = 0L;
+
+        // The median loss is 0, but the worst repetition's 500 must fail the run
+        assertThat(
+                        Benchmark.runWorkloads(
+                                arguments,
+                                Map.of("lossy", workload),
+                                mock(Worker.class),
+                                (d, w, ignored) -> pending.removeFirst()))
+                .isEqualTo(Benchmark.THRESHOLD_FAILURE_EXIT_CODE);
+        JsonNode lostCheck =
+                new ObjectMapper()
+                        .readTree(directory.resolve("result-summary.json").toFile())
+                        .get("thresholds")
+                        .get("checks")
+                        .get("maxLostMessages");
+        assertThat(lostCheck.get("status").asString()).isEqualTo("FAIL");
+        assertThat(lostCheck.get("observed").asDouble()).isEqualTo(500);
+    }
+
+    @Test
     void repeatOneKeepsTheSingleResultFile() throws Exception {
         Benchmark.Arguments arguments = arguments();
         arguments.repeat = 1;

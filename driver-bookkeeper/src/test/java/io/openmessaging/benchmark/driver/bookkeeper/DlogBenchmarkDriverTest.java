@@ -54,6 +54,20 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
 class DlogBenchmarkDriverTest {
+
+    @Test
+    void dlogConfDoesNotExpandFileEnvironmentOrPropertyLookups(@TempDir Path dir) throws Exception {
+        Path secret = dir.resolve("secret");
+        Files.writeString(secret, "s3cr3t");
+        String fileRef = "${file:UTF-8:" + secret + "}";
+        var conf =
+                DlogBenchmarkDriver.dlogConfiguration(
+                        "zkAclId=" + fileRef + "\nbkDigestPW=${env:HOME}\nfeatureProviderClass=${sys:user.home}");
+        // zkAclId is sent to the ZooKeeper in dlogUri, so it must stay the literal reference
+        assertThat(conf.getZkAclId()).isEqualTo(fileRef);
+        assertThat(conf.getString("bkDigestPW")).isEqualTo("${env:HOME}");
+        assertThat(conf.getString("featureProviderClass")).isEqualTo("${sys:user.home}");
+    }
     private static final String TOPIC = "stream";
 
     @Test

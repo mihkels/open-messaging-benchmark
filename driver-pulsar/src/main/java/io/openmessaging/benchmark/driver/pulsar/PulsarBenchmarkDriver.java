@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.DriverConfigs;
 import io.openmessaging.benchmark.driver.Failures;
@@ -31,10 +32,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminBuilder;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.admin.PulsarAdminException.ConflictException;
+import org.apache.pulsar.client.api.Authentication;
 import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.Producer;
@@ -46,6 +49,7 @@ import org.apache.pulsar.common.policies.data.BacklogQuota;
 import org.apache.pulsar.common.policies.data.BacklogQuota.RetentionPolicy;
 import org.apache.pulsar.common.policies.data.PersistencePolicies;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -61,6 +65,33 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
     private String namespace;
     private volatile ProducerBuilder<byte[]> producerBuilder;
+
+    // A file: URI anywhere a value starts, as in "file:///etc/shadow" or "privateKey":"file:/x"
+    private static final Pattern FILE_REFERENCE = Pattern.compile("(?i)(?<![a-z0-9])file:");
+
+    /**
+     * Checks an authentication plugin from the driver config before Pulsar instantiates it. The
+     * config arrives over the worker API, and Pulsar would construct any named class before checking
+     * its type. Plugins such as {@code AuthenticationToken} also read {@code file:} references and
+     * send the file to the broker, which the caller chooses, so those are refused: put the token
+     * itself in {@code authentication.data}.
+     *
+     * @param plugin the authentication plugin class name
+     * @param data the plugin parameters, or {@code null}
+     */
+    static void checkAuthentication(String plugin, @Nullable String data) {
+        try {
+            ConfiguredClasses.load(
+                    plugin, Authentication.class, PulsarBenchmarkDriver.class.getClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalArgumentException("Unknown authentication plugin " + plugin, e);
+        }
+        if (data != null && FILE_REFERENCE.matcher(data).find()) {
+            throw new IllegalArgumentException(
+                    "authentication.data must not reference local files (file:); give the token or"
+                            + " credentials inline");
+        }
+    }
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
@@ -95,6 +126,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
         if (config.client.authentication.plugin != null
                 && !config.client.authentication.plugin.isEmpty()) {
+            checkAuthentication(config.client.authentication.plugin, config.client.authentication.data);
             clientBuilder.authentication(
                     config.client.authentication.plugin, config.client.authentication.data);
             pulsarAdminBuilder.authentication(

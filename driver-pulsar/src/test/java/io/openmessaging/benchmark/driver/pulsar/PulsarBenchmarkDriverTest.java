@@ -55,6 +55,34 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 class PulsarBenchmarkDriverTest {
+
+    @Test
+    void refusesAuthenticationThatReadsLocalFiles() {
+        String token = "org.apache.pulsar.client.impl.auth.AuthenticationToken";
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication(token, "file:///etc/passwd"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file:");
+        String oauth = "org.apache.pulsar.client.impl.auth.oauth2.AuthenticationOAuth2";
+        String oauthParams = "{\"issuerUrl\":\"https://idp\",\"privateKey\":\"FILE:/home/u/key.json\"}";
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication(oauth, oauthParams))
+                .isInstanceOf(IllegalArgumentException.class);
+        // Inline tokens and TLS parameter names that merely end in "File" stay allowed
+        PulsarBenchmarkDriver.checkAuthentication(token, "token:eyJhbGciOiJIUzI1NiJ9.e30.x");
+        PulsarBenchmarkDriver.checkAuthentication(token, null);
+        PulsarBenchmarkDriver.checkAuthentication(
+                "org.apache.pulsar.client.impl.auth.AuthenticationTls",
+                "tlsCertFile:/certs/client.pem,tlsKeyFile:/certs/client.key");
+    }
+
+    @Test
+    void refusesAuthenticationPluginsThatAreNotAuthentication() {
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication("java.lang.String", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not implement");
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication("no.such.Plugin", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown authentication plugin");
+    }
     @Test
     void consumerCallbackAcknowledgesAndReleasesMessage() throws Exception {
         PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
@@ -359,7 +387,8 @@ class PulsarBenchmarkDriverTest {
         ClientBuilder clientBuilder = initialize(temp, admin, true);
 
         verify(clientBuilder).tlsTrustCertsFilePath("/certs/ca.pem");
-        verify(clientBuilder).authentication("token", "secret");
+        verify(clientBuilder)
+                .authentication("org.apache.pulsar.client.impl.auth.AuthenticationToken", "secret");
         verify(admin.tenants()).createTenant(org.mockito.ArgumentMatchers.eq("benchmark"), any());
     }
 
@@ -458,7 +487,7 @@ class PulsarBenchmarkDriverTest {
                   namespacePrefix: benchmark/ns
                   clusterName: local
                   authentication:
-                    plugin: token
+                    plugin: org.apache.pulsar.client.impl.auth.AuthenticationToken
                     data: secret
                 """;
         String plainConfiguration =

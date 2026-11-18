@@ -49,6 +49,24 @@ import org.junit.jupiter.api.Test;
 
 public class JMSBenchmarkDriverTest {
     @Test
+    void refusesFactoryConfigurationThatReadsLocalFiles() {
+        for (String forged :
+                List.of(
+                        "{\"authPlugin\":\"org.apache.pulsar.client.impl.auth.AuthenticationToken\","
+                                + "\"authParams\":\"file:///etc/passwd\"}",
+                        "{\"config.providers\":\"d\",\"client.id\":\"${d:/home/u/.ssh:id_rsa}\"}",
+                        "{\"sasl.jaas.config\":\"com.sun.security.auth.module.JndiLoginModule required;\"}")) {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> JMSBenchmarkDriver.checkFactoryConfiguration(forged),
+                    forged);
+        }
+        JMSBenchmarkDriver.checkFactoryConfiguration(null);
+        JMSBenchmarkDriver.checkFactoryConfiguration(
+                "{\"brokerServiceUrl\":\"pulsar://b:6650\",\"tlsTrustCertsFilePath\":\"/certs/ca.pem\"}");
+    }
+
+    @Test
     void closesSharedConnectionFactoryAndDelegateEvenWhenClosuresFail() throws Exception {
         JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
         AtomicInteger connectionCloses = new AtomicInteger();

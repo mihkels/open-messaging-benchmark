@@ -189,6 +189,12 @@ provider: [Artemis JMS client](https://activemq.apache.org/components/artemis/do
 [Pulsar JMS (DataStax Starlight for JMS)](https://github.com/datastax/pulsar-jms) and
 [Confluent JMS client](https://docs.confluent.io/platform/current/clients/kafka-jms-client/overview.html).
 
+`connectionFactoryConfigurationParam` must not contain `file:` references, `${...}` placeholders or
+the `JndiLoginModule` / `LdapLoginModule` JAAS modules; the driver refuses them before any client
+starts. They would let a driver config read files on the worker host and send them to a broker, for
+example through Pulsar JMS `authParams: file:...` or the config providers of the older kafka-clients
+that Confluent's JMS jar bundles. Give tokens and credentials inline.
+
 ### Shipped configurations
 
 |              File               |      Provider       | `use20api` | Transactions | Delegate |                                   Notes                                    |      Regression case       |

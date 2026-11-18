@@ -83,6 +83,12 @@ To allow a provider anyway, add for example
 `-Dorg.apache.kafka.automatic.config.providers=org.apache.kafka.common.config.provider.EnvVarConfigProvider`
 to `OMB_DRIVER_JVM_OPTS`.
 
+For the same reason the driver JVM sets
+`org.apache.commons.configuration2.interpol.ConfigurationInterpolator.defaultPrefixLookups` to an
+empty list unless `OMB_DRIVER_JVM_OPTS` sets it. commons-configuration2 then leaves `${file:...}`,
+`${env:...}`, `${sys:...}` and similar references as written; the BookKeeper driver's `dlogConf`
+uses it.
+
 ## Plugin discovery
 
 Plugins are collected from all of these locations. Two bundles with the same `id`, or two bundles

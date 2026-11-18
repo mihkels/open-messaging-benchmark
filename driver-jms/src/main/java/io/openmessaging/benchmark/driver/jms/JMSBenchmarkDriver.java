@@ -29,12 +29,14 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
 import javax.jms.Destination;
 import javax.jms.MessageConsumer;
 import javax.jms.Session;
 import javax.jms.Topic;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
@@ -50,6 +52,8 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
+        // Before the admin delegate connects anywhere
+        checkFactoryConfiguration(config.connectionFactoryConfigurationParam);
         try {
             if (config.delegateForAdminOperationsClassName != null
                     && !config.delegateForAdminOperationsClassName.isEmpty()) {
@@ -82,6 +86,28 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                 throw interrupted;
             }
             throw new IOException("Cannot initialize JMS benchmark driver", t);
+        }
+    }
+
+    // A file: URI where a value starts, a ${...} placeholder (Kafka config providers in the client
+    // bundled with older Kafka JMS providers) or a JAAS login module that performs JNDI lookups
+    private static final Pattern LOCAL_REFERENCE =
+            Pattern.compile("(?i)(?<![a-z0-9])file:|\\$\\{|JndiLoginModule|LdapLoginModule");
+
+    /**
+     * Checks the provider configuration from the driver config before the provider sees it. It
+     * arrives over the worker API and is passed whole to the provider's client, whose own settings
+     * can read local files and send them to the broker the caller chooses: Pulsar JMS {@code
+     * authParams: file:...}, or {@code config.providers} placeholders in the old kafka-clients that
+     * Kafka JMS jars bundle, which predates the driver process's protection.
+     *
+     * @param configuration the connection factory configuration, or {@code null}
+     */
+    static void checkFactoryConfiguration(@Nullable String configuration) {
+        if (configuration != null && LOCAL_REFERENCE.matcher(configuration).find()) {
+            throw new IllegalArgumentException(
+                    "connectionFactoryConfigurationParam must not reference local files (file:),"
+                            + " contain ${...} placeholders or JNDI login modules; give values inline");
         }
     }
 

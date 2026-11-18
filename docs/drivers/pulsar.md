@@ -170,26 +170,26 @@ All keys are read by `PulsarConfig` and its nested classes. Unknown keys are ign
 
 ### `client`
 
-|                Key                 |  Type   |   Default    |                                                     Description                                                      |
-|------------------------------------|---------|--------------|----------------------------------------------------------------------------------------------------------------------|
-| `serviceUrl`                       | string  | required     | Binary protocol URL, for example `pulsar://host:6650`. TLS settings are applied only if it starts with `pulsar+ssl`. |
-| `httpUrl`                          | string  | required     | Admin REST URL, for example `http://host:8080`. TLS settings are applied only if it starts with `https`.             |
-| `namespacePrefix`                  | string  | required     | `<tenant>/<namespace prefix>`. A random suffix is appended for each driver instance.                                 |
-| `clusterName`                      | string  | none         | Only allowed cluster of the tenant when the driver creates it. Not used if the tenant already exists.                |
-| `topicType`                        | enum    | `persistent` | `persistent` or `non-persistent`. Used as the scheme of the topic names.                                             |
-| `ioThreads`                        | int     | `8`          | Client I/O threads.                                                                                                  |
-| `connectionsPerBroker`             | int     | `8`          | Client connections per broker.                                                                                       |
-| `maxConcurrentLookupRequests`      | int     | `1000`       | Concurrent topic lookup requests.                                                                                    |
-| `clientMemoryLimitMB`              | long    | `256`        | Client memory limit for pending messages, in MB.                                                                     |
-| `persistence.ensembleSize`         | int     | `3`          | Namespace persistence policy: bookies in a ledger ensemble.                                                          |
-| `persistence.writeQuorum`          | int     | `3`          | Namespace persistence policy: copies of each entry.                                                                  |
-| `persistence.ackQuorum`            | int     | `2`          | Namespace persistence policy: bookie acknowledgements required for each entry.                                       |
-| `persistence.deduplicationEnabled` | boolean | `false`      | Broker-side message deduplication on the benchmark namespace.                                                        |
-| `tlsAllowInsecureConnection`       | boolean | `false`      | Accept untrusted server certificates (client and admin client).                                                      |
-| `tlsEnableHostnameVerification`    | boolean | `false`      | Verify the server host name (client and admin client).                                                               |
-| `tlsTrustCertsFilePath`            | string  | none         | Path of the trusted CA certificate file on each worker.                                                              |
-| `authentication.plugin`            | string  | none         | Authentication plugin class name. Applied to the client and the admin client when not empty.                         |
-| `authentication.data`              | string  | none         | Authentication parameters passed to the plugin.                                                                      |
+|                Key                 |  Type   |   Default    |                                                                Description                                                                 |
+|------------------------------------|---------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `serviceUrl`                       | string  | required     | Binary protocol URL, for example `pulsar://host:6650`. TLS settings are applied only if it starts with `pulsar+ssl`.                       |
+| `httpUrl`                          | string  | required     | Admin REST URL, for example `http://host:8080`. TLS settings are applied only if it starts with `https`.                                   |
+| `namespacePrefix`                  | string  | required     | `<tenant>/<namespace prefix>`. A random suffix is appended for each driver instance.                                                       |
+| `clusterName`                      | string  | none         | Only allowed cluster of the tenant when the driver creates it. Not used if the tenant already exists.                                      |
+| `topicType`                        | enum    | `persistent` | `persistent` or `non-persistent`. Used as the scheme of the topic names.                                                                   |
+| `ioThreads`                        | int     | `8`          | Client I/O threads.                                                                                                                        |
+| `connectionsPerBroker`             | int     | `8`          | Client connections per broker.                                                                                                             |
+| `maxConcurrentLookupRequests`      | int     | `1000`       | Concurrent topic lookup requests.                                                                                                          |
+| `clientMemoryLimitMB`              | long    | `256`        | Client memory limit for pending messages, in MB.                                                                                           |
+| `persistence.ensembleSize`         | int     | `3`          | Namespace persistence policy: bookies in a ledger ensemble.                                                                                |
+| `persistence.writeQuorum`          | int     | `3`          | Namespace persistence policy: copies of each entry.                                                                                        |
+| `persistence.ackQuorum`            | int     | `2`          | Namespace persistence policy: bookie acknowledgements required for each entry.                                                             |
+| `persistence.deduplicationEnabled` | boolean | `false`      | Broker-side message deduplication on the benchmark namespace.                                                                              |
+| `tlsAllowInsecureConnection`       | boolean | `false`      | Accept untrusted server certificates (client and admin client).                                                                            |
+| `tlsEnableHostnameVerification`    | boolean | `false`      | Verify the server host name (client and admin client).                                                                                     |
+| `tlsTrustCertsFilePath`            | string  | none         | Path of the trusted CA certificate file on each worker.                                                                                    |
+| `authentication.plugin`            | string  | none         | Authentication plugin class name, which must implement Pulsar `Authentication`. Applied to the client and the admin client when not empty. |
+| `authentication.data`              | string  | none         | Authentication parameters passed to the plugin. `file:` references are refused; give the token inline (`token:...`).                       |
 
 The driver also sets these client options, which are not configurable: operation timeout 10 minutes,
 no limit on lookup requests, and one listener thread per available processor.

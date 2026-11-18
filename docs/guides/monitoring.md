@@ -90,13 +90,25 @@ process. Once a driver is initialized, it includes:
 Lost messages are not a worker metric: a message is lost when no worker received it, so the
 coordinator derives `lost` from all workers' counts after the run and writes it to the result.
 
-Each driver process serves one workload run, so its metrics carry `run_id` and `driver` (the
-driver configuration's `name`) labels. Match `run_id` to the `runId` of the JSON result to find
-the workload.
+Each driver process serves one workload run, so its metrics carry `run_id`, `workload` (the
+workload's `name`) and `driver` (the driver configuration's `name`) labels. Match `run_id` to the
+`runId` of the JSON result. A worker driven by an older coordinator leaves `workload` out.
+
+Every run adds its own set of series, so a Prometheus that keeps many runs keeps many series sets;
+each of the four latency timers adds 90 bucket series per worker and run. Size the retention for the
+runs you want to compare, and look runs up by `run_id` instead of graphing all of them at once.
 
 The driver's send-completion point depends on its broker and configuration; it is not always a
 broker acknowledgement. See [Publish latency](../methodology/latency-and-backlog.md#publish-latency).
-Timers expose `_count`, `_sum` and `_max` series. A minimal Prometheus scrape configuration:
+Timers expose `_count`, `_sum`, `_max` and `_bucket` series; the buckets cover 100 µs to 60 s, so
+`histogram_quantile` gives approximate percentiles across workers, for example the p99 publish
+latency of a run:
+
+```promql
+histogram_quantile(0.99, sum by (le) (rate(produce_latency_seconds_bucket{run_id="<runId>"}[1m])))
+```
+
+The JSON result keeps exact percentiles. A minimal Prometheus scrape configuration:
 
 ```yaml
 scrape_configs:
@@ -121,6 +133,10 @@ CPU seconds, heap used/committed bytes, non-heap/direct-buffer bytes, platform-t
 GC count/collection seconds, and PID. Unsupported management readings are `NaN`.
 These gauges are read on scrape, not updated on the message hot path. Collection time is not a
 GC-pause distribution, and heap is not resident memory.
+
+The Helm chart ships a Grafana dashboard of these metrics; see
+[Grafana dashboard](containers-and-kubernetes.md#grafana-dashboard).
+
 For broker-independent resource measurements, profiling, and repeatable baseline comparisons,
 see [Framework resource efficiency](../development/framework-performance.md).
 
@@ -154,11 +170,11 @@ standard OpenTelemetry variables:
 | `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | `cumulative`                                          |
 
 On Kubernetes, set `service.instance.id` from the pod name with the downward API. Metric names and
-the `run_id`, `driver`, `phase` and `role` attributes are the same as on `/metrics`. A driver
-process pushes its last interval when it stops, so a run's final counts arrive even when the job
-ends right after it.
+the `run_id`, `workload`, `driver`, `phase` and `role` attributes are the same as on `/metrics`.
+A driver process pushes its last interval when it stops, so a run's final counts arrive even when
+the job ends right after it.
 
-Timers export count, sum and max only. Use the JSON result for latency percentiles.
+Timers export explicit-bucket histograms with the same buckets as `_bucket` on `/metrics`.
 
 A minimal collector configuration that receives OTLP and serves it to Prometheus, for example as the
 data source of a Grafana dashboard:

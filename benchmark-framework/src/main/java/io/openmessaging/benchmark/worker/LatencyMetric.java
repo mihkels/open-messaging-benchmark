@@ -15,6 +15,8 @@ package io.openmessaging.benchmark.worker;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
 import org.HdrHistogram.Recorder;
@@ -25,6 +27,8 @@ import org.HdrHistogram.Recorder;
  */
 final class LatencyMetric {
     private static final int SIGNIFICANT_DIGITS = 4;
+    private static final Duration HISTOGRAM_MIN = Duration.of(100, ChronoUnit.MICROS);
+    private static final Duration HISTOGRAM_MAX = Duration.ofSeconds(60);
 
     private final boolean skipNegatives;
     private final long highestTrackableMicros;
@@ -42,7 +46,14 @@ final class LatencyMetric {
         this.highestTrackableMicros = highestTrackableMicros;
         interval = new Recorder(highestTrackableMicros, SIGNIFICANT_DIGITS);
         cumulative = new Recorder(highestTrackableMicros, SIGNIFICANT_DIGITS);
-        timer = Timer.builder(name).description(description).register(registry);
+        // Buckets let dashboards compute percentiles across workers; above 60 s lands in +Inf
+        timer =
+                Timer.builder(name)
+                        .description(description)
+                        .publishPercentileHistogram()
+                        .minimumExpectedValue(HISTOGRAM_MIN)
+                        .maximumExpectedValue(HISTOGRAM_MAX)
+                        .register(registry);
     }
 
     /**

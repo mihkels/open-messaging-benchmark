@@ -23,6 +23,7 @@ import static org.mockito.Mockito.when;
 import com.beust.jcommander.JCommander;
 import io.javalin.Javalin;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth.DriverState;
@@ -183,12 +184,12 @@ class AuthenticatedWorkerHttpTest {
         when(worker.createTopics(org.mockito.ArgumentMatchers.any())).thenReturn(List.of("t-1"));
         when(worker.getCountersStats()).thenReturn(new CountersStats(4, 5, 6));
         try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
-            client.setRunId("run-1");
+            client.setRunContext(new RunContext("run-1", "workload-1"));
             assertThat(client.createTopics(new TopicsInfo(1, 1))).containsExactly("t-1");
             assertThat(client.getCountersStats()).isEqualTo(new CountersStats(4, 5, 6));
             client.stopAll();
         }
-        verify(worker).setRunId("run-1");
+        verify(worker).setRunContext(new RunContext("run-1", "workload-1"));
         verify(worker).stopAll();
         assertThat(seenAuthorization).isNotEmpty().allMatch(("Bearer " + TOKEN)::equals);
     }

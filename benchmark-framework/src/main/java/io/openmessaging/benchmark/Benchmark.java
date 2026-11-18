@@ -27,6 +27,7 @@ import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.WorkerClock;
 import io.openmessaging.benchmark.worker.WorkerWatchdog;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -786,7 +787,7 @@ public final class Benchmark {
             String driverName = driverName(combination.driverConfig());
             String runId = RunId.create();
             Instant startedAt = Instant.now();
-            worker.setRunId(runId);
+            worker.setRunContext(new RunContext(runId, workload.name));
             MDC.put(MDC_RUN_ID, runId);
             MDC.put(MDC_WORKLOAD, workload.name);
             MDC.put(MDC_DRIVER, driverName);

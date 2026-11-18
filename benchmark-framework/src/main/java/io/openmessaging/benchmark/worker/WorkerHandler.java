@@ -21,6 +21,7 @@ import io.javalin.http.HttpStatus;
 import io.openmessaging.benchmark.utils.SecureTempFiles;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
@@ -36,6 +37,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 
@@ -234,7 +236,12 @@ public class WorkerHandler implements AutoCloseable {
     }
 
     private void handleSetRunId(Context ctx) {
-        worker.setRunId(mapper.readValue(ctx.body(), String.class));
+        JsonNode body = mapper.readTree(ctx.body());
+        // Coordinators without the workload tag send the run id as a JSON string
+        worker.setRunContext(
+                body.isString()
+                        ? new RunContext(body.asString(), null)
+                        : mapper.treeToValue(body, RunContext.class));
     }
 
     private void handleSetPhase(Context ctx) {

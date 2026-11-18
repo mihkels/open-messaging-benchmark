@@ -39,6 +39,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
@@ -205,8 +206,8 @@ public final class HttpWorkerClient implements Worker {
     }
 
     @Override
-    public void setRunId(String runId) {
-        sendPost(SET_RUN_ID, writer.writeValueAsBytes(runId));
+    public void setRunContext(RunContext run) {
+        sendPost(SET_RUN_ID, writer.writeValueAsBytes(run));
     }
 
     @Override

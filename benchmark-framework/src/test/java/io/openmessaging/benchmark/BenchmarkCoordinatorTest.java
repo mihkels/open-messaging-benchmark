@@ -16,7 +16,6 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
@@ -29,6 +28,7 @@ import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -113,7 +113,7 @@ class BenchmarkCoordinatorTest {
                 assertThat(clients.constructed()).isEmpty();
                 assertThat(selectedWorkers).containsExactly(processes.constructed().getFirst());
                 verify(processes.constructed().getFirst()).initializeDriver(driver);
-                verify(processes.constructed().getFirst()).setRunId(anyString());
+                verify(processes.constructed().getFirst()).setRunContext(any(RunContext.class));
                 verify(processes.constructed().getFirst()).stopAll();
                 verify(processes.constructed().getFirst()).close();
             } else {
@@ -122,7 +122,7 @@ class BenchmarkCoordinatorTest {
                 assertThat(selectedWorkers).singleElement().isInstanceOf(DistributedWorkersEnsemble.class);
                 for (HttpWorkerClient client : clients.constructed()) {
                     verify(client).initializeDriver(driver);
-                    verify(client).setRunId(anyString());
+                    verify(client).setRunContext(any(RunContext.class));
                     verify(client).stopAll();
                     verify(client).close();
                 }

@@ -28,7 +28,7 @@ public record ResolvedDriver(String driverClass, List<PluginBundle> bundles) {
         bundles = List.copyOf(bundles);
     }
 
-    public PluginBundle primary() {
+    PluginBundle primary() {
         return bundles.get(0);
     }
 }

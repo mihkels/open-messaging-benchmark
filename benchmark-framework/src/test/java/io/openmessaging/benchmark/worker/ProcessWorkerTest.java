@@ -163,7 +163,7 @@ class ProcessWorkerTest {
             assertThat(worker.scrapeMetrics())
                     .contains("messages_sent_total", "fixture_driver_initialized_total")
                     .containsPattern("benchmark_phase\\{[^}]*phase=\"warmup\"[^}]*} 1\\.0")
-                    // Launch tags reach meters registered before the run id arrives over HTTP
+                    // The run id is a launch tag; a later setRunId does not retag the running driver
                     .containsPattern(
                             "messages_sent_total\\{[^}]*driver=\"test\"[^}]*run_id=\"run-before-start\"");
             worker.stopAll();

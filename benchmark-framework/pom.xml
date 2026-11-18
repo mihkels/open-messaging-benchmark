@@ -34,6 +34,8 @@
         <hdrhistogram.version>2.2.2</hdrhistogram.version>
         <async.client.version>3.0.14</async.client.version>
         <javalin.version>7.2.4</javalin.version>
+        <!-- Keep at the Jetty version Javalin is built against -->
+        <jetty.version>12.1.14</jetty.version>
     </properties>
 
     <dependencies>
@@ -102,6 +104,16 @@
             <groupId>org.asynchttpclient</groupId>
             <artifactId>async-http-client</artifactId>
             <version>${async.client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-alpn-java-server</artifactId>
+            <version>${jetty.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.http2</groupId>
+            <artifactId>jetty-http2-server</artifactId>
+            <version>${jetty.version}</version>
         </dependency>
         <dependency>
             <groupId>org.hdrhistogram</groupId>

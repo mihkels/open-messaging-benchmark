@@ -33,6 +33,8 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
 import static io.openmessaging.benchmark.worker.WorkerHandler.YAML_CONTENT_TYPE;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolNames;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -123,7 +125,23 @@ public final class HttpWorkerClient implements Worker {
      * @param caFile the PEM certificate workers present, or {@code null} for plain HTTP workers
      */
     public HttpWorkerClient(String host, @Nullable String token, @Nullable Path caFile) {
-        this(host, token, caFile, WorkerTimeouts.request(), WorkerTimeouts.stop());
+        this(host, token, caFile, WorkerTimeouts.request(), WorkerTimeouts.stop(), false);
+    }
+
+    /**
+     * Creates the coordinator's client for a remote {@code BenchmarkWorker}, which speaks HTTP/2: h2
+     * by ALPN over TLS, and h2c by prior knowledge over plain HTTP. The worker's driver process and
+     * other HTTP/1.1-only servers need one of the constructors instead.
+     *
+     * @param host the worker's base URL
+     * @param token the shared worker token, or {@code null} to send none
+     * @param caFile the PEM certificate workers present, or {@code null} for plain HTTP workers
+     * @return the client
+     */
+    public static HttpWorkerClient forRemoteWorker(
+            String host, @Nullable String token, @Nullable Path caFile) {
+        return new HttpWorkerClient(
+                host, token, caFile, WorkerTimeouts.request(), WorkerTimeouts.stop(), true);
     }
 
     private HttpWorkerClient(
@@ -131,9 +149,10 @@ public final class HttpWorkerClient implements Worker {
             @Nullable String token,
             @Nullable Path caFile,
             Duration requestTimeout,
-            Duration stopTimeout) {
+            Duration stopTimeout,
+            boolean h2c) {
         this(
-                asyncHttpClient(clientConfig(caFile, requestTimeout)),
+                asyncHttpClient(clientConfig(caFile, requestTimeout).setHttp2CleartextEnabled(h2c)),
                 host,
                 token,
                 CLOSE_TIMEOUT,
@@ -159,6 +178,14 @@ public final class HttpWorkerClient implements Worker {
                                     .trustManager(caFile.toFile())
                                     // Netty 4.2 checks host names by default
                                     .endpointIdentificationAlgorithm(null)
+                                    // AHC adds ALPN only to contexts it builds itself
+                                    .applicationProtocolConfig(
+                                            new ApplicationProtocolConfig(
+                                                    ApplicationProtocolConfig.Protocol.ALPN,
+                                                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                                                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                                                    ApplicationProtocolNames.HTTP_2,
+                                                    ApplicationProtocolNames.HTTP_1_1))
                                     .build())
                     .setDisableHttpsEndpointIdentificationAlgorithm(true);
         } catch (SSLException | IllegalArgumentException e) {

@@ -28,7 +28,14 @@ import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
+import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -253,15 +260,15 @@ public final class BenchmarkWorker {
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();
         WorkerHandler handler = new WorkerHandler(worker, auth);
-        var https =
-                arguments.tlsCert == null || arguments.tlsKey == null
-                        ? null
-                        : WorkerTls.connector(
+        var connector =
+                arguments.tlsCert != null && arguments.tlsKey != null
+                        ? WorkerTls.connector(
                                 arguments.tlsCert,
                                 arguments.tlsKey,
                                 arguments.getBindAddress(),
-                                arguments.getHttpPort());
-        if (https != null) {
+                                arguments.getHttpPort())
+                        : cleartext(arguments.getBindAddress(), arguments.getHttpPort());
+        if (arguments.tlsCert != null) {
             log.info("Serving the worker API over HTTPS with {}", arguments.tlsCert);
         }
         Supplier<String> allMetrics = () -> metrics(prometheusRegistry.scrape(), worker::scrapeMetrics);
@@ -269,10 +276,8 @@ public final class BenchmarkWorker {
                 Javalin.create(
                                 config -> {
                                     handler.configure(config);
-                                    if (https != null) {
-                                        // Javalin adds its HTTP connector only when none was added
-                                        config.jetty.addConnector(https);
-                                    }
+                                    // Javalin adds its HTTP connector only when none was added
+                                    config.jetty.addConnector(connector);
                                     config.routes.get(
                                             HttpWorkerClient.METRICS_PATH, ctx -> ctx.result(allMetrics.get()));
                                 })
@@ -294,6 +299,25 @@ public final class BenchmarkWorker {
                                 },
                                 "benchmark-worker-shutdown"));
         Thread.currentThread().join();
+    }
+
+    /**
+     * Builds the plain-text connector, which serves HTTP/1.1 and h2c, by upgrade or prior knowledge,
+     * on one port.
+     *
+     * @param host the address to listen on
+     * @param port the port to listen on, or 0 for any free port
+     * @return the connector factory, for {@code config.jetty.addConnector}
+     */
+    static BiFunction<Server, HttpConfiguration, Connector> cleartext(String host, int port) {
+        return (server, http) -> {
+            ServerConnector connector =
+                    new ServerConnector(
+                            server, new HttpConnectionFactory(http), new HTTP2CServerConnectionFactory(http));
+            connector.setHost(host);
+            connector.setPort(port);
+            return connector;
+        };
     }
 
     private static final ObjectWriter writer = new ObjectMapper().writerWithDefaultPrettyPrinter();

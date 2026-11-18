@@ -18,6 +18,7 @@ import static io.openmessaging.benchmark.plugin.PluginFixtures.descriptor;
 import static io.openmessaging.benchmark.plugin.PluginFixtures.driverSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import io.javalin.Javalin;
 import io.openmessaging.benchmark.plugin.HostRuntime;
@@ -267,7 +268,7 @@ class ProcessWorkerTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("exited with code 42");
             assertThatThrownBy(worker::getCountersStats).hasMessageContaining("exited with code 42");
-            assertThatThrownBy(worker::scrapeMetrics).hasMessageContaining("exited with code 42");
+            assertThat(worker.scrapeMetrics()).isEmpty();
             WorkerHealth crashed = worker.health();
             assertThat(crashed.ready()).isTrue();
             assertThat(crashed.driver()).isEqualTo(DriverState.EXITED);
@@ -381,6 +382,48 @@ class ProcessWorkerTest {
 
     @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    @SuppressWarnings("java:S2925") // polls for a marker file written by the driver JVM process
+    void scrapesMetricsWhileDriverInitializationHangs() throws Exception {
+        Path marker = dir.resolve("hung-scrape.pid");
+        String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
+        try {
+            System.setProperty(
+                    ProcessWorker.JVM_OPTS_PROPERTY, "-Xmx256m -Dfixture.marker=\"" + marker + "\"");
+            ProcessWorker worker = newWorker();
+            Thread initializer =
+                    Thread.ofPlatform()
+                            .start(() -> {
+                                try {
+                                    worker.initializeDriver(config("fixture.hung.HungDriver"));
+                                } catch (Exception expected) {
+                                    // close() aborts the hanging initialization
+                                }
+                            });
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+                while (!Files.exists(marker) && initializer.isAlive() && System.nanoTime() < deadline) {
+                    Thread.sleep(25);
+                }
+                assertThat(marker).exists();
+                assertThat(worker.health().driver()).isEqualTo(DriverState.INITIALIZING);
+
+                // initializeDriver holds the worker monitor; the scrape must not wait for it
+                assertTimeoutPreemptively(Duration.ofSeconds(10), worker::scrapeMetrics);
+            } finally {
+                worker.close();
+                initializer.join(TimeUnit.SECONDS.toMillis(30));
+            }
+        } finally {
+            if (oldOptions == null) {
+                System.clearProperty(ProcessWorker.JVM_OPTS_PROPERTY);
+            } else {
+                System.setProperty(ProcessWorker.JVM_OPTS_PROPERTY, oldOptions);
+            }
+        }
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void forwardsZoneIdAndAllowsDriverJvmOptionsToOverrideIt() throws Exception {
         String oldZone = System.getProperty("zone.id");
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);
@@ -454,10 +497,10 @@ class ProcessWorkerTest {
                 remote.initializeDriver(config("fixture.crash.CrashDriver"));
                 assertThatThrownBy(() -> remote.createTopics(new TopicsInfo(1, 1)))
                         .hasMessageContaining("exited with code 42");
-                HttpResponse<String> failed =
+                HttpResponse<String> crashed =
                         metrics.send(metricsRequest, HttpResponse.BodyHandlers.ofString());
-                assertThat(failed.statusCode()).isEqualTo(500);
-                assertThat(failed.body()).contains("exited with code 42");
+                assertThat(crashed.statusCode()).isEqualTo(200);
+                assertThat(crashed.body()).isEmpty();
             }
         } finally {
             app.stop();

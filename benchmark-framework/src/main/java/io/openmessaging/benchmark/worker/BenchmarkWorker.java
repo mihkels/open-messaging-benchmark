@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -169,6 +170,23 @@ public final class BenchmarkWorker {
         return null;
     }
 
+    /**
+     * The supervisor metrics followed by the driver metrics, if the driver can be scraped.
+     *
+     * @param supervisor the supervisor metrics
+     * @param driver scrapes the driver process
+     * @return the metrics; the supervisor metrics alone when the driver scrape fails
+     */
+    static String metrics(String supervisor, Supplier<String> driver) {
+        try {
+            return supervisor + driver.get();
+        } catch (RuntimeException e) {
+            // Scraped every few seconds; /health reports what went wrong with the driver
+            log.debug("Driver metrics unavailable", e);
+            return supervisor;
+        }
+    }
+
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
     static void main(String[] args)
@@ -246,6 +264,7 @@ public final class BenchmarkWorker {
         if (https != null) {
             log.info("Serving the worker API over HTTPS with {}", arguments.tlsCert);
         }
+        Supplier<String> allMetrics = () -> metrics(prometheusRegistry.scrape(), worker::scrapeMetrics);
         Javalin app =
                 Javalin.create(
                                 config -> {
@@ -255,8 +274,7 @@ public final class BenchmarkWorker {
                                         config.jetty.addConnector(https);
                                     }
                                     config.routes.get(
-                                            HttpWorkerClient.METRICS_PATH,
-                                            ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));
+                                            HttpWorkerClient.METRICS_PATH, ctx -> ctx.result(allMetrics.get()));
                                 })
                         .start(arguments.getBindAddress(), arguments.getHttpPort());
 

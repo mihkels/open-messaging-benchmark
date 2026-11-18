@@ -22,6 +22,7 @@ import io.nats.client.Dispatcher;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.JetStreamSubscription;
+import io.nats.client.impl.Headers;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
@@ -56,13 +57,17 @@ class NatsBenchmarkConsumerLifecycleTest {
                 };
         fixture.driver.createConsumer("topic", "subscription", callback).join();
 
-        byte[] body = ByteBuffer.allocate(Long.BYTES + 1).putLong(1234L).put((byte) 9).array();
+        byte[] body = {9};
+        Headers headers = new Headers().put(NatsBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER, "1234");
         io.nats.client.Message message =
                 proxy(
                         io.nats.client.Message.class,
                         (method, args) -> {
                             if (method.equals("getData")) {
                                 return body;
+                            }
+                            if (method.equals("getHeaders")) {
+                                return headers;
                             }
                             if (method.equals("ack")) {
                                 acknowledgements.incrementAndGet();
@@ -119,6 +124,15 @@ class NatsBenchmarkConsumerLifecycleTest {
 
         assertEquals(NullPointerException.class, failure.getCause().getClass());
         assertEquals(1, fixture.dispatcherCloses.get());
+    }
+
+    @Test
+    void driverCloseClosesTheSharedConnectionAndToleratesAnUninitializedDriver() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.driver.close();
+        assertEquals(1, fixture.connectionCloses.get());
+
+        new NatsBenchmarkDriver().close();
     }
 
     private static final class Fixture {

@@ -26,6 +26,7 @@ import io.nats.client.PushSubscribeOptions;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.api.StreamInfo;
+import io.nats.client.impl.Headers;
 import io.nats.client.support.JsonUtils;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
@@ -141,8 +142,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                             topic,
                             dispatcher,
                             (Message msg) -> {
-                                long publishTimestamp = readLongFromBytes(msg.getData());
-                                consumerCallback.messageReceived(msg.getData(), publishTimestamp);
+                                consumerCallback.messageReceived(msg.getData(), publishTimestamp(msg));
                                 msg.ack();
                             },
                             false,
@@ -166,12 +166,18 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
 
     private static final Logger log = LoggerFactory.getLogger(NatsBenchmarkDriver.class);
 
-    private static long readLongFromBytes(final byte[] b) {
-        long result = 0;
-        for (int i = 0; i < 8; i++) {
-            result <<= 8;
-            result |= (b[i] & 0xFF);
+    // A message without a readable timestamp header is counted but gives no latency sample.
+    static long publishTimestamp(Message msg) {
+        Headers headers = msg.getHeaders();
+        String value =
+                headers == null ? null : headers.getFirst(NatsBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER);
+        if (value != null) {
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException _) {
+                // fall through to the placeholder
+            }
         }
-        return result;
+        return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
     }
 }

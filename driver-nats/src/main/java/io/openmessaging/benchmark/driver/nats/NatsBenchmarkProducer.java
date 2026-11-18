@@ -14,12 +14,18 @@
 package io.openmessaging.benchmark.driver.nats;
 
 import io.nats.client.JetStream;
+import io.nats.client.impl.Headers;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class NatsBenchmarkProducer implements BenchmarkProducer {
+    /**
+     * Header carrying the producer's send time in epoch milliseconds; the payload stays untouched.
+     */
+    static final String PUBLISH_TIMESTAMP_HEADER = "omb-ts";
+
     private final String topic;
 
     private final JetStream jetStream;
@@ -34,14 +40,9 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
         // Close may settle the send immediately after registration, so copy the caller's data first.
-        byte[] message = payload.length < Long.BYTES ? null : payload.clone();
+        byte[] message = payload.clone();
         CompletableFuture<Void> send = pending.register();
         if (send.isDone()) {
-            return send;
-        }
-        if (message == null) {
-            send.completeExceptionally(
-                    new IllegalArgumentException("NATS payload must be at least 8 bytes"));
             return send;
         }
 
@@ -49,9 +50,10 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
         // since a shared JetStream acknowledgement may never complete.
         PendingSendTracker tracker = pending;
         try {
-            writeLongToBytes(System.currentTimeMillis(), message);
+            Headers headers =
+                    new Headers().put(PUBLISH_TIMESTAMP_HEADER, Long.toString(System.currentTimeMillis()));
             jetStream
-                    .publishAsync(topic, message)
+                    .publishAsync(topic, headers, message)
                     .<Void>thenApply(_ -> null)
                     .whenComplete((_, failure) -> tracker.completeFromClient(send, failure));
         } catch (RuntimeException failure) {
@@ -68,12 +70,5 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
         // Rejects a close from a completion callback; every other close settles the sends again
         pending.beginClose();
         pending.failRemaining();
-    }
-
-    public static void writeLongToBytes(long l, byte[] dst) {
-        for (int i = 7; i >= 0; i--) {
-            dst[i] = (byte) (l & 0xFF);
-            l >>= 8;
-        }
     }
 }

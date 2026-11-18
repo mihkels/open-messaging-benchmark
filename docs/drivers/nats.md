@@ -21,15 +21,15 @@ subscription is a durable push consumer with a deliver group.
 This driver is not the NATS Streaming (STAN) driver. NATS Streaming is a separate, deprecated product with its own
 server and client; see [NATS Streaming](nats-streaming.md).
 
-|          Item          |                                                                                Value                                                                                |
-|------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `nats`                                                                                                                                                              |
-| Module                 | `driver-nats`                                                                                                                                                       |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`                                                                                                        |
-| Example config shipped | `driver-nats/nats.yaml` (`localhost:4222`, `replicationFactor: 3`, file storage by default)                                                                         |
-| Tested broker          | `nats:2.11-alpine` with `-js` (Compose stack `nats`, NATS 2.11 with JetStream)                                                                                      |
-| Regression cases       | `nats-contract` (file storage), `nats-memory-fanout` (memory storage, 2 subjects x 2 durable consumers)                                                             |
-| Known limitations      | Partitions and keys are ignored; the payload's first 8 bytes carry the publish timestamp (messages must be at least 8 bytes); streams and consumers are not deleted |
+|          Item          |                                                  Value                                                  |
+|------------------------|---------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `nats`                                                                                                  |
+| Module                 | `driver-nats`                                                                                           |
+| `driverClass`          | `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`                                            |
+| Example config shipped | `driver-nats/nats.yaml` (`localhost:4222`, `replicationFactor: 3`, file storage by default)             |
+| Tested broker          | `nats:2.11-alpine` with `-js` (Compose stack `nats`, NATS 2.11 with JetStream)                          |
+| Regression cases       | `nats-contract` (file storage), `nats-memory-fanout` (memory storage, 2 subjects x 2 durable consumers) |
+| Known limitations      | Partitions and keys are ignored; streams and consumers are not deleted                                  |
 
 ## Local Docker Compose
 
@@ -163,12 +163,12 @@ is its own durable consumer and receives every message, so multiple subscription
 **Acknowledgement.** Auto-ack is disabled. Each message is acknowledged with `ack()` after the benchmark callback.
 The ack policy, ack wait and maximum pending acknowledgements are consumer defaults.
 
-**End-to-end latency.** The producer copies the payload for each send and writes `System.currentTimeMillis()` into
-the first 8 bytes of the copy (big-endian), which the consumer reads back. The caller's payload is not modified;
-on the wire, the timestamp replaces its first 8 bytes and the remaining bytes are unchanged. Payloads shorter than
-8 bytes fail without being published. The per-send copy adds allocation and copying overhead, so compare throughput
-and allocation using equivalent workloads when evaluating performance. Latency is measured between the producer's
-and the consumer's clocks; synchronise worker clocks. See
+**End-to-end latency.** Each publish carries the producer's `System.currentTimeMillis()` in the `omb-ts` message
+header, which the consumer reads back; message headers need nats-server 2.2 or later. The payload goes out
+unchanged, so `verifyDelivery` works. A message without a readable `omb-ts` header is counted but gives no latency
+sample. The producer copies the payload for each send, which adds allocation and copying overhead, so compare
+throughput and allocation using equivalent workloads when evaluating performance. Latency is measured between the
+producer's and the consumer's clocks; synchronise worker clocks. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Durability.** `storageType: file` stores messages on disk, `memory` keeps them in server memory; both are
@@ -230,7 +230,6 @@ Common problems:
   the number of JetStream servers (the shipped `nats.yaml` uses 3).
 - Configuration error for `storageType`: use lower-case `file` or `memory`.
 - JetStream not enabled: the server was started without `-js` (or the account has no JetStream access).
-- `NATS payload must be at least 8 bytes` on send: increase the message size to at least 8 bytes.
 - Driver fails to initialize: `natsHostUrl` is unreachable; the connection attempt times out after 5 s.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in

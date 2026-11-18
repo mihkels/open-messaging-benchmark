@@ -86,6 +86,7 @@ public final class FunctionalSmoke {
                         "Expected " + workload.topics + " topics but the worker created " + topics.size());
             }
             ConsumerAssignment consumers = new ConsumerAssignment();
+            consumers.verifyDelivery = workload.verifyDelivery;
             List<String> producers = new ArrayList<>();
             for (String topic : topics) {
                 for (int i = 0; i < workload.subscriptionsPerTopic; i++) {
@@ -116,7 +117,8 @@ public final class FunctionalSmoke {
                             PayloadTemplates.of(payloads(workload), null),
                             workload.producerRate,
                             workload.keyDistributor,
-                            workload.keyDistribution));
+                            workload.keyDistribution,
+                            workload.verifyDelivery));
 
             long minimumSent = minimumMessages(workload);
             long minimumReceived = minimumSent * workload.subscriptionsPerTopic;
@@ -127,7 +129,9 @@ public final class FunctionalSmoke {
                     stats.messagesSent() - baseline.messagesSent(),
                     stats.messageSendErrors() - baseline.messageSendErrors(),
                     stats.messagesReceived() - baseline.messagesReceived(),
-                    latency);
+                    latency,
+                    stats.delivered() - baseline.delivered(),
+                    stats.duplicated() - baseline.duplicated());
         } finally {
             worker.stopAll();
         }

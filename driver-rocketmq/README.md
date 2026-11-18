@@ -73,10 +73,3 @@ the send returns or schedule close on another thread without waiting in the call
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
 [results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),
 [troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/).
-
-## Legacy deployment files
-
-[`deploy/`](deploy) contains Terraform (`provision-rocketmq-alicloud.tf`) and Ansible
-(`deploy.yaml`) files for an Alibaba Cloud cluster from the original project. They are unmaintained.
-Adapt them for Java 27 and the current distribution and plugin layout (`drivers/` bundles on every
-worker) before use.

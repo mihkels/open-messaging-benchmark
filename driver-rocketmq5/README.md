@@ -80,9 +80,3 @@ the send returns or schedule close on another thread without waiting in the call
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
 [results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),
 [troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/).
-
-## Legacy deployment files
-
-This module has no deployment files of its own. The unmaintained Alibaba Cloud files in
-[`driver-rocketmq/deploy`](../driver-rocketmq/deploy) do not set up a proxy; adapt them for Java 27,
-the current plugin layout and a RocketMQ 5 proxy before use.

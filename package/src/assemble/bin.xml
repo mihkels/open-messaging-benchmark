@@ -39,16 +39,8 @@
 			<directory>${basedir}/..</directory>
 
 			<includes>
-				<include>**/driver-*/deploy/**</include>
 				<include>**/driver-*/*.yaml</include>
 			</includes>
-
-			<excludes>
-				<exclude>**/.terraform/**</exclude>
-				<exclude>**/terraform.tfstate</exclude>
-				<exclude>**/terraform.tfstate.backup</exclude>
-				<exclude>**/*.retry</exclude>
-			</excludes>
 		</fileSet>
 	</fileSets>
 

@@ -483,12 +483,6 @@
                                 <exclude>**/*.pyc</exclude>
                                 <exclude>**/.pydevproject</exclude>
                                 <exclude>.github/**</exclude>
-                                <exclude>**/*/myid</exclude>
-                                <exclude>**/*.tfvars</exclude>
-                                <exclude>**/*.tf</exclude>
-                                <exclude>**/*.cfg</exclude>
-                                <exclude>**/*.service</exclude>
-                                <exclude>**/*.cookie</exclude>
                                 <exclude>**/*.data</exclude>
                                 <!-- Rewritten by release-please with only the version -->
                                 <exclude>version.txt</exclude>

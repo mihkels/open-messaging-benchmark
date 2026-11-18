@@ -203,12 +203,3 @@ Broker addresses in the driver configuration must be reachable from the worker p
 For meaningful numbers, schedule workers on dedicated nodes, away from the brokers, with CPU
 requests that match their limits. To try the chart with every driver on a laptop, see
 [Local Kubernetes](kubernetes-local.md).
-
-## Cloud deployment scripts
-
-Several driver modules contain a `deploy/` directory with Terraform and Ansible files for
-provisioning brokers and workers on AWS or Alibaba Cloud. They come from upstream and are not tested
-by this fork; their instance types, versions and paths may be out of date. They still reference
-older distribution names, Java versions and launcher settings: adapt them for Java 27, the current
-tarball name and the complete `drivers/` plugin bundles before using them. Treat them as examples,
-and check the driver page for their status.

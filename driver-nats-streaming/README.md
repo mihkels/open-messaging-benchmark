@@ -80,9 +80,3 @@ the send returns or schedule close on another thread without waiting in the call
 - [Runtime and plugins](https://mihkels.github.io/open-messaging-benchmark/reference/runtime-and-plugins/)
 - [Troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/)
 
-## Legacy deployment files
-
-[`deploy/`](deploy) contains Terraform and Ansible files for AWS (and Alibaba Cloud under `deploy/ali`) from the
-original project. They are unmaintained: they reference older distribution names, Java versions and launcher
-settings. Adapt them to Java 27, the current distribution and the plugin layout (complete `drivers/` bundles on
-every worker) before using them.

@@ -242,5 +242,4 @@ Source and configuration files:
 - Shipped config: [`driver-nats/nats.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nats/nats.yaml)
 - Regression configs: [`nats-file.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-file.yaml), [`nats-memory.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-memory.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nats.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nats.yaml)
-- Legacy Terraform/Ansible files: [`driver-nats/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats/deploy). They are unmaintained, reference older distribution names, Java versions and launcher settings, and must be adapted before use.
 

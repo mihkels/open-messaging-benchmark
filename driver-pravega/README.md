@@ -86,11 +86,7 @@ More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/work
 These files come from the original project. They are unmaintained and need adapting for Java 27 and
 the current distribution and plugin layout (`drivers/` bundles on every worker) before use:
 
-- [`deploy/`](deploy): Terraform (`provision-pravega-aws.tf`, `terraform.tfvars`) and Ansible
-  (`deploy.yaml`, `vars.yaml`, `collect_logs_and_metrics.yaml`) for an AWS cluster with metrics
-  collection.
-- [`doc/`](doc): notes on building Pravega from source, metrics and logs, running in Kubernetes, and
-  troubleshooting.
+- [`doc/run_in_k8s.md`](doc/run_in_k8s.md): notes on running Pravega in Kubernetes.
 - [`build-docker.sh`](build-docker.sh), [`deploy-k8s-components.sh`](deploy-k8s-components.sh),
   [`driver-bash.sh`](driver-bash.sh), [`uninstall.sh`](uninstall.sh): Kubernetes helper scripts.
   `build-docker.sh` expects the old `openmessaging-benchmark-0.0.1-SNAPSHOT` tarball.

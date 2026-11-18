@@ -93,5 +93,5 @@ systems on separate clusters, or rotate the driver order between repeats.
 The [workload generation tool](../guides/workload-generation.md) produces families of workload
 files from one template, and a script that runs `bin/benchmark` for a list of drivers and stores the
 result files with their inputs is enough for most studies. The
-[Helm chart](../guides/containers-and-kubernetes.md) and the per-driver `deploy/` directories help
-recreate the environment.
+[Docker images and Helm chart](../guides/containers-and-kubernetes.md) help recreate the
+environment.

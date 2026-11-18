@@ -244,5 +244,4 @@ Source and configuration files:
 - Shipped config: [`driver-nsq/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nsq/nsq.yaml)
 - Regression config: [`e2e-tests/compose/drivers/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nsq.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nsq.yaml)
-- Legacy Terraform/Ansible files: [`driver-nsq/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nsq/deploy). They are unmaintained, reference older distribution names, Java versions and launcher settings, and must be adapted before use.
 

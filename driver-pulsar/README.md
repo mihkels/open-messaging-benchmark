@@ -80,14 +80,3 @@ check, not a performance result.
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
 [results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),
 [troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/).
-
-## Legacy deployment files
-
-[`deploy/ssd`](deploy/ssd) contains Terraform and Ansible files for AWS (and
-[`deploy/ssd/alicloud`](deploy/ssd/alicloud) for Alibaba Cloud) from the original project. They are
-unmaintained: they refer to older distribution names, Java versions and launcher settings. Adapt
-them for Java 27 and the current distribution and plugin layout (`drivers/` bundles on every worker)
-before use. The playbooks read Ansible variables from
-[`deploy/ssd/extra_vars.yaml`](deploy/ssd/extra_vars.yaml), for example `disk_dev` for the bookie
-disk devices and `protocol_handlers` for downloading protocol handlers such as KoP;
-`restart-brokers.yaml` restarts the brokers after a configuration change.

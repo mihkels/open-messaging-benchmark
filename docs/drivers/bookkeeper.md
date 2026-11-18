@@ -279,7 +279,6 @@ Source and configuration files:
 - Shipped config: [`bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-bookkeeper/bookkeeper.yaml)
 - Compose driver config: [`drivers/bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/bookkeeper.yaml)
 - Compose stack: [`stacks/bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/bookkeeper.yaml)
-- Legacy Terraform/Ansible files, unmaintained: [`driver-bookkeeper/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-bookkeeper/deploy)
 
 To write workloads and connect to your own cluster, see [Workloads](../guides/workloads.md) and
 [Using your broker](../getting-started/using-your-broker.md).

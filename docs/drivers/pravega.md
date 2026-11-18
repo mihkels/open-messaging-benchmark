@@ -260,7 +260,7 @@ Source and configuration files:
 - Shipped configs: [`pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pravega/pravega.yaml), [`pravega-exactly-once.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pravega/pravega-exactly-once.yaml)
 - Compose driver configs: [`drivers/pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pravega.yaml), [`drivers/pravega-transactions.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pravega-transactions.yaml)
 - Compose stack: [`stacks/pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/pravega.yaml)
-- Legacy AWS, Kubernetes and build files, unmaintained: [`driver-pravega`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pravega) (`deploy/`, `doc/`, shell scripts)
+- Legacy Kubernetes and build files, unmaintained: [`driver-pravega`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pravega) (`doc/run_in_k8s.md`, Kubernetes helper scripts)
 
 To write workloads and connect to your own cluster, see [Workloads](../guides/workloads.md) and
 [Using your broker](../getting-started/using-your-broker.md).

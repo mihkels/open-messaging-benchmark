@@ -26,9 +26,12 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Constructor;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
@@ -47,6 +50,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     private Connection connection;
     private JMSConfig config;
     private BenchmarkDriver delegateForAdminOperations;
+    private final Set<List<String>> subscriptions = ConcurrentHashMap.newKeySet();
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
@@ -184,6 +188,18 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        if (!config.use20api && !subscriptions.add(List.of(topic, subscriptionName))) {
+            // Each 1.1 consumer is its own subscriber, so a second one would receive every message again.
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException(
+                            "JMS driver with use20api: false creates a non-shared subscriber per consumer:"
+                                    + " subscription "
+                                    + subscriptionName
+                                    + " on topic "
+                                    + topic
+                                    + " already has a consumer (set consumerPerSubscription: 1 or"
+                                    + " use20api: true)"));
+        }
         Connection consumerConnection = null;
         Session session = null;
         MessageConsumer durableConsumer = null;

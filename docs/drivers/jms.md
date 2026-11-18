@@ -19,16 +19,16 @@ plugin contains only the JMS API; you add the provider's client jar (the "JMS pr
 `ext/` directory. Topic creation can be delegated to another benchmark driver, such as the Kafka or
 Pulsar driver, for providers that cannot create topics through JMS.
 
-|       Item        |                                                                              Value                                                                               |
-|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin ID         | `jms`                                                                                                                                                            |
-| Module            | `driver-jms`                                                                                                                                                     |
-| `driverClass`     | `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`                                                                                                       |
-| Example configs   | `driver-jms/artemis-jms.yaml`, `artemis-jms-transactions.yaml`, `pulsar-jms.yaml`, `pulsar-jms-selectors.yaml`, `pulsar-jms-transactions.yaml`, `kafka-jms.yaml` |
-| Client library    | `jakarta.jms-api` 2.0.3 (package `javax.jms`) plus a provider jar you supply                                                                                     |
-| Tested providers  | `artemis-jms-client-all` 2.57.0 with Artemis 2.57.0; `pulsar-jms-all` 6.0.11 with Pulsar 4.0.6; Confluent `kafka-jms-client` (user-built) with Kafka 4.4.0       |
-| Regression cases  | `jms-artemis-contract`, `jms-artemis-transactions`, `jms-pulsar-contract`, `jms-pulsar-selectors`, `jms-pulsar-transactions`, `jms-kafka-contract`               |
-| Known limitations | Needs a `javax.jms` provider (not `jakarta.jms`); one message per transaction; JMS 1.1 mode ignores subscription names; topics are not deleted                   |
+|       Item        |                                                                                          Value                                                                                          |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID         | `jms`                                                                                                                                                                                   |
+| Module            | `driver-jms`                                                                                                                                                                            |
+| `driverClass`     | `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`                                                                                                                              |
+| Example configs   | `driver-jms/artemis-jms.yaml`, `artemis-jms-transactions.yaml`, `pulsar-jms.yaml`, `pulsar-jms-selectors.yaml`, `pulsar-jms-transactions.yaml`, `kafka-jms.yaml`                        |
+| Client library    | `jakarta.jms-api` 2.0.3 (package `javax.jms`) plus a provider jar you supply                                                                                                            |
+| Tested providers  | `artemis-jms-client-all` 2.57.0 with Artemis 2.57.0; `pulsar-jms-all` 6.0.11 with Pulsar 4.0.6; Confluent `kafka-jms-client` (user-built) with Kafka 4.4.0                              |
+| Regression cases  | `jms-artemis-contract`, `jms-artemis-transactions`, `jms-pulsar-contract`, `jms-pulsar-selectors`, `jms-pulsar-transactions`, `jms-kafka-contract`                                      |
+| Known limitations | Needs a `javax.jms` provider (not `jakarta.jms`); one message per transaction; JMS 1.1 mode ignores subscription names and allows one consumer per subscription; topics are not deleted |
 
 For Apache ActiveMQ Artemis there is also a native driver that uses the Artemis core client instead of
 JMS; see [Apache ActiveMQ Artemis](artemis.md#artemis-native-or-artemis-via-jms).
@@ -309,10 +309,13 @@ Closing from its provider completion callback is rejected; retry after the callb
 in 1.1 mode), calls the benchmark callback and then `acknowledge()`. In an `AUTO_ACKNOWLEDGE` session the
 provider acknowledges when the listener returns. Delivery is at-least-once.
 
-With `use20api: false`, all consumers on a topic are independent non-durable consumers. Whether two
-consumers of one benchmark subscription share or both receive the messages depends on the provider: for
-Artemis, every consumer receives every message; for the Confluent client, consumers sharing `group.id`
-share partitions, and all benchmark subscriptions use the same `group.id`.
+With `use20api: false`, every consumer is its own non-shared, non-durable subscriber (on Artemis, each
+one receives every message), so a benchmark subscription can have only one consumer: the driver rejects a
+second consumer on the same topic and subscription with an error asking for `consumerPerSubscription: 1`
+or `use20api: true`. The check runs per worker, so consumers of one subscription that the coordinator
+splits across distributed workers are not caught. Several subscriptions on a topic are still allowed;
+with the Confluent client they all share the `group.id` partitions instead of each receiving every
+message.
 
 **End-to-end latency.** The producer sets the long property `E2EStartMillis` to its wall clock just
 before sending; the consumer reports latency as its wall clock minus that value. Cross-host latency

@@ -89,15 +89,16 @@ class DistributedWorkersEnsembleTest {
                 }
                 if (i < producerCount) {
                     int slot = producerCount - 1 - i;
-                    verify(worker).createProducers(roundRobin(topics, slot, producerCount));
+                    List<String> assigned = roundRobin(topics, slot, producerCount);
+                    verify(worker).createProducers(assigned);
                     verify(worker).probeProducers();
                     ArgumentCaptor<ProducerWorkAssignment> captured =
                             ArgumentCaptor.forClass(ProducerWorkAssignment.class);
                     verify(worker).startLoad(captured.capture());
                     assertThat(captured.getValue())
                             .usingRecursiveComparison()
-                            .isEqualTo(load.withPublishRate(120.0 / producerCount));
-                    verify(worker).adjustPublishRate(60.0 / producerCount);
+                            .isEqualTo(load.withPublishRate(120.0 * assigned.size() / topics.size()));
+                    verify(worker).adjustPublishRate(60.0 * assigned.size() / topics.size());
                     verify(worker, never()).createConsumers(any());
                     verify(worker, never()).pauseConsumers();
                     verify(worker, never()).resumeConsumers();
@@ -121,7 +122,34 @@ class DistributedWorkersEnsembleTest {
     }
 
     @Test
-    void dividesRateByUsedProducerWorkersAndRecalculatesForTheNextWorkload() throws Exception {
+    void givesEveryProducerTheSameRateWhenWorkersHoldUnevenProducerCounts() throws Exception {
+        // Workers 1 and 0 produce; round-robin gives worker 1 two producers and worker 0 one.
+        List<Worker> workers = workers(4);
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            ensemble.createProducers(List.of("a", "b", "c"));
+            verify(workers.get(1)).createProducers(List.of("a", "c"));
+            verify(workers.get(0)).createProducers(List.of("b"));
+            ProducerWorkAssignment load =
+                    new ProducerWorkAssignment(List.of(new byte[] {1}), 90, KeyDistributorType.NO_KEY);
+            ensemble.startLoad(load);
+            ensemble.adjustPublishRate(30);
+
+            ArgumentCaptor<ProducerWorkAssignment> twoProducers =
+                    ArgumentCaptor.forClass(ProducerWorkAssignment.class);
+            verify(workers.get(1)).startLoad(twoProducers.capture());
+            ArgumentCaptor<ProducerWorkAssignment> oneProducer =
+                    ArgumentCaptor.forClass(ProducerWorkAssignment.class);
+            verify(workers.get(0)).startLoad(oneProducer.capture());
+            assertThat(twoProducers.getValue().publishRate() / 2)
+                    .isEqualTo(oneProducer.getValue().publishRate())
+                    .isEqualTo(30);
+            verify(workers.get(1)).adjustPublishRate(20);
+            verify(workers.get(0)).adjustPublishRate(10);
+        }
+    }
+
+    @Test
+    void skipsWorkersWithoutProducersAndRecalculatesForTheNextWorkload() throws Exception {
         List<Worker> workers = workers(6);
         try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
             ensemble.createProducers(List.of("only-topic"));
@@ -131,16 +159,38 @@ class DistributedWorkersEnsembleTest {
             ensemble.startLoad(
                     new ProducerWorkAssignment(List.of(new byte[] {1}), 90, KeyDistributorType.NO_KEY));
             ensemble.adjustPublishRate(60);
+            ArgumentCaptor<ProducerWorkAssignment> load =
+                    ArgumentCaptor.forClass(ProducerWorkAssignment.class);
+            verify(workers.get(2)).startLoad(load.capture());
+            assertThat(load.getValue().publishRate()).isEqualTo(90);
+            verify(workers.get(2)).adjustPublishRate(60);
+            for (Worker idle : workers.subList(0, 2)) {
+                verify(idle, never()).startLoad(any());
+                verify(idle, never()).adjustPublishRate(anyDouble());
+            }
+
             ensemble.createProducers(List.of("a", "b", "c"));
             ensemble.adjustPublishRate(120);
             for (Worker worker : workers.subList(0, 3)) {
-                ArgumentCaptor<ProducerWorkAssignment> load =
-                        ArgumentCaptor.forClass(ProducerWorkAssignment.class);
-                verify(worker).startLoad(load.capture());
-                assertThat(load.getValue().publishRate()).isEqualTo(90);
-                verify(worker).adjustPublishRate(60);
                 verify(worker).adjustPublishRate(40);
             }
+        }
+    }
+
+    @Test
+    void rejectsLoadBeforeProducersAreCreated() throws Exception {
+        List<Worker> workers = workers(2);
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            ProducerWorkAssignment load =
+                    new ProducerWorkAssignment(List.of(new byte[] {1}), 90, KeyDistributorType.NO_KEY);
+            assertThatThrownBy(() -> ensemble.startLoad(load))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("createProducers");
+            assertThatThrownBy(() -> ensemble.adjustPublishRate(10))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("createProducers");
+            verify(workers.getFirst(), never()).startLoad(any());
+            verify(workers.getFirst(), never()).adjustPublishRate(anyDouble());
         }
     }
 

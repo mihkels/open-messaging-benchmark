@@ -143,16 +143,13 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             log.info("Created Pulsar admin client");
 
             producerBuilder =
-                    client
-                            .newProducer()
-                            .enableBatching(config.producer.batchingEnabled)
-                            .batchingMaxPublishDelay(
-                                    config.producer.batchingMaxPublishDelayMs, TimeUnit.MILLISECONDS)
-                            .batchingMaxMessages(Integer.MAX_VALUE)
-                            .batchingMaxBytes(config.producer.batchingMaxBytes)
-                            .blockIfQueueFull(config.producer.blockIfQueueFull)
-                            .sendTimeout(0, TimeUnit.MILLISECONDS)
-                            .maxPendingMessages(config.producer.pendingQueueSize);
+                    configureProducer(
+                            client.newProducer(),
+                            config.producer.batchingEnabled,
+                            config.producer.batchingMaxPublishDelayMs,
+                            config.producer.batchingMaxBytes,
+                            config.producer.blockIfQueueFull,
+                            config.producer.pendingQueueSize);
 
             createNamespace();
         } catch (IOException | RuntimeException failure) {
@@ -161,6 +158,25 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             closeClients(failures);
             throw failure;
         }
+    }
+
+    // Batches are bounded by delay and bytes only, and sends never time out, so slow brokers show up
+    // as latency rather than send failures. Shared with the KoP driver so both measure the same way.
+    public static ProducerBuilder<byte[]> configureProducer(
+            ProducerBuilder<byte[]> builder,
+            boolean batchingEnabled,
+            int batchingMaxPublishDelayMs,
+            int batchingMaxBytes,
+            boolean blockIfQueueFull,
+            int pendingQueueSize) {
+        return builder
+                .enableBatching(batchingEnabled)
+                .batchingMaxPublishDelay(batchingMaxPublishDelayMs, TimeUnit.MILLISECONDS)
+                .batchingMaxMessages(Integer.MAX_VALUE)
+                .batchingMaxBytes(batchingMaxBytes)
+                .blockIfQueueFull(blockIfQueueFull)
+                .sendTimeout(0, TimeUnit.MILLISECONDS)
+                .maxPendingMessages(pendingQueueSize);
     }
 
     // The persistence configuration is logged once per run, so eager formatting costs nothing

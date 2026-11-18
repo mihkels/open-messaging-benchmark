@@ -37,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminBuilder;
 import org.apache.pulsar.client.admin.PulsarAdminException;
@@ -430,6 +431,23 @@ class PulsarBenchmarkDriverTest {
         assertThatThrownBy(() -> initialize(temp, missing, false))
                 .isInstanceOf(java.io.IOException.class)
                 .hasCause(failure);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void configureProducerDisablesSendTimeoutAndMessageCountBatchLimit() {
+        ProducerBuilder<byte[]> builder = mock(ProducerBuilder.class, RETURNS_SELF);
+
+        assertThat(PulsarBenchmarkDriver.configureProducer(builder, false, 7, 4096, false, 123))
+                .isSameAs(builder);
+
+        verify(builder).enableBatching(false);
+        verify(builder).batchingMaxPublishDelay(7, TimeUnit.MILLISECONDS);
+        verify(builder).batchingMaxMessages(Integer.MAX_VALUE);
+        verify(builder).batchingMaxBytes(4096);
+        verify(builder).blockIfQueueFull(false);
+        verify(builder).sendTimeout(0, TimeUnit.MILLISECONDS);
+        verify(builder).maxPendingMessages(123);
     }
 
     @Test

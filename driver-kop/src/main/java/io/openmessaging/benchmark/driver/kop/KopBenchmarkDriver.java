@@ -27,6 +27,7 @@ import io.openmessaging.benchmark.driver.kop.config.ClientType;
 import io.openmessaging.benchmark.driver.kop.config.Config;
 import io.openmessaging.benchmark.driver.kop.config.PulsarConfig;
 import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkConsumer;
+import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver;
 import io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkProducer;
 import io.streamnative.pulsar.handlers.kop.KafkaPayloadProcessor;
 import java.io.IOException;
@@ -36,7 +37,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -94,14 +94,13 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         final PulsarConfig pulsarConfig = config.pulsarConfig();
         if (config.producerType().equals(ClientType.PULSAR)) {
             producerBuilder =
-                    getPulsarClient(pulsarConfig.serviceUrl())
-                            .newProducer()
-                            .enableBatching(pulsarConfig.batchingEnabled())
-                            .blockIfQueueFull(pulsarConfig.blockIfQueueFull())
-                            .batchingMaxPublishDelay(
-                                    pulsarConfig.batchingMaxPublishDelayMs(), TimeUnit.MILLISECONDS)
-                            .batchingMaxBytes(pulsarConfig.batchingMaxBytes())
-                            .maxPendingMessages(pulsarConfig.pendingQueueSize())
+                    PulsarBenchmarkDriver.configureProducer(
+                                    getPulsarClient(pulsarConfig.serviceUrl()).newProducer(),
+                                    pulsarConfig.batchingEnabled(),
+                                    pulsarConfig.batchingMaxPublishDelayMs(),
+                                    pulsarConfig.batchingMaxBytes(),
+                                    pulsarConfig.blockIfQueueFull(),
+                                    pulsarConfig.pendingQueueSize())
                             .maxPendingMessagesAcrossPartitions(
                                     pulsarConfig.maxPendingMessagesAcrossPartitions());
         }

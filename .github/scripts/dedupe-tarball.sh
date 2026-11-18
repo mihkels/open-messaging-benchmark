@@ -53,7 +53,10 @@ tar -C "$work" --sort=name --owner=root:0 --group=root:0 -cf - "$top" | gzip -n 
 
 # The rewritten archive must hold exactly the same files; it may add directory entries the
 # assembly plugin leaves out
-files() { tar -tzf "$1" | grep -v '/$' | sort; }
+files() {
+    local archive=$1
+    tar -tzf "$archive" | grep -v '/$' | sort
+}
 if ! diff <(files "$tarball") <(files "$work/out.tar.gz") > /dev/null; then
     echo "Deduplicated tarball lists different files than $tarball" >&2
     exit 1

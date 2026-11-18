@@ -331,7 +331,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         long lastControlTimestamp = System.nanoTime();
         long probeStart = lastControlTimestamp;
 
-        RateController rateController = new RateController();
+        RateController rateController = new RateController(workload.subscriptionsPerTopic);
 
         while (!runCompleted) {
             // Check every few seconds and adjust the rate

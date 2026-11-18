@@ -120,7 +120,7 @@ It has one entry per probe step, every few seconds, warm-up included.
 | `seconds`                  | number          | Seconds since the probe started                                                                     |
 | `rate`                     | number          | Publish rate in msg/s before the step                                                               |
 | `nextRate`                 | number          | Publish rate in msg/s the step chose                                                                |
-| `receiveBacklog`           | integer         | Messages published but not yet received                                                             |
+| `receiveBacklog`           | integer         | Messages published but not yet received, one per subscription; 0 without subscriptions              |
 | `publishBacklog`           | integer         | Messages the producers fell short of `rate` by in the step                                          |
 | `publishDelayLatency99pct` | integer, absent | p99 publish delay in µs of the latest period; absent before the first period                        |
 | `decision`                 | string          | `rampUp`, or the backlog over its limit that made it back off: `receiveBacklog` or `publishBacklog` |

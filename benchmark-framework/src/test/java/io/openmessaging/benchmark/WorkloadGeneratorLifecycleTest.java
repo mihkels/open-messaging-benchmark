@@ -597,7 +597,9 @@ class WorkloadGeneratorLifecycleTest {
     void sustainableRateControllerRampsUpThenBacksOffWhenBacklogGrows() throws Exception {
         Worker worker = worker();
         when(worker.getCountersStats())
-                .thenReturn(new CountersStats(), new CountersStats(), new CountersStats(2_000, 0, 0));
+                // The readiness probe is received, then nothing more
+                .thenReturn(
+                        new CountersStats(0, 0, 1), new CountersStats(0, 0, 1), new CountersStats(2_000, 0, 1));
         List<Double> adjustedRates = Collections.synchronizedList(new ArrayList<>());
         CountDownLatch adjustments = new CountDownLatch(2);
         doAnswer(
@@ -611,6 +613,7 @@ class WorkloadGeneratorLifecycleTest {
 
         Workload workload = workload();
         workload.producerRate = 0;
+        workload.subscriptionsPerTopic = 1;
         AtomicReference<Throwable> runFailure = new AtomicReference<>();
         WorkloadGenerator generator = generator(workload, worker, Duration.ofSeconds(2));
         Thread runner =
@@ -627,7 +630,8 @@ class WorkloadGeneratorLifecycleTest {
             generator.close();
             runner.join(2000);
             assertThat(runner.isAlive()).isFalse();
-            assertThat(adjustedRates).contains(20_000.0, 0.0);
+            // Nothing received: backs off to the 1 msg/s floor, not 0
+            assertThat(adjustedRates).contains(20_000.0, 1.0);
             assertThat(runFailure.get()).isInstanceOf(InterruptedException.class);
         } finally {
             generator.close();
@@ -648,7 +652,7 @@ class WorkloadGeneratorLifecycleTest {
         TestResult result = new TestResult();
         long second = TimeUnit.SECONDS.toNanos(1);
         try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
-            RateController controller = new RateController();
+            RateController controller = new RateController(1);
             double rate =
                     generator.probeStep(controller, 10_000, second, 3, new CountersStats(10_000, 0, 10_000));
             generator.collect(result, 1, TimeUnit.NANOSECONDS, true);

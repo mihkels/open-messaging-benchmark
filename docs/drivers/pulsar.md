@@ -329,7 +329,6 @@ Source and configuration files:
 - Shipped configs: [`pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pulsar/pulsar.yaml), [`pulsar-effectively-once.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pulsar/pulsar-effectively-once.yaml)
 - Compose driver configs: [`pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar.yaml), [`pulsar-shared-nobatch.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar-shared-nobatch.yaml), [`pulsar-key-shared-dedup.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar-key-shared-dedup.yaml)
 - Compose stack: [`stacks/pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/pulsar.yaml)
-- Legacy Terraform/Ansible files, unmaintained: [`driver-pulsar/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pulsar/deploy)
 
 To write workloads and connect to your own cluster, see [Workloads](../guides/workloads.md) and
 [Using your broker](../getting-started/using-your-broker.md).

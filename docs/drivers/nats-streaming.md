@@ -225,5 +225,4 @@ Source and configuration files:
 - Shipped config: [`driver-nats-streaming/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nats-streaming/nats-streaming.yaml)
 - Regression config: [`e2e-tests/compose/drivers/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-streaming.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nats-streaming.yaml)
-- Legacy Terraform/Ansible files: [`driver-nats-streaming/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats-streaming/deploy). They are unmaintained, reference older distribution names, Java versions and launcher settings, and must be adapted before use.
 

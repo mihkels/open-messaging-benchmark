@@ -14,13 +14,9 @@ core/*.json
 !/release-please-config.json
 !/.release-please-manifest.json
 !/deployment/kubernetes/helm/**/values.schema.json
-*.retry
 *.pem
 *.hcl
 !/docker-bake.hcl
-**/.terraform
-**/terraform.tfstate
-**/terraform.tfstate.backup
 **/*.lock.info
 .DS_Store
 .factorypath

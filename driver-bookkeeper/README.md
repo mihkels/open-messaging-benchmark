@@ -80,10 +80,3 @@ check, not a performance result.
 More: [workloads](https://mihkels.github.io/open-messaging-benchmark/guides/workloads/),
 [results](https://mihkels.github.io/open-messaging-benchmark/guides/results/),
 [troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/).
-
-## Legacy deployment files
-
-[`deploy/`](deploy) contains Terraform (`provision-pulsar-aws.tf`) and Ansible (`deploy.yaml`) files
-with service templates from the original project. They are unmaintained: they download old release
-tarballs and the `openmessaging-benchmark-0.0.1-SNAPSHOT` distribution. Adapt them for Java 27 and
-the current distribution and plugin layout (`drivers/` bundles on every worker) before use.

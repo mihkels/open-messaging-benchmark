@@ -263,5 +263,4 @@ Source and configuration files:
 - Shipped config: [`driver-rabbitmq/rabbitmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-rabbitmq/rabbitmq.yaml)
 - Regression configs: [`rabbitmq-quorum.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-quorum.yaml), [`rabbitmq-classic.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-classic.yaml), [`rabbitmq-stream.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-stream.yaml)
 - Stack file: [`e2e-tests/compose/stacks/rabbitmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rabbitmq.yaml)
-- Legacy Terraform/Ansible files: [`driver-rabbitmq/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rabbitmq/deploy). They are unmaintained, reference older distribution names, Java versions and launcher settings, and must be adapted before use.
 

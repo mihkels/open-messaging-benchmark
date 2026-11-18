@@ -302,7 +302,6 @@ drivers/<module>/       one plugin bundle per driver module (plugin.yaml, driver
 workloads/              workload files
 payload/                payload files
 driver-*/*.yaml         driver configuration files
-driver-*/deploy/        deployment material shipped with the drivers
 README.md, LICENSE
 ```
 

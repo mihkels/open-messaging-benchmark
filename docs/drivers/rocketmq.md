@@ -237,7 +237,6 @@ Source and configuration files:
 - Shipped config: [`rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-rocketmq/rocketmq.yaml)
 - Compose driver config: [`drivers/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rocketmq.yaml)
 - Compose stack: [`stacks/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rocketmq.yaml)
-- Legacy Alibaba Cloud Terraform/Ansible files, unmaintained: [`driver-rocketmq/deploy`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rocketmq/deploy)
 
 To write workloads and connect to your own cluster, see [Workloads](../guides/workloads.md) and
 [Using your broker](../getting-started/using-your-broker.md).

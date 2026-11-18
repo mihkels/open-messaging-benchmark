@@ -14,8 +14,6 @@ e2e-tests/target
 local-test
 deployment
 docs
-**/.terraform
-**/terraform.tfstate*
 **/.env
 **/.env.*
 **/*.pem

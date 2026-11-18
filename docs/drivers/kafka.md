@@ -344,7 +344,4 @@ Source and configuration files:
   [`kafka-lz4.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/kafka-lz4.yaml),
   [`kafka-idempotent.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/kafka-idempotent.yaml)
 - Compose stack: [`e2e-tests/compose/stacks/kafka.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/kafka.yaml)
-- Legacy Terraform and Ansible files: [`driver-kafka/deploy/`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kafka/deploy).
-  They reference an older distribution, Java version and launcher settings and are not maintained for
-  this fork. Adapt them to Java 27 and the current distribution and plugin layout before use.
 

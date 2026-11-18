@@ -101,8 +101,3 @@ check, not a performance result.
   [Troubleshooting](https://mihkels.github.io/open-messaging-benchmark/guides/troubleshooting/)
 - [Runtime and plugins](https://mihkels.github.io/open-messaging-benchmark/reference/runtime-and-plugins/)
 
-## Legacy deployment files
-
-[`deploy/`](deploy/README.md) contains Terraform and Ansible files for AWS and Alibaba Cloud from the
-original project. They are unmaintained: they reference an older distribution, Java version and launcher
-settings, and must be adapted to Java 27 and the current distribution and plugin layout before use.

@@ -45,10 +45,6 @@
 							<exclude>**/.project</exclude>
 							<exclude>**/.settings</exclude>
 							<exclude>**/target/**</exclude>
-							<exclude>**/.terraform/**</exclude>
-							<exclude>**/terraform.tfstate</exclude>
-							<exclude>**/terraform.tfstate.backup</exclude>
-							<exclude>**/*.retry</exclude>
 							<exclude>**/.settings/**</exclude>
 						</excludes>
 					</fileSet>

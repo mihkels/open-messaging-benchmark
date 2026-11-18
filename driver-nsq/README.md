@@ -73,7 +73,7 @@ continues once per minute.
 - Closing a consumer from its own callback is rejected to avoid deadlock; retry on another thread. Consumer close
   waits up to 15 seconds for callbacks to finish and send `FIN`, and at most 30 seconds overall. Close failures and
   timeouts are reported; cleanup can continue after a timeout.
-- End-to-end latency uses the timestamp `nsqd` assigns on receipt (nsqd clock).
+- End-to-end latency uses the producer's send time, carried in an 8-byte prefix that the consumer strips.
 - Topics and channels are not deleted after a run.
 
 ## Further reading

@@ -63,7 +63,7 @@ e2e-tests/compose/run-e2e.sh --stacks redis
 - Keys are stored in a `key` field but not used for routing or ordering.
 - Single endpoint only: no Redis Cluster, Sentinel or TLS.
 - Sends are synchronous: each producer has one `XADD` in flight at a time.
-- End-to-end latency uses the stream entry ID, which Redis takes from the server clock.
+- End-to-end latency uses the producer's send time from the entry's `ts` field, not the stream entry ID.
 - `jedisPoolMaxTotal` bounds the producer/admin pool; consumers use a separate unbounded pool.
 - Appends apply approximate `MAXLEN ~ redisStreamMaxLen` trimming (default 1,000,000 entries).
   Size it above the largest expected backlog per stream: unread entries can be trimmed.

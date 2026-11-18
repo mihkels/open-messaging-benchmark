@@ -797,13 +797,6 @@ public final class WorkloadGenerator implements WorkloadRun {
         measuredStart = worker.getCountersStats();
     }
 
-    TestResult printAndCollectStats(long testDurations, TimeUnit unit)
-            throws IOException, InterruptedException {
-        TestResult result = newResult();
-        collect(result, testDurations, unit, true);
-        return result;
-    }
-
     private @Nullable String payloadSource() {
         if (workload.payloadGenerator != null) {
             return "payload generator";
@@ -811,7 +804,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         return workload.usesMessageSizeDistribution() ? "size distribution" : workload.payloadFile;
     }
 
-    private TestResult newResult() {
+    TestResult newResult() {
         TestResult result = new TestResult();
         result.workload = workload.name;
         result.driver = driverName;

@@ -340,7 +340,8 @@ class TestResultJsonTest {
                         Duration.ofMillis(5),
                         Duration.ofMillis(5),
                         Duration.ofSeconds(2))) {
-            TestResult result = generator.printAndCollectStats(1, TimeUnit.NANOSECONDS);
+            TestResult result = generator.newResult();
+            generator.collect(result, 1, TimeUnit.NANOSECONDS, true);
             result.metadata =
                     new ResultMetadata(
                             "018f0000-0000-7000-8000-000000000001",

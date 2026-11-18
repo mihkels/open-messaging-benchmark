@@ -158,10 +158,6 @@ public class ProcessWorker implements Worker {
             starting.start(classpath.entries(), metricTags, () -> closed);
             HttpWorkerClient client =
                     Objects.requireNonNull(starting.client(), "driver client after start");
-            String id = runId;
-            if (id != null) {
-                client.setRunId(id);
-            }
             RunPhase currentPhase = phase;
             if (currentPhase != null) {
                 client.setPhase(currentPhase);
@@ -218,13 +214,9 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
-    public synchronized void setRunId(String runId) {
+    public void setRunId(String runId) {
+        // Reaches the meters of the next driver process as a launch tag; a running one keeps its own
         this.runId = runId;
-        DriverProcess running = current;
-        HttpWorkerClient client = running == null ? null : running.client();
-        if (client != null) {
-            client.setRunId(runId);
-        }
     }
 
     @Override

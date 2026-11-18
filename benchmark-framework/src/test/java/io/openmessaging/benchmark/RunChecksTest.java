@@ -103,6 +103,23 @@ class RunChecksTest {
     }
 
     @Test
+    void measuresBacklogGrowthPerSubscription() {
+        TestResult result = healthy();
+        for (int i = 0; i < result.backlog.size(); i++) {
+            result.backlog.set(i, i * 1_200L); // 12k copies over the measured window
+        }
+        Workload threeSubscriptions = workload();
+        threeSubscriptions.subscriptionsPerTopic = 3;
+
+        // 12k copies across 3 subscriptions at 1000 msg/s is 4 s of lag, under the 10 s limit
+        assertThat(new RunChecks().evaluate(threeSubscriptions, result)).isEmpty();
+
+        Finding finding = only(new RunChecks().evaluate(workload(), result));
+        assertThat(finding.check()).isEqualTo("backlogGrowth");
+        assertThat(finding.value()).isEqualTo(12.0);
+    }
+
+    @Test
     void skipsBacklogGrowthForPauseAndBacklogWorkloads() {
         TestResult result = healthy();
         for (int i = 0; i < result.backlog.size(); i++) {

@@ -141,10 +141,6 @@ public class WorkerStats {
         return registry;
     }
 
-    public void setRunId(String runId) {
-        registry.config().commonTags("run_id", runId);
-    }
-
     public void setPhase(RunPhase phase) {
         this.phase = phase;
     }

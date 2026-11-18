@@ -18,7 +18,6 @@ import io.javalin.config.RoutesConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.utils.SecureTempFiles;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
@@ -74,10 +73,6 @@ public class WorkerHandler implements AutoCloseable {
             Set.of(JSON_CONTENT_TYPE, YAML_CONTENT_TYPE);
     private final Worker worker;
     private final @Nullable BearerTokenAuth auth;
-
-    public WorkerHandler(PrometheusMeterRegistry statsLogger) {
-        this(new LocalWorker(statsLogger));
-    }
 
     /**
      * Creates a handler for serving {@code worker} over HTTP.

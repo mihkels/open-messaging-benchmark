@@ -217,7 +217,7 @@ public final class PluginRegistry {
         return Path.of(home == null || home.isBlank() ? "" : home).toAbsolutePath().normalize();
     }
 
-    public List<PluginBundle> bundles() {
+    List<PluginBundle> bundles() {
         return bundles;
     }
 

@@ -90,7 +90,8 @@ class WorkloadGeneratorLifecycleTest {
                         Duration.ofMillis(10),
                         Duration.ofSeconds(2))) {
             generator.includeHistograms(true);
-            result = generator.printAndCollectStats(1, TimeUnit.MILLISECONDS);
+            result = generator.newResult();
+            generator.collect(result, 1, TimeUnit.MILLISECONDS, true);
         }
 
         verify(worker, times(1)).getPeriodStats();
@@ -122,7 +123,8 @@ class WorkloadGeneratorLifecycleTest {
         TestResult result;
         try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
             generator.excludeWarmUp();
-            result = generator.printAndCollectStats(1, TimeUnit.MILLISECONDS);
+            result = generator.newResult();
+            generator.collect(result, 1, TimeUnit.MILLISECONDS, true);
         }
 
         assertThat(result.summary.totalMessagesSent()).isEqualTo(150);

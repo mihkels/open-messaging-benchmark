@@ -91,14 +91,15 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
         return creation;
     }
 
-    public KafkaBenchmarkConsumer(
+    // Tests only: skips the readiness handshake that create() performs
+    KafkaBenchmarkConsumer(
             KafkaConsumer<String, byte[]> consumer,
             Properties consumerConfig,
             ConsumerCallback callback) {
         this(consumer, consumerConfig, callback, 100L);
     }
 
-    public KafkaBenchmarkConsumer(
+    KafkaBenchmarkConsumer(
             KafkaConsumer<String, byte[]> consumer,
             Properties consumerConfig,
             ConsumerCallback callback,

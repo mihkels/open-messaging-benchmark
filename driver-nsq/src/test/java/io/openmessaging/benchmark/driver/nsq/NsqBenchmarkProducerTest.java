@@ -485,10 +485,21 @@ class NsqBenchmarkProducerTest {
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
             assertThat(future.cancel(false)).isTrue();
             Arrays.fill(payload, (byte) 9);
-            assertThat(wirePayload.get()).containsExactly(1, 2, 3);
+            assertThat(Arrays.copyOfRange(wirePayload.get(), Long.BYTES, wirePayload.get().length))
+                    .containsExactly(1, 2, 3);
         } finally {
             release.countDown();
         }
+    }
+
+    @Test
+    void messagePrefixesThePayloadWithTheBigEndianSendTime() {
+        byte[] payload = {7, 8};
+
+        byte[] message = NsqBenchmarkProducer.withTimestamp(payload, 0x0102030405060708L);
+
+        assertThat(message).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 7, 8);
+        assertThat(payload).containsExactly(7, 8);
     }
 
     @Test

@@ -18,15 +18,15 @@ The NSQ driver benchmarks [NSQ](https://nsq.io/). Producers publish to one `nsqd
 `nsqd` through `nsqlookupd` and read from a channel. Each benchmark topic is an NSQ topic and each subscription is an
 NSQ channel. It uses the `com.github.brainlag:nsq-client` library (1.0.0.RC4).
 
-|          Item          |                                                        Value                                                         |
-|------------------------|----------------------------------------------------------------------------------------------------------------------|
-| Plugin ID              | `nsq`                                                                                                                |
-| Module                 | `driver-nsq`                                                                                                         |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                           |
-| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                       |
-| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                 |
-| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)               |
-| Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; `nsqdHost` must identify the same daemon on HTTP and TCP |
+|          Item          |                                                                              Value                                                                              |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `nsq`                                                                                                                                                           |
+| Module                 | `driver-nsq`                                                                                                                                                    |
+| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                                                                      |
+| Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                                                                  |
+| Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                                                            |
+| Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                          |
+| Known limitations      | Partitions and keys are ignored; one `nsqd` for publishing; `nsqdHost` must identify the same daemon on HTTP and TCP; messages carry an 8-byte send-time prefix |
 
 ## Local Docker Compose
 
@@ -171,9 +171,12 @@ remain pending if client code does not stop, so callers should use a bounded wai
 **Acknowledgement.** Each message is finished (`FIN`) after the benchmark callback returns. The client requeues a
 message if its callback executor rejects delivery; a callback that throws does not send `FIN`.
 
-**End-to-end latency.** The consumer uses the message timestamp, which `nsqd` assigns when it receives the message,
-as the publish time. Latency is measured from the `nsqd` clock and excludes the time from producer to `nsqd`. Clock
-offset between the `nsqd` host and the workers adds directly to the result. See
+**End-to-end latency.** The producer puts its send time, 8 bytes big-endian epoch milliseconds, in front of each
+payload, so every message is 8 bytes larger on the wire than `messageSize`. The consumer reads the send time,
+strips it, and hands the original payload to the benchmark, so reported sizes and `verifyDelivery` are unchanged.
+Latency covers the full path from producer to consumer and depends on synchronised worker clocks. The timestamp
+`nsqd` assigns on receipt is not used, since it would leave out the producer-to-`nsqd` leg. A message shorter than
+8 bytes, which no benchmark producer sends, is counted but gives no latency sample. See
 [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Durability.** Messages are held in `nsqd` memory and written to disk (`--data-path`) when the in-memory queue is

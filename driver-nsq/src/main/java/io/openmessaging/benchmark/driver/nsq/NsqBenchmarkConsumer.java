@@ -32,6 +32,7 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -590,7 +591,16 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         int[] depth = inCallback.get();
         depth[0]++;
         try {
-            callback.messageReceived(message.getMessage(), message.getTimestamp().getTime());
+            byte[] body = message.getMessage();
+            if (body.length < Long.BYTES) {
+                // Not from a benchmark producer: counted, but no latency sample
+                callback.messageReceived(body, ConsumerCallback.NO_PUBLISH_TIMESTAMP);
+            } else {
+                // Reading the producer's send time moves the position to the original payload
+                ByteBuffer payload = ByteBuffer.wrap(body);
+                long publishTimestamp = payload.getLong();
+                callback.messageReceived(payload, publishTimestamp);
+            }
             message.finished();
         } finally {
             depth[0]--;

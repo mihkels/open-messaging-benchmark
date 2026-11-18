@@ -128,11 +128,14 @@ class NsqBenchmarkConsumerTest {
             ((AbandonableCreation) creation).abandonCreation();
             assertThat(creation.cancel(true)).isFalse();
             assertThat(broker.awaitCommand("RDY ")).isEqualTo("RDY 200");
-            long published = System.currentTimeMillis();
-            broker.sendMessage("hello".getBytes(StandardCharsets.UTF_8), published);
+            long sent = 1_234L;
+            broker.sendMessage(
+                    NsqBenchmarkProducer.withTimestamp("hello".getBytes(StandardCharsets.UTF_8), sent),
+                    System.currentTimeMillis());
             assertThat(received.await(5, TimeUnit.SECONDS)).isTrue();
+            // The producer's prefix is stripped and its send time used, not the nsqd timestamp
             assertThat(payload.get()).isEqualTo("hello".getBytes(StandardCharsets.UTF_8));
-            assertThat(timestamp.get()).isEqualTo(published);
+            assertThat(timestamp.get()).isEqualTo(sent);
             assertThat(broker.awaitCommand("FIN ")).isEqualTo("FIN 0123456789abcdef");
             consumer.close();
             assertThat(broker.awaitCommand("CLS")).isEqualTo("CLS");

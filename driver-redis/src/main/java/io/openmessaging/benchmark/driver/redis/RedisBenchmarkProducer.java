@@ -29,6 +29,9 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
     private static final byte[] PAYLOAD_FIELD = "payload".getBytes(UTF_8);
     private static final byte[] KEY_FIELD = "key".getBytes(UTF_8);
 
+    /** Producer send time in epoch milliseconds, so latency does not start at the broker's clock. */
+    static final byte[] TIMESTAMP_FIELD = "ts".getBytes(UTF_8);
+
     private final JedisPool pool;
     private final byte[] topic;
     private final XAddParams xaddParams;
@@ -44,9 +47,10 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
     public CompletableFuture<Void> sendAsync(final Optional<String> key, final byte[] payload) {
         // xadd returns once Redis has acknowledged the entry
         return lifecycle.publishSync(() -> {
-            // byte[] keys have identity equality; the two field names are distinct arrays
+            // byte[] keys have identity equality; the field names are distinct arrays
             Map<byte[], byte[]> map1 = new IdentityHashMap<>();
             map1.put(PAYLOAD_FIELD, payload);
+            map1.put(TIMESTAMP_FIELD, Long.toString(System.currentTimeMillis()).getBytes(UTF_8));
             if (key.isPresent()) {
                 map1.put(KEY_FIELD, key.get().getBytes(UTF_8));
             }

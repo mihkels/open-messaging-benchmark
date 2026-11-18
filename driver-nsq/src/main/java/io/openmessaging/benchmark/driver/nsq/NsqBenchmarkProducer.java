@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.CloseOnce;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -76,8 +77,8 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
 
         byte[] message;
         try {
-            // Cancellation can complete the future while the NSQ client is still using the bytes.
-            message = payload.clone();
+            // nsqd stamps messages with its own clock, so the producer's send time goes in front.
+            message = withTimestamp(payload, System.currentTimeMillis());
         } catch (Throwable failure) {
             semaphore.release();
             return CompletableFuture.failedFuture(failure);
@@ -100,6 +101,22 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
     @Override
     public void close() {
         lifecycle.close(this::shutdownResources);
+    }
+
+    /**
+     * Builds the message NSQ carries: the send time in front of the payload. The copy also keeps the
+     * caller's array free, since cancellation can complete a send while the NSQ client still uses the
+     * bytes.
+     *
+     * @param payload the caller's payload
+     * @param timestamp the send time in epoch milliseconds
+     * @return an owned array of the 8-byte big-endian timestamp followed by the payload
+     */
+    static byte[] withTimestamp(byte[] payload, long timestamp) {
+        return ByteBuffer.allocate(Math.addExact(Long.BYTES, payload.length))
+                .putLong(timestamp)
+                .put(payload)
+                .array();
     }
 
     private void shutdownResources() {

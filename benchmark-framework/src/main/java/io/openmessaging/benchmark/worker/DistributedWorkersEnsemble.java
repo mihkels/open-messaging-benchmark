@@ -38,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -51,7 +52,9 @@ public final class DistributedWorkersEnsemble implements Worker {
     private final List<Worker> consumerWorkers;
     private final Worker leader;
 
-    private int numberOfUsedProducerWorkers;
+    // Producers on each producer worker that has any, from the last createProducers
+    private Map<Worker, Integer> producersPerWorker = Map.of();
+    private int totalProducers;
 
     public DistributedWorkersEnsemble(List<Worker> workers, boolean extraConsumerWorkers) {
         Preconditions.checkArgument(workers.size() > 1, "At least two workers are required");
@@ -110,11 +113,17 @@ public final class DistributedWorkersEnsemble implements Worker {
             topicsPerProducerMap.put(producerWorkers.get(i++), assignedTopics);
         }
 
-        // Number of actually used workers might be less than available workers
-        numberOfUsedProducerWorkers =
-                (int) topicsPerProducerMap.values().stream().filter(t -> !t.isEmpty()).count();
+        // Each list holds one topic per producer, so its size is the worker's producer count
+        Map<Worker, Integer> counts = new LinkedHashMap<>();
+        topicsPerProducerMap.forEach((worker, assigned) -> {
+            if (!assigned.isEmpty()) {
+                counts.put(worker, assigned.size());
+            }
+        });
+        producersPerWorker = counts;
+        totalProducers = topics.size();
         log.debug(
-                "Producing worker count: {} of {}", numberOfUsedProducerWorkers, producerWorkers.size());
+                "Producing worker count: {} of {}", producersPerWorker.size(), producerWorkers.size());
         forAll(
                 List.copyOf(topicsPerProducerMap.entrySet()),
                 entry -> entry.getKey().createProducers(entry.getValue()));
@@ -122,11 +131,9 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
-        // Reduce the publish rate across all the brokers
-        double newRate = producerWorkAssignment.publishRate() / numberOfUsedProducerWorkers;
-        log.debug("Setting worker assigned publish rate to {} msgs/sec", newRate);
-        ProducerWorkAssignment assignment = producerWorkAssignment.withPublishRate(newRate);
-        forAll(producerWorkers, worker -> worker.startLoad(assignment));
+        forEachProducingWorker(
+                producerWorkAssignment.publishRate(),
+                (worker, rate) -> worker.startLoad(producerWorkAssignment.withPublishRate(rate)));
     }
 
     @Override
@@ -136,9 +143,25 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void adjustPublishRate(double publishRate) {
-        double newRate = publishRate / numberOfUsedProducerWorkers;
-        log.debug("Adjusting producer publish rate to {} msgs/sec", newRate);
-        forAll(producerWorkers, worker -> worker.adjustPublishRate(newRate));
+        forEachProducingWorker(publishRate, Worker::adjustPublishRate);
+    }
+
+    /*
+     * Splits the rate by producer, not by worker, so every producer gets the same share. Workers without
+     * producers are skipped: a worker rejects a start rate of 0.
+     */
+    private void forEachProducingWorker(double publishRate, BiConsumer<Worker, Double> action) {
+        if (totalProducers == 0) {
+            throw new IllegalStateException(
+                    "No producers to set a publish rate for: call createProducers with at least one topic first");
+        }
+        forAll(
+                List.copyOf(producersPerWorker.entrySet()),
+                entry -> {
+                    double rate = publishRate * entry.getValue() / totalProducers;
+                    log.debug("Setting publish rate of {} to {} msgs/sec", entry.getKey().id(), rate);
+                    action.accept(entry.getKey(), rate);
+                });
     }
 
     @Override

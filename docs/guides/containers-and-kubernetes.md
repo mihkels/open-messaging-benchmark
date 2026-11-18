@@ -27,7 +27,8 @@ Published images are in `docker.io/mihkels/open-messaging-benchmark` for `linux/
 Images are published from release tags only; there are no images of unreleased `main` commits.
 Build one locally to try changes that are not released yet.
 
-Images are signed with cosign and carry SBOM and provenance attestations; see
+Images are signed with cosign and carry signed SPDX SBOM and SLSA provenance attestations
+(`cosign verify-attestation --type spdxjson` / `--type slsaprovenance1`); see
 [Releasing](../development/releasing.md#verifying-images-and-charts).
 
 To build your own, [`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)

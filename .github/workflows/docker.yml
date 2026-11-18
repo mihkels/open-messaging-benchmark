@@ -261,6 +261,45 @@ jobs:
           done
           echo "Signed $IMAGE_REPOSITORY@$digest" >> "$GITHUB_STEP_SUMMARY"
 
+      # cosign cannot read the attestations BuildKit stores inside the image index, so each
+      # platform's SBOM (SPDX) and provenance (SLSA v1) is attached again to the index digest as a
+      # signed cosign attestation. The SPDX document name carries the platform.
+      - name: Attest SBOM and provenance
+        env:
+          METADATA: ${{ steps.bake.outputs.metadata }}
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          digest=$(jq -r '.release["containerimage.digest"]' <<< "$METADATA")
+          [[ "$digest" == sha256:* ]] || { echo "no image digest in bake metadata" >&2; exit 1; }
+          image="$IMAGE_REPOSITORY@$digest"
+          attest() {
+            for attempt in 1 2 3 4; do
+              if mise exec "cosign@$COSIGN_VERSION" -- cosign attest --yes "$@" "$image"; then
+                return 0
+              fi
+              if [[ "$attempt" -eq 4 ]]; then
+                echo "::error::Attestation $* failed after $attempt attempts"
+                return 1
+              fi
+              delay=$((attempt * 15))
+              echo "::warning::Attestation attempt $attempt failed; retrying in ${delay}s"
+              sleep "$delay"
+            done
+          }
+          docker buildx imagetools inspect "$image" --format '{{ json .SBOM }}' > sbom.json
+          docker buildx imagetools inspect "$image" --format '{{ json .Provenance }}' > provenance.json
+          jq -e 'length > 0' sbom.json provenance.json > /dev/null \
+            || { echo "no BuildKit SBOM or provenance in $image" >&2; exit 1; }
+          for platform in $(jq -r 'keys[]' sbom.json); do
+            jq -e --arg p "$platform" '.[$p].SPDX | .name = "\(env.IMAGE_REPOSITORY) \($p)"' \
+              sbom.json > sbom.spdx.json
+            jq -e --arg p "$platform" '.[$p].SLSA' provenance.json > provenance.slsa.json
+            attest --type spdxjson --predicate sbom.spdx.json
+            attest --type slsaprovenance1 --predicate provenance.slsa.json
+            echo "Attested SBOM and provenance for $platform to $image" >> "$GITHUB_STEP_SUMMARY"
+          done
+
   # Keeps code scanning current between releases without building: new advisories against the
   # published image's packages show up within a week.
   scan-published:
@@ -305,6 +344,9 @@ jobs:
     permissions:
       # Upload release assets and remove them from releases past the retention window
       contents: write
+      # SLSA provenance attestation for the tarball (gh attestation verify)
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -329,6 +371,10 @@ jobs:
           sha256sum "$tarball" > SHA256SUMS
           gh release upload "$TAG" "$tarball" SHA256SUMS --clobber
           echo "Attached $tarball and SHA256SUMS to release $TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/openmessaging-benchmark-*-bin.tar.gz
 
       - name: Keep the distribution on the latest release only
         env:

@@ -242,6 +242,8 @@ public class WorkerStats {
         publishDelayLatency.reset();
         publishScheduleLatency.reset();
         endToEndLatency.reset();
+        // A warm-up failure must not be reported as a measured-window send error
+        lastSendError = null;
     }
 
     public void reset() {
@@ -258,7 +260,6 @@ public class WorkerStats {
         delivered.reset();
         duplicated.reset();
         outOfOrder.reset();
-        lastSendError = null;
     }
 
     public void recordProducerFailure(Throwable failure) {

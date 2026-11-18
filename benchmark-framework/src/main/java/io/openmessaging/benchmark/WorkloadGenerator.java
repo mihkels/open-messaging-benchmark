@@ -95,6 +95,8 @@ public final class WorkloadGenerator implements WorkloadRun {
     private boolean controllerFailureReported;
 
     private volatile double targetPublishRate;
+    // Run totals when the measured window started, so the summary excludes warm-up traffic
+    private CountersStats measuredStart = new CountersStats();
     private volatile RunPhase phase = RunPhase.MEASURE;
     // Send error reason last logged per worker id, so each new reason is logged once
     private final Map<String, String> loggedSendErrors = new HashMap<>();
@@ -232,6 +234,9 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
 
         worker.resetStats();
+        if (workload.warmupDurationMinutes > 0) {
+            excludeWarmUp();
+        }
         int measuredMinutes = workload.measuredMinutes();
         log.info("----- Starting benchmark traffic ({}m)------", measuredMinutes);
         if (workload.usesStages()) {
@@ -786,6 +791,12 @@ public final class WorkloadGenerator implements WorkloadRun {
         event.addKeyValue("event", PHASE_KEY).addKeyValue(PHASE_KEY, next.name()).log();
     }
 
+    // Remembers the run totals at the end of warm-up, so the summary leaves them out. Without
+    // warm-up the totals before the window are just the readiness probes, which the summary keeps.
+    void excludeWarmUp() {
+        measuredStart = worker.getCountersStats();
+    }
+
     TestResult printAndCollectStats(long testDurations, TimeUnit unit)
             throws IOException, InterruptedException {
         TestResult result = newResult();
@@ -867,9 +878,8 @@ public final class WorkloadGenerator implements WorkloadRun {
         CumulativeLatencies aggregate = worker.getCumulativeLatencies();
         ResultLog.aggregate(aggregate);
         result.recordAggregate(aggregate);
-        var counters = worker.getCountersStats();
         result.recordSummary(
-                counters,
+                worker.getCountersStats().minus(measuredStart),
                 // A staged run has no single target; the measured average matches the achieved average
                 workload.usesStages()
                         ? TestResult.average(TestResult.measured(result.phase, result.targetRate))

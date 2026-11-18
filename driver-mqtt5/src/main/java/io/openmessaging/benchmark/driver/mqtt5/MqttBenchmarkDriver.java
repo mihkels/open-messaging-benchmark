@@ -303,17 +303,10 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     }
 
     private Mqtt5ClientBuilder getClientBuilder(String clientId, BooleanSupplier closed) {
-        HostAndPort hostAndPort = parseServerUri(this.config.client.serverUri);
         Mqtt5ClientBuilder clientBuilder =
                 Mqtt5Client.builder()
                         .identifier(clientId)
-                        .transportConfig(
-                                MqttClientTransportConfig.builder()
-                                        .serverHost(hostAndPort.getHost())
-                                        .serverPort(hostAndPort.getPort())
-                                        .socketConnectTimeout(3, TimeUnit.SECONDS)
-                                        .mqttConnectTimeout(3, TimeUnit.SECONDS)
-                                        .build());
+                        .transportConfig(transportConfig(this.config.client.serverUri));
 
         // Simple Auth with username and password
         if (isNotEmpty(this.config.client.username) && isNotEmpty(this.config.client.password)) {
@@ -370,10 +363,37 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return DriverConfigs.read(configurationFile, MqttConfig.class);
     }
 
-    static HostAndPort parseServerUri(String serverUri) {
+    /**
+     * Builds the transport for a server URI. {@code ssl://}, {@code tls://} and {@code mqtts://}
+     * connect over TLS with the JVM's default trust store and host name verification, so the username
+     * and password never cross the network in clear text.
+     *
+     * @param serverUri the server URI from the driver config
+     * @return the transport configuration
+     */
+    static MqttClientTransportConfig transportConfig(String serverUri) {
+        HostAndPort hostAndPort = parseServerUri(serverUri);
+        var transport =
+                MqttClientTransportConfig.builder()
+                        .serverHost(hostAndPort.getHost())
+                        .serverPort(hostAndPort.getPort())
+                        .socketConnectTimeout(3, TimeUnit.SECONDS)
+                        .mqttConnectTimeout(3, TimeUnit.SECONDS);
+        if (isTls(serverUri)) {
+            transport = transport.sslWithDefaultConfig();
+        }
+        return transport.build();
+    }
+
+    private static boolean isTls(String serverUri) {
         int separator = serverUri.indexOf("://");
         String scheme = separator >= 0 ? serverUri.substring(0, separator) : "";
-        boolean tls = Set.of("ssl", "tls", "mqtts").contains(scheme.toLowerCase(Locale.ROOT));
+        return Set.of("ssl", "tls", "mqtts").contains(scheme.toLowerCase(Locale.ROOT));
+    }
+
+    static HostAndPort parseServerUri(String serverUri) {
+        int separator = serverUri.indexOf("://");
+        boolean tls = isTls(serverUri);
         HostAndPort address;
         try {
             address =

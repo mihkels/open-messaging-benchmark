@@ -59,19 +59,37 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         this.namespace = namespace;
     }
 
-    @Override
-    public void initialize(Path configurationFile, MeterRegistry meterRegistry) throws IOException {
-        Config config = DriverConfigs.read(configurationFile, Config.class);
-
+    /**
+     * Parses {@code dlogConf} with interpolation off. It arrives over the worker API, and
+     * commons-configuration2 would otherwise expand {@code ${file:...}}, {@code ${env:...}} and
+     * similar references into values such as {@code zkAclId} that are sent to the ZooKeeper in {@code
+     * dlogUri}. The driver process also turns these lookups off for every configuration.
+     *
+     * @param dlogConf the {@code dlogConf} properties text
+     * @return the DistributedLog configuration
+     * @throws IOException if the text is not valid properties
+     */
+    static DistributedLogConfiguration dlogConfiguration(String dlogConf) throws IOException {
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
+        // Without an interpolator, values are returned as written
+        conf.setInterpolator(null);
         try {
             PropertiesConfiguration propsConf = new PropertiesConfiguration();
-            propsConf.read(new StringReader(config.dlogConf));
+            propsConf.setInterpolator(null);
+            propsConf.read(new StringReader(dlogConf));
             conf.loadConf(propsConf);
         } catch (ConfigurationException e) {
             // dlogConf may hold bkDigestPW, so never log or echo it.
             throw new IOException("Failed to load dlog configuration", e);
         }
+        return conf;
+    }
+
+    @Override
+    public void initialize(Path configurationFile, MeterRegistry meterRegistry) throws IOException {
+        Config config = DriverConfigs.read(configurationFile, Config.class);
+
+        DistributedLogConfiguration conf = dlogConfiguration(config.dlogConf);
         URI dlogUri = URI.create(config.dlogUri);
 
         // BookKeeper client metrics are not exported.

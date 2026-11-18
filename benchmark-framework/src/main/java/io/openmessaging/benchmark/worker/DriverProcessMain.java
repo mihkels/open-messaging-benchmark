@@ -46,17 +46,26 @@ public final class DriverProcessMain {
     static final String INITIALIZE_DRIVER_LOCAL = "/initialize-driver-local";
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
     static final String KAFKA_CONFIG_PROVIDERS = "org.apache.kafka.automatic.config.providers";
+    static final String CONFIGURATION2_LOOKUPS =
+            "org.apache.commons.configuration2.interpol.ConfigurationInterpolator.defaultPrefixLookups";
 
     private DriverProcessMain() {}
 
     /**
-     * Driver configs arrive over the worker API, so Kafka clients must not resolve {@code
-     * config.providers} references: those read local files and send them to a broker of the caller's
-     * choice. An operator can still opt in by setting the property in {@code OMB_DRIVER_JVM_OPTS}.
+     * Driver configs arrive over the worker API, so client libraries must not expand references that
+     * read local files, environment variables or system properties: a client then sends them to a
+     * broker of the caller's choice. This turns off Kafka {@code config.providers} and the {@code
+     * ${file:...}}, {@code ${env:...}} and similar lookups of commons-configuration2, which
+     * BookKeeper (DistributedLog) uses for {@code dlogConf}. An operator can still opt in by setting
+     * either property in {@code OMB_DRIVER_JVM_OPTS}.
      */
-    static void disableKafkaConfigProviders() {
+    static void disableConfigFileLookups() {
         if (System.getProperty(KAFKA_CONFIG_PROVIDERS) == null) {
             System.setProperty(KAFKA_CONFIG_PROVIDERS, "none");
+        }
+        if (System.getProperty(CONFIGURATION2_LOOKUPS) == null) {
+            // An empty list turns every default lookup off
+            System.setProperty(CONFIGURATION2_LOOKUPS, "");
         }
     }
 
@@ -80,7 +89,7 @@ public final class DriverProcessMain {
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
     public static void main(String[] args) throws Exception {
-        disableKafkaConfigProviders();
+        disableConfigFileLookups();
         Path portFile = null;
         Path tokenFile = null;
         List<String> tags = new ArrayList<>();

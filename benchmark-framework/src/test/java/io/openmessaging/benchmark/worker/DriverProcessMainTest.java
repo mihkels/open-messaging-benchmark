@@ -20,6 +20,8 @@ import io.micrometer.core.instrument.Tags;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class DriverProcessMainTest {
 
@@ -29,18 +31,21 @@ class DriverProcessMainTest {
                 .isEqualTo(Tags.of("run_id", "r-1", "driver", "Kafka", "empty", ""));
     }
 
-    @Test
-    void disablesKafkaConfigProvidersUnlessTheOperatorSetThem() {
-        String key = DriverProcessMain.KAFKA_CONFIG_PROVIDERS;
+    @ParameterizedTest
+    @CsvSource({
+        "org.apache.kafka.automatic.config.providers, none",
+        "org.apache.commons.configuration2.interpol.ConfigurationInterpolator.defaultPrefixLookups, ''"
+    })
+    void disablesConfigFileLookupsUnlessTheOperatorSetThem(String key, String disabled) {
         String before = System.getProperty(key);
         try {
             System.clearProperty(key);
-            DriverProcessMain.disableKafkaConfigProviders();
-            assertThat(System.getProperty(key)).isEqualTo("none");
+            DriverProcessMain.disableConfigFileLookups();
+            assertThat(System.getProperty(key)).isEqualTo(disabled);
 
-            System.setProperty(key, "org.example.Provider");
-            DriverProcessMain.disableKafkaConfigProviders();
-            assertThat(System.getProperty(key)).isEqualTo("org.example.Provider");
+            System.setProperty(key, "OPERATOR_CHOICE");
+            DriverProcessMain.disableConfigFileLookups();
+            assertThat(System.getProperty(key)).isEqualTo("OPERATOR_CHOICE");
         } finally {
             if (before == null) {
                 System.clearProperty(key);

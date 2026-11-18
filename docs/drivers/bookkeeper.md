@@ -150,10 +150,10 @@ every worker ([Runtime and plugins](../reference/runtime-and-plugins.md)).
 
 The driver's configuration class (`Config`) reads two keys. Unknown keys are ignored.
 
-|    Key     |  Type  | Default  |                                                            Description                                                            |
-|------------|--------|----------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `dlogUri`  | string | required | DistributedLog namespace URI, `distributedlog://<zookeeper host:port>/<namespace path>`.                                          |
-| `dlogConf` | string | required | DistributedLog configuration in Java properties format, loaded into `DistributedLogConfiguration`. Use a YAML block scalar (`|`). |
+|    Key     |  Type  | Default  |                                                                               Description                                                                               |
+|------------|--------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `dlogUri`  | string | required | DistributedLog namespace URI, `distributedlog://<zookeeper host:port>/<namespace path>`.                                                                                |
+| `dlogConf` | string | required | DistributedLog configuration in Java properties format, loaded into `DistributedLogConfiguration`. Use a YAML block scalar (`|`). `${...}` references are not expanded. |
 
 ### `dlogConf` properties used by the shipped file
 

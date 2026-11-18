@@ -218,8 +218,9 @@ supervisor forwards its `log4j.configurationFile`, `log4j2.configurationFile` an
 properties. It also sets `omb.log.name=benchmark-driver`, so the driver process logs
 to `benchmark-driver.log` instead of `benchmark-worker.log`. `DriverProcessMain` sets
 `org.apache.kafka.automatic.config.providers=none` unless the driver JVM options already set it,
-because driver configs arrive over the worker API and Kafka config providers would let them read
-local files. All settings are listed in
+and sets the commons-configuration2 default lookups (`${file:...}`, `${env:...}` and so on) to an
+empty list, because driver configs arrive over the worker API and both would let them read local
+files. All settings are listed in
 [Runtime and plugins](../reference/runtime-and-plugins.md).
 
 [`DriverProcessMain`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/DriverProcessMain.java)

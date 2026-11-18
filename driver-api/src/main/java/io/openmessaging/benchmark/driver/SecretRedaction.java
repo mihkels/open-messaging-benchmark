@@ -49,7 +49,8 @@ public final class SecretRedaction {
                     Pattern.CASE_INSENSITIVE);
     private static final Pattern SECRET_COMPOUND =
             Pattern.compile(
-                    "api.?key|access.?key|private.?key|sasl.?jaas|auth.?config", Pattern.CASE_INSENSITIVE);
+                    "api.?key|access.?key|private.?key|keystore.?key|sasl.?jaas|auth.?config|user.?info",
+                    Pattern.CASE_INSENSITIVE);
     // Abbreviated password keys such as redisPass or adminPwd. Only as a suffix, so that names like
     // bypassCache or passive are not masked.
     private static final Pattern SECRET_SUFFIX =
@@ -162,6 +163,9 @@ public final class SecretRedaction {
         int separator = firstSeparator(line);
         if (separator > 0) {
             String key = line.substring(0, separator).strip();
+            if (key.startsWith("- ")) {
+                key = key.substring(2).strip(); // YAML list item
+            }
             if (!key.isEmpty() && hasNoWhitespace(key) && isSecretKey(key)) {
                 return maskAfter(line, separator);
             }
@@ -196,7 +200,8 @@ public final class SecretRedaction {
         return key.chars().noneMatch(Character::isWhitespace);
     }
 
-    // Masks the password of every scheme://user:password@host in the text.
+    // Masks the password of every scheme://user:password@host in the text, and the whole userinfo
+    // of scheme://token@host, since a bare token cannot be told apart from a user name.
     private static String redactUriUserInfo(String text) {
         StringBuilder out = new StringBuilder(text.length());
         int copied = 0;
@@ -204,17 +209,51 @@ public final class SecretRedaction {
         int scheme;
         while ((scheme = text.indexOf(SCHEME_SEPARATOR, from)) >= 0) {
             int start = scheme + SCHEME_SEPARATOR.length();
-            int end = authorityEnd(text, start);
+            int end = userInfoAwareEnd(text, start, authorityEnd(text, start));
             int at = text.lastIndexOf('@', end - 1);
             int colon = text.indexOf(':', start);
-            if (at >= start && colon >= 0 && colon + 1 < at) {
-                out.append(text, copied, colon + 1).append(REDACTED);
+            if (at >= start && colon >= start && colon < at) {
+                if (colon + 1 < at) {
+                    out.append(text, copied, colon + 1).append(REDACTED);
+                    copied = at;
+                }
+            } else if (at > start) {
+                out.append(text, copied, start).append(REDACTED);
                 copied = at;
             }
             // The next "://" may start at the ':' just before the '/' that ended this authority.
             from = Math.max(end - 1, start);
         }
         return copied == 0 ? text : out.append(text, copied, text.length()).toString();
+    }
+
+    // An unencoded '/' in a password, as in amqp://u:pa/ss@host, ends the authority too early. When
+    // the text between the first ':' and that '/' is not a port number and an '@' follows before
+    // the next space or quote, the '/' belongs to the password and the authority ends after that '@'.
+    private static int userInfoAwareEnd(String text, int start, int end) {
+        if (end >= text.length()
+                || text.charAt(end) != '/'
+                || text.lastIndexOf('@', end - 1) >= start) {
+            return end;
+        }
+        int colon = text.indexOf(':', start);
+        if (colon < start || colon >= end || isPort(text, colon + 1, end)) {
+            return end;
+        }
+        int hardEnd = end;
+        while (hardEnd < text.length() && !isValueTerminator(text.charAt(hardEnd))) {
+            hardEnd++;
+        }
+        int at = text.lastIndexOf('@', hardEnd - 1);
+        return at > end ? at + 1 : end;
+    }
+
+    private static boolean isPort(String text, int from, int to) {
+        return from < to && text.substring(from, to).chars().allMatch(Character::isDigit);
+    }
+
+    private static boolean isValueTerminator(char c) {
+        return c == '"' || c == '\'' || Character.isWhitespace(c);
     }
 
     private static int authorityEnd(String text, int start) {
@@ -226,6 +265,6 @@ public final class SecretRedaction {
     }
 
     private static boolean isAuthorityTerminator(char c) {
-        return c == '/' || c == '?' || c == '#' || c == '"' || c == '\'' || Character.isWhitespace(c);
+        return c == '/' || c == '?' || c == '#' || isValueTerminator(c);
     }
 }

@@ -118,6 +118,9 @@ class SecretRedactionTest {
                 "privateKey",
                 "private_key",
                 "private.key",
+                "ssl.keystore.key",
+                "basic.auth.user.info",
+                "userInfo",
                 "authentication",
                 "Authorization",
                 "authConfig",
@@ -224,14 +227,39 @@ class SecretRedactionTest {
                 SecretRedaction.redactString("url: nats://a:p1@h1,nats://b:p2@h2"));
         assertEquals(
                 "--uri=\"amqp://u:[REDACTED]@h\"", SecretRedaction.redactString("--uri=\"amqp://u:p@h\""));
+        // An unencoded '/' in the password does not end the authority
+        assertEquals(
+                "amqp://u:[REDACTED]@host/vhost", SecretRedaction.redactString("amqp://u:pa/ss@host/vhost"));
+    }
+
+    @Test
+    void masksBareUserInfoBecauseItMayBeAToken() {
+        assertEquals(
+                "nats://[REDACTED]@host:4222", SecretRedaction.redactString("nats://s3cr3ttoken@host:4222"));
+        assertEquals(
+                "amqp://[REDACTED]@rabbit:5672", SecretRedaction.redactString("amqp://user@rabbit:5672"));
+    }
+
+    @Test
+    void masksYamlListItemsWithSecretKeys() {
+        assertEquals("- password: [REDACTED]", SecretRedaction.redactString("- password: hunter2"));
+        assertEquals("  - name: kafka", SecretRedaction.redactString("  - name: kafka"));
+    }
+
+    @Test
+    void masksKeystoreKeysAndUserInfoProperties() {
+        assertEquals(
+                "ssl.keystore.key=[REDACTED]\nbasic.auth.user.info=[REDACTED]",
+                SecretRedaction.redactString(
+                        "ssl.keystore.key=-----BEGIN PRIVATE KEY-----\nbasic.auth.user.info=user:pw"));
     }
 
     @Test
     void keepsUrisWithoutPasswords() {
         for (String uri :
                 List.of(
-                        "amqp://user@rabbit:5672",
                         "pulsar://broker:6650",
+                        "http://host/a@b",
                         "http://host:8080/a@b",
                         "amqp://user:@host",
                         "tcp://",

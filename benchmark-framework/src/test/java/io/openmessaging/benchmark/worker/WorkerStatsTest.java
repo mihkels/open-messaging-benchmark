@@ -140,6 +140,11 @@ class WorkerStatsTest {
 
             stats.reset();
             assertThat(stats.toPeriodStats().sendErrorReasons()).isEmpty();
+
+            // The reset after warm-up also forgets a warm-up failure
+            stats.recordProducerFailure(new IOException("warm-up"));
+            stats.resetLatencies();
+            assertThat(stats.toPeriodStats().sendErrorReasons()).isEmpty();
         } finally {
             registry.close();
         }

@@ -112,6 +112,26 @@ class WorkloadGeneratorLifecycleTest {
         assertSerializedResult(Path.of(arguments.output));
     }
 
+    @Test
+    void summaryCountsOnlyTheMeasuredWindowAfterWarmUpErrors() throws Exception {
+        Worker worker = worker();
+        // 3 sends failed during warm-up; none after
+        when(worker.getCountersStats())
+                .thenReturn(new CountersStats(100, 3, 100), new CountersStats(250, 3, 250));
+        Workload workload = workload();
+        TestResult result;
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.excludeWarmUp();
+            result = generator.printAndCollectStats(1, TimeUnit.MILLISECONDS);
+        }
+
+        assertThat(result.summary.totalMessagesSent()).isEqualTo(150);
+        assertThat(result.summary.totalErrors()).isZero();
+        assertThat(new RunChecks().evaluate(workload, result))
+                .extracting(Finding::check)
+                .doesNotContain(RunChecks.SEND_ERRORS);
+    }
+
     private static void assertCollectedResult(TestResult result) {
         assertThat(result.backlog).containsExactly(12L);
         assertThat(result.publishLatencyAvg).containsExactly(2.0);

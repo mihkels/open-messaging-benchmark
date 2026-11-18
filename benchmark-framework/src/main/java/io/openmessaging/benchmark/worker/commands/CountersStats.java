@@ -44,6 +44,23 @@ public record CountersStats(
     }
 
     /**
+     * Subtracts an earlier reading of the same counters, giving what happened since it.
+     *
+     * @param earlier the earlier reading
+     * @return a new CountersStats instance with the differences
+     */
+    public CountersStats minus(CountersStats earlier) {
+        return new CountersStats(
+                this.messagesSent - earlier.messagesSent,
+                this.messageSendErrors - earlier.messageSendErrors,
+                this.messagesReceived - earlier.messagesReceived,
+                this.verifiedSent - earlier.verifiedSent,
+                this.delivered - earlier.delivered,
+                this.duplicated - earlier.duplicated,
+                this.outOfOrder - earlier.outOfOrder);
+    }
+
+    /**
      * Combines this CountersStats with another, returning a new record with the summed values.
      *
      * @param other The other CountersStats to add.

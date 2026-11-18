@@ -122,7 +122,8 @@ backlog = subscriptionsPerTopic × messages published − messages received
 
 Messages published counts only successful sends. Both totals count from the start of load,
 including warm-up and the readiness probe; resetting statistics for measurement resets only the
-latency histograms.
+latency histograms. The summary's `totalMessagesSent` and `totalErrors` subtract the totals at the
+end of warm-up, so they cover the measured window only.
 
 It is reported every 10 seconds in the console and in the result's `backlog` series. A backlog that
 grows during a fixed-rate run means consumers cannot keep up with that rate; the result reports it

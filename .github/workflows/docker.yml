@@ -92,6 +92,7 @@ jobs:
           fi
           mkdir dist
           cp package/target/openmessaging-benchmark-*-bin.tar.gz dist/dist.tar.gz
+          .github/scripts/dedupe-tarball.sh dist/dist.tar.gz
 
       - name: Image variants
         id: variants

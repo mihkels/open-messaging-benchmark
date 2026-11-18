@@ -251,7 +251,10 @@ Pulsar namespace persistence settings on the broker, which this driver does not 
 
 **Producing.** Kafka producers behave as in the [Kafka driver](kafka.md#semantics): a message counts as
 published when the send callback succeeds. Pulsar producers count a message as published when
-`sendAsync` completes.
+`sendAsync` completes. Pulsar producers use the same settings as the [Pulsar driver](pulsar.md): no
+send timeout, and batches are bounded by `batchingMaxPublishDelayMs` and `batchingMaxBytes` only, with
+no message-count limit. Earlier KoP runs used the Pulsar client defaults (30-second send timeout,
+1000 messages per batch), so Pulsar-producer results are not comparable with them.
 
 **Consuming.** Kafka consumers use the Kafka driver's consumer loop, polling with `pollTimeoutMs`. The
 driver commits offsets with `commitAsync` after each non-empty poll. Because the driver does not set

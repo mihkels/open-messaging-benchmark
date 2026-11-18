@@ -16,7 +16,9 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -158,6 +160,41 @@ class ThresholdsTest {
         thresholds.maxDuplicatedMessages = 10L;
 
         Thresholds.Result evaluation = thresholds.evaluate(new TestResult());
+
+        assertThat(evaluation.checks.get("maxLostMessages").status).isEqualTo(Thresholds.Status.FAIL);
+        assertThat(evaluation.checks.get("maxDuplicatedMessages").status)
+                .isEqualTo(Thresholds.Status.FAIL);
+    }
+
+    @Test
+    void deliveryLimitsJudgeTheWorstOfSeveralDeliveries() {
+        Thresholds thresholds = new Thresholds();
+        thresholds.maxLostMessages = 0L;
+        thresholds.maxDuplicatedMessages = 5L;
+        Thresholds.Result evaluation = new Thresholds.Result(new LinkedHashMap<>());
+
+        thresholds.evaluateDelivery(
+                evaluation,
+                List.of(
+                        new Delivery(100, 100, 0, 0, 0),
+                        new Delivery(100, 0, 500, 2, 0),
+                        new Delivery(100, 100, 0, 1, 0)));
+
+        assertThat(evaluation.checks.get("maxLostMessages").observed).isEqualTo(500.0);
+        assertThat(evaluation.checks.get("maxLostMessages").status).isEqualTo(Thresholds.Status.FAIL);
+        assertThat(evaluation.checks.get("maxDuplicatedMessages").observed).isEqualTo(2.0);
+        assertThat(evaluation.checks.get("maxDuplicatedMessages").status)
+                .isEqualTo(Thresholds.Status.PASS);
+    }
+
+    @Test
+    void deliveryLimitsFailWhenAnyDeliveryIsMissing() {
+        Thresholds thresholds = new Thresholds();
+        thresholds.maxLostMessages = 10L;
+        thresholds.maxDuplicatedMessages = 10L;
+        Thresholds.Result evaluation = new Thresholds.Result(new LinkedHashMap<>());
+
+        thresholds.evaluateDelivery(evaluation, Arrays.asList(new Delivery(100, 100, 0, 0, 0), null));
 
         assertThat(evaluation.checks.get("maxLostMessages").status).isEqualTo(Thresholds.Status.FAIL);
         assertThat(evaluation.checks.get("maxDuplicatedMessages").status)

@@ -35,7 +35,8 @@ import org.jspecify.annotations.Nullable;
  * @param succeeded the repetitions that produced a result, after their retries
  * @param results each repetition that ran
  * @param metrics the spread of each metric over the successful repetitions; empty when none did
- * @param thresholds the workload thresholds evaluated against the medians
+ * @param thresholds the workload thresholds evaluated against the medians, and the delivery limits
+ *     against the worst repetition
  * @param findings the summary's own findings: run-to-run variance and failed repetitions
  * @param validity the worst-of verdict of the summary's findings and every finding of each
  *     successful repetition
@@ -139,6 +140,8 @@ public record RepeatSummary(
                                 (long) median(successes, r -> r.summary.totalMessagesSent()),
                                 median(successes, r -> r.summary.publishRateAvg()),
                                 successes.getFirst().summary.targetRate());
+                // Delivery limits judge the worst repetition, not the median
+                thresholds.evaluateDelivery(evaluated, successes.stream().map(r -> r.delivery).toList());
             }
         }
         int failed = repetitions - successes.size();

@@ -114,7 +114,8 @@ summary's medians.
   [Repeated runs](../guides/results.md#repeated-runs). A repetition that fails after its retries
   is listed as failed in the summary and left out of the statistics, and the process still exits
   with a non-zero status. Workload thresholds decide the exit status from the medians, not from
-  each repetition. `--repeat 1` behaves exactly like a run without it.
+  each repetition, except `maxLostMessages` and `maxDuplicatedMessages`, which judge the worst
+  repetition. `--repeat 1` behaves exactly like a run without it.
 - **Validation errors** such as unknown options, `--workers` combined with `--workers-file`, no
   workload files, no `--drivers`, `--expected-workers` below 2, negative `--retries`, `--repeat` below 1, or a workload that fails
   validation (pool size, size distribution, backlog settings) print a message and exit with a

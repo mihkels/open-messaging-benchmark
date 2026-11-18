@@ -167,6 +167,7 @@ class PulsarBenchmarkProducerTest {
         TypedMessageBuilder<byte[]> builder = mock();
         CountDownLatch publishing = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
+        CompletableFuture<MessageId> clientSend = new CompletableFuture<>();
         when(client.newMessage()).thenReturn(builder);
         when(builder.value(any(byte[].class))).thenReturn(builder);
         // A full queue with blockIfQueueFull blocks sendAsync until the client is closed
@@ -176,8 +177,8 @@ class PulsarBenchmarkProducerTest {
                     if (!release.await(5, TimeUnit.SECONDS)) {
                         throw new AssertionError("send was not released");
                     }
-                    return CompletableFuture.failedFuture(
-                            new PulsarClientException.AlreadyClosedException("closed"));
+                    // Settled only after close returns, so the client's failure cannot race failRemaining
+                    return clientSend;
                 });
         doAnswer(
                         invocation -> {
@@ -196,6 +197,7 @@ class PulsarBenchmarkProducerTest {
 
             verify(client).close();
             CompletableFuture<Void> send = sending.get(5, TimeUnit.SECONDS);
+            clientSend.completeExceptionally(new PulsarClientException.AlreadyClosedException("closed"));
             assertThat(send).isCompletedExceptionally();
             assertThatThrownBy(send::join).hasCauseInstanceOf(IllegalStateException.class);
         } finally {

@@ -127,6 +127,13 @@ workload: workloads/1-topic-16-partitions-1kb.yaml
 driverConfig: ""
 workloadConfig: ""
 
+# Grafana dashboard of the worker metrics, by run id, workload and worker. Grafana must read a
+# Prometheus that scrapes the workers (see networkPolicy.metricsFrom)
+grafana:
+  dashboard:
+    # Create a ConfigMap labeled grafana_dashboard: "1", which the Grafana dashboard sidecar loads
+    enabled: false
+
 # Size limit of the emptyDir volume that receives result files
 resultsSizeLimit: 1Gi
 

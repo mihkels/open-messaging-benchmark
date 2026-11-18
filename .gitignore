@@ -14,6 +14,7 @@ core/*.json
 !/release-please-config.json
 !/.release-please-manifest.json
 !/deployment/kubernetes/helm/**/values.schema.json
+!/deployment/kubernetes/helm/*/dashboards/*.json
 *.pem
 *.hcl
 !/docker-bake.hcl

@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
@@ -26,7 +27,7 @@ import java.util.List;
 
 public interface Worker extends AutoCloseable {
 
-    default void setRunId(String runId) {}
+    default void setRunContext(RunContext run) {}
 
     default void setPhase(RunPhase phase) {}
 

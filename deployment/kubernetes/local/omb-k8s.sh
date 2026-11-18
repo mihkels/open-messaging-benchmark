@@ -480,6 +480,8 @@ cmd_lint() {
     helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.protectMetrics=true
     helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.existingSecret=omb-token
     helm lint --strict "$CHART_DIR" --set workers.tls.enabled=true
+    helm lint --strict "$CHART_DIR" --set grafana.dashboard.enabled=true
+    python3 -m json.tool "$CHART_DIR/dashboards/omb.json" > /dev/null || die "dashboards/omb.json is not valid JSON"
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm lint --strict "$CHART_DIR" -f "$values"
     done
@@ -513,6 +515,9 @@ cmd_lint() {
         --set workers.tls.existingSecret=omb-tls > "$rendered/tls-existing.yaml"
     grep -q 'type: kubernetes.io/tls' "$rendered/tls-existing.yaml" \
         && die "tls.existingSecret must not create a Secret"
+    grep -q grafana_dashboard "$rendered/default.yaml" && die "the Grafana dashboard must be off by default"
+    helm template "$RELEASE" "$CHART_DIR" --set grafana.dashboard.enabled=true > "$rendered/dashboard.yaml"
+    grep -q 'grafana_dashboard: "1"' "$rendered/dashboard.yaml" || die "dashboard.yaml has no grafana_dashboard ConfigMap"
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm template "$RELEASE" "$CHART_DIR" -f "$values" > "$rendered/values-$(basename "$values")"
     done

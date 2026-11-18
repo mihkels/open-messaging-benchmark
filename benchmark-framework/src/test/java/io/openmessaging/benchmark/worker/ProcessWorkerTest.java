@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import io.javalin.Javalin;
 import io.openmessaging.benchmark.plugin.HostRuntime;
 import io.openmessaging.benchmark.plugin.PluginRegistry;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
@@ -151,21 +152,25 @@ class ProcessWorkerTest {
     void runsEachDriverInItsOwnProcessWithItsOwnLibraries() throws Exception {
         try (ProcessWorker worker = newWorker()) {
             // A run id set before a driver process exists is passed to the next one that starts
-            worker.setRunId("run-before-start");
+            worker.setRunContext(new RunContext("run-before-start", "workload-alpha"));
             worker.setPhase(RunPhase.WARMUP);
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
-            worker.setRunId("run-alpha");
+            worker.setRunContext(new RunContext("run-beta", "workload-beta"));
             long alphaPid = worker.pid();
             assertThat(worker.createTopics(new TopicsInfo(1, 1)))
                     .singleElement()
                     .asString()
                     .startsWith("alpha-v1-isolated-");
             assertThat(worker.scrapeMetrics())
-                    .contains("messages_sent_total", "fixture_driver_initialized_total")
+                    .contains(
+                            "messages_sent_total",
+                            "fixture_driver_initialized_total",
+                            "e2e_latency_seconds_bucket{")
                     .containsPattern("benchmark_phase\\{[^}]*phase=\"warmup\"[^}]*} 1\\.0")
-                    // The run id is a launch tag; a later setRunId does not retag the running driver
+                    // The run id is a launch tag; a later setRunContext does not retag the running driver
                     .containsPattern(
-                            "messages_sent_total\\{[^}]*driver=\"test\"[^}]*run_id=\"run-before-start\"");
+                            "messages_sent_total\\{[^}]*driver=\"test\"[^}]*run_id=\"run-before-start\""
+                                    + "[^}]*workload=\"workload-alpha\"");
             worker.stopAll();
             assertThat(worker.pid()).isEqualTo(alphaPid);
 
@@ -177,6 +182,11 @@ class ProcessWorkerTest {
                     .singleElement()
                     .asString()
                     .startsWith("beta-v2-isolated-");
+            // The next driver process carries the run context set since
+            assertThat(worker.scrapeMetrics())
+                    .containsPattern(
+                            "messages_sent_total\\{[^}]*run_id=\"run-beta\"[^}]*workload=\"workload-beta\"")
+                    .doesNotContain("run-before-start");
 
             worker.close();
             assertThat(worker.pid()).isNull();

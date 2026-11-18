@@ -23,6 +23,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import io.openmessaging.benchmark.worker.commands.WorkerHealth;
@@ -74,7 +75,7 @@ public class ProcessWorker implements Worker {
     private volatile boolean closed;
     private volatile boolean unusable;
     private volatile boolean initializing;
-    private volatile @Nullable String runId;
+    private volatile @Nullable RunContext run;
     private volatile @Nullable RunPhase phase;
     // The last driver failure, reported by health() until the next driver initializes
     private volatile @Nullable String lastError;
@@ -142,9 +143,13 @@ public class ProcessWorker implements Worker {
 
         // Tags fixed at launch reach every meter; a driver process serves a single run
         Map<String, String> metricTags = new LinkedHashMap<>();
-        String launchRunId = runId;
-        if (launchRunId != null) {
-            metricTags.put("run_id", launchRunId);
+        RunContext launchRun = run;
+        if (launchRun != null) {
+            metricTags.put("run_id", launchRun.runId());
+            String workload = launchRun.workload();
+            if (workload != null && !workload.isBlank()) {
+                metricTags.put("workload", workload);
+            }
         }
         if (config.get("name") instanceof String name && !name.isBlank()) {
             metricTags.put("driver", name);
@@ -214,9 +219,9 @@ public class ProcessWorker implements Worker {
     }
 
     @Override
-    public void setRunId(String runId) {
+    public void setRunContext(RunContext run) {
         // Reaches the meters of the next driver process as a launch tag; a running one keeps its own
-        this.runId = runId;
+        this.run = run;
     }
 
     @Override

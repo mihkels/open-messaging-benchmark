@@ -26,6 +26,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
@@ -186,8 +187,8 @@ public final class DistributedWorkersEnsemble implements Worker {
     }
 
     @Override
-    public void setRunId(String runId) {
-        forAll(workers, worker -> worker.setRunId(runId));
+    public void setRunContext(RunContext run) {
+        forAll(workers, worker -> worker.setRunContext(run));
     }
 
     @Override

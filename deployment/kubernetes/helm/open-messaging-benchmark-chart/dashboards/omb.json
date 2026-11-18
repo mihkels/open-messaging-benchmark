@@ -1,0 +1,853 @@
+{
+  "uid": "omb-workers",
+  "title": "OpenMessaging Benchmark",
+  "description": "Worker metrics of the OpenMessaging Benchmark, by run and workload",
+  "tags": [
+    "omb",
+    "benchmark"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "workload",
+        "label": "Workload",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(messages_sent_total, workload)",
+          "refId": "workload"
+        },
+        "definition": "label_values(messages_sent_total, workload)",
+        "refresh": 2,
+        "sort": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "run_id",
+        "label": "Run id",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(messages_sent_total{workload=~\"$workload\"}, run_id)",
+          "refId": "run_id"
+        },
+        "definition": "label_values(messages_sent_total{workload=~\"$workload\"}, run_id)",
+        "refresh": 2,
+        "sort": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "instance",
+        "label": "Worker",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(messages_sent_total{run_id=~\"$run_id\"}, instance)",
+          "refId": "instance"
+        },
+        "definition": "label_values(messages_sent_total{run_id=~\"$run_id\"}, instance)",
+        "refresh": 2,
+        "sort": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "subscriptions",
+        "label": "Subscriptions per topic",
+        "type": "textbox",
+        "query": "1",
+        "current": {
+          "text": "1",
+          "value": "1"
+        },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Throughput",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 2,
+      "title": "Publish vs consume rate",
+      "description": "Messages sent and received per second, summed over the selected workers.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum by (run_id) (rate(messages_sent_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "publish {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "sum by (run_id) (rate(messages_recv_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "consume {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 3,
+      "title": "Byte rate",
+      "description": "Payload bytes sent and received per second.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum by (run_id) (rate(bytes_sent_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "publish {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "sum by (run_id) (rate(bytes_recv_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "consume {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 4,
+      "title": "Backlog",
+      "description": "Messages sent times the subscriptions variable minus messages received, over the selected workers. Set subscriptions to the workload's subscriptions per topic and keep every worker selected. Workers are scraped at different moments, so the value is off by up to the rate times the scrape interval and can dip below zero; the JSON result has the exact backlog.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum by (run_id) (messages_sent_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}) * $subscriptions - sum by (run_id) (messages_recv_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "{{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "Send error rate",
+      "description": "Failed sends per second.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "sum by (run_id) (rate(message_send_errors_total{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 6,
+      "title": "Latency",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 7,
+      "title": "Publish latency",
+      "description": "Send to send completion. Percentiles come from histogram buckets of 100 us to 60 s, so they are approximate; use the JSON result for exact values.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le, run_id) (rate(produce_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, run_id) (rate(produce_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.999, sum by (le, run_id) (rate(produce_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99.9 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "max by (run_id) (produce_latency_seconds_max{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "max {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 8,
+      "title": "Schedule-corrected publish latency",
+      "description": "Intended send time to send completion, so a stalled producer does not hide queueing. Percentiles come from histogram buckets of 100 us to 60 s, so they are approximate; use the JSON result for exact values.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le, run_id) (rate(produce_schedule_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, run_id) (rate(produce_schedule_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.999, sum by (le, run_id) (rate(produce_schedule_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99.9 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "max by (run_id) (produce_schedule_latency_seconds_max{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "max {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "Publish delay",
+      "description": "Delay between the scheduled and the actual send. Percentiles come from histogram buckets of 100 us to 60 s, so they are approximate; use the JSON result for exact values.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le, run_id) (rate(producer_delay_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, run_id) (rate(producer_delay_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.999, sum by (le, run_id) (rate(producer_delay_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99.9 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "max by (run_id) (producer_delay_latency_seconds_max{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "max {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 10,
+      "title": "End-to-end latency",
+      "description": "Publish timestamp to receipt; depends on clock offset between workers. Percentiles come from histogram buckets of 100 us to 60 s, so they are approximate; use the JSON result for exact values.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le, run_id) (rate(e2e_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le, run_id) (rate(e2e_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.999, sum by (le, run_id) (rate(e2e_latency_seconds_bucket{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p99.9 {{run_id}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "max by (run_id) (e2e_latency_seconds_max{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "max {{run_id}}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 11,
+      "title": "Run phase",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "id": 12,
+      "title": "Phase",
+      "description": "Current run phase reported by the workers.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": " "
+                },
+                "1": {
+                  "text": "active"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "max by (phase) (benchmark_phase{run_id=~\"$run_id\",workload=~\"$workload\",instance=~\"$instance\"})",
+          "legendFormat": "{{phase}}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 13,
+      "title": "JVM",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 14,
+      "title": "Heap used",
+      "description": "Heap of the worker supervisor and driver JVMs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 41
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "omb_resource_heap_used_bytes{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} {{role}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "GC time share",
+      "description": "Share of wall time spent in garbage collection.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 41
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "rate(omb_resource_gc_collection_seconds{instance=~\"$instance\"}[$__rate_interval])",
+          "legendFormat": "{{instance}} {{role}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 16,
+      "title": "CPU",
+      "description": "Process CPU in cores.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 41
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "rate(omb_resource_cpu_seconds{instance=~\"$instance\"}[$__rate_interval])",
+          "legendFormat": "{{instance}} {{role}}"
+        }
+      ]
+    }
+  ]
+}

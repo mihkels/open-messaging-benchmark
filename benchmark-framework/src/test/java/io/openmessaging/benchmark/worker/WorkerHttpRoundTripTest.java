@@ -31,6 +31,7 @@ import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RunContext;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
@@ -98,12 +99,13 @@ class WorkerHttpRoundTripTest {
         List<String> topics = List.of("topic-α", "topic-\"quoted\"");
         when(worker.createTopics(any())).thenReturn(topics);
         assertThat(remote.id()).isEqualTo(host);
-        remote.setRunId("018f0000-0000-7000-8000-000000000001");
+        remote.setRunContext(new RunContext("018f0000-0000-7000-8000-000000000001", "workload-α"));
         remote.setPhase(RunPhase.BACKLOG_DRAIN);
         assertThat(remote.createTopics(info)).containsExactlyElementsOf(topics);
         ArgumentCaptor<TopicsInfo> capturedInfo = ArgumentCaptor.forClass(TopicsInfo.class);
         verify(worker).createTopics(capturedInfo.capture());
-        verify(worker).setRunId("018f0000-0000-7000-8000-000000000001");
+        verify(worker)
+                .setRunContext(new RunContext("018f0000-0000-7000-8000-000000000001", "workload-α"));
         verify(worker).setPhase(RunPhase.BACKLOG_DRAIN);
         assertThat(capturedInfo.getValue()).usingRecursiveComparison().isEqualTo(info);
 
@@ -371,12 +373,22 @@ class WorkerHttpRoundTripTest {
     }
 
     @Test
+    void rejectsRunContextWithoutRunId() throws Exception {
+        assertThat(
+                        rawPost(host + WorkerHandler.SET_RUN_ID, "application/json", "{\"workload\":\"w\"}")
+                                .statusCode())
+                .isEqualTo(500);
+        verifyNoMoreInteractions(worker);
+    }
+
+    @Test
     void acceptsJsonWithParametersAndLeavesGetsUnchecked() throws Exception {
         assertThat(
                         rawPost(host + WorkerHandler.SET_RUN_ID, "Application/JSON; charset=utf-8", "\"run-1\"")
                                 .statusCode())
                 .isEqualTo(200);
-        verify(worker).setRunId("run-1");
+        // A JSON string is the run id alone, as coordinators without the workload tag send it
+        verify(worker).setRunContext(new RunContext("run-1", null));
         when(worker.getCountersStats()).thenReturn(new CountersStats(1, 2, 3));
         try (HttpClient client = HttpClient.newHttpClient()) {
             HttpResponse<String> response =

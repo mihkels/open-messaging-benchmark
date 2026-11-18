@@ -128,6 +128,7 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `workers.tls.enabled`                                                  | `false`                                                                       | Serve the worker API over HTTPS with a shared self-signed certificate. See below                                 |
 | `workers.tls.existingSecret`                                           | empty                                                                         | `kubernetes.io/tls` Secret, for example from cert-manager. When empty, the chart creates `<fullname>-worker-tls` |
 | `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                                              |
+| `grafana.dashboard.enabled`                                            | `false`                                                                       | ConfigMap with a Grafana dashboard for the dashboard sidecar. See below                                          |
 | `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                                             |
 
 The coordinator finds the workers through the headless Service: `WORKERS` is
@@ -200,6 +201,24 @@ the worker can no longer take a driver. Only ready workers are listed by the hea
 the next run starts a fresh driver; the coordinator's watchdog fails the running workload instead.
 Liveness stays a cheap TCP check, so a crashed driver never restarts the worker pod under a run.
 Broker addresses in the driver configuration must be reachable from the worker pods.
+
+### Grafana dashboard
+
+`grafana.dashboard.enabled=true` adds a ConfigMap `<fullname>-dashboard` labeled
+`grafana_dashboard: "1"`, which the Grafana dashboard sidecar (on by default in
+kube-prometheus-stack) loads. The dashboard source is
+[`dashboards/omb.json`](https://github.com/mihkels/open-messaging-benchmark/tree/main/deployment/kubernetes/helm/open-messaging-benchmark-chart/dashboards/omb.json)
+in the chart; import it by hand into a Grafana without the sidecar.
+
+Grafana needs a Prometheus data source that scrapes the worker pods' `/metrics` on port 8080, for
+example with a `PodMonitor` that selects `app.kubernetes.io/component: worker`; add the Prometheus
+namespace to `networkPolicy.metricsFrom`. The dashboard shows publish and consume rates, byte rates,
+backlog, send errors, publish, schedule-corrected publish, publish-delay and end-to-end latency
+percentiles, the run phase, and heap, GC and CPU of the worker JVMs. Its variables select the
+`workload`, `run_id` and worker (`instance`); set **Subscriptions per topic** to the workload's
+`subscriptionsPerTopic` for a correct backlog. Workers are scraped at different moments, so the
+backlog is off by up to the rate times the scrape interval and can dip below zero. Every run is a
+new `run_id` series set; see [Worker metrics](monitoring.md#worker-metrics) for the retention cost.
 
 For meaningful numbers, schedule workers on dedicated nodes, away from the brokers, with CPU
 requests that match their limits. To try the chart with every driver on a laptop, see

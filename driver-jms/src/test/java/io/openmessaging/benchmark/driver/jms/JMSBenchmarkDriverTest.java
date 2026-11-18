@@ -515,6 +515,43 @@ public class JMSBenchmarkDriverTest {
         assertEquals(List.of("createConsumer:null"), calls);
     }
 
+    @Test
+    void jms11RejectsSecondConsumerOnSameSubscription() throws Exception {
+        List<String> calls = new ArrayList<>();
+        JMSBenchmarkDriver driver = consumerDriver(new JMSConfig(), calls);
+
+        driver.createConsumer("topic", "subscription", null).join().close();
+        driver.createConsumer("topic", "other-subscription", null).join().close();
+        driver.createConsumer("other-topic", "subscription", null).join().close();
+        CompletionException failure =
+                assertThrows(
+                        CompletionException.class,
+                        () -> driver.createConsumer("topic", "subscription", null).join());
+
+        IllegalArgumentException cause =
+                assertInstanceOf(IllegalArgumentException.class, failure.getCause());
+        assertEquals(
+                "JMS driver with use20api: false creates a non-shared subscriber per consumer:"
+                        + " subscription subscription on topic topic already has a consumer"
+                        + " (set consumerPerSubscription: 1 or use20api: true)",
+                cause.getMessage());
+        // No JMS consumer is opened for the rejected one
+        assertEquals(3, calls.size());
+    }
+
+    @Test
+    void jms20AllowsSeveralConsumersOnSameSubscription() throws Exception {
+        JMSConfig config = new JMSConfig();
+        config.use20api = true;
+        List<String> calls = new ArrayList<>();
+        JMSBenchmarkDriver driver = consumerDriver(config, calls);
+
+        driver.createConsumer("topic", "subscription", null).join().close();
+        driver.createConsumer("topic", "subscription", null).join().close();
+
+        assertEquals(2, calls.size());
+    }
+
     private static JMSBenchmarkDriver consumerDriver(JMSConfig config, List<String> calls)
             throws Exception {
         MessageConsumer consumer = proxy(MessageConsumer.class, (method, args) -> null);

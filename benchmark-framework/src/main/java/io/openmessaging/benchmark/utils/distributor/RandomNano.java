@@ -13,11 +13,13 @@
  */
 package io.openmessaging.benchmark.utils.distributor;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 public class RandomNano extends KeyDistributor {
 
     @Override
     public String next() {
-        int randomIndex = Math.abs((int) System.nanoTime() % getLength());
-        return get(randomIndex);
+        // nanoTime ticks are coarse on some hosts, so its low bits hit only a few hundred keys
+        return get(ThreadLocalRandom.current().nextInt(getLength()));
     }
 }

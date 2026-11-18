@@ -259,20 +259,17 @@ public class ProcessWorker implements Worker {
     /**
      * Prometheus metrics of the running driver process.
      *
-     * @return the metrics, or an empty string if no driver has been started
-     * @throws IllegalStateException if the driver exited or its metrics cannot be scraped
+     * <p>Reads only volatile fields so a scrape never waits for {@link #initializeDriver(Path)}.
+     *
+     * @return the metrics, or an empty string if no driver is running or it is still starting
+     * @throws IllegalStateException if the metrics cannot be scraped
      */
     public String scrapeMetrics() {
-        HttpWorkerClient client;
-        synchronized (this) {
-            DriverProcess running = current;
-            if (running == null || running.endpoint() == null) {
-                return "";
-            }
-            if (running.hasExited()) {
-                throw running.crashed(null);
-            }
-            client = Objects.requireNonNull(running.client(), "driver client after start");
+        DriverProcess running = current;
+        HttpWorkerClient client = running == null ? null : running.client();
+        // health() and the next driver call report a crash; crashed() here would hide it from stopAll
+        if (running == null || client == null || running.hasExited()) {
+            return "";
         }
         return client.scrapeMetrics();
     }

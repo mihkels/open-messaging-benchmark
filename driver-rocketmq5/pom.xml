@@ -56,6 +56,11 @@
                     <groupId>ch.qos.logback</groupId>
                     <artifactId>logback-classic</artifactId>
                 </exclusion>
+                <!-- Broker-side storage (~57 MB); no client or tools class references it -->
+                <exclusion>
+                    <groupId>org.rocksdb</groupId>
+                    <artifactId>rocksdbjni</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>

@@ -32,6 +32,10 @@ summarized in [Runtime and plugins](../reference/runtime-and-plugins.md).
 Paths inside a bundle are relative to the bundle directory. The directory name does not matter; the
 bundle is identified by the `id` in `plugin.yaml`.
 
+In the release tarball, jars that are byte-identical across bundles are stored once as hard links.
+Each bundle still loads its own copy in its own JVM. To patch a jar in one bundle, delete it first
+(`rm`, then copy) or replace it with `mv`: copying over it in place also changes the other bundles.
+
 ## `plugin.yaml`
 
 The descriptor of the example loopback driver,

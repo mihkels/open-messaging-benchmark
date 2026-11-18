@@ -92,7 +92,7 @@ final class RunCallbacks implements ConsumerCallback {
                 gate.readLock().unlock();
             }
             if (failure != null && accepting) {
-                log.warn("Write error on message", failure);
+                log.debug("Write error on message", failure);
             }
         } catch (Throwable t) {
             unexpectedFailure.accept(t);

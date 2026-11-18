@@ -18,6 +18,12 @@ import java.nio.ByteBuffer;
 /** Callback that the driver implementation calls when a message is received. */
 public interface ConsumerCallback {
     /**
+     * Publish timestamp for a message that carries none: the message is counted but gives no
+     * end-to-end latency sample, because the latency comes out negative and the framework drops it.
+     */
+    long NO_PUBLISH_TIMESTAMP = Long.MAX_VALUE / 1000;
+
+    /**
      * Driver should invoke this method (or the ByteBuffer variant) once for each message received.
      *
      * @param payload the received message payload

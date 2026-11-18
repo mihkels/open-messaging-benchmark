@@ -163,7 +163,6 @@ class MqttBenchmarkDriverOptionsTest {
         verify(callback).messageReceived(new byte[] {1}, 42L);
         verify(stamped).acknowledge();
 
-        long before = System.currentTimeMillis();
         Mqtt5Publish garbled =
                 publish(
                         new byte[] {2},
@@ -172,12 +171,9 @@ class MqttBenchmarkDriverOptionsTest {
         handler.getValue().accept(garbled);
         Mqtt5Publish unstamped = publish(new byte[] {3});
         handler.getValue().accept(unstamped);
-        ArgumentCaptor<Long> time = ArgumentCaptor.forClass(Long.class);
-        verify(callback)
-                .messageReceived(org.mockito.ArgumentMatchers.eq(new byte[] {2}), time.capture());
-        verify(callback)
-                .messageReceived(org.mockito.ArgumentMatchers.eq(new byte[] {3}), time.capture());
-        assertThat(time.getAllValues()).allMatch(t -> t >= before);
+        // Counted, but no latency sample: a consumer-clock fallback would record ~0 ms.
+        verify(callback).messageReceived(new byte[] {2}, ConsumerCallback.NO_PUBLISH_TIMESTAMP);
+        verify(callback).messageReceived(new byte[] {3}, ConsumerCallback.NO_PUBLISH_TIMESTAMP);
         verify(unstamped).acknowledge();
     }
 
@@ -226,9 +222,14 @@ class MqttBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void unknownQosFallsBackToAtLeastOnce() {
-        assertThat(MqttBenchmarkDriver.intToQoS(7)).isEqualTo(MqttQos.AT_LEAST_ONCE);
+    void unknownQosIsRejected() {
+        assertThatThrownBy(() -> MqttBenchmarkDriver.intToQoS(3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid MQTT qos 3; use 0, 1 or 2");
+        assertThatThrownBy(() -> MqttBenchmarkDriver.intToQoS(-1))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThat(MqttBenchmarkDriver.intToQoS(0)).isEqualTo(MqttQos.AT_MOST_ONCE);
+        assertThat(MqttBenchmarkDriver.intToQoS(2)).isEqualTo(MqttQos.EXACTLY_ONCE);
     }
 
     @Test

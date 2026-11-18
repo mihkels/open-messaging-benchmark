@@ -124,6 +124,8 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 | `workers.auth.existingSecret` / `workers.auth.secretKey`               | empty, `token`                                                                | Secret holding the token. When empty, the chart creates `<fullname>-worker-token`      |
 | `workers.auth.token`                                                   | empty                                                                         | Fixed token for the created Secret; set it or `existingSecret` for GitOps renders      |
 | `workers.auth.protectMetrics`                                          | `false`                                                                       | Require the token on `/metrics` too                                                    |
+| `workers.tls.enabled`                                                  | `false`                                                                       | Serve the worker API over HTTPS with a shared self-signed certificate. See below       |
+| `workers.tls.existingSecret`                                           | empty                                                                         | `kubernetes.io/tls` Secret, for example from cert-manager. When empty, the chart creates `<fullname>-worker-tls` |
 | `networkPolicy.enabled`                                                | `true`                                                                        | Only the coordinator may reach the worker port 8080                                    |
 | `extraVolumes`, `extraVolumeMounts`, `extraInitContainers`, `extraEnv` | empty                                                                         | For example JMS provider jars in `/benchmark/drivers/driver-jms/ext`                   |
 
@@ -170,6 +172,26 @@ helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-cha
 too, for example with `authorization.credentials_file` in its scrape configuration. Probes are not
 affected: `/health` needs no token. `workers.auth.enabled=false` starts the workers with
 `--insecure-no-auth`, which leaves only the NetworkPolicy in front of the API.
+
+With `workers.tls.enabled=true` the workers serve HTTPS, so the token does not cross the cluster
+network in clear text. The chart creates a `kubernetes.io/tls` Secret with a self-signed
+certificate (Helm's `genSelfSignedCert`) and reuses it on `helm upgrade`; like the generated token,
+`helm template`, Argo CD and Flux render a new one each time, so use `workers.tls.existingSecret`
+there. Workers mount the certificate and key, the coordinator only the certificate, which it trusts
+through `OMB_WORKER_CA_FILE`; `dns://` discovery then uses `https://`. Readiness probes switch to
+HTTPS. The coordinator trusts that one certificate and does not check host names, since it reaches
+workers by pod IP, so cert-manager is optional: any `kubernetes.io/tls` Secret works, for example
+
+```bash
+bin/benchmark-tls-cert tls
+kubectl create secret tls omb-worker-tls --cert=tls/worker.crt --key=tls/worker.key
+helm install omb oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart --version <version> \
+  --set workers.tls.enabled=true --set workers.tls.existingSecret=omb-worker-tls
+```
+
+A cert-manager `Certificate` works the same way; give it `privateKey.encoding: PKCS8` or an RSA key,
+since the worker reads PKCS#8 and PKCS#1 RSA keys. Prometheus must then scrape with
+`scheme: https` (see [Monitoring](monitoring.md)).
 
 Worker readiness is an HTTP GET of [`/health`](monitoring.md#worker-health), which answers 503 once
 the worker can no longer take a driver. Only ready workers are listed by the headless Service, so

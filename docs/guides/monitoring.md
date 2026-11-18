@@ -110,6 +110,11 @@ scrape_configs:
 `--protect-metrics`; then add `authorization: {credentials_file: /path/to/token}` to the scrape job.
 See [Authentication](../reference/cli.md#authentication).
 
+Workers started with `--tls-cert` serve `/metrics` over HTTPS only. Add `scheme: https` and
+`tls_config: {ca_file: /path/to/worker.crt, server_name: omb-worker}`
+to the scrape job: the shared certificate's name is `omb-worker`, not the target's host name. See
+[TLS](../reference/cli.md#tls).
+
 JVM resource gauges are exported separately as `omb_resource_*`, with `role="supervisor"` and
 `role="driver"` labels so the combined endpoint retains process identity. They include process
 CPU seconds, heap used/committed bytes, non-heap/direct-buffer bytes, platform-thread count,

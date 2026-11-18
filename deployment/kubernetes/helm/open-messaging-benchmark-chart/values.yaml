@@ -84,6 +84,17 @@ workers:
     secretKey: token
     # Require the token on /metrics too. Leave false so Prometheus can scrape without it
     protectMetrics: false
+  # Serve the worker API over HTTPS so the token does not cross the network in clear text. Workers
+  # get the certificate and key, the coordinator only the certificate, which it trusts as the one
+  # certificate every worker presents (host names are not checked, since workers are reached by
+  # pod IP). Readiness probes switch to HTTPS; Prometheus must then scrape with scheme: https.
+  tls:
+    enabled: false
+    # Name of an existing kubernetes.io/tls Secret, for example one cert-manager issues. Its key
+    # must be PKCS#8 or PKCS#1 RSA. When empty, the chart creates <fullname>-worker-tls with a
+    # self-signed certificate that stays the same across upgrades (the lookup caveat of
+    # auth.token applies: helm template, Argo CD and Flux render a new one each time)
+    existingSecret: ""
 
 coordinator:
   # interactive: a long-running pod to exec into and start runs by hand

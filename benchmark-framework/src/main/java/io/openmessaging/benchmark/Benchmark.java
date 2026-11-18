@@ -125,6 +125,15 @@ public final class Benchmark {
         public @Nullable Path workerTokenFile;
 
         @Parameter(
+                names = "--worker-ca-file",
+                description =
+                        "PEM certificate that https:// workers present (their --tls-cert); overrides the "
+                                + HttpWorkerClient.CA_FILE_ENV
+                                + " environment variable. With a dns:// address, workers are reached over"
+                                + " https:// when this is set")
+        public @Nullable Path workerCaFile;
+
+        @Parameter(
                 names = {"-x", "--extra"},
                 description = "Allocate extra consumer workers when your backlog builds.")
         boolean extraConsumers;
@@ -325,9 +334,10 @@ public final class Benchmark {
                 throw new IllegalArgumentException(
                         "A dns:// worker address cannot be combined with other worker addresses: " + workers);
             }
-            arguments.workers =
+            List<String> resolved =
                     WorkerDiscovery.resolve(
                             workers.getFirst(), arguments.expectedWorkers, arguments.workersTimeout);
+            arguments.workers = discoveredUrls(resolved, workerCaFile(arguments, System.getenv()));
         }
     }
 
@@ -358,13 +368,45 @@ public final class Benchmark {
         return workloads;
     }
 
+    // The certificate https:// workers present: --worker-ca-file, else the environment variable
+    static @Nullable Path workerCaFile(Arguments arguments, Map<String, String> environment) {
+        if (arguments.workerCaFile != null) {
+            return arguments.workerCaFile;
+        }
+        String fromEnv = environment.get(HttpWorkerClient.CA_FILE_ENV);
+        return fromEnv == null || fromEnv.isBlank() ? null : Path.of(fromEnv.strip());
+    }
+
+    // Discovery yields http:// URLs; a configured worker certificate means the workers use TLS
+    static List<String> discoveredUrls(List<String> resolved, @Nullable Path caFile) {
+        return caFile == null
+                ? resolved
+                : resolved.stream().map(url -> "https" + url.substring("http".length())).toList();
+    }
+
+    // Workers use self-signed certificates, so an https:// worker needs the certificate to trust
+    static @Nullable String missingWorkerCa(List<String> workers, @Nullable Path caFile) {
+        if (caFile == null
+                && workers.stream().anyMatch(w -> w.regionMatches(true, 0, "https://", 0, 8))) {
+            return "https:// workers need --worker-ca-file or "
+                    + HttpWorkerClient.CA_FILE_ENV
+                    + " naming the certificate they present";
+        }
+        return null;
+    }
+
     private static Worker createWorker(Arguments arguments) {
         if (arguments.workers != null && !arguments.workers.isEmpty()) {
             String token =
                     BearerTokenAuth.resolveToken(System.getenv(), arguments.workerTokenFile).orElse(null);
+            Path caFile = workerCaFile(arguments, System.getenv());
+            String tlsError = missingWorkerCa(arguments.workers, caFile);
+            if (tlsError != null) {
+                throw new IllegalArgumentException(tlsError);
+            }
             List<Worker> workers =
                     arguments.workers.stream()
-                            .map(host -> (Worker) new HttpWorkerClient(host, token))
+                            .map(host -> (Worker) new HttpWorkerClient(host, token, caFile))
                             .toList();
             log.info("Using distributed workers ensemble");
             if (arguments.driverLocation != null) {
@@ -376,6 +418,9 @@ public final class Benchmark {
         }
         if (arguments.workerTokenFile != null) {
             log.warn("--worker-token-file is ignored without remote workers");
+        }
+        if (arguments.workerCaFile != null) {
+            log.warn("--worker-ca-file is ignored without remote workers");
         }
         // Run the driver in a child JVM with only its plugin bundle on the classpath
         log.info("Using local driver process worker");

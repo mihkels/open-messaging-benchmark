@@ -64,6 +64,12 @@ spec:
             {{- else if .Values.workers.auth.protectMetrics }}
             - --protect-metrics
             {{- end }}
+            {{- if .Values.workers.tls.enabled }}
+            - --tls-cert
+            - /tls/tls.crt
+            - --tls-key
+            - /tls/tls.key
+            {{- end }}
           env:
             - name: HEAP_OPTS
               value: {{ .Values.workers.heapOpts | quote }}
@@ -84,6 +90,9 @@ spec:
             httpGet:
               path: /health
               port: http
+              {{- if .Values.workers.tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
             initialDelaySeconds: 5
             periodSeconds: 5
           # A TCP check: a crashed driver must fail the run, not restart the worker under it
@@ -96,8 +105,20 @@ spec:
             {{- toYaml .Values.workers.resources | nindent 12 }}
           volumeMounts:
             {{- include "omb.volumeMounts" . | nindent 12 }}
+            {{- if .Values.workers.tls.enabled }}
+            - name: worker-tls
+              mountPath: /tls
+              readOnly: true
+            {{- end }}
       volumes:
         {{- include "omb.volumes" . | nindent 8 }}
+        {{- if .Values.workers.tls.enabled }}
+        - name: worker-tls
+          secret:
+            secretName: {{ include "omb.tlsSecretName" . }}
+            # Group-readable by fsGroup; the container runs as a non-root user
+            defaultMode: 0440
+        {{- end }}
       {{- with .Values.workers.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

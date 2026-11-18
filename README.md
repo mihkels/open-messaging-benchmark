@@ -36,7 +36,7 @@ docker buildx bake                # or pull docker.io/mihkels/open-messaging-ben
 cd local-test && docker compose up -d
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
-     --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \
+     --workers https://omb-worker-1:8080,https://omb-worker-2:8080 \
      -o /results/first-result.json /workloads/simple.yaml'
 ```
 

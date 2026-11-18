@@ -20,6 +20,7 @@ port to the coordinator with a NetworkPolicy by default and can enable the token
 
 Images (`docker.io/mihkels/open-messaging-benchmark`) and the Helm chart
 (`docker.io/mihkels/open-messaging-benchmark-chart`) are signed keylessly with cosign from this
-repository's GitHub Actions workflows, and images carry SBOM and provenance attestations. See
-[Releasing](docs/development/releasing.md#verifying-images-and-charts) for the `cosign verify`
-commands.
+repository's GitHub Actions workflows. Images carry signed SBOM (SPDX) and SLSA provenance
+attestations; the chart and the release tarball carry SLSA provenance as GitHub artifact
+attestations. See [Releasing](docs/development/releasing.md#verifying-images-and-charts) for the
+`cosign verify`, `cosign verify-attestation` and `gh attestation verify` commands.

@@ -59,7 +59,8 @@ hand.
 - Only pushes to `main` write caches, and release tags use none, so a pull request cannot poison
   what is published.
 - Images and charts are signed keylessly with cosign through GitHub's OIDC token: no signing keys
-  are stored. Images carry SBOM and SLSA provenance attestations.
+  are stored. Images carry cosign SBOM (SPDX) and SLSA provenance attestations; the chart and the
+  release tarball carry SLSA provenance as GitHub artifact attestations.
 - Trivy scans every image and sends all findings to code scanning. Fixable critical and high
   vulnerabilities in the base image packages and the benchmark framework (`/benchmark/lib`) fail
   the build. Findings in the client libraries bundled with driver plugins (`/benchmark/drivers`)
@@ -101,13 +102,40 @@ cosign verify docker.io/mihkels/open-messaging-benchmark-chart:0.1.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-SBOM and provenance:
+SBOM and provenance attestations on images, one of each per platform. The SPDX document name
+ends with the platform (`linux/amd64`, `linux/arm64`). The provenance predicate is SLSA v1, so
+the type is `slsaprovenance1` (`slsaprovenance` means SLSA v0.2):
 
 ```bash
-docker buildx imagetools inspect docker.io/mihkels/open-messaging-benchmark:0.1.0 \
-  --format '{{ json .SBOM }}'
-docker buildx imagetools inspect docker.io/mihkels/open-messaging-benchmark:0.1.0 \
-  --format '{{ json .Provenance }}'
+cosign verify-attestation docker.io/mihkels/open-messaging-benchmark:0.1.0 --type spdxjson \
+  --certificate-identity-regexp '^https://github.com/mihkels/open-messaging-benchmark/\.github/workflows/docker\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  | jq -r '.payload | @base64d | fromjson | .predicate.name'
+
+cosign verify-attestation docker.io/mihkels/open-messaging-benchmark:0.1.0 --type slsaprovenance1 \
+  --certificate-identity-regexp '^https://github.com/mihkels/open-messaging-benchmark/\.github/workflows/docker\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
 ```
+
+The same SBOM and provenance are also readable unsigned with
+`docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'` (or `.Provenance`).
+
+SLSA provenance for the Helm chart and the release tarball is stored as a GitHub artifact
+attestation:
+
+```bash
+gh attestation verify oci://docker.io/mihkels/open-messaging-benchmark-chart:0.1.0 \
+  --repo mihkels/open-messaging-benchmark \
+  --signer-workflow mihkels/open-messaging-benchmark/.github/workflows/helm.yml
+
+gh release download v0.1.0 --repo mihkels/open-messaging-benchmark \
+  --pattern 'openmessaging-benchmark-*-bin.tar.gz'
+gh attestation verify openmessaging-benchmark-0.1.0-bin.tar.gz \
+  --repo mihkels/open-messaging-benchmark \
+  --signer-workflow mihkels/open-messaging-benchmark/.github/workflows/docker.yml
+```
+
+Releases published before these attestations were added carry only the image signatures and the
+BuildKit SBOM and provenance.
 
 For production clusters, pin the image digest (`image.digest` in the chart) rather than a tag.

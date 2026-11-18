@@ -99,8 +99,9 @@ jobs:
     environment: dockerhub
     permissions:
       contents: read
-      # Keyless cosign signing through GitHub's OIDC token
+      # Keyless cosign signing and the SLSA provenance attestation through GitHub's OIDC token
       id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -141,3 +142,9 @@ jobs:
             cosign login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
           mise exec "cosign@$COSIGN_VERSION" -- cosign sign --yes "$CHART_REPOSITORY@$DIGEST"
           echo "Signed $CHART_REPOSITORY@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+      # Stored in GitHub's attestation store, which `gh attestation verify oci://...` reads by digest
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CHART_REPOSITORY }}
+          subject-digest: ${{ steps.push.outputs.digest }}

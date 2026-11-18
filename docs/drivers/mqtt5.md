@@ -19,15 +19,15 @@ The MQTT 5 driver benchmarks MQTT 5 brokers with the [HiveMQ MQTT client](https:
 regression suite tests it against Eclipse Mosquitto; other brokers that support MQTT 5 shared subscriptions should
 work but are not tested here.
 
-|          Item          |                                          Value                                          |
-|------------------------|-----------------------------------------------------------------------------------------|
-| Plugin ID              | `mqtt5`                                                                                 |
-| Module                 | `driver-mqtt5`                                                                          |
-| `driverClass`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                           |
-| Example config shipped | `driver-mqtt5/mqtt5.yaml` (`tcp://localhost:1883`, no authentication)                   |
-| Tested broker          | `eclipse-mosquitto:2.0.22`, anonymous listener on 1883 (Compose stack `mqtt5`)          |
-| Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                  |
-| Known limitations      | No TLS or WebSocket; partitions and keys are ignored; latency uses the producer's clock |
+|          Item          |                                                  Value                                                  |
+|------------------------|---------------------------------------------------------------------------------------------------------|
+| Plugin ID              | `mqtt5`                                                                                                 |
+| Module                 | `driver-mqtt5`                                                                                          |
+| `driverClass`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                                           |
+| Example config shipped | `driver-mqtt5/mqtt5.yaml` (`tcp://localhost:1883`, no authentication)                                   |
+| Tested broker          | `eclipse-mosquitto:2.0.22`, anonymous listener on 1883 (Compose stack `mqtt5`)                          |
+| Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                                  |
+| Known limitations      | No WebSocket or client certificates; partitions and keys are ignored; latency uses the producer's clock |
 
 ## Local Docker Compose
 
@@ -119,19 +119,22 @@ Install the plugin bundle on every worker, see [Runtime and plugins](../referenc
 
 Keys are nested under `client` and `consumer` and read by `MqttConfig`. Unknown keys are ignored.
 
-|               Key                |  Type   |        Default         |                                                                            Description                                                                            |
-|----------------------------------|---------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `client.serverUri`               | string  | `tcp://localhost:1883` | Broker address as `[scheme://]host[:port]`. Only host and port are used. Without a port: 8883 for `ssl`, `tls` or `mqtts`, else 1883 (TLS itself is not enabled). |
-| `client.username`                | string  | empty                  | User name for MQTT simple authentication. Used only when `password` is also non-empty.                                                                            |
-| `client.password`                | string  | empty                  | Password. Used only when `username` is also non-empty.                                                                                                            |
-| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value is treated as `1`.                                                                          |
-| `client.topicPrefix`             | string  | `benchmark`            | First level of the topic names, without trailing slash.                                                                                                           |
-| `consumer.cleanSession`          | boolean | `true`                 | Clean Start flag of consumer connections.                                                                                                                         |
-| `consumer.sessionExpiryInterval` | int     | `259200` (3 days)      | Session expiry in seconds for consumer connections. Used only when `cleanSession` is `false`; otherwise 0.                                                        |
-| `consumer.receiveMaximum`        | int     | `256`                  | Receive Maximum of consumer connections: QoS 1 and 2 messages the broker may have unacknowledged per consumer.                                                    |
+|               Key                |  Type   |        Default         |                                                                              Description                                                                              |
+|----------------------------------|---------|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `client.serverUri`               | string  | `tcp://localhost:1883` | Broker address as `[scheme://]host[:port]`. Only host and port are used. `ssl`, `tls` and `mqtts` connect over TLS (default port 8883), others over plain TCP (1883). |
+| `client.username`                | string  | empty                  | User name for MQTT simple authentication. Used only when `password` is also non-empty.                                                                                |
+| `client.password`                | string  | empty                  | Password. Used only when `username` is also non-empty.                                                                                                                |
+| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value is treated as `1`.                                                                              |
+| `client.topicPrefix`             | string  | `benchmark`            | First level of the topic names, without trailing slash.                                                                                                               |
+| `consumer.cleanSession`          | boolean | `true`                 | Clean Start flag of consumer connections.                                                                                                                             |
+| `consumer.sessionExpiryInterval` | int     | `259200` (3 days)      | Session expiry in seconds for consumer connections. Used only when `cleanSession` is `false`; otherwise 0.                                                            |
+| `consumer.receiveMaximum`        | int     | `256`                  | Receive Maximum of consumer connections: QoS 1 and 2 messages the broker may have unacknowledged per consumer.                                                        |
 
-Producer connections use client defaults for Clean Start, session expiry and Receive Maximum. Keep-alive, TLS and
-WebSocket transport are not configurable; TLS and WebSocket are not supported.
+Producer connections use client defaults for Clean Start, session expiry and Receive Maximum. Keep-alive and
+WebSocket transport are not configurable, and WebSocket is not supported. With `ssl://`, `tls://` or `mqtts://`
+the driver uses TLS with the driver JVM's default trust store and checks the broker's host name. For a broker
+with a private CA, add `-Djavax.net.ssl.trustStore=<file> -Djavax.net.ssl.trustStorePassword=<password>` to
+`OMB_DRIVER_JVM_OPTS`.
 
 ## Semantics
 
@@ -230,7 +233,8 @@ Common problems:
   requires credentials and only one of `username` and `password` is set.
 - `Subscription rejected` or `Invalid SUBACK`: consumer creation failed. The broker may not support shared
   subscriptions, the user may lack permission, or the SUBACK may not match the requested filters.
-- A TLS port (8883) does not work: the driver only connects over plain TCP.
+- `PKIX path building failed` or a handshake error with `ssl://`/`mqtts://`: the driver JVM does not trust
+  the broker certificate, or its host name does not match. Add the CA to the driver JVM trust store as above.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in
 [Results](../guides/results.md).

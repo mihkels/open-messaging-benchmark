@@ -19,10 +19,8 @@ import io.nats.client.Nats;
 import io.nats.client.api.StorageType;
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,7 +32,7 @@ import org.testcontainers.containers.Network;
 class NatsE2eIT extends BaseE2eIT {
     @Test
     @DriverContract("nats")
-    void testFileAndMemoryStreamsWithFanoutAndTimestampPayload() throws Exception {
+    void testFileAndMemoryStreamsWithFanoutAndDeliveryVerification() throws Exception {
         try (Network network = Network.newNetwork();
                 GenericContainer<?> nats = BrokerFixtures.nats(network);
                 NetworkBenchmark runner = new NetworkBenchmark(network)) {
@@ -48,6 +46,14 @@ class NatsE2eIT extends BaseE2eIT {
             memory.topics = 2;
             memory.subscriptionsPerTopic = 2;
             validateResults(runner.run(BrokerFixtures.driverConfig("nats-memory.yaml"), memory), memory);
+
+            // The publish timestamp must not overwrite the delivery stamp in the payload (#418).
+            Workload verified = createSimpleWorkload();
+            verified.verifyDelivery = true;
+            SmokeResult delivery = runner.run(BrokerFixtures.driverConfig("nats-memory.yaml"), verified);
+            validateResults(delivery, verified);
+            assertThat(delivery.delivered()).as("stamped messages delivered").isPositive();
+            assertThat(delivery.duplicated()).as("duplicated").isZero();
 
             String server = "nats://" + nats.getHost() + ":" + nats.getMappedPort(4222);
             try (var connection = Nats.connect(server)) {
@@ -89,10 +95,7 @@ class NatsE2eIT extends BaseE2eIT {
                 producer.sendAsync(Optional.empty(), expected.clone()).get(10, TimeUnit.SECONDS);
                 for (MessageCapture capture : List.of(first, second)) {
                     MessageCapture.Delivery delivery = capture.await();
-                    assertThat(delivery.payload()).hasSize(expected.length);
-                    assertThat(Arrays.copyOfRange(delivery.payload(), 8, expected.length))
-                            .isEqualTo(Arrays.copyOfRange(expected, 8, expected.length));
-                    assertThat(ByteBuffer.wrap(delivery.payload()).getLong()).isEqualTo(delivery.timestamp());
+                    assertThat(delivery.payload()).isEqualTo(expected);
                     assertThat(delivery.timestamp()).isBetween(before, System.currentTimeMillis());
                 }
                 try (var connection = Nats.connect(server)) {

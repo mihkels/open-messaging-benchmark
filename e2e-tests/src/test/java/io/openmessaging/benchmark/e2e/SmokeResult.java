@@ -13,8 +13,29 @@
  */
 package io.openmessaging.benchmark.e2e;
 
+/**
+ * Totals of one smoke run.
+ *
+ * @param messagesSent messages acknowledged after the readiness probes
+ * @param messageSendErrors sends that failed
+ * @param messagesReceived messages received, one per subscription
+ * @param endToEndLatencyMillis mean end-to-end latency
+ * @param delivered stamped messages received for the first time; zero unless {@code verifyDelivery}
+ * @param duplicated stamped messages received again; zero unless {@code verifyDelivery}
+ */
 public record SmokeResult(
         long messagesSent,
         long messageSendErrors,
         long messagesReceived,
-        double endToEndLatencyMillis) {}
+        double endToEndLatencyMillis,
+        long delivered,
+        long duplicated) {
+
+    public SmokeResult(
+            long messagesSent,
+            long messageSendErrors,
+            long messagesReceived,
+            double endToEndLatencyMillis) {
+        this(messagesSent, messageSendErrors, messagesReceived, endToEndLatencyMillis, 0, 0);
+    }
+}

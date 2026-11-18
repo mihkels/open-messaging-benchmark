@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.nats.client.JetStream;
 import io.nats.client.api.PublishAck;
+import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -437,12 +438,13 @@ class NatsBenchmarkProducerLifecycleTest {
                         new Class<?>[] {JetStream.class},
                         (proxy, method, args) -> {
                             if (!method.getName().equals("publishAsync")
-                                    || method.getParameterCount() != 2
+                                    || method.getParameterCount() != 3
                                     || method.getParameterTypes()[0] != String.class
-                                    || method.getParameterTypes()[1] != byte[].class) {
+                                    || method.getParameterTypes()[1] != Headers.class
+                                    || method.getParameterTypes()[2] != byte[].class) {
                                 throw new AssertionError("Unexpected JetStream call: " + method);
                             }
-                            return publish.apply((String) args[0], (byte[]) args[1]);
+                            return publish.apply((String) args[0], (byte[]) args[2]);
                         });
     }
 }

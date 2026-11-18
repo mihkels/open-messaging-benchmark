@@ -24,9 +24,8 @@ import tools.jackson.databind.ser.std.StdSerializer;
 
 public class HistogramSerializer extends StdSerializer<Histogram> {
     private static final Logger log = LoggerFactory.getLogger(HistogramSerializer.class);
-    private static final int INITIAL_BUFFER_SIZE = 8 * 1024 * 1024;
-    private final ThreadLocal<ByteBuffer> threadBuffer =
-            ThreadLocal.withInitial(() -> ByteBuffer.allocate(INITIAL_BUFFER_SIZE));
+    // Compressed histograms are a few KB; serializeHistogram doubles the buffer when one is larger
+    private static final int INITIAL_BUFFER_SIZE = 64 * 1024;
 
     public HistogramSerializer() {
         super(Histogram.class);
@@ -74,12 +73,7 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
     @Override
     public void serialize(Histogram histogram, JsonGenerator jsonGenerator, SerializationContext ctxt)
             throws JacksonException {
-        ByteBuffer buffer = threadBuffer.get();
-        ByteBuffer newBuffer = serializeHistogram(histogram, buffer);
-        if (newBuffer != buffer) {
-            threadBuffer.set(newBuffer);
-        }
-        jsonGenerator.writeBinary(toByteArray(newBuffer));
-        threadBuffer.remove();
+        ByteBuffer buffer = serializeHistogram(histogram, ByteBuffer.allocate(INITIAL_BUFFER_SIZE));
+        jsonGenerator.writeBinary(buffer.array(), buffer.arrayOffset(), buffer.limit());
     }
 }

@@ -113,6 +113,17 @@ OMB_WORKER_TOKEN for the worker and coordinator containers when workers.auth.ena
 {{- end }}
 {{- end -}}
 
+{{/*
+Secret holding the worker TLS certificate: workers.tls.existingSecret, or the one this chart creates.
+*/}}
+{{- define "omb.tlsSecretName" -}}
+{{- if .Values.workers.tls.existingSecret -}}
+{{- .Values.workers.tls.existingSecret -}}
+{{- else -}}
+{{- printf "%s-worker-tls" (include "omb.fullname" . | trunc 48 | trimSuffix "-") -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "omb.driverPath" -}}
 {{- if .Values.driverConfig -}}/config/driver.yaml{{- else -}}{{ .Values.driver }}{{- end -}}
 {{- end -}}

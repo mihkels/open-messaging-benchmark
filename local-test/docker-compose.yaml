@@ -33,15 +33,31 @@ services:
     networks:
       - ombnet
 
+  # Creates the self-signed certificate the workers serve and the coordinator trusts
+  omb-tls-init:
+    image: ${OMB_IMAGE:-openmessaging-benchmark:local}
+    container_name: omb-tls-init
+    user: "0"
+    command: ["bash","-c","[ -s /tls/worker.key ] || bin/benchmark-tls-cert /tls DNS:omb-worker-1 DNS:omb-worker-2; chown -R 10001:10001 /tls"]
+    volumes:
+      - omb-tls:/tls
+    networks:
+      - ombnet
+
   omb-worker-1:
     image: ${OMB_IMAGE:-openmessaging-benchmark:local}
     container_name: omb-worker-1
     environment:
       - HEAP_OPTS=-Xms512m -Xmx512m
       - OMB_WORKER_TOKEN=${OMB_WORKER_TOKEN:-local-test-token}
-    command: ["bash","-c","bin/benchmark-worker -p 8080"]
+    command: ["bash","-c","bin/benchmark-worker -p 8080 --tls-cert /tls/worker.crt --tls-key /tls/worker.key"]
+    depends_on:
+      omb-tls-init:
+        condition: service_completed_successfully
+    volumes:
+      - omb-tls:/tls:ro
     ports:
-      - "127.0.0.1:18081:8080"   # HTTP API (bearer token) and /metrics (open); loopback only
+      - "127.0.0.1:18081:8080"   # HTTPS API (bearer token) and /metrics (open); loopback only
     networks:
       - ombnet
 
@@ -51,7 +67,12 @@ services:
     environment:
       - HEAP_OPTS=-Xms512m -Xmx512m
       - OMB_WORKER_TOKEN=${OMB_WORKER_TOKEN:-local-test-token}
-    command: ["bash","-c","bin/benchmark-worker -p 8080"]
+    command: ["bash","-c","bin/benchmark-worker -p 8080 --tls-cert /tls/worker.crt --tls-key /tls/worker.key"]
+    depends_on:
+      omb-tls-init:
+        condition: service_completed_successfully
+    volumes:
+      - omb-tls:/tls:ro
     ports:
       - "127.0.0.1:18082:8080"
     networks:
@@ -63,11 +84,13 @@ services:
     environment:
       - HEAP_OPTS=-Xms512m -Xmx512m
       - OMB_WORKER_TOKEN=${OMB_WORKER_TOKEN:-local-test-token}
+      - OMB_WORKER_CA_FILE=/tls/worker.crt
     depends_on:
       - kafka
       - omb-worker-1
       - omb-worker-2
     volumes:
+      - omb-tls:/tls:ro
       - ./drivers:/drivers:ro
       - ./workloads:/workloads:ro
       - ./payload:/payload:ro
@@ -75,7 +98,7 @@ services:
     command:
       [
         "bash","-c",
-        "echo 'Run the benchmark with:'; echo '  bin/benchmark --drivers /drivers/kafka.yaml --workers http://omb-worker-1:8080,http://omb-worker-2:8080 -o /results/result.json /workloads/simple.yaml'; exec sleep infinity"
+        "echo 'Run the benchmark with:'; echo '  bin/benchmark --drivers /drivers/kafka.yaml --workers https://omb-worker-1:8080,https://omb-worker-2:8080 -o /results/result.json /workloads/simple.yaml'; exec sleep infinity"
       ]
     networks:
       - ombnet
@@ -83,3 +106,6 @@ services:
 networks:
   ombnet:
     driver: bridge
+
+volumes:
+  omb-tls:

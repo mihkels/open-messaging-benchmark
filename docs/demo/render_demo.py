@@ -63,7 +63,7 @@ COMPOSE_OUTPUT = [
 RUN_COMMAND = [
     "docker exec -it omb-driver bash -lc \\",
     "  'bin/benchmark --drivers /drivers/kafka.yaml \\",
-    "     --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \\",
+    "     --workers https://omb-worker-1:8080,https://omb-worker-2:8080 \\",
     "     -o first-result.json /workloads/simple.yaml'",
 ]
 

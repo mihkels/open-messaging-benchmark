@@ -479,6 +479,7 @@ cmd_lint() {
         --set-file workloadConfig="$SUITE_DIR/workloads/contract.yaml"
     helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.protectMetrics=true
     helm lint --strict "$CHART_DIR" --set workers.auth.enabled=true --set workers.auth.existingSecret=omb-token
+    helm lint --strict "$CHART_DIR" --set workers.tls.enabled=true
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm lint --strict "$CHART_DIR" -f "$values"
     done
@@ -502,6 +503,16 @@ cmd_lint() {
     for f in default auth; do
         grep -q 'path: /health' "$rendered/$f.yaml" || die "$f.yaml readiness probe is not GET /health"
     done
+    grep -q -- '--tls-cert' "$rendered/default.yaml" && die "TLS must be off by default"
+    helm template "$RELEASE" "$CHART_DIR" --set workers.tls.enabled=true > "$rendered/tls.yaml"
+    grep -q 'type: kubernetes.io/tls' "$rendered/tls.yaml" || die "tls.yaml has no TLS Secret"
+    grep -q -- '--tls-cert' "$rendered/tls.yaml" || die "tls.yaml workers have no --tls-cert"
+    grep -q 'scheme: HTTPS' "$rendered/tls.yaml" || die "tls.yaml readiness probe is not HTTPS"
+    grep -q 'name: OMB_WORKER_CA_FILE' "$rendered/tls.yaml" || die "tls.yaml coordinator has no OMB_WORKER_CA_FILE"
+    helm template "$RELEASE" "$CHART_DIR" --set workers.tls.enabled=true \
+        --set workers.tls.existingSecret=omb-tls > "$rendered/tls-existing.yaml"
+    grep -q 'type: kubernetes.io/tls' "$rendered/tls-existing.yaml" \
+        && die "tls.existingSecret must not create a Secret"
     for values in "$LOCAL_DIR"/values/*.yaml; do
         helm template "$RELEASE" "$CHART_DIR" -f "$values" > "$rendered/values-$(basename "$values")"
     done

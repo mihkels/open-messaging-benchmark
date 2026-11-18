@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Creates a self-signed certificate for the worker HTTP API:
+#   bin/benchmark-tls-cert [directory] [extra subjectAltName entries, eg. DNS:w1 IP:10.0.0.5]
+# Writes <directory>/worker.crt and <directory>/worker.key (default directory: ./tls).
+# Give every worker both files (--tls-cert, --tls-key) and the coordinator worker.crt
+# (--worker-ca-file). The coordinator trusts only this certificate and does not check host
+# names, so the subjectAltName entries are informational.
+set -euo pipefail
+
+DIR=${1:-tls}
+shift || true
+SAN="DNS:omb-worker,DNS:localhost,IP:127.0.0.1"
+for extra in "$@"; do
+    SAN="$SAN,$extra"
+done
+
+command -v openssl >/dev/null || { echo "benchmark-tls-cert needs openssl on the PATH" >&2; exit 1; }
+mkdir -p "$DIR"
+umask 077
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 \
+    -subj "/CN=omb-worker" -addext "subjectAltName=$SAN" \
+    -keyout "$DIR/worker.key" -out "$DIR/worker.crt" 2>/dev/null
+chmod 644 "$DIR/worker.crt"
+
+cat <<MSG
+Wrote $DIR/worker.crt and $DIR/worker.key (valid 825 days).
+  Workers:     bin/benchmark-worker --tls-cert $DIR/worker.crt --tls-key $DIR/worker.key
+  Coordinator: bin/benchmark --worker-ca-file $DIR/worker.crt -w https://<worker>:8080,...
+MSG

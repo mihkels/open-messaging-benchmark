@@ -34,6 +34,7 @@ bin/benchmark [options] <workload.yaml>...
 | `--expected-workers`    | Count                 | With a `dns://` address, wait until this many workers resolve. Default `2`, the minimum                                                                                                          |
 | `--workers-timeout`     | Duration              | With a `dns://` address, how long to wait for `--expected-workers`, such as `30s` or `5m`. Default `5m`                                                                                          |
 | `--worker-token-file`   | Path                  | File with the bearer token to send to remote workers; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication)                                                                        |
+| `--worker-ca-file`      | Path                  | Certificate that `https://` workers present (their `--tls-cert`); overrides `OMB_WORKER_CA_FILE`. With `dns://`, workers are reached over `https://`. See [TLS](#tls)                            |
 | `-x`, `--extra`         |                       | In distributed mode, use about a third of the workers as producers instead of half                                                                                                               |
 | `-o`, `--output`        | Path                  | Write the result to this file instead of a generated name                                                                                                                                        |
 | `--report-html <file>`  |                       | Also write an [HTML report](../guides/html-report.md) of every run in this invocation to `<file>`                                                                                                |
@@ -151,6 +152,8 @@ bin/benchmark-worker [options]
 | `--token-file`        |         | File with the bearer token every request must send; overrides `OMB_WORKER_TOKEN`. See [Authentication](#authentication) |
 | `--protect-metrics`   |         | Require the token on `/metrics` too; it is open by default                                                              |
 | `--insecure-no-auth`  |         | Start without a token on a non-loopback `--bind`; the API is then open to anyone who reaches the port                   |
+| `--tls-cert`          |         | PEM certificate; with `--tls-key`, serve HTTPS instead of HTTP. See [TLS](#tls)                                         |
+| `--tls-key`           |         | PEM private key (PKCS#8 or PKCS#1 RSA) for `--tls-cert`                                                                 |
 | `-sp`, `--stats-port` |         | Deprecated and ignored; logs a warning if passed                                                                        |
 | `-h`, `--help`        |         | Print usage and exit                                                                                                    |
 
@@ -207,15 +210,39 @@ bin/benchmark -d driver-kafka/kafka-latency.yaml -w http://w1:8080,http://w2:808
 
 A worker without a token refuses to start on a non-loopback `--bind` address, such as the default
 `0.0.0.0`, and names the fix. On a loopback address, or with `--insecure-no-auth`, it starts with an
-unauthenticated API and logs a warning. Either way,
-the token travels in clear text over HTTP: run workers on a trusted network and keep the port closed
-to everything but the coordinator (and Prometheus). The supervisor's own channel to its driver
+unauthenticated API and logs a warning. Over plain HTTP the token travels in clear text: use
+[TLS](#tls), or run workers on a trusted network and keep the port closed to everything but the
+coordinator (and Prometheus). The supervisor's own channel to its driver
 process on `127.0.0.1` does not use this token, and the driver process does not get it.
 
 The worker rejects any request with an `Origin` header with `403 Forbidden`, because only browsers
 send one. A worker without a token also rejects a `Host` that is not an IP address or `localhost`,
 which stops a web page from reaching it through DNS rebinding. Address a tokenless worker by IP,
 for example `-w http://10.0.0.5:8080`, not by host name.
+
+### TLS
+
+Workers serve HTTPS instead of HTTP when given a PEM certificate and key. One self-signed
+certificate is shared by all workers, and the coordinator trusts exactly that certificate:
+
+```bash
+bin/benchmark-tls-cert tls                       # writes tls/worker.crt and tls/worker.key (needs openssl)
+bin/benchmark-worker --tls-cert tls/worker.crt --tls-key tls/worker.key   # on each worker, same files
+bin/benchmark --worker-ca-file tls/worker.crt -w https://w1:8080,https://w2:8080 workloads/simple.yaml
+```
+
+- `OMB_WORKER_CA_FILE` can stand in for `--worker-ca-file`. An `https://` worker without either is
+  a usage error. With a `dns://` address the discovered workers are reached over `https://` when a
+  certificate is configured.
+- The coordinator does not check the worker's host name, because workers are reached by IP (pod IPs
+  in Kubernetes) or names the certificate does not list. Anyone holding the workers' private key can
+  impersonate a worker, so keep `worker.key` on the workers only; the coordinator needs just
+  `worker.crt`. The bearer token still authenticates the coordinator, so use both.
+- The key may be PKCS#8 (`BEGIN PRIVATE KEY`, as `bin/benchmark-tls-cert` writes) or PKCS#1 RSA
+  (`BEGIN RSA PRIVATE KEY`, as Helm and cert-manager write by default). Convert other keys with
+  `openssl pkcs8 -topk8 -nocrypt -in KEY -out KEY.pk8`.
+- With TLS the worker answers only HTTPS on `--port`, `/metrics` included. The supervisor's channel to
+  its driver process stays plain HTTP on `127.0.0.1`.
 
 ## bin/benchmark-report
 

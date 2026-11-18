@@ -21,9 +21,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.metrics.otlp.OtlpExport;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -86,6 +88,18 @@ public final class BenchmarkWorker {
                 description = "Require the bearer token on /metrics too (it is open by default)")
         private boolean protectMetrics;
 
+        @Parameter(
+                names = "--tls-cert",
+                description =
+                        "PEM certificate chain; with --tls-key, the API is served over HTTPS instead of HTTP."
+                                + " Create one with bin/benchmark-tls-cert")
+        private @Nullable Path tlsCert;
+
+        @Parameter(
+                names = "--tls-key",
+                description = "PEM private key (PKCS#8 or PKCS#1 RSA) for --tls-cert")
+        private @Nullable Path tlsKey;
+
         public boolean isHelp() {
             return help;
         }
@@ -142,9 +156,23 @@ public final class BenchmarkWorker {
                 + " unauthenticated";
     }
 
+    /**
+     * Checks that TLS is either fully configured or not at all.
+     *
+     * @param arguments the parsed command line
+     * @return {@code null} when the TLS options are consistent, otherwise the reason they are not
+     */
+    static @Nullable String refuseIncompleteTls(Arguments arguments) {
+        if ((arguments.tlsCert == null) != (arguments.tlsKey == null)) {
+            return "--tls-cert and --tls-key must be given together";
+        }
+        return null;
+    }
+
     // WorkerHandler lives for the whole process; closed by the shutdown hook
     @SuppressWarnings("java:S2095")
-    static void main(String[] args) throws InterruptedException, UnknownHostException {
+    static void main(String[] args)
+            throws InterruptedException, IOException, GeneralSecurityException {
         final Arguments arguments = new Arguments();
         JCommander jc = new JCommander(arguments);
         jc.setProgramName("benchmark-worker");
@@ -172,7 +200,10 @@ public final class BenchmarkWorker {
         new JvmResourceMetrics().bindTo(registry, "supervisor");
 
         BearerTokenAuth auth = authFor(arguments, System.getenv());
-        String refusal = refuseUnauthenticated(arguments, auth);
+        String refusal = refuseIncompleteTls(arguments);
+        if (refusal == null) {
+            refusal = refuseUnauthenticated(arguments, auth);
+        }
         if (refusal != null) {
             System.err.println(refusal);
             System.exit(-1);
@@ -204,10 +235,25 @@ public final class BenchmarkWorker {
         // Drivers run in a child process with only their own plugin bundle on the classpath
         ProcessWorker worker = new ProcessWorker();
         WorkerHandler handler = new WorkerHandler(worker, auth);
+        var https =
+                arguments.tlsCert == null || arguments.tlsKey == null
+                        ? null
+                        : WorkerTls.connector(
+                                arguments.tlsCert,
+                                arguments.tlsKey,
+                                arguments.getBindAddress(),
+                                arguments.getHttpPort());
+        if (https != null) {
+            log.info("Serving the worker API over HTTPS with {}", arguments.tlsCert);
+        }
         Javalin app =
                 Javalin.create(
                                 config -> {
                                     handler.configure(config);
+                                    if (https != null) {
+                                        // Javalin adds its HTTP connector only when none was added
+                                        config.jetty.addConnector(https);
+                                    }
                                     config.routes.get(
                                             HttpWorkerClient.METRICS_PATH,
                                             ctx -> ctx.result(prometheusRegistry.scrape() + worker.scrapeMetrics()));

@@ -15,10 +15,40 @@ package io.openmessaging.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class BenchmarkArgumentsTest {
+
+    @Test
+    void workerCaFileComesFromTheOptionThenTheEnvironment() {
+        Benchmark.Arguments arguments = new Benchmark.Arguments();
+        assertThat(Benchmark.workerCaFile(arguments, Map.of())).isNull();
+        assertThat(Benchmark.workerCaFile(arguments, Map.of("OMB_WORKER_CA_FILE", " "))).isNull();
+        assertThat(Benchmark.workerCaFile(arguments, Map.of("OMB_WORKER_CA_FILE", "/tls/env.crt\n")))
+                .isEqualTo(Path.of("/tls/env.crt"));
+        arguments.workerCaFile = Path.of("/tls/flag.crt");
+        assertThat(Benchmark.workerCaFile(arguments, Map.of("OMB_WORKER_CA_FILE", "/tls/env.crt")))
+                .isEqualTo(Path.of("/tls/flag.crt"));
+    }
+
+    @Test
+    void httpsWorkersNeedTheirCertificate() {
+        List<String> https = List.of("http://w1:8080", "HTTPS://w2:8080");
+        assertThat(Benchmark.missingWorkerCa(https, null)).contains("--worker-ca-file");
+        assertThat(Benchmark.missingWorkerCa(https, Path.of("ca.crt"))).isNull();
+        assertThat(Benchmark.missingWorkerCa(List.of("http://w1:8080"), null)).isNull();
+    }
+
+    @Test
+    void discoveredWorkersUseHttpsWhenACertificateIsConfigured() {
+        List<String> resolved = List.of("http://10.0.0.1:8080", "http://[::1]:8080");
+        assertThat(Benchmark.discoveredUrls(resolved, null)).isEqualTo(resolved);
+        assertThat(Benchmark.discoveredUrls(resolved, Path.of("ca.crt")))
+                .containsExactly("https://10.0.0.1:8080", "https://[::1]:8080");
+    }
 
     @Test
     void rejectsOutputWhenCombinationsWouldOverwriteIt() {

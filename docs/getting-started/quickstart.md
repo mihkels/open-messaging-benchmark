@@ -59,11 +59,12 @@ The image runs as a non-root user and `/benchmark` is read-only; results go to `
 The [`local-test`](https://github.com/mihkels/open-messaging-benchmark/tree/main/local-test)
 directory contains a Compose file with:
 
-|            Service             |                            Role                             |
-|--------------------------------|-------------------------------------------------------------|
-| `kafka`                        | Apache Kafka 4.4.0 in KRaft mode, reachable as `kafka:9092` |
-| `omb-worker-1`, `omb-worker-2` | Benchmark workers listening on port 8080                    |
-| `omb-driver`                   | Idle container used to run the coordinator                  |
+|            Service             |                              Role                              |
+|--------------------------------|----------------------------------------------------------------|
+| `kafka`                        | Apache Kafka 4.4.0 in KRaft mode, reachable as `kafka:9092`    |
+| `omb-tls-init`                 | One-shot job that creates the workers' self-signed certificate |
+| `omb-worker-1`, `omb-worker-2` | Benchmark workers serving HTTPS on port 8080                   |
+| `omb-driver`                   | Idle container used to run the coordinator                     |
 
 It mounts `local-test/drivers`, `local-test/workloads` and `local-test/payload` into the
 coordinator container as `/drivers`, `/workloads` and `/payload`.
@@ -78,14 +79,16 @@ docker compose up -d
 docker compose ps
 ```
 
-All four containers should be running. Wait until Kafka and both workers are ready before starting
+All four long-running containers should be running; `omb-tls-init` exits once it has written the
+certificate. The coordinator trusts it through `OMB_WORKER_CA_FILE`, so `-k` in the `curl` checks
+below only skips verifying the self-signed certificate on your host. Wait until Kafka and both workers are ready before starting
 the benchmark:
 
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 --list
-curl -fsS -o /dev/null http://127.0.0.1:18081/metrics
-curl -fsS -o /dev/null http://127.0.0.1:18082/metrics
+curl -fsS -k -o /dev/null https://127.0.0.1:18081/metrics
+curl -fsS -k -o /dev/null https://127.0.0.1:18082/metrics
 ```
 
 The topic list may be empty; all three commands should succeed. If one fails, wait and retry it.
@@ -95,7 +98,7 @@ The topic list may be empty; all three commands should succeed. If one fails, wa
 ```bash
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
-     --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \
+     --workers https://omb-worker-1:8080,https://omb-worker-2:8080 \
      -o /results/first-result.json /workloads/simple.yaml'
 ```
 
@@ -150,7 +153,7 @@ docker exec -it omb-driver bash -lc \
 # One of the bundled workloads (paths relative to /benchmark)
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
-     --workers http://omb-worker-1:8080,http://omb-worker-2:8080 \
+     --workers https://omb-worker-1:8080,https://omb-worker-2:8080 \
      workloads/1-topic-16-partitions-1kb.yaml'
 ```
 

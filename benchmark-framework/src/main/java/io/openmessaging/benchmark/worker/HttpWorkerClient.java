@@ -33,6 +33,7 @@ import static io.openmessaging.benchmark.worker.WorkerHandler.STOP_ALL;
 import static io.openmessaging.benchmark.worker.WorkerHandler.YAML_CONTENT_TYPE;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
+import io.netty.handler.ssl.SslContextBuilder;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -54,8 +55,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javax.net.ssl.SSLException;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.BoundRequestBuilder;
+import org.asynchttpclient.DefaultAsyncHttpClientConfig;
 import org.asynchttpclient.Dsl;
 import org.asynchttpclient.Response;
 import org.jspecify.annotations.Nullable;
@@ -67,6 +70,9 @@ import tools.jackson.databind.ObjectWriter;
 public final class HttpWorkerClient implements Worker {
     /** The path of the Prometheus metrics of a benchmark worker or driver process. */
     public static final String METRICS_PATH = "/metrics";
+
+    /** The environment variable naming the PEM certificate that {@code https://} workers present. */
+    public static final String CA_FILE_ENV = "OMB_WORKER_CA_FILE";
 
     /** The request and read timeout of {@link #scrapeMetrics()}. */
     public static final Duration SCRAPE_TIMEOUT = Duration.ofSeconds(10);
@@ -104,19 +110,60 @@ public final class HttpWorkerClient implements Worker {
      * @param token the shared worker token, or {@code null} to send none
      */
     public HttpWorkerClient(String host, @Nullable String token) {
-        this(host, token, WorkerTimeouts.request(), WorkerTimeouts.stop());
+        this(host, token, null);
+    }
+
+    /**
+     * Creates a client that sends the bearer token and, for {@code https://} workers, trusts only the
+     * given certificate.
+     *
+     * @param host the worker's base URL
+     * @param token the shared worker token, or {@code null} to send none
+     * @param caFile the PEM certificate workers present, or {@code null} for plain HTTP workers
+     */
+    public HttpWorkerClient(String host, @Nullable String token, @Nullable Path caFile) {
+        this(host, token, caFile, WorkerTimeouts.request(), WorkerTimeouts.stop());
     }
 
     private HttpWorkerClient(
-            String host, @Nullable String token, Duration requestTimeout, Duration stopTimeout) {
+            String host,
+            @Nullable String token,
+            @Nullable Path caFile,
+            Duration requestTimeout,
+            Duration stopTimeout) {
         this(
-                asyncHttpClient(
-                        Dsl.config().setReadTimeout(requestTimeout).setRequestTimeout(requestTimeout)),
+                asyncHttpClient(clientConfig(caFile, requestTimeout)),
                 host,
                 token,
                 CLOSE_TIMEOUT,
                 requestTimeout,
                 stopTimeout);
+    }
+
+    static DefaultAsyncHttpClientConfig.Builder clientConfig(
+            @Nullable Path caFile, Duration requestTimeout) {
+        DefaultAsyncHttpClientConfig.Builder config =
+                Dsl.config().setReadTimeout(requestTimeout).setRequestTimeout(requestTimeout);
+        if (caFile == null) {
+            return config;
+        }
+        try {
+            // shortcut: trusts exactly the workers' own certificate and skips the host name check,
+            // because workers are reached by pod IP or ad-hoc names the certificate cannot list. The
+            // bearer token still authenticates the coordinator. Upgrade to per-worker certificates with
+            // full verification if the worker key may be shared outside the benchmark.
+            return config
+                    .setSslContext(
+                            SslContextBuilder.forClient()
+                                    .trustManager(caFile.toFile())
+                                    // Netty 4.2 checks host names by default
+                                    .endpointIdentificationAlgorithm(null)
+                                    .build())
+                    .setDisableHttpsEndpointIdentificationAlgorithm(true);
+        } catch (SSLException | IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Cannot use worker CA file " + caFile + ": " + e.getMessage(), e);
+        }
     }
 
     HttpWorkerClient(AsyncHttpClient httpClient, String host) {

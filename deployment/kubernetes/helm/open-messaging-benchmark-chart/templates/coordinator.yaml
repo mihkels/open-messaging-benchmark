@@ -57,6 +57,11 @@ spec:
         {{- with include "omb.authEnv" . }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- if .Values.workers.tls.enabled }}
+        # dns:// discovery then reaches the workers over https://
+        - name: OMB_WORKER_CA_FILE
+          value: /tls/tls.crt
+        {{- end }}
         {{- with .Values.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -85,8 +90,22 @@ spec:
         {{- toYaml .Values.coordinator.resources | nindent 8 }}
       volumeMounts:
         {{- include "omb.volumeMounts" . | nindent 8 }}
+        {{- if .Values.workers.tls.enabled }}
+        - name: worker-tls
+          mountPath: /tls
+          readOnly: true
+        {{- end }}
   volumes:
     {{- include "omb.volumes" . | nindent 4 }}
+    {{- if .Values.workers.tls.enabled }}
+    # Only the certificate: the coordinator never needs the workers' private key
+    - name: worker-tls
+      secret:
+        secretName: {{ include "omb.tlsSecretName" . }}
+        items:
+          - key: tls.crt
+            path: tls.crt
+    {{- end }}
   {{- with .Values.coordinator.nodeSelector }}
   nodeSelector:
     {{- toYaml . | nindent 4 }}

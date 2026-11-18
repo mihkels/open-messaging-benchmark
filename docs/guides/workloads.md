@@ -77,13 +77,13 @@ There are three common ways to use it:
 With `producerRate: 0`, producers start at 10,000 msg/s and the coordinator adjusts the rate every
 3 seconds. While producers keep up and consumers keep pace, the rate grows by a ramping factor that
 doubles after each healthy step. When either falls behind, the rate drops to what was actually
-achieved and the ramping factor halves, so the run converges on the highest rate the system
+achieved (never below 1 msg/s) and the ramping factor halves, so the run converges on the highest rate the system
 sustains without queueing. The thresholds come from environment variables on the coordinator:
 
 |        Variable         | Default |                             Meaning                             |
 |-------------------------|---------|-----------------------------------------------------------------|
 | `PUBLISH_BACKLOG_LIMIT` | 1000    | Messages the producers may fall short of the target in one step |
-| `RECEIVE_BACKLOG_LIMIT` | 1000    | Messages published but not yet received                         |
+| `RECEIVE_BACKLOG_LIMIT` | 1000    | Messages published but not yet received, one per subscription   |
 | `MIN_RAMPING_FACTOR`    | 0.01    | Smallest relative rate increase per step                        |
 | `MAX_RAMPING_FACTOR`    | 1       | Largest relative rate increase per step                         |
 

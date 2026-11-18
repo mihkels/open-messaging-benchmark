@@ -23,6 +23,8 @@ class RateController {
     private final long receiveBacklogLimit;
     private final double minRampingFactor;
     private final double maxRampingFactor;
+    // Each published message is received once per subscription
+    private final int subscriptions;
 
     private double rampingFactor;
 
@@ -34,7 +36,8 @@ class RateController {
     private long receiveBacklog;
     private long publishBacklog;
 
-    RateController() {
+    RateController(int subscriptions) {
+        this.subscriptions = subscriptions;
         publishBacklogLimit = Env.getLong("PUBLISH_BACKLOG_LIMIT", 1_000);
         receiveBacklogLimit = Env.getLong("RECEIVE_BACKLOG_LIMIT", 1_000);
         minRampingFactor = Env.getDouble("MIN_RAMPING_FACTOR", 0.01);
@@ -54,11 +57,14 @@ class RateController {
         previousTotalPublished = totalPublished;
         previousTotalReceived = totalReceived;
 
-        receiveBacklog = totalPublished - totalReceived;
+        // A producer-only workload has nothing to receive
+        receiveBacklog = subscriptions == 0 ? 0 : subscriptions * totalPublished - totalReceived;
         publishBacklog = expected - published;
         if (receiveBacklog > receiveBacklogLimit) {
             decision = "receiveBacklog";
-            return nextRate(periodNanos, received, expected, receiveBacklog);
+            // Both count one copy per subscription; scale back to published messages
+            return nextRate(
+                    periodNanos, received / subscriptions, expected, receiveBacklog / subscriptions);
         }
 
         if (publishBacklog > publishBacklogLimit) {
@@ -92,7 +98,8 @@ class RateController {
         long nextExpected = Math.max(0, expected - backlog);
         double nextExpectedRate = rate(nextExpected, periodNanos);
         double actualRate = rate(actual, periodNanos);
-        return Math.min(actualRate, nextExpectedRate);
+        // Never 0: ramp-up multiplies the rate, so 0 could never climb again
+        return Math.max(1, Math.min(actualRate, nextExpectedRate));
     }
 
     private double rate(long count, long periodNanos) {

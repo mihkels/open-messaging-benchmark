@@ -124,7 +124,7 @@ Keys are nested under `client` and `consumer` and read by `MqttConfig`. Unknown 
 | `client.serverUri`               | string  | `tcp://localhost:1883` | Broker address as `[scheme://]host[:port]`. Only host and port are used. `ssl`, `tls` and `mqtts` connect over TLS (default port 8883), others over plain TCP (1883). |
 | `client.username`                | string  | empty                  | User name for MQTT simple authentication. Used only when `password` is also non-empty.                                                                                |
 | `client.password`                | string  | empty                  | Password. Used only when `username` is also non-empty.                                                                                                                |
-| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value is treated as `1`.                                                                              |
+| `client.qos`                     | int     | `1`                    | QoS for publishes and subscriptions: `0`, `1` or `2`. Any other value fails driver initialization.                                                                    |
 | `client.topicPrefix`             | string  | `benchmark`            | First level of the topic names, without trailing slash.                                                                                                               |
 | `consumer.cleanSession`          | boolean | `true`                 | Clean Start flag of consumer connections.                                                                                                                             |
 | `consumer.sessionExpiryInterval` | int     | `259200` (3 days)      | Session expiry in seconds for consumer connections. Used only when `cleanSession` is `false`; otherwise 0.                                                            |
@@ -168,8 +168,9 @@ ready fails creation instead of retrying indefinitely.
 
 **End-to-end latency.** Each publish carries the producer's wall-clock time in the user property
 `benchmark-publish-timestamp`; the consumer uses it as the publish time. Latency therefore covers the full path from
-producer to consumer and includes clock offset between producer and consumer hosts. If the property is missing, the
-receive time is used. See [Latency and backlog](../methodology/latency-and-backlog.md).
+producer to consumer and includes clock offset between producer and consumer hosts. If the property is missing or
+unreadable, for example after a bridge that strips user properties, the message is counted but gives no latency
+sample. See [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Durability.** Determined by the QoS and by broker persistence settings. With QoS 0 messages can be lost; the
 regression broker does not persist anything.

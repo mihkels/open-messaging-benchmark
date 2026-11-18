@@ -76,6 +76,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         this.config = readConfig(configurationFile);
+        intToQoS(config.client.qos);
     }
 
     @Override
@@ -436,7 +437,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return value != null && !value.isEmpty();
     }
 
-    // Extract publishTimestamp from user properties, return System.currentTimeMillis() if not found
+    // A message without a readable publish timestamp is counted but gives no latency sample.
     private static long extractPublishTimestamp(Mqtt5UserProperties userProperties) {
         List<? extends Mqtt5UserProperty> propertyList = userProperties.asList();
         for (Mqtt5UserProperty property : propertyList) {
@@ -444,17 +445,17 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                 try {
                     return Long.parseLong(property.getValue().toString());
                 } catch (NumberFormatException _) {
-                    return System.currentTimeMillis();
+                    return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
                 }
             }
         }
-        return System.currentTimeMillis();
+        return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
     }
 
     public static MqttQos intToQoS(int val) {
         MqttQos qos = MqttQos.fromCode(val);
         if (qos == null) {
-            qos = MqttQos.AT_LEAST_ONCE;
+            throw new IllegalArgumentException("Invalid MQTT qos " + val + "; use 0, 1 or 2");
         }
         return qos;
     }

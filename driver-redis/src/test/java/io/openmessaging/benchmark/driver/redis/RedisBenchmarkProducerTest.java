@@ -70,9 +70,30 @@ class RedisBenchmarkProducerTest {
                 .xadd(
                         any(byte[].class),
                         org.mockito.ArgumentMatchers.<Map<byte[], byte[]>>argThat(
-                                map -> map.size() == 2 && "k".equals(field(map, "key"))),
+                                map -> map.size() == 3 && "k".equals(field(map, "key"))),
                         any(XAddParams.class));
         verify(jedis).close();
+    }
+
+    @Test
+    void sendCarriesTheProducerTimestampField() {
+        JedisPool pool = mock();
+        Jedis jedis = mock();
+        when(pool.getResource()).thenReturn(jedis);
+        RedisBenchmarkProducer producer = new RedisBenchmarkProducer(pool, "topic", 1000);
+
+        long before = System.currentTimeMillis();
+        producer.sendAsync(Optional.empty(), new byte[] {1}).join();
+        long after = System.currentTimeMillis();
+
+        verify(jedis)
+                .xadd(
+                        any(byte[].class),
+                        org.mockito.ArgumentMatchers.<Map<byte[], byte[]>>argThat(map -> {
+                            long ts = Long.parseLong(field(map, "ts"));
+                            return map.size() == 2 && ts >= before && ts <= after;
+                        }),
+                        any(XAddParams.class));
     }
 
     // The entry map uses identity keys, so look the field up by name

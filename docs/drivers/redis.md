@@ -150,10 +150,11 @@ stream's entries; every group receives every entry, so multiple subscriptions pe
 were delivered but never acknowledged (for example when a worker stops) stay in the group's pending entries list; the
 driver does not claim or redeliver them.
 
-**End-to-end latency.** The consumer uses the millisecond part of the stream entry ID as the publish time. Redis
-assigns that ID from the server clock when `XADD` runs, so end-to-end latency is measured from the Redis server's
-clock, not from the producer's send time. Clock offset between the Redis host and the consumer workers adds
-directly to the reported value. See [Latency and backlog](../methodology/latency-and-backlog.md).
+**End-to-end latency.** Each entry carries the producer's send time in epoch milliseconds in a `ts` field next to
+`payload`, and the consumer uses it as the publish time. Latency therefore covers the full path from producer to
+consumer and depends on synchronised worker clocks. The stream entry ID's time is not used: Redis takes it from the
+server clock, so it would leave out the producer-to-Redis leg. An entry without a readable `ts` field is counted
+but gives no latency sample. See [Latency and backlog](../methodology/latency-and-backlog.md).
 
 **Payloads.** Payloads are written and read as bytes, including non-UTF-8 binary payloads.
 
@@ -234,7 +235,7 @@ Common problems:
 - `OOM command not allowed when used memory > 'maxmemory'`: approximate trimming is not a byte limit;
   reduce `redisStreamMaxLen`, delete old benchmark keys or
   raise `maxmemory`.
-- High or negative-looking end-to-end latency: clock offset between the Redis server and the workers.
+- High or negative-looking end-to-end latency: clock offset between the producer and consumer workers.
 
 General advice is in [Troubleshooting](../guides/troubleshooting.md); result interpretation in
 [Results](../guides/results.md).

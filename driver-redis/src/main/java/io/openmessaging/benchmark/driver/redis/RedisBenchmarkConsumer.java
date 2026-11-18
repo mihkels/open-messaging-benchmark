@@ -41,6 +41,7 @@ import redis.clients.jedis.resps.StreamEntryBinary;
 public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private static final Logger log = LoggerFactory.getLogger(RedisBenchmarkConsumer.class);
     private static final byte[] PAYLOAD_FIELD = "payload".getBytes(UTF_8);
+    private static final byte[] TIMESTAMP_FIELD = "ts".getBytes(UTF_8);
 
     private final String topic;
     private final String subscriptionName;
@@ -136,9 +137,12 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
                     if (closing) {
                         return;
                     }
-                    long timestamp = entry.getID().getTime();
-                    byte[] payload = readPayload(entry);
-                    consumerCallback.messageReceived(payload, timestamp);
+                    byte[] payload = field(entry, PAYLOAD_FIELD);
+                    if (payload == null) {
+                        throw new IllegalStateException(
+                                "Missing payload field in Redis stream entry " + entry.getID());
+                    }
+                    consumerCallback.messageReceived(payload, publishTimestamp(entry));
                     delivered.add(entry.getID());
                 }
             }
@@ -149,13 +153,27 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static byte[] readPayload(StreamEntryBinary entry) {
+    private static byte[] field(StreamEntryBinary entry, byte[] name) {
         for (var field : entry.getFields().entrySet()) {
-            if (Arrays.equals(field.getKey(), PAYLOAD_FIELD)) {
+            if (Arrays.equals(field.getKey(), name)) {
                 return field.getValue();
             }
         }
-        throw new IllegalStateException("Missing payload field in Redis stream entry " + entry.getID());
+        return null;
+    }
+
+    // The entry ID's time is the broker's receive time, so only the producer's field is used;
+    // an entry without a readable one is counted but gives no latency sample.
+    private static long publishTimestamp(StreamEntryBinary entry) {
+        byte[] value = field(entry, TIMESTAMP_FIELD);
+        if (value != null) {
+            try {
+                return Long.parseLong(new String(value, UTF_8));
+            } catch (NumberFormatException _) {
+                // fall through to the placeholder
+            }
+        }
+        return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
     }
 
     @Override

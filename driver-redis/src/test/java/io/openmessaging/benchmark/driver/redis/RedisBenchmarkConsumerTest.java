@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -190,7 +191,12 @@ class RedisBenchmarkConsumerTest {
         Map<byte[], byte[]> fields = new IdentityHashMap<>();
         fields.put("other".getBytes(UTF_8), new byte[] {9});
         fields.put("payload".getBytes(UTF_8), new byte[] {1, 2});
+        fields.put("ts".getBytes(UTF_8), "7".getBytes(UTF_8));
         StreamEntryBinary entry = new StreamEntryBinary(new StreamEntryID(42, 0), fields);
+        Map<byte[], byte[]> garbledFields = new IdentityHashMap<>();
+        garbledFields.put("payload".getBytes(UTF_8), new byte[] {3});
+        garbledFields.put("ts".getBytes(UTF_8), "x".getBytes(UTF_8));
+        StreamEntryBinary garbled = new StreamEntryBinary(new StreamEntryID(44, 0), garbledFields);
         StreamEntryBinary missingPayload =
                 new StreamEntryBinary(
                         new StreamEntryID(43, 0), Map.of("other".getBytes(UTF_8), new byte[] {9}));
@@ -202,7 +208,7 @@ class RedisBenchmarkConsumerTest {
                         switch (reads.getAndIncrement()) {
                             case 0 -> null;
                             case 1 -> List.of();
-                            case 2 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry)));
+                            case 2 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(entry, garbled)));
                             case 3 -> List.of(Map.entry("topic".getBytes(UTF_8), List.of(missingPayload)));
                             case 4 -> throw new JedisDataException("ERR unexpected");
                             case 5 -> throw new IllegalStateException("connection lost");
@@ -219,8 +225,10 @@ class RedisBenchmarkConsumerTest {
         assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
         consumer.close();
 
-        verify(callback).messageReceived(new byte[] {1, 2}, 42L);
-        verify(jedis).xack("topic", "subscription", new StreamEntryID(42, 0));
+        // The producer's send time, not the entry ID's broker time
+        verify(callback).messageReceived(new byte[] {1, 2}, 7L);
+        verify(callback).messageReceived(new byte[] {3}, ConsumerCallback.NO_PUBLISH_TIMESTAMP);
+        verify(jedis).xack("topic", "subscription", new StreamEntryID(42, 0), new StreamEntryID(44, 0));
         verify(jedis, never()).xack("topic", "subscription", new StreamEntryID(43, 0));
     }
 
@@ -416,13 +424,14 @@ class RedisBenchmarkConsumerTest {
         holder.set(consumer);
         created.countDown();
 
-        verify(callback, org.mockito.Mockito.timeout(5000)).messageReceived(new byte[] {1}, 1L);
+        verify(callback, org.mockito.Mockito.timeout(5000))
+                .messageReceived(new byte[] {1}, ConsumerCallback.NO_PUBLISH_TIMESTAMP);
         while (closer.get() == null) {
             Thread.onSpinWait();
         }
         closer.get().join(5000);
         assertThat(closer.get().isAlive()).isFalse();
-        verify(callback, never()).messageReceived(new byte[] {2}, 2L);
+        verify(callback, never()).messageReceived(eq(new byte[] {2}), anyLong());
         verify(jedis).xack("topic", "subscription", new StreamEntryID(1, 0));
         verify(jedis, never()).xack("topic", "subscription", new StreamEntryID(2, 0));
     }

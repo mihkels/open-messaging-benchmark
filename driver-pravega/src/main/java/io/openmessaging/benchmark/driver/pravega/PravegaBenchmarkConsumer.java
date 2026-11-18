@@ -139,8 +139,7 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
         if (includeTimestampInEvent) {
             return event.getLong();
         }
-        // Far-future placeholder: the latency comes out negative and the framework drops it.
-        return TimeUnit.MICROSECONDS.toMillis(Long.MAX_VALUE);
+        return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
     }
 
     @Override

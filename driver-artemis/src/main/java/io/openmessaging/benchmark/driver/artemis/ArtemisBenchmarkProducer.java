@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.artemis;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
@@ -86,6 +87,12 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         CompletableFuture<Void> future;
         synchronized (lifecycleLock) {
             future = pending.register();
@@ -96,6 +103,7 @@ public final class ArtemisBenchmarkProducer implements BenchmarkProducer {
                 ClientMessage msg = session.createMessage(true /* durable */);
                 msg.setTimestamp(System.currentTimeMillis());
                 msg.getBodyBuffer().writeBytes(payload);
+                headers.forEach(msg::putBytesProperty);
 
                 producer.send(
                         msg,

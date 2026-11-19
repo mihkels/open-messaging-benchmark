@@ -24,6 +24,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +43,17 @@ import org.apache.activemq.artemis.api.core.client.SendAcknowledgementHandler;
 import org.junit.jupiter.api.Test;
 
 class ArtemisBenchmarkProducerTest {
+    @Test
+    void headersBecomeBytesProperties() throws Exception {
+        Fixture fixture = new Fixture();
+        ArtemisBenchmarkProducer producer = fixture.create();
+        byte[] value = {7, 8};
+
+        producer.sendAsync(Optional.empty(), new byte[] {1}, Map.of("omb_h0", value));
+
+        verify(fixture.message).putBytesProperty("omb_h0", value);
+        producer.close();
+    }
 
     @Test
     void closeSettlesOutstandingSendsAndRejectsLateAcknowledgements() throws Exception {

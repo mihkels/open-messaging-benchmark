@@ -17,9 +17,11 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.CloseOnce;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -127,6 +129,12 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         SendOperation operation = new SendOperation();
         synchronized (pending) {
             if (closer.isClosed()) {
@@ -149,7 +157,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             if (!operation.attachProducer(producer)) {
                 return operation.result;
             }
-            BytesMessage bytesMessage = createMessage(session, key, payload);
+            BytesMessage bytesMessage = createMessage(session, key, payload, headers);
             if (!operation.isActive()) {
                 return operation.result;
             }
@@ -166,12 +174,18 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         return operation.result;
     }
 
-    private BytesMessage createMessage(Session session, Optional<String> key, byte[] payload)
+    private BytesMessage createMessage(
+            Session session, Optional<String> key, byte[] payload, Map<String, byte[]> headers)
             throws JMSException {
         BytesMessage bytesMessage = session.createBytesMessage();
         bytesMessage.writeBytes(payload);
         if (key.isPresent()) {
             bytesMessage.setStringProperty("JMSXGroupID", key.get());
+        }
+        for (Map.Entry<String, byte[]> header : headers.entrySet()) {
+            // JMS properties cannot hold byte[]; ISO-8859-1 round-trips every byte
+            bytesMessage.setStringProperty(
+                    header.getKey(), new String(header.getValue(), StandardCharsets.ISO_8859_1));
         }
         for (JMSConfig.AddProperty prop : properties) {
             bytesMessage.setStringProperty(prop.name, prop.value);

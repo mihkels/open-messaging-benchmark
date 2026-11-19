@@ -199,7 +199,8 @@ public final class WorkloadGenerator implements WorkloadRun {
                         targetPublishRate,
                         workload.keyDistributor,
                         workload.keyDistribution,
-                        workload.verifyDelivery);
+                        workload.verifyDelivery,
+                        workload.headers);
         String source = payloadSource();
         log.info(
                 "Prepared {} payloads from {} in {} ms", payloads.size(), source, timer.elapsedMillis());

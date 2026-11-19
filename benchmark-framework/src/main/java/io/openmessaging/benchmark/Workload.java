@@ -18,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
 import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import java.util.Arrays;
@@ -59,6 +60,10 @@ public class Workload {
     /** Optional generated payloads with a target compression ratio; excludes the other sources. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable PayloadGenerator payloadGenerator;
+
+    /** Optional generated headers sent with every message; needs a driver that supports them. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public @Nullable MessageHeaders headers;
 
     public int subscriptionsPerTopic;
 

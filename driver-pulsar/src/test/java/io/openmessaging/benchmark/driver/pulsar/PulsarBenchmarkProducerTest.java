@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -38,6 +39,20 @@ import org.apache.pulsar.client.api.TypedMessageBuilder;
 import org.junit.jupiter.api.Test;
 
 class PulsarBenchmarkProducerTest {
+    @Test
+    void headersBecomeLatin1Properties() {
+        Producer<byte[]> client = mock();
+        TypedMessageBuilder<byte[]> builder = mock();
+        when(client.newMessage()).thenReturn(builder);
+        when(builder.value(any(byte[].class))).thenReturn(builder);
+        when(builder.sendAsync()).thenReturn(new CompletableFuture<>());
+        PulsarBenchmarkProducer producer = new PulsarBenchmarkProducer(client);
+
+        producer.sendAsync(
+                Optional.empty(), new byte[] {1}, Map.of("omb_h0", new byte[] {'a', (byte) 0xE9}));
+
+        verify(builder).property("omb_h0", "a\u00e9");
+    }
 
     @Test
     void canceledSendDoesNotRetainCallerPayload() {

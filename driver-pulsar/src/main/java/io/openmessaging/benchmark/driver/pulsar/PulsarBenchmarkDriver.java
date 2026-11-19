@@ -248,6 +248,11 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         return config.client.topicType + "://" + namespace + "/test";
     }

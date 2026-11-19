@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark.driver;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -45,4 +46,26 @@ public interface BenchmarkProducer extends AutoCloseable {
      * @return a non-null future that tracks the send's completion
      */
     CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload);
+
+    /**
+     * Publish a message with headers asynchronously.
+     *
+     * <p>Completion, failure and payload ownership follow {@link #sendAsync(Optional, byte[])}. The
+     * header map and its value arrays are caller-owned and read-only under the same rules as the
+     * payload. Drivers whose brokers only carry string headers decode each value as ISO-8859-1. A
+     * driver may fail the send if its broker cannot carry a value's bytes; the benchmark generates
+     * ASCII alphanumeric values, which every supported broker carries.
+     *
+     * <p>The default implementation drops the headers and sends the message without them. Drivers
+     * that send headers override this method and {@link BenchmarkDriver#supportsHeaders()}.
+     *
+     * @param key the key associated with this message
+     * @param payload the caller-owned message payload
+     * @param headers the caller-owned message headers, keyed by header name
+     * @return a non-null future that tracks the send's completion
+     */
+    default CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
+        return sendAsync(key, payload);
+    }
 }

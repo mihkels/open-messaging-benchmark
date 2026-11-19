@@ -35,6 +35,7 @@ import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
@@ -1184,6 +1185,50 @@ class LocalWorkerLifecycleTest {
         }
     }
 
+    @Test
+    void sendsGeneratedHeadersWhenTheDriverSupportsThem() throws Exception {
+        List<Map<String, byte[]>> sent = new CopyOnWriteArrayList<>();
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsync(any(), any(), any())).thenAnswer(invocation -> {
+            sent.add(invocation.getArgument(2));
+            return CompletableFuture.completedFuture(null);
+        });
+        Scenario scenario = new Scenario(List.of(producer));
+        scenario.supportsHeaders = true;
+        try (LocalWorker worker = worker(scenario, Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            worker.startLoad(headersAssignment());
+            waitUntil(() -> sent.size() >= 3);
+            assertThat(sent).allSatisfy(headers -> assertThat(headers)
+                    .containsOnlyKeys("omb_h0", "omb_h1")
+                    .allSatisfy((name, value) -> assertThat(value).hasSize(8)));
+            verify(producer, times(0)).sendAsync(any(), any());
+        }
+    }
+
+    @Test
+    void rejectsHeadersBeforeLoadWhenTheDriverDoesNotSupportThem() throws Exception {
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            assertThatThrownBy(() -> worker.startLoad(headersAssignment()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("does not support message headers");
+            verify(producer, times(0)).sendAsync(any(), any());
+            verify(producer, times(0)).sendAsync(any(), any(), any());
+        }
+    }
+
+    private static ProducerWorkAssignment headersAssignment() {
+        return new ProducerWorkAssignment(
+                PayloadTemplates.of(List.of(new byte[32]), null),
+                10_000,
+                KeyDistributorType.NO_KEY,
+                null,
+                false,
+                new MessageHeaders(2, 8));
+    }
+
     private static ProducerWorkAssignment verifiedAssignment(byte[] template) {
         return new ProducerWorkAssignment(
                 PayloadTemplates.of(List.of(template), null), 100_000, KeyDistributorType.NO_KEY, null, true);
@@ -1288,6 +1333,7 @@ class LocalWorkerLifecycleTest {
         private volatile ConsumerCallback callback;
         private Runnable onClose = () -> {};
         private Exception closeFailure;
+        private boolean supportsHeaders;
 
         private Scenario(List<BenchmarkProducer> producers) {
             createProducers = () -> CompletableFuture.completedFuture(producers);
@@ -1307,6 +1353,11 @@ class LocalWorkerLifecycleTest {
         @Override
         public String getTopicNamePrefix() {
             return "fixture";
+        }
+
+        @Override
+        public boolean supportsHeaders() {
+            return scenario.supportsHeaders;
         }
 
         @Override

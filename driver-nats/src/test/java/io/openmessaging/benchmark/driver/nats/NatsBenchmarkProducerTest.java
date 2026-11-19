@@ -70,13 +70,10 @@ class NatsBenchmarkProducerTest {
         assertEquals("ab", headers.get(0).getFirst("omb_h0"));
         assertTimestampHeader(headers.get(0), before, after);
         // NATS only carries ASCII header values; other bytes fail the send
-        assertThrows(
-                CompletionException.class,
-                () ->
-                        producer
-                                .sendAsync(
-                                        Optional.empty(), new byte[] {1}, Map.of("omb_h0", new byte[] {(byte) 0xE9}))
-                                .join());
+        Map<String, byte[]> invalid = Map.of("omb_h0", new byte[] {(byte) 0xE9});
+        CompletableFuture<Void> rejected =
+                producer.sendAsync(Optional.empty(), new byte[] {1}, invalid);
+        assertThrows(CompletionException.class, rejected::join);
     }
 
     private static final String TOPIC = "test-topic";

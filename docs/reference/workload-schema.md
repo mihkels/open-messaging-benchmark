@@ -106,7 +106,7 @@ headers:
 
 Both fields are required. Every message carries `count` headers named `omb_h0` to
 `omb_h<count-1>`, each with a `valueSize`-byte ASCII alphanumeric value. Workers pre-generate 64
-header sets before the load starts and pick one at random per message, so the send path does not
+header sets before the load starts and each producer cycles through them, so the send path does not
 allocate header values and batch compression cannot collapse identical headers. Header bytes are
 not counted in the throughput byte counters, which stay payload-only on both sides; the overhead
 shows up as lower throughput and higher latency. See

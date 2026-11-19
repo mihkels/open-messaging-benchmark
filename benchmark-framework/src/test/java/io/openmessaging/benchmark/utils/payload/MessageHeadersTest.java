@@ -36,8 +36,12 @@ class MessageHeadersTest {
                                     .hasSize(16)
                                     .matches("[0-9A-Za-z]*"));
         }
-        assertThat(pool.get(0).get("omb_h0")).isNotEqualTo(pool.get(1).get("omb_h0"));
-        assertThatThrownBy(() -> pool.get(0).put("x", new byte[0]))
+        Map<String, byte[]> first = pool.get(0);
+        byte[] firstValue = first.get("omb_h0");
+        byte[] secondValue = pool.get(1).get("omb_h0");
+        assertThat(firstValue).isNotEqualTo(secondValue);
+        byte[] extra = new byte[0];
+        assertThatThrownBy(() -> first.put("x", extra))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 

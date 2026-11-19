@@ -1211,7 +1211,8 @@ class LocalWorkerLifecycleTest {
         BenchmarkProducer producer = mock(BenchmarkProducer.class);
         try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
             worker.createProducers(List.of("topic"));
-            assertThatThrownBy(() -> worker.startLoad(headersAssignment()))
+            ProducerWorkAssignment assignment = headersAssignment();
+            assertThatThrownBy(() -> worker.startLoad(assignment))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("does not support message headers");
             verify(producer, times(0)).sendAsync(any(), any());

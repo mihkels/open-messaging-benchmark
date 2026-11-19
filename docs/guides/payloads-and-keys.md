@@ -147,7 +147,7 @@ headers:
   add themselves.
 - Values are random ASCII alphanumeric bytes, so brokers whose headers carry only strings (Pulsar,
   NATS, JMS) send exactly `valueSize` bytes per value.
-- Each worker generates 64 header sets before the load starts and picks one at random per message.
+- Each worker generates 64 header sets before the load starts, and each producer cycles through them.
   The send path allocates nothing for headers, and batch compression sees varied values rather than
   one repeated set.
 - Throughput byte counters cover payloads only, on both the producer and consumer side. Header

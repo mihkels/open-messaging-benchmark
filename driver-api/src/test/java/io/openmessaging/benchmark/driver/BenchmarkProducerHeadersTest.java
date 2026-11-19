@@ -36,7 +36,9 @@ class BenchmarkProducerHeadersTest {
                     }
 
                     @Override
-                    public void close() {}
+                    public void close() {
+                        // Nothing to release
+                    }
                 };
 
         assertSame(sent, producer.sendAsync(Optional.empty(), payload, Map.of("h", new byte[] {2})));

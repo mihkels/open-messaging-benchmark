@@ -422,6 +422,12 @@ public final class LocalWorker implements Worker {
         return null;
     }
 
+    // Cycles through the pre-generated header sets; floorMod keeps the index valid after overflow
+    private static @Nullable Map<String, byte[]> headersFor(
+            @Nullable List<Map<String, byte[]>> headers, int sent) {
+        return headers == null ? null : headers.get(Math.floorMod(sent, headers.size()));
+    }
+
     // Sends messages from one producer on its own task until the worker stops.
     private void startProducer(
             Run current,
@@ -437,6 +443,7 @@ public final class LocalWorker implements Worker {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
                         MessageProducer messageProducer = current.messageProducer;
+                        int sent = 0;
                         while (!current.stopping && !current.sendsStopped) {
                             Optional<String> key = Optional.ofNullable(keyDistributor.next());
                             byte[] payload = payloads.next(random);
@@ -445,7 +452,7 @@ public final class LocalWorker implements Worker {
                                     key,
                                     stamp == null ? payload : stamp.stamp(payload),
                                     stamp != null,
-                                    headers == null ? null : headers.get(random.nextInt(headers.size())));
+                                    headersFor(headers, sent++));
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();

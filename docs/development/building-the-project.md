@@ -295,9 +295,10 @@ package/target/openmessaging-benchmark-<version>-bin.tar.gz
 `<version>` is the reactor version (the `revision` property in the root POM, which
 release-please updates; see [Releasing](releasing.md)). The assembly descriptor is
 [`package/src/assemble/bin.xml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/package/src/assemble/bin.xml).
-Prebuilt tarballs for the newest 10 releases are attached to the
-[GitHub releases](https://github.com/mihkels/open-messaging-benchmark/releases) together with a
-`SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`.
+A prebuilt tarball is attached only to the latest
+[GitHub release](https://github.com/mihkels/open-messaging-benchmark/releases), together with a
+`SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`. Older releases have both
+removed (see [Releasing](releasing.md)), so build an older version from its tag.
 
 The tarball contains a single `openmessaging-benchmark-<version>/` directory with this layout:
 

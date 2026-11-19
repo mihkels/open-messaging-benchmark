@@ -33,7 +33,6 @@ import io.streamnative.pulsar.handlers.kop.KafkaPayloadProcessor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -128,7 +127,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) 1L);
         final CompletableFuture<Void> future = new CompletableFuture<>();
         open(admin, "admin client")
-                .createTopics(Collections.singletonList(newTopic))
+                .createTopics(List.of(newTopic))
                 .all()
                 .whenComplete((result, throwable) -> {
                     if (throwable == null) {

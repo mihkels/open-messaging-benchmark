@@ -18,8 +18,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -140,7 +140,7 @@ public record WorkloadSetTemplate(
             @JsonProperty("warmupDurationMinutes") Integer warmupDurationMinutes,
             @JsonProperty("stages") @Nullable List<Workload.Stage> stages) {
         return new WorkloadSetTemplate(
-                nameFormat != null ? nameFormat : DEFAULT_NAME_TEMPLATE,
+                Objects.requireNonNullElse(nameFormat, DEFAULT_NAME_TEMPLATE),
                 topics,
                 partitionsPerTopic,
                 messageSize,
@@ -148,15 +148,15 @@ public record WorkloadSetTemplate(
                 producersPerTopic,
                 consumerPerSubscription,
                 producerRate,
-                keyDistributor != null ? keyDistributor : KeyDistributorType.NO_KEY,
+                Objects.requireNonNullElse(keyDistributor, KeyDistributorType.NO_KEY),
                 keyDistribution,
                 payloadFile,
                 useRandomizedPayloads != null && useRandomizedPayloads,
-                randomBytesRatio != null ? randomBytesRatio : 0.0,
-                randomizedPayloadPoolSize != null ? randomizedPayloadPoolSize : 0,
-                consumerBacklogSizeGB != null ? consumerBacklogSizeGB : 0,
-                testDurationMinutes != null ? testDurationMinutes : DEFAULT_TEST_DURATION_MINUTES,
-                warmupDurationMinutes != null ? warmupDurationMinutes : DEFAULT_WARMUP_DURATION_MINUTES,
+                Objects.requireNonNullElse(randomBytesRatio, 0.0),
+                Objects.requireNonNullElse(randomizedPayloadPoolSize, 0),
+                Objects.requireNonNullElse(consumerBacklogSizeGB, 0L),
+                Objects.requireNonNullElse(testDurationMinutes, DEFAULT_TEST_DURATION_MINUTES),
+                Objects.requireNonNullElse(warmupDurationMinutes, DEFAULT_WARMUP_DURATION_MINUTES),
                 stages);
     }
 
@@ -164,13 +164,13 @@ public record WorkloadSetTemplate(
     public WorkloadSetTemplate() {
         this(
                 DEFAULT_NAME_TEMPLATE,
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
                 KeyDistributorType.NO_KEY,
                 null,
                 null,

@@ -323,14 +323,16 @@ class JMSBenchmarkProducerTest {
                             Session.class,
                             (method, args) -> {
                                 switch (method) {
-                                    case "createProducer":
+                                    case "createProducer" -> {
                                         if (createFailure != null) {
                                             throw createFailure;
                                         }
                                         return producer;
-                                    case "createBytesMessage":
+                                    }
+                                    case "createBytesMessage" -> {
                                         return message;
-                                    case "close":
+                                    }
+                                    case "close" -> {
                                         sessionCloses.incrementAndGet();
                                         if (onClose != null) {
                                             onClose.run();
@@ -339,8 +341,10 @@ class JMSBenchmarkProducerTest {
                                             throw closeFailure;
                                         }
                                         return null;
-                                    default:
+                                    }
+                                    default -> {
                                         throw new AssertionError("Unexpected session method: " + method);
+                                    }
                                 }
                             });
             return JMSBenchmarkProducer.create(

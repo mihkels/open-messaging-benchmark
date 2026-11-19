@@ -21,7 +21,6 @@ import io.openmessaging.benchmark.driver.Failures;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -88,8 +87,7 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         this.executor = Executors.newSingleThreadExecutor();
         this.groupName = subscriptionName.getBytes(UTF_8);
         this.consumerName = consumerId.getBytes(UTF_8);
-        this.streamQuery =
-                Collections.singletonMap(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
+        this.streamQuery = Map.of(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);
 
         this.consumerTask = this.executor.submit(this::consume);
     }

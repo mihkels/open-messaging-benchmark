@@ -417,10 +417,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     }
 
     private static String extractClientId(MqttClientConfig clientConfig) {
-        if (clientConfig.getClientIdentifier().isPresent()) {
-            return clientConfig.getClientIdentifier().get().toString();
-        }
-        return "";
+        return clientConfig.getClientIdentifier().map(Object::toString).orElse("");
     }
 
     private static String toSharedSubscription(String topicFilter, String sharedGroup) {

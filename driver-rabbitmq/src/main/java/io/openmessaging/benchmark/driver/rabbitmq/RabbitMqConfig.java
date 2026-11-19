@@ -16,7 +16,6 @@ package io.openmessaging.benchmark.driver.rabbitmq;
 import static io.openmessaging.benchmark.driver.rabbitmq.RabbitMqConfig.QueueType.CLASSIC;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -47,19 +46,19 @@ public class RabbitMqConfig {
         CLASSIC {
             @Override
             Map<String, Object> queueOptions() {
-                return Collections.emptyMap();
+                return Map.of();
             }
         },
         QUORUM {
             @Override
             Map<String, Object> queueOptions() {
-                return Collections.singletonMap("x-queue-type", "quorum");
+                return Map.of("x-queue-type", "quorum");
             }
         },
         STREAM {
             @Override
             Map<String, Object> queueOptions() {
-                return Collections.singletonMap("x-queue-type", "stream");
+                return Map.of("x-queue-type", "stream");
             }
         };
 

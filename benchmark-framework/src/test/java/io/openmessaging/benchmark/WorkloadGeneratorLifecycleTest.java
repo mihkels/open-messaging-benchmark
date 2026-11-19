@@ -618,11 +618,15 @@ class WorkloadGeneratorLifecycleTest {
     @Test
     void sustainableRateControllerRampsUpThenBacksOffWhenBacklogGrows() throws Exception {
         Worker worker = worker();
-        when(worker.getCountersStats())
-                // The readiness probe is received, then nothing more
-                .thenReturn(
-                        new CountersStats(0, 0, 1), new CountersStats(0, 0, 1), new CountersStats(2_000, 0, 1));
         List<Double> adjustedRates = Collections.synchronizedList(new ArrayList<>());
+        // Keyed on controller progress, not call order: the run thread polls these counters too.
+        // Caught up (a large total, so no tick period builds a publish backlog), then nothing more
+        // is received.
+        when(worker.getCountersStats())
+                .thenAnswer(_ ->
+                        adjustedRates.isEmpty()
+                                ? new CountersStats(1_000_000, 0, 1_000_000)
+                                : new CountersStats(1_002_000, 0, 1_000_000));
         CountDownLatch adjustments = new CountDownLatch(2);
         doAnswer(
                         invocation -> {

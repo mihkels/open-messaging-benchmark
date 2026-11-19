@@ -79,9 +79,12 @@ class NsqBenchmarkDriverTest {
             Path config =
                     Files.writeString(
                             temp.resolve("nsq.yaml"),
-                            "nsqdHost: 127.0.0.1\nlookupHost: 127.0.0.1\nnsqdHttpPort: "
-                                    + server.getAddress().getPort()
-                                    + "\n");
+                            """
+                            nsqdHost: 127.0.0.1
+                            lookupHost: 127.0.0.1
+                            nsqdHttpPort: %d
+                            """
+                                    .formatted(server.getAddress().getPort()));
             driver.initialize(config, null);
             driver.createTopic("benchmark-topic", 1).get(5, TimeUnit.SECONDS);
             assertThat(request.get()).isEqualTo("POST /topic/create?topic=benchmark-topic");
@@ -551,8 +554,11 @@ class NsqBenchmarkDriverTest {
     private Path httpConfig(HttpServer server) throws Exception {
         return Files.writeString(
                 temp.resolve("nsq-http.yaml"),
-                "nsqdHost: 127.0.0.1\nlookupHost: 127.0.0.1\nnsqdHttpPort: "
-                        + server.getAddress().getPort()
-                        + "\n");
+                """
+                nsqdHost: 127.0.0.1
+                lookupHost: 127.0.0.1
+                nsqdHttpPort: %d
+                """
+                        .formatted(server.getAddress().getPort()));
     }
 }

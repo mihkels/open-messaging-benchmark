@@ -23,7 +23,6 @@ import io.openmessaging.benchmark.driver.Failures;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +94,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        return createTopics(Collections.singletonList(new TopicInfo(topic, partitions)));
+        return createTopics(List.of(new TopicInfo(topic, partitions)));
     }
 
     @Override

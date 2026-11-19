@@ -66,8 +66,13 @@ class RocketMQ5BenchmarkDriverOptionsTest {
         driver.initialize(
                 config(
                         BASE
-                                + "sendDelayMsg: true\nadminAccessKey: aak\nadminSecretKey: ask\n"
-                                + "accessKey: ak\nsecretKey: sk\n"),
+                                + """
+                                sendDelayMsg: true
+                                adminAccessKey: aak
+                                adminSecretKey: ask
+                                accessKey: ak
+                                secretKey: sk
+                                """),
                 null);
         assertThat(driver.isAdminAclEnabled()).isTrue();
         assertThat(driver.isAclEnabled()).isTrue();

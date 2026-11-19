@@ -351,10 +351,13 @@ class BenchmarkCoordinatorTest {
         Path config = directory.resolve(name + ".yaml");
         Files.writeString(
                 config,
-                "name: "
-                        + name
-                        + "\ndriverClass: fixture.Driver\npassword: driver-password\n"
-                        + "authToken: driver-token\n");
+                """
+                name: %s
+                driverClass: fixture.Driver
+                password: driver-password
+                authToken: driver-token
+                """
+                        .formatted(name));
         return config;
     }
 

@@ -17,8 +17,8 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.jms.BytesMessage;
@@ -49,7 +49,7 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
         this.session = session;
         this.producer = producer;
         this.useAsyncSend = useAsyncSend;
-        this.properties = properties != null ? properties : Collections.emptyList();
+        this.properties = Objects.requireNonNullElse(properties, List.of());
     }
 
     /**

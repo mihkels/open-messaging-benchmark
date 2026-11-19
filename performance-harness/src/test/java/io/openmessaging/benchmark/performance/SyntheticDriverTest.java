@@ -96,9 +96,14 @@ class SyntheticDriverTest {
     @ValueSource(strings = {"sync", "async"})
     void loopbackFansOutAndRoundRobinsWithoutCopyingPayload(String mode) throws Exception {
         initialize(
-                "mode: "
-                        + mode
-                        + "\nqueueCapacity: 32\nthreads: 1\nname: synthetic\ndriverClass: ignored\n");
+                """
+                mode: %s
+                queueCapacity: 32
+                threads: 1
+                name: synthetic
+                driverClass: ignored
+                """
+                        .formatted(mode));
         driver.createTopic("topic", 1).join();
         List<Integer> order = new ArrayList<>();
         AtomicInteger broadcast = new AtomicInteger();

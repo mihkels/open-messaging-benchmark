@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.kop.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.StringReader;
+import java.util.Objects;
 import java.util.Properties;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
@@ -35,11 +36,11 @@ public record Config(
             @JsonProperty("pollTimeoutMs") Long pollTimeoutMs,
             @JsonProperty("kafkaConfig") String kafkaConfig) {
         this(
-                producerType != null ? producerType : ClientType.KAFKA,
-                consumerType != null ? consumerType : ClientType.KAFKA,
-                pulsarConfig != null ? pulsarConfig : new PulsarConfig(),
+                Objects.requireNonNullElse(producerType, ClientType.KAFKA),
+                Objects.requireNonNullElse(consumerType, ClientType.KAFKA),
+                Objects.requireNonNullElseGet(pulsarConfig, PulsarConfig::new),
                 pollTimeoutMs != null ? pollTimeoutMs : DEFAULT_POLL_TIMEOUT_MS,
-                kafkaConfig != null ? kafkaConfig : "");
+                Objects.requireNonNullElse(kafkaConfig, ""));
     }
 
     private static final long DEFAULT_POLL_TIMEOUT_MS = 100L;
@@ -51,7 +52,7 @@ public record Config(
 
     public Properties getKafkaProperties() {
         Properties props = new Properties();
-        if (kafkaConfig != null && !kafkaConfig.trim().isEmpty()) {
+        if (kafkaConfig != null && !kafkaConfig.isBlank()) {
             try {
                 props.load(new StringReader(kafkaConfig));
             } catch (Exception e) {

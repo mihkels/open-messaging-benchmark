@@ -51,9 +51,7 @@ public class RedisBenchmarkProducer implements BenchmarkProducer {
             Map<byte[], byte[]> map1 = new IdentityHashMap<>();
             map1.put(PAYLOAD_FIELD, payload);
             map1.put(TIMESTAMP_FIELD, Long.toString(System.currentTimeMillis()).getBytes(UTF_8));
-            if (key.isPresent()) {
-                map1.put(KEY_FIELD, key.get().getBytes(UTF_8));
-            }
+            key.ifPresent(k -> map1.put(KEY_FIELD, k.getBytes(UTF_8)));
             try (Jedis jedis = this.pool.getResource()) {
                 jedis.xadd(this.topic, map1, this.xaddParams);
             }

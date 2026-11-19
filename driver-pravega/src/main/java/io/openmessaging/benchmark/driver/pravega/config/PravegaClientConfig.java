@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.driver.pravega.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -25,7 +24,7 @@ public record PravegaClientConfig(String controllerURI, String scopeName) {
     @JsonCreator
     public static PravegaClientConfig fromMap(@Nullable Map<String, Object> properties) {
         if (properties == null) {
-            properties = Collections.emptyMap();
+            properties = Map.of();
         }
         return new PravegaClientConfig(
                 getString(properties, "controllerURI").orElse("tcp://localhost:9090"),

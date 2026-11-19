@@ -178,7 +178,7 @@ public class RunChecks {
                 && summary.publishRateAvg() > 0) {
             List<Long> backlog = TestResult.measured(result.phase, result.backlog);
             if (backlog.size() >= 2) {
-                long growth = backlog.get(backlog.size() - 1) - backlog.get(0);
+                long growth = backlog.getLast() - backlog.getFirst();
                 // Backlog holds one copy per subscription
                 double seconds =
                         growth / (summary.publishRateAvg() * Math.max(1, workload.subscriptionsPerTopic));

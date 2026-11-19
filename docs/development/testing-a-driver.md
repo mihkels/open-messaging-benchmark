@@ -257,7 +257,7 @@ The suite is driven by files in
 | `cases.txt`              | The cases                                                                                         |
 | `drivers/`, `workloads/` | Case inputs, using Compose service names as host names                                            |
 | `artifacts.txt`          | Pinned external artifacts with SHA-256 checksums                                                  |
-| `runner/Dockerfile`      | Java 27 image (Eclipse Temurin 27, like the application image) containing the binary distribution |
+| `runner/Dockerfile`      | Java 27 image (Amazon Corretto 27, like the application image) containing the binary distribution |
 
 **1. Stack file.** `common.yaml` defines a `stack-ready` service, and both workers start only after it
 has completed successfully. A stack file adds the broker services and makes `stack-ready` wait until the

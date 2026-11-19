@@ -84,7 +84,8 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         if (closeTimeoutNanos <= 0) {
             throw new IllegalArgumentException("Consumer close timeout must be positive");
         }
-        this.executor = Executors.newSingleThreadExecutor();
+        this.executor =
+                Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("redis-consumer").factory());
         this.groupName = subscriptionName.getBytes(UTF_8);
         this.consumerName = consumerId.getBytes(UTF_8);
         this.streamQuery = Map.of(topic.getBytes(UTF_8), StreamEntryID.XREADGROUP_UNDELIVERED_ENTRY);

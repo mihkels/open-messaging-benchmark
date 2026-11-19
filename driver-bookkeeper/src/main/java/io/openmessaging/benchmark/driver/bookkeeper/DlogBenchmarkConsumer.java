@@ -13,7 +13,6 @@
  */
 package io.openmessaging.benchmark.driver.bookkeeper;
 
-import dlshade.com.google.common.util.concurrent.ThreadFactoryBuilder;
 import dlshade.org.apache.distributedlog.DLSN;
 import dlshade.org.apache.distributedlog.LogRecordWithDLSN;
 import dlshade.org.apache.distributedlog.api.DistributedLogManager;
@@ -73,11 +72,8 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
         this.closeWaitMillis = closeWaitMillis;
         this.executor =
-                Executors.newSingleThreadExecutor(
-                        new ThreadFactoryBuilder()
-                                .setNameFormat("dlog-benchmark-reader-thread-%d")
-                                .setDaemon(true)
-                                .build());
+                Executors.newThreadPerTaskExecutor(
+                        Thread.ofVirtual().name("dlog-benchmark-reader-thread-", 0).factory());
         try {
             this.readerTask = executor.submit(this::read);
         } catch (RuntimeException | Error failure) {

@@ -427,16 +427,18 @@ class DlogBenchmarkConsumerTest {
         LogReader initial = mock(LogReader.class);
         ConsumerCallback callback = mock(ConsumerCallback.class);
         CountDownLatch reopenFailed = new CountDownLatch(1);
+        AtomicReference<Thread> reader = new AtomicReference<>();
         when(initial.readNext(false)).thenThrow(new IOException("read failed"));
         when(manager.openLogReader(DLSN.InitialDLSN))
                 .thenAnswer(invocation -> {
+                    reader.set(Thread.currentThread());
                     reopenFailed.countDown();
                     throw new IOException("reopen failed");
                 });
         DlogBenchmarkConsumer consumer = new DlogBenchmarkConsumer(manager, initial, callback);
         try {
             assertThat(reopenFailed.await(5, TimeUnit.SECONDS)).isTrue();
-            awaitReaderSleeping();
+            awaitSleeping(reader.get());
         } finally {
             consumer.close();
         }
@@ -449,15 +451,11 @@ class DlogBenchmarkConsumerTest {
 
     @SuppressWarnings(
             "java:S2925") // polls the reader thread state; a sleeping thread exposes no hook
-    private static void awaitReaderSleeping() throws InterruptedException {
+    // The reader is a virtual thread, which Thread.getAllStackTraces() does not list
+    private static void awaitSleeping(Thread reader) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
-            boolean sleeping =
-                    Thread.getAllStackTraces().keySet().stream()
-                            .anyMatch(thread ->
-                                    thread.getName().startsWith("dlog-benchmark-reader-thread-")
-                                            && thread.getState() == Thread.State.TIMED_WAITING);
-            if (sleeping) {
+            if (reader.getState() == Thread.State.TIMED_WAITING) {
                 return;
             }
             Thread.sleep(10);

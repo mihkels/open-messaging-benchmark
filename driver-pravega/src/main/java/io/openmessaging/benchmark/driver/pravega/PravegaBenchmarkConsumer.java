@@ -95,7 +95,8 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
                         ReaderConfig.builder().disableTimeWindows(true).build());
 
         // Create the executor and consumer instance *after* all risky operations are done.
-        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        final ExecutorService executor =
+                Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("pravega-reader").factory());
         PravegaBenchmarkConsumer consumer = new PravegaBenchmarkConsumer(reader, executor);
 
         // Start a thread to read events.

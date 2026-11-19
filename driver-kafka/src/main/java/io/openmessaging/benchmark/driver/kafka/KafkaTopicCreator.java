@@ -96,11 +96,8 @@ class KafkaTopicCreator {
         }
 
         ExecutorService worker =
-                Executors.newSingleThreadExecutor(runnable -> {
-                    Thread thread = new Thread(runnable, "kafka-topic-creation");
-                    thread.setDaemon(true);
-                    return thread;
-                });
+                Executors.newThreadPerTaskExecutor(
+                        Thread.ofVirtual().name("kafka-topic-creation").factory());
         class CreationFuture extends CompletableFuture<Void> {
             private boolean terminal;
             private boolean cancelled;

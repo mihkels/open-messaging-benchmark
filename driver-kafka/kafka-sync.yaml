@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/driver-schema.json
+
 # Kafka driver profile that is configuring to sync all
 # published messages to disk to achieve durability
 name: Kafka

@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../../docs/reference/workload-schema.json
+
 
 name: Simple Workload 1 producer on 1 topic
 

@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/workload-schema.json
+
 name: 1m-10-topics-6-partitions-100b
 
 topics: 10

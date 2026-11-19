@@ -1,0 +1,18 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$id" : "https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json",
+  "title" : "OpenMessaging Benchmark driver configuration",
+  "description" : "Driver YAML file passed to the benchmark CLI; keys other than name and driverClass are read by the driver.",
+  "type" : "object",
+  "properties" : {
+    "driverClass" : {
+      "type" : "string",
+      "minLength" : 1
+    },
+    "name" : {
+      "type" : "string",
+      "minLength" : 1
+    }
+  },
+  "required" : [ "driverClass", "name" ]
+}

@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/driver-schema.json
+
 
 name: Kafka-exactly-once
 driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver

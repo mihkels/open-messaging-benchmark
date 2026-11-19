@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../../../docs/reference/driver-schema.json
+
 name: KoP pulsar producer and kafka consumer
 driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
 producerType: pulsar

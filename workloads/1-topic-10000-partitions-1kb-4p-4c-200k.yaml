@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/workload-schema.json
+
 name: 200k rate 4 producers and 4 consumers on 1 topic / 10000 partition
 
 topics: 1

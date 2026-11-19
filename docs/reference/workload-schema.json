@@ -1,0 +1,222 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$id" : "https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json",
+  "title" : "OpenMessaging Benchmark workload",
+  "description" : "Workload YAML file passed to the benchmark CLI.",
+  "type" : "object",
+  "properties" : {
+    "backlogDrainRatio" : {
+      "type" : "number"
+    },
+    "checks" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "disabled" : {
+          "type" : [ "array", "null" ],
+          "items" : {
+            "type" : "string"
+          }
+        },
+        "maxBacklogGrowthSeconds" : {
+          "type" : "number"
+        },
+        "maxClockOffsetFraction" : {
+          "type" : "number"
+        },
+        "maxPublishDelayGrowthMs" : {
+          "type" : "number"
+        },
+        "maxRateShortfall" : {
+          "type" : "number"
+        },
+        "maxRunToRunCv" : {
+          "type" : "number"
+        },
+        "maxSendErrors" : {
+          "type" : "integer"
+        },
+        "maxWorkerCpu" : {
+          "type" : "number"
+        },
+        "maxWorkerGc" : {
+          "type" : "number"
+        },
+        "minMeasuredMinutes" : {
+          "type" : "integer"
+        },
+        "minTailSamples" : {
+          "type" : "integer"
+        }
+      },
+      "additionalProperties" : false
+    },
+    "consumerBacklogSizeGB" : {
+      "type" : "integer"
+    },
+    "consumerPause" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "afterMinutes" : {
+          "type" : "integer"
+        },
+        "durationMinutes" : {
+          "type" : "integer"
+        }
+      },
+      "required" : [ "afterMinutes", "durationMinutes" ],
+      "additionalProperties" : false
+    },
+    "consumerPerSubscription" : {
+      "type" : "integer",
+      "minimum" : 1
+    },
+    "keyDistribution" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "exponent" : {
+          "type" : "number"
+        },
+        "keys" : {
+          "type" : "integer"
+        }
+      },
+      "required" : [ "exponent", "keys" ],
+      "additionalProperties" : false
+    },
+    "keyDistributor" : {
+      "anyOf" : [ {
+        "type" : "null"
+      }, {
+        "type" : "string",
+        "enum" : [ "NO_KEY", "KEY_ROUND_ROBIN", "RANDOM_NANO", "ZIPFIAN" ]
+      } ]
+    },
+    "messageSize" : {
+      "type" : "integer"
+    },
+    "messageSizeDistribution" : {
+      "type" : [ "object", "null" ],
+      "additionalProperties" : {
+        "type" : "integer"
+      }
+    },
+    "name" : {
+      "type" : "string"
+    },
+    "partitionsPerTopic" : {
+      "type" : "integer",
+      "minimum" : 1
+    },
+    "payloadFile" : {
+      "type" : [ "string", "null" ]
+    },
+    "payloadGenerator" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "poolSize" : {
+          "type" : "integer"
+        },
+        "targetCompressionRatio" : {
+          "type" : "number"
+        },
+        "type" : {
+          "type" : "string",
+          "const" : "COMPRESSIBLE"
+        }
+      },
+      "required" : [ "poolSize", "targetCompressionRatio", "type" ],
+      "additionalProperties" : false
+    },
+    "producerRate" : {
+      "type" : "integer"
+    },
+    "producersPerTopic" : {
+      "type" : "integer",
+      "minimum" : 1
+    },
+    "randomBytesRatio" : {
+      "type" : "number"
+    },
+    "randomizedPayloadPoolSize" : {
+      "type" : "integer"
+    },
+    "repeat" : {
+      "type" : [ "integer", "null" ]
+    },
+    "stages" : {
+      "type" : [ "array", "null" ],
+      "items" : {
+        "type" : "object",
+        "properties" : {
+          "durationMinutes" : {
+            "type" : "integer"
+          },
+          "targetRate" : {
+            "type" : "integer"
+          }
+        },
+        "required" : [ "durationMinutes", "targetRate" ],
+        "additionalProperties" : false
+      }
+    },
+    "subscriptionsPerTopic" : {
+      "type" : "integer",
+      "minimum" : 1
+    },
+    "testDurationMinutes" : {
+      "type" : "integer"
+    },
+    "thresholds" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "maxDuplicatedMessages" : {
+          "type" : [ "integer", "null" ]
+        },
+        "maxLostMessages" : {
+          "type" : [ "integer", "null" ]
+        },
+        "maxPublishLatency99Ms" : {
+          "type" : [ "number", "null" ]
+        },
+        "minThroughputRatio" : {
+          "type" : [ "number", "null" ]
+        }
+      },
+      "additionalProperties" : false
+    },
+    "topics" : {
+      "type" : "integer",
+      "minimum" : 1
+    },
+    "useRandomizedPayloads" : {
+      "type" : "boolean"
+    },
+    "verifyDelivery" : {
+      "type" : "boolean"
+    },
+    "warmupDurationMinutes" : {
+      "type" : "integer"
+    }
+  },
+  "required" : [ "consumerPerSubscription", "name", "partitionsPerTopic", "producersPerTopic", "subscriptionsPerTopic", "topics" ],
+  "additionalProperties" : false,
+  "allOf" : [ {
+    "if" : {
+      "not" : {
+        "required" : [ "stages" ]
+      }
+    },
+    "then" : {
+      "required" : [ "producerRate", "testDurationMinutes" ]
+    }
+  }, {
+    "if" : {
+      "not" : {
+        "required" : [ "messageSizeDistribution" ]
+      }
+    },
+    "then" : {
+      "required" : [ "messageSize" ]
+    }
+  } ]
+}

@@ -14,45 +14,81 @@ limitations under the License.
 
 # Workload schema
 
-A workload file is YAML. Unknown fields are ignored, so a misspelled field silently keeps its
-default. See [Workloads](../guides/workloads.md) and [Payloads and keys](../guides/payloads-and-keys.md)
-for explanations and examples.
+A workload file is YAML. Before any worker starts, the CLI checks every workload file against
+[`workload-schema.json`](workload-schema.json) and every driver file against
+[`driver-schema.json`](driver-schema.json). A failing file stops the run with every violation listed,
+for example `Invalid workload my.yaml: required property 'topics' not found; property 'producerRat'
+is not defined in the schema`. The schema rejects:
+
+- unknown fields, at the top level and inside nested blocks, so a misspelled field fails instead of
+  silently keeping its default;
+- missing required fields (marked in the table below);
+- values of the wrong type, and topic, partition, subscription, producer or consumer counts below 1.
+
+The rules under [Constraints](#constraints) then apply. See [Workloads](../guides/workloads.md) and
+[Payloads and keys](../guides/payloads-and-keys.md) for explanations and examples.
+
+## Schema and editor support
+
+Both schemas are generated from the Java classes and published with these docs:
+
+- `https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json`
+- `https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json`
+
+Editors that use the YAML language server (VS Code with the Red Hat YAML extension, and others)
+autocomplete fields and flag mistakes when the file starts with a schema comment:
+
+```yaml
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
+name: my workload
+```
+
+The bundled workload and driver files already carry this comment with a relative path. A driver
+file must set `name` and `driverClass`; the driver itself reads and checks its other keys.
+
+Contributors who change `Workload`, its nested types or `DriverConfiguration` regenerate the
+schemas with the command below and commit the result. The build fails while the committed files are
+stale.
+
+```bash
+mvn -pl benchmark-framework test -Dtest=YamlSchemaTest -DupdateSchema=true
+```
 
 ## Fields
 
-|            Field            |  Type   | Default  |                                                                                                  Description                                                                                                  |
-|-----------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`                      | string  | none     | Stored as `workload` in the result and used to group charts                                                                                                                                                   |
-| `topics`                    | int     | 0        | Number of topics to create                                                                                                                                                                                    |
-| `partitionsPerTopic`        | int     | 0        | Partitions per topic; interpretation depends on the driver                                                                                                                                                    |
-| `subscriptionsPerTopic`     | int     | 0        | Independent subscriptions per topic; each receives every message                                                                                                                                              |
-| `consumerPerSubscription`   | int     | 0        | Consumers sharing each subscription                                                                                                                                                                           |
-| `producersPerTopic`         | int     | 0        | Producers per topic                                                                                                                                                                                           |
-| `producerRate`              | int     | 0        | Total target rate in msg/s across all producers; `0` searches for the maximum sustainable rate                                                                                                                |
-| `messageSize`               | int     | 0        | Message size in bytes, for payload files and randomized payloads                                                                                                                                              |
-| `payloadFile`               | path    | none     | File used as every message's payload, relative to the current directory; its length must equal `messageSize`. Required unless `payloadGenerator`, `useRandomizedPayloads` or `messageSizeDistribution` is set |
-| `useRandomizedPayloads`     | boolean | false    | Generate a pool of random payloads instead of using `payloadFile`                                                                                                                                             |
-| `randomBytesRatio`          | number  | 0.0      | Fraction of each randomized payload that is random; the rest is zeros                                                                                                                                         |
-| `randomizedPayloadPoolSize` | int     | 0        | Number of randomized payloads generated; must be positive when `useRandomizedPayloads` is true and no distribution is set                                                                                     |
-| `messageSizeDistribution`   | map     | none     | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool                                                                                                                          |
-| `payloadGenerator`          | object  | none     | Generated payloads with a target compression ratio; excludes `payloadFile` and `useRandomizedPayloads`. See below                                                                                             |
-| `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                                       |
-| `keyDistribution`           | object  | none     | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                                          |
-| `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                                                                                                                                              |
-| `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                                    |
-| `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                                                  |
-| `testDurationMinutes`       | int     | 0        | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                                      |
-| `thresholds`                | object  | none     | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                                                  |
-| `stages`                    | list    | none     | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                                                |
-| `consumerPause`             | object  | none     | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
-| `repeat`                    | int     | 1        | Run the workload this many times with each driver and summarize the spread; `--repeat` overrides it. See [Repeated runs](../guides/results.md#repeated-runs)                                                  |
-| `checks`                    | object  | defaults | Limits for the built-in run checks that write `findings` to the result; see [Run checks](#run-checks)                                                                                                         |
-| `verifyDelivery`            | boolean | false    | Stamp each message with its producer and sequence number and count lost, duplicated and reordered messages; see [Delivery verification](../guides/results.md#delivery-verification)                           |
+|            Field            |  Type   |                  Default                   |                                                                                                  Description                                                                                                  |
+|-----------------------------|---------|--------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`                      | string  | required                                   | Stored as `workload` in the result and used to group charts                                                                                                                                                   |
+| `topics`                    | int     | required                                   | Number of topics to create; at least 1                                                                                                                                                                        |
+| `partitionsPerTopic`        | int     | required                                   | Partitions per topic, at least 1; interpretation depends on the driver                                                                                                                                        |
+| `subscriptionsPerTopic`     | int     | required                                   | Independent subscriptions per topic, at least 1; each receives every message                                                                                                                                  |
+| `consumerPerSubscription`   | int     | required                                   | Consumers sharing each subscription; at least 1                                                                                                                                                               |
+| `producersPerTopic`         | int     | required                                   | Producers per topic; at least 1                                                                                                                                                                               |
+| `producerRate`              | int     | required without `stages`                  | Total target rate in msg/s across all producers; `0` searches for the maximum sustainable rate                                                                                                                |
+| `messageSize`               | int     | required without `messageSizeDistribution` | Message size in bytes, for payload files and randomized payloads                                                                                                                                              |
+| `payloadFile`               | path    | none                                       | File used as every message's payload, relative to the current directory; its length must equal `messageSize`. Required unless `payloadGenerator`, `useRandomizedPayloads` or `messageSizeDistribution` is set |
+| `useRandomizedPayloads`     | boolean | false                                      | Generate a pool of random payloads instead of using `payloadFile`                                                                                                                                             |
+| `randomBytesRatio`          | number  | 0.0                                        | Fraction of each randomized payload that is random; the rest is zeros                                                                                                                                         |
+| `randomizedPayloadPoolSize` | int     | 0                                          | Number of randomized payloads generated; must be positive when `useRandomizedPayloads` is true and no distribution is set                                                                                     |
+| `messageSizeDistribution`   | map     | none                                       | Size ranges and weights; overrides `messageSize`, `payloadFile` and the payload pool                                                                                                                          |
+| `payloadGenerator`          | object  | none                                       | Generated payloads with a target compression ratio; excludes `payloadFile` and `useRandomizedPayloads`. See below                                                                                             |
+| `keyDistributor`            | enum    | `NO_KEY`                                   | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                                       |
+| `keyDistribution`           | object  | none                                       | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                                          |
+| `consumerBacklogSizeGB`     | long    | 0                                          | Build a backlog of this size during measurement; `0` disables it                                                                                                                                              |
+| `backlogDrainRatio`         | number  | 1.0                                        | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                                    |
+| `warmupDurationMinutes`     | int     | 1                                          | Warm-up length; its statistics are discarded                                                                                                                                                                  |
+| `testDurationMinutes`       | int     | required without `stages`                  | Measured period in minutes; values at or below `0` have no automatic end                                                                                                                                      |
+| `thresholds`                | object  | none                                       | Optional measured-window SLO checks; see [CI gating](../guides/ci-gating.md)                                                                                                                                  |
+| `stages`                    | list    | none                                       | Rate profile of `durationMinutes` and `targetRate` entries; replaces `producerRate` and `testDurationMinutes`. See [Rate profiles](../guides/rate-profiles.md)                                                |
+| `consumerPause`             | object  | none                                       | Pause consumers `afterMinutes` into the measured run for `durationMinutes`; see [Consumer pause](../guides/workloads.md#consumer-pause)                                                                       |
+| `repeat`                    | int     | 1                                          | Run the workload this many times with each driver and summarize the spread; `--repeat` overrides it. See [Repeated runs](../guides/results.md#repeated-runs)                                                  |
+| `checks`                    | object  | defaults                                   | Limits for the built-in run checks that write `findings` to the result; see [Run checks](#run-checks)                                                                                                         |
+| `verifyDelivery`            | boolean | false                                      | Stamp each message with its producer and sequence number and count lost, duplicated and reordered messages; see [Delivery verification](../guides/results.md#delivery-verification)                           |
 
-Set the topology and duration fields explicitly. In particular, a missing or non-positive
-`testDurationMinutes` causes the measured run to continue indefinitely until interrupted; it does
-not produce a zero-length run. Use positive topic, producer and consumer counts for a meaningful
-benchmark.
+`producerRate` and `testDurationMinutes` must be set unless `stages` replaces them, so leaving them
+out cannot silently start a maximum-rate search or a run without an end. Set `producerRate: 0` to
+search for the maximum sustainable rate. A `testDurationMinutes` at or below `0` still runs until
+interrupted; it does not produce a zero-length run.
 
 ## Payload precedence
 
@@ -121,7 +157,7 @@ messageSizeDistribution:
 | `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                                              |
 | Invalid distribution range or weight                                                                | An error naming the range or weight                                                    |
 | `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                                        |
-| `payloadGenerator` missing a field                                                                  | `payloadGenerator requires type, targetCompressionRatio and poolSize`                  |
+| `payloadGenerator` missing a field                                                                  | `required property '<field>' not found`, from the schema                               |
 | `targetCompressionRatio` ≤ 0, > 1 or not a number                                                   | `payloadGenerator targetCompressionRatio must be in (0, 1]`                            |
 | `payloadGenerator.poolSize` ≤ 0                                                                     | `payloadGenerator poolSize must be positive`                                           |
 | `payloadGenerator` with `payloadFile`                                                               | `payloadGenerator and payloadFile are mutually exclusive`                              |

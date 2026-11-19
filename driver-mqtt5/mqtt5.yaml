@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/driver-schema.json
+
 name: MQTT
 driverClass: io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver
 

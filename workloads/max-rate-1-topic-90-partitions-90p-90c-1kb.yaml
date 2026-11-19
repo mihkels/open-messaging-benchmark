@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/workload-schema.json
+
 name: max-rate-1-topic-90-partitions-90p-90c-1kb
 
 topics: 1

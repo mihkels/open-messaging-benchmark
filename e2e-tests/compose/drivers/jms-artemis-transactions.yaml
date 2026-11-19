@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../../../docs/reference/driver-schema.json
+
 name: JMS-Artemis-transactions
 driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
 connectionFactoryClassName: org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory

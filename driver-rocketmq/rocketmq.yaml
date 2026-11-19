@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../docs/reference/driver-schema.json
+
 name: RocketMQ
 driverClass: io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver
 

@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=../../../docs/reference/driver-schema.json
+
 name: Pulsar-shared-no-batching
 driverClass: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
 client:

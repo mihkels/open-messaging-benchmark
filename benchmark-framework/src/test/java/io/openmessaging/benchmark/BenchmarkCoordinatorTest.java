@@ -59,7 +59,7 @@ class BenchmarkCoordinatorTest {
     void mainSelectsWorkerTopologyAndWritesTheCompletedResult(String topology) throws Exception {
         Path driver = driver("fixture");
         Path workload = directory.resolve("workload.yaml");
-        Files.writeString(workload, "name: workload\nunknownFutureOption: ignored\n");
+        Files.writeString(workload, WorkloadYaml.minimal("workload"));
         Path output = directory.resolve("result.json");
         List<String> arguments =
                 new ArrayList<>(
@@ -149,7 +149,9 @@ class BenchmarkCoordinatorTest {
     void validatesWorkloadsBeforeConstructingWorkers() throws Exception {
         Path invalid = directory.resolve("invalid.yaml");
         Files.writeString(
-                invalid, "name: invalid\nuseRandomizedPayloads: true\nrandomizedPayloadPoolSize: 0\n");
+                invalid,
+                WorkloadYaml.minimal("invalid")
+                        + "useRandomizedPayloads: true\nrandomizedPayloadPoolSize: 0\n");
         String[] arguments = {"--drivers", driver("fixture").toString(), invalid.toString()};
         try (var processes = mockConstruction(ProcessWorker.class);
                 var clients = mockConstruction(HttpWorkerClient.class)) {
@@ -245,7 +247,8 @@ class BenchmarkCoordinatorTest {
                         () -> Benchmark.runWorkloads(arguments, workloads, worker, (d, w, selected) -> run))
                 .isInstanceOf(IllegalStateException.class)
                 .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                .hasRootCauseMessage("Driver configuration " + unnamed + " must specify a name");
+                .hasRootCauseMessage(
+                        "Invalid driver configuration " + unnamed + ": required property 'name' not found");
         verify(run, never()).run();
         verify(worker).close();
     }

@@ -43,8 +43,8 @@ autocomplete fields and flag mistakes when the file starts with a schema comment
 name: my workload
 ```
 
-The bundled workload and driver files already carry this comment with a relative path. A driver
-file must set `name` and `driverClass`; the driver itself reads and checks its other keys.
+The bundled workload and driver files already carry this comment, pointing at the published
+schemas. A driver file must set `name` and `driverClass`; the driver itself reads and checks its other keys.
 
 Contributors who change `Workload`, its nested types or `DriverConfiguration` regenerate the
 schemas with the command below and commit the result. The build fails while the committed files are

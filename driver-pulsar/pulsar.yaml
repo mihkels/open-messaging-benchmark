@@ -12,7 +12,7 @@
 # limitations under the License.
 #
 
-# yaml-language-server: $schema=../docs/reference/driver-schema.json
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: Pulsar
 driverClass: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver

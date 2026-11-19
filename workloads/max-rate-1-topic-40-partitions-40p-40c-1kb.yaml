@@ -12,7 +12,7 @@
 # limitations under the License.
 #
 
-# yaml-language-server: $schema=../docs/reference/workload-schema.json
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
 
 name: max-rate-1-topic-40-partitions-40p-40c-1kb
 

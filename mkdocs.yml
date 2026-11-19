@@ -189,5 +189,7 @@ nav:
         - Framework resource efficiency: development/framework-performance.md
         - Releasing: development/releasing.md
         - Documentation: development/documentation.md
+        - Design decisions:
+            - "ADR 0001: Partition telemetry": development/adr/0001-partition-telemetry.md
   - Blog:
     - blog/index.md

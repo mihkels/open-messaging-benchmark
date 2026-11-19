@@ -19,6 +19,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.core.importer.Location;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -31,8 +32,22 @@ import com.tngtech.archunit.lang.ArchRule;
  */
 @AnalyzeClasses(
         packages = "io.openmessaging.benchmark",
-        importOptions = ImportOption.DoNotIncludeTests.class)
+        importOptions = {
+            ImportOption.DoNotIncludeTests.class,
+            FrameworkArchitectureTest.DoNotIncludeShaded.class
+        })
 class FrameworkArchitectureTest {
+
+    /**
+     * Third-party code that metrics-otlp relocates under {@code io.openmessaging} is not ours to
+     * check.
+     */
+    static final class DoNotIncludeShaded implements ImportOption {
+        @Override
+        public boolean includes(Location location) {
+            return !location.contains("/metrics/otlp/shaded/");
+        }
+    }
 
     private static final String DRIVER_API_PACKAGE = "io.openmessaging.benchmark.driver";
 

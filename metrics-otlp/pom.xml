@@ -74,7 +74,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.6.2</version>
                 <dependencies>
                     <!-- The plugin's own ASM cannot read Java 27 class files -->
                     <dependency>

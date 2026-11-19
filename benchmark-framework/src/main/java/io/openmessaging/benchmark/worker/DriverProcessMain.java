@@ -142,11 +142,7 @@ public final class DriverProcessMain {
 
         Runnable shutdown =
                 () -> {
-                    try {
-                        worker.stopAll();
-                    } catch (RuntimeException e) {
-                        log.warn("Failed to stop driver", e);
-                    }
+                    // Closing the handler closes the worker, which stops the driver
                     try {
                         handler.close();
                     } catch (Exception e) {

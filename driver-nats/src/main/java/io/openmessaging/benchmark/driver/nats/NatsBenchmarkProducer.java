@@ -57,9 +57,9 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
                     .<Void>thenApply(_ -> null)
                     .whenComplete((_, failure) -> tracker.completeFromClient(send, failure));
         } catch (RuntimeException failure) {
-            tracker.completeFromClient(send, failure);
+            send.completeExceptionally(failure);
         } catch (Error failure) {
-            tracker.completeFromClient(send, failure);
+            send.completeExceptionally(failure);
             throw failure;
         }
         return send;

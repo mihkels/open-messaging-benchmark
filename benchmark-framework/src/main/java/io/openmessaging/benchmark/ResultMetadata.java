@@ -14,7 +14,7 @@
 package io.openmessaging.benchmark;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.openmessaging.benchmark.driver.SecretRedaction;
+import io.openmessaging.benchmark.utils.SecretRedaction;
 import io.openmessaging.benchmark.worker.WorkerClock;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;

@@ -244,8 +244,7 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public CumulativeLatencies getCumulativeLatencies() {
-        return mapAll(workers, Worker::getCumulativeLatencies).stream()
-                .reduce(new CumulativeLatencies(), CumulativeLatencies::plus);
+        return CumulativeLatencies.aggregate(mapAll(workers, Worker::getCumulativeLatencies));
     }
 
     @Override

@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -464,21 +465,31 @@ public final class WorkloadGenerator implements WorkloadRun {
         // consumerBacklogSizeGB's drain rule, floored at the backlog in flight before the pause
         long drained =
                 Math.max(steady, Math.max(1000L, (long) ((1.0 - workload.backlogDrainRatio) * peak)));
-        var watch = new StallWatch("Pause drain", "messages received", CountersStats::messagesReceived);
+        OptionalLong drainedAt = drainTo("Pause drain", drained, clock, tickMillis);
+        if (drainedAt.isPresent()) {
+            double seconds = (drainedAt.getAsLong() - resumed) / 1e9;
+            pauseDrainSeconds = seconds;
+            log.info("--- Drained the paused backlog in {} s ---", seconds);
+            enterPhase(RunPhase.MEASURE);
+        }
+    }
+
+    // Waits for the backlog to fall to target; returns the clock reading then, or empty if the run
+    // completed first
+    private OptionalLong drainTo(String waitName, long target, LongSupplier clock, long tickMillis)
+            throws InterruptedException {
+        var watch = new StallWatch(waitName, "messages received", CountersStats::messagesReceived);
         while (!runCompleted) {
             CountersStats stats = worker.getCountersStats();
             long now = clock.getAsLong();
             long backlog = backlog(stats);
-            if (backlog <= drained) {
-                double seconds = (now - resumed) / 1e9;
-                pauseDrainSeconds = seconds;
-                log.info("--- Drained the paused backlog in {} s ---", seconds);
-                enterPhase(RunPhase.MEASURE);
-                return;
+            if (backlog <= target) {
+                return OptionalLong.of(now);
             }
-            watch.check(now, stats, backlogProgress(backlog, "<=", drained));
+            watch.check(now, stats, backlogProgress(backlog, "<=", target));
             Thread.sleep(tickMillis);
         }
+        return OptionalLong.empty();
     }
 
     // Returns false if the run completed first
@@ -692,21 +703,10 @@ public final class WorkloadGenerator implements WorkloadRun {
         long backlogEmptyLevel = (long) ((1.0 - workload.backlogDrainRatio) * backlogMessageCapacity);
         final long minBacklog = Math.max(1000L, backlogEmptyLevel);
 
-        var drain =
-                new StallWatch("Backlog drain", "messages received", CountersStats::messagesReceived);
-        while (true) {
-            CountersStats stats = worker.getCountersStats();
-            long backlog = backlog(stats);
-            if (backlog <= minBacklog) {
-                log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
-                enterPhase(RunPhase.MEASURE);
-
-                Thread.sleep(MINUTES.toMillis(testDurationMinutes));
-
-                return;
-            }
-            drain.check(clock.getAsLong(), stats, backlogProgress(backlog, "<=", minBacklog));
-            Thread.sleep(drainTickMillis);
+        if (drainTo("Backlog drain", minBacklog, clock, drainTickMillis).isPresent()) {
+            log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
+            enterPhase(RunPhase.MEASURE);
+            Thread.sleep(MINUTES.toMillis(testDurationMinutes));
         }
     }
 

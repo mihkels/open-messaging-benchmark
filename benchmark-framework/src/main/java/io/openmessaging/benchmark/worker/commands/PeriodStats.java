@@ -76,98 +76,8 @@ public record PeriodStats(
         this.load = load;
     }
 
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    public PeriodStats(
-            long messagesSent,
-            long messageSendErrors,
-            long bytesSent,
-            long messagesReceived,
-            long bytesReceived,
-            long totalMessagesSent,
-            long totalMessageSendErrors,
-            long totalMessagesReceived,
-            @Nullable Histogram publishLatency,
-            @Nullable Histogram publishDelayLatency,
-            @Nullable Histogram endToEndLatency,
-            @Nullable Histogram publishScheduleLatency,
-            @Nullable Map<String, String> sendErrorReasons) {
-        this(
-                messagesSent,
-                messageSendErrors,
-                bytesSent,
-                messagesReceived,
-                bytesReceived,
-                totalMessagesSent,
-                totalMessageSendErrors,
-                totalMessagesReceived,
-                publishLatency,
-                publishDelayLatency,
-                endToEndLatency,
-                publishScheduleLatency,
-                sendErrorReasons,
-                null);
-    }
-
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    public PeriodStats(
-            long messagesSent,
-            long messageSendErrors,
-            long bytesSent,
-            long messagesReceived,
-            long bytesReceived,
-            long totalMessagesSent,
-            long totalMessageSendErrors,
-            long totalMessagesReceived,
-            @Nullable Histogram publishLatency,
-            @Nullable Histogram publishDelayLatency,
-            @Nullable Histogram endToEndLatency,
-            @Nullable Histogram publishScheduleLatency) {
-        this(
-                messagesSent,
-                messageSendErrors,
-                bytesSent,
-                messagesReceived,
-                bytesReceived,
-                totalMessagesSent,
-                totalMessageSendErrors,
-                totalMessagesReceived,
-                publishLatency,
-                publishDelayLatency,
-                endToEndLatency,
-                publishScheduleLatency,
-                null);
-    }
-
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    public PeriodStats(
-            long messagesSent,
-            long messageSendErrors,
-            long bytesSent,
-            long messagesReceived,
-            long bytesReceived,
-            long totalMessagesSent,
-            long totalMessageSendErrors,
-            long totalMessagesReceived,
-            Histogram publishLatency,
-            Histogram publishDelayLatency,
-            Histogram endToEndLatency) {
-        this(
-                messagesSent,
-                messageSendErrors,
-                bytesSent,
-                messagesReceived,
-                bytesReceived,
-                totalMessagesSent,
-                totalMessageSendErrors,
-                totalMessagesReceived,
-                publishLatency,
-                publishDelayLatency,
-                endToEndLatency,
-                null);
-    }
-
     public PeriodStats() {
-        this(0, 0, 0, 0, 0, 0, 0, 0, new Histogram(5), new Histogram(5), new Histogram(5));
+        this(0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null, null, null);
     }
 
     // Return defensive copies in getters
@@ -220,28 +130,7 @@ public record PeriodStats(
      * @return A new PeriodStats instance with the combined values.
      */
     public PeriodStats plus(PeriodStats other) {
-        return new PeriodStats(
-                this.messagesSent + other.messagesSent,
-                this.messageSendErrors + other.messageSendErrors,
-                this.bytesSent + other.bytesSent,
-                this.messagesReceived + other.messagesReceived,
-                this.bytesReceived + other.bytesReceived,
-                this.totalMessagesSent + other.totalMessagesSent,
-                this.totalMessageSendErrors + other.totalMessageSendErrors,
-                this.totalMessagesReceived + other.totalMessagesReceived,
-                combine(this.publishLatency, other.publishLatency),
-                combine(this.publishDelayLatency, other.publishDelayLatency),
-                combine(this.endToEndLatency, other.endToEndLatency),
-                combine(this.publishScheduleLatency, other.publishScheduleLatency),
-                merge(List.of(this, other)),
-                WorkerLoad.max(this.load, other.load));
-    }
-
-    private static Histogram combine(Histogram first, Histogram second) {
-        Histogram combined = new Histogram(5);
-        combined.add(first);
-        combined.add(second);
-        return combined;
+        return aggregate(List.of(this, other));
     }
 
     private static Map<String, String> merge(List<PeriodStats> snapshots) {

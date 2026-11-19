@@ -65,7 +65,9 @@ class WorkloadGeneratorLifecycleTest {
         Histogram delay = histogram(100, 500);
         Histogram endToEnd = histogram(4_000, 8_000);
         PeriodStats snapshot =
-                spy(new PeriodStats(10, 2, 100, 8, 80, 10, 2, 8, publish, delay, endToEnd));
+                spy(
+                        new PeriodStats(
+                                10, 2, 100, 8, 80, 10, 2, 8, publish, delay, endToEnd, null, null, null));
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency = publish.copy();
         cumulative.publishDelayLatency = delay.copy();
@@ -237,8 +239,8 @@ class WorkloadGeneratorLifecycleTest {
         // 10 messages per period in warm-up, then 40; both periods last at least 10 ms
         when(worker.getPeriodStats())
                 .thenReturn(
-                        new PeriodStats(10, 0, 10, 10, 10, 10, 0, 10, empty, empty, empty),
-                        new PeriodStats(40, 0, 40, 40, 40, 50, 0, 50, empty, empty, empty));
+                        new PeriodStats(10, 0, 10, 10, 10, 10, 0, 10, empty, empty, empty, null, null, null),
+                        new PeriodStats(40, 0, 40, 40, 40, 50, 0, 50, empty, empty, empty, null, null, null));
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency = empty.copy();
         cumulative.publishDelayLatency = empty.copy();
@@ -672,7 +674,7 @@ class WorkloadGeneratorLifecycleTest {
         Histogram delay = new Histogram(5);
         delay.recordValue(1_500);
         when(worker.getPeriodStats())
-                .thenReturn(new PeriodStats(0, 0, 0, 0, 0, 0, 0, 0, null, delay, null, null));
+                .thenReturn(new PeriodStats(0, 0, 0, 0, 0, 0, 0, 0, null, delay, null, null, null, null));
         Workload workload = workload();
         workload.producerRate = 0;
         TestResult result = new TestResult();

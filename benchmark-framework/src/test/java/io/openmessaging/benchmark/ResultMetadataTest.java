@@ -16,7 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.openmessaging.benchmark.driver.SecretRedaction;
+import io.openmessaging.benchmark.utils.SecretRedaction;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;

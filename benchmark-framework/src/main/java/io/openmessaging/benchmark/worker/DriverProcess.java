@@ -72,7 +72,6 @@ final class DriverProcess {
     // exit; processStopped records that the process no longer needs stopping.
     private volatile @Nullable Process process;
     private volatile boolean processStopped;
-    private volatile @Nullable String endpoint;
     private volatile @Nullable HttpWorkerClient client;
     private volatile boolean crashReported;
 
@@ -179,7 +178,7 @@ final class DriverProcess {
             Thread.sleep(50);
         }
         int port = Integer.parseInt(Files.readString(portFile, StandardCharsets.US_ASCII).trim());
-        endpoint = "http://127.0.0.1:" + port;
+        String endpoint = "http://127.0.0.1:" + port;
         client = new HttpWorkerClient(endpoint, newToken);
         log.info("Driver process pid {} is serving {} on {}", started.pid(), description, endpoint);
     }
@@ -202,10 +201,6 @@ final class DriverProcess {
     void authorizeConfig(Path driverConfigFile) throws IOException {
         DriverProcessServer.authorizeConfig(
                 Objects.requireNonNull(workDir, "driver work directory after start"), driverConfigFile);
-    }
-
-    @Nullable String endpoint() {
-        return endpoint;
     }
 
     @Nullable Long pid() {
@@ -313,7 +308,6 @@ final class DriverProcess {
         if (closing != null) {
             stopProcess(closing, failures);
         }
-        endpoint = null;
         Path directory = workDir;
         if (directory != null && owned() == null) {
             try {

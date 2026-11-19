@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker.commands;
 import static java.util.concurrent.TimeUnit.HOURS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import java.util.List;
 import org.HdrHistogram.Histogram;
 
 public class CumulativeLatencies {
@@ -26,18 +27,23 @@ public class CumulativeLatencies {
     public Histogram endToEndLatency = new Histogram(HOURS.toMicros(12), 4);
 
     public CumulativeLatencies plus(CumulativeLatencies toAdd) {
+        return aggregate(List.of(this, toAdd));
+    }
+
+    /**
+     * Sums the latencies into one new instance, without an intermediate copy per step.
+     *
+     * @param latencies the latencies to sum
+     * @return the sum
+     */
+    public static CumulativeLatencies aggregate(List<CumulativeLatencies> latencies) {
         CumulativeLatencies result = new CumulativeLatencies();
-
-        result.publishLatency.add(this.publishLatency);
-        result.publishDelayLatency.add(this.publishDelayLatency);
-        result.publishScheduleLatency.add(this.publishScheduleLatency);
-        result.endToEndLatency.add(this.endToEndLatency);
-
-        result.publishLatency.add(toAdd.publishLatency);
-        result.publishDelayLatency.add(toAdd.publishDelayLatency);
-        result.publishScheduleLatency.add(toAdd.publishScheduleLatency);
-        result.endToEndLatency.add(toAdd.endToEndLatency);
-
+        for (CumulativeLatencies latency : latencies) {
+            result.publishLatency.add(latency.publishLatency);
+            result.publishDelayLatency.add(latency.publishDelayLatency);
+            result.publishScheduleLatency.add(latency.publishScheduleLatency);
+            result.endToEndLatency.add(latency.endToEndLatency);
+        }
         return result;
     }
 }

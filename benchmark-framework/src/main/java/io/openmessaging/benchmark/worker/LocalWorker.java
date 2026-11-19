@@ -30,8 +30,8 @@ import io.openmessaging.benchmark.driver.ConfiguredClasses;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
-import io.openmessaging.benchmark.driver.SecretRedaction;
 import io.openmessaging.benchmark.utils.RandomGenerator;
+import io.openmessaging.benchmark.utils.SecretRedaction;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
@@ -492,15 +492,25 @@ public final class LocalWorker implements Worker {
             Failures cleanup = new Failures();
             cleanup.deferInterrupt("Interrupted before stopping the worker");
             List<TrackedTask<?>> tasks = current.beginStopping();
-            sealCallbacks(current, cleanup);
+            awaitOrRecord(current.callbacks::seal, deadline(), "Callback gate did not quiesce", cleanup);
             boolean tasksExited = cancelTasks(tasks, cleanup);
             Detached detached = current.detach();
             closeResources(detached.handles(), "producer or consumer", cleanup);
             if (detached.driver() != null) {
                 closeResources(List.of(detached.driver()), "driver", cleanup);
             }
-            boolean creationsFinished = awaitCreations(current, cleanup);
-            boolean callbacksFinished = awaitCallbacks(current, cleanup);
+            boolean creationsFinished =
+                    awaitOrRecord(
+                            current::awaitCreations,
+                            deadline(),
+                            "Resource creation callbacks did not finish",
+                            cleanup);
+            boolean callbacksFinished =
+                    awaitOrRecord(
+                            current.callbacks::awaitQuiescence,
+                            deadline(),
+                            "Outstanding send or consumer callbacks did not finish",
+                            cleanup);
             cleanup.add(current.cleanupFailure());
 
             // A worker with failed cleanup is already unusable and may still receive stats from stuck
@@ -524,54 +534,34 @@ public final class LocalWorker implements Worker {
         }
     }
 
-    private void sealCallbacks(Run current, Failures cleanup) {
-        try {
-            if (!current.callbacks.seal(deadline())) {
-                cleanup.add(new TimeoutException("Callback gate did not quiesce"));
-            }
-        } catch (InterruptedException e) {
-            cleanup.addInterruption(e);
-        }
-    }
-
     // Returns whether every task exited after its cancellation.
     private boolean cancelTasks(List<TrackedTask<?>> tasks, Failures cleanup) {
         tasks.forEach(task -> task.cancel(true));
         long taskDeadline = deadline();
         boolean tasksExited = true;
         for (TrackedTask<?> task : tasks) {
-            try {
-                if (!task.awaitExit(taskDeadline)) {
-                    cleanup.add(
-                            new TimeoutException(task.description() + " did not exit after cancellation"));
-                    tasksExited = false;
-                }
-            } catch (InterruptedException e) {
-                cleanup.addInterruption(e);
-                tasksExited = false;
-            }
+            tasksExited &=
+                    awaitOrRecord(
+                            task::awaitExit,
+                            taskDeadline,
+                            task.description() + " did not exit after cancellation",
+                            cleanup);
         }
         return tasksExited;
     }
 
-    private boolean awaitCreations(Run current, Failures cleanup) {
-        try {
-            if (current.awaitCreations(deadline())) {
-                return true;
-            }
-            cleanup.add(new TimeoutException("Resource creation callbacks did not finish"));
-        } catch (InterruptedException e) {
-            cleanup.addInterruption(e);
-        }
-        return false;
+    private interface Wait {
+        boolean until(long deadlineNanos) throws InterruptedException;
     }
 
-    private boolean awaitCallbacks(Run current, Failures cleanup) {
+    // Returns whether the wait finished by the deadline; records a timeout or interruption otherwise
+    private static boolean awaitOrRecord(
+            Wait wait, long deadlineNanos, String timeoutMessage, Failures cleanup) {
         try {
-            if (current.callbacks.awaitQuiescence(deadline())) {
+            if (wait.until(deadlineNanos)) {
                 return true;
             }
-            cleanup.add(new TimeoutException("Outstanding send or consumer callbacks did not finish"));
+            cleanup.add(new TimeoutException(timeoutMessage));
         } catch (InterruptedException e) {
             cleanup.addInterruption(e);
         }

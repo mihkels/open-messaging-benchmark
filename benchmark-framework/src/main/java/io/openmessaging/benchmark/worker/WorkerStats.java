@@ -17,6 +17,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.openmessaging.benchmark.driver.Failures;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
@@ -66,6 +67,9 @@ public class WorkerStats {
     private final LongAdder delivered = new LongAdder();
     private final LongAdder duplicated = new LongAdder();
     private final LongAdder outOfOrder = new LongAdder();
+
+    // Only recorded into when the workload enables partitionTelemetry
+    private final PartitionMetrics partitions = new PartitionMetrics();
 
     private volatile @Nullable RunPhase phase;
     // Last send failure as "class: message"; kept until reset so every period reports it.
@@ -173,7 +177,10 @@ public class WorkerStats {
                 endToEndLatency.takeInterval(),
                 publishScheduleLatency.takeInterval(),
                 lastSendError == null ? Map.of() : Map.of(LocalWorker.ID, lastSendError),
-                sampleLoad());
+                sampleLoad(),
+                partitions.takePartitions(),
+                partitions.takeRebalances(),
+                partitions.takeDroppedRebalances());
     }
 
     private synchronized @Nullable WorkerLoad sampleLoad() {
@@ -238,6 +245,7 @@ public class WorkerStats {
         publishDelayLatency.reset();
         publishScheduleLatency.reset();
         endToEndLatency.reset();
+        partitions.reset();
         // A warm-up failure must not be reported as a measured-window send error
         lastSendError = null;
     }
@@ -256,6 +264,18 @@ public class WorkerStats {
         delivered.reset();
         duplicated.reset();
         outOfOrder.reset();
+    }
+
+    void recordPartitionPublish(String topic, int partition, long publishLatencyMicros) {
+        partitions.recordPublish(topic, partition, publishLatencyMicros);
+    }
+
+    void recordPartitionReceive(String topic, int partition, long endToEndLatencyMicros) {
+        partitions.recordReceive(topic, partition, endToEndLatencyMicros);
+    }
+
+    void recordRebalance(String topic, RebalanceEvent event) {
+        partitions.recordRebalance(topic, event);
     }
 
     public void recordProducerFailure(Throwable failure) {

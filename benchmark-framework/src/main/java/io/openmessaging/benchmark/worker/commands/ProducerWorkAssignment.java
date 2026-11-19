@@ -36,6 +36,7 @@ import org.jspecify.annotations.Nullable;
  * @param keyDistribution optional Zipfian distribution parameters
  * @param verifyDelivery whether producers stamp each payload for delivery verification
  * @param headers optional generated headers sent with every message
+ * @param partitionTelemetry whether producers report the partition of every send
  */
 @JsonPropertyOrder({
     "payloadData",
@@ -44,7 +45,8 @@ import org.jspecify.annotations.Nullable;
     "payloadWeights",
     "keyDistribution",
     "verifyDelivery",
-    "headers"
+    "headers",
+    "partitionTelemetry"
 })
 public record ProducerWorkAssignment(
         @JsonIgnore PayloadTemplates payloads,
@@ -52,7 +54,19 @@ public record ProducerWorkAssignment(
         KeyDistributorType keyDistributorType,
         @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable KeyDistribution keyDistribution,
         @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean verifyDelivery,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable MessageHeaders headers) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable MessageHeaders headers,
+        @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean partitionTelemetry) {
+
+    public ProducerWorkAssignment(
+            PayloadTemplates payloads,
+            double publishRate,
+            KeyDistributorType keyDistributorType,
+            @Nullable KeyDistribution keyDistribution,
+            boolean verifyDelivery,
+            @Nullable MessageHeaders headers) {
+        this(
+                payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery, headers, false);
+    }
 
     public ProducerWorkAssignment(
             PayloadTemplates payloads,
@@ -85,6 +99,7 @@ public record ProducerWorkAssignment(
     }
 
     @JsonCreator
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public ProducerWorkAssignment(
             @JsonProperty("payloadData") @Nullable List<byte[]> payloadData,
             @JsonProperty("publishRate") double publishRate,
@@ -92,14 +107,16 @@ public record ProducerWorkAssignment(
             @JsonProperty("payloadWeights") int @Nullable [] payloadWeights,
             @JsonProperty("keyDistribution") @Nullable KeyDistribution keyDistribution,
             @JsonProperty("verifyDelivery") boolean verifyDelivery,
-            @JsonProperty("headers") @Nullable MessageHeaders headers) {
+            @JsonProperty("headers") @Nullable MessageHeaders headers,
+            @JsonProperty("partitionTelemetry") boolean partitionTelemetry) {
         this(
                 PayloadTemplates.of(payloadData, payloadWeights),
                 publishRate,
                 keyDistributorType,
                 keyDistribution,
                 verifyDelivery,
-                headers);
+                headers,
+                partitionTelemetry);
     }
 
     /**
@@ -130,6 +147,12 @@ public record ProducerWorkAssignment(
      */
     public ProducerWorkAssignment withPublishRate(double publishRate) {
         return new ProducerWorkAssignment(
-                payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery, headers);
+                payloads,
+                publishRate,
+                keyDistributorType,
+                keyDistribution,
+                verifyDelivery,
+                headers,
+                partitionTelemetry);
     }
 }

@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.worker;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -74,13 +75,39 @@ final class RunCallbacks implements ConsumerCallback {
             LongSupplier nanoClock,
             @Nullable Throwable failure,
             boolean stamped) {
+        completeSend(
+                payloadLength,
+                intendedSendTime,
+                sendTime,
+                nanoClock,
+                failure,
+                stamped,
+                null,
+                ConsumerCallback.UNKNOWN_PARTITION);
+    }
+
+    // Records a completed send; with a topic and a known partition, also into its partition telemetry
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    void completeSend(
+            long payloadLength,
+            long intendedSendTime,
+            long sendTime,
+            LongSupplier nanoClock,
+            @Nullable Throwable failure,
+            boolean stamped,
+            @Nullable String topic,
+            int partition) {
         try {
             gate.readLock().lock();
             try {
                 if (accepting) {
                     if (failure == null) {
-                        stats.recordProducerSuccess(
-                                payloadLength, intendedSendTime, sendTime, nanoClock.getAsLong());
+                        long now = nanoClock.getAsLong();
+                        stats.recordProducerSuccess(payloadLength, intendedSendTime, sendTime, now);
+                        if (topic != null && partition >= 0) {
+                            stats.recordPartitionPublish(
+                                    topic, partition, TimeUnit.NANOSECONDS.toMicros(now - sendTime));
+                        }
                         if (stamped) {
                             stats.recordVerifiedSend();
                         }
@@ -134,6 +161,59 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     void receive(int size, long publishTimestamp) {
+        receive(size, publishTimestamp, null, UNKNOWN_PARTITION);
+    }
+
+    /**
+     * A callback for one consumer's topic that also records partition telemetry: per-partition
+     * traffic and latency, and the consumer's rebalance events.
+     *
+     * @param topic the consumer's topic
+     * @return the callback
+     */
+    ConsumerCallback forTopic(String topic) {
+        return new ConsumerCallback() {
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp) {
+                receive(payload.length, publishTimestamp, topic, UNKNOWN_PARTITION);
+            }
+
+            @Override
+            public void messageReceived(ByteBuffer payload, long publishTimestamp) {
+                receive(payload.remaining(), publishTimestamp, topic, UNKNOWN_PARTITION);
+            }
+
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp, int partition) {
+                receive(payload.length, publishTimestamp, topic, partition);
+            }
+
+            @Override
+            public void messageReceived(ByteBuffer payload, long publishTimestamp, int partition) {
+                receive(payload.remaining(), publishTimestamp, topic, partition);
+            }
+
+            @Override
+            public void partitionsChanged(RebalanceEvent event) {
+                rebalance(topic, event);
+            }
+        };
+    }
+
+    private void rebalance(String topic, RebalanceEvent event) {
+        gate.readLock().lock();
+        try {
+            if (accepting) {
+                stats.recordRebalance(topic, event);
+            }
+        } catch (Throwable t) {
+            unexpectedFailure.accept(t);
+        } finally {
+            gate.readLock().unlock();
+        }
+    }
+
+    private void receive(int size, long publishTimestamp, @Nullable String topic, int partition) {
         gate.readLock().lock();
         try {
             if (!accepting) {
@@ -144,6 +224,9 @@ final class RunCallbacks implements ConsumerCallback {
                 long latencyMicros =
                         TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis() - publishTimestamp);
                 stats.recordMessageReceived(size, latencyMicros);
+                if (topic != null && partition >= 0) {
+                    stats.recordPartitionReceive(topic, partition, latencyMicros);
+                }
             } catch (Throwable t) {
                 receives.decrementAndGet();
                 signalProgress();

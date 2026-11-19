@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.contains;
@@ -29,12 +30,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
+import io.openmessaging.benchmark.worker.commands.PartitionPeriod;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
+import io.openmessaging.benchmark.worker.commands.RebalanceRecord;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.nio.file.Files;
@@ -113,6 +117,57 @@ class WorkloadGeneratorLifecycleTest {
                 arguments, Map.of("snapshot", workload), worker, (d, w, ignored) -> completed);
 
         assertSerializedResult(Path.of(arguments.output));
+    }
+
+    @Test
+    void collectSummarizesPartitionSkewAndListsRebalancesPerPeriod() throws Exception {
+        Histogram slow = new Histogram(1);
+        slow.recordValue(50_000);
+        PeriodStats snapshot =
+                new PeriodStats(
+                        3,
+                        0,
+                        0,
+                        0,
+                        0,
+                        3,
+                        0,
+                        0,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(
+                                new PartitionPeriod("t", 0, 1, 0, new Histogram(1), new Histogram(1)),
+                                new PartitionPeriod("t", 1, 2, 0, slow, new Histogram(1))),
+                        List.of(
+                                new RebalanceRecord(
+                                        null, 5L, "local", "t", RebalanceEvent.Kind.ASSIGNED, List.of(1))),
+                        2);
+        Worker worker = worker();
+        when(worker.getPeriodStats()).thenReturn(snapshot);
+        TestResult result;
+        try (WorkloadGenerator generator = fastGenerator(workload(), worker)) {
+            result = generator.newResult();
+            generator.collect(result, 1, TimeUnit.MILLISECONDS, true);
+        }
+
+        int periods = result.publishRate.size();
+        assertThat(result.partitionSkew)
+                .hasSize(periods)
+                .allSatisfy(skew -> {
+                    assertThat(skew.partitions()).isEqualTo(2);
+                    assertThat(skew.publishMaxMeanRatio()).isCloseTo(4.0 / 3, within(1e-9));
+                    assertThat(skew.topPublishP99())
+                            .extracting(PartitionSkew.PartitionLatency::partition)
+                            .containsExactly(1);
+                });
+        assertThat(result.partitionSkew.getFirst().period()).isZero();
+        assertThat(result.rebalanceEvents).hasSize(periods);
+        assertThat(result.rebalanceEvents.getLast().period()).isEqualTo(periods - 1);
+        assertThat(result.droppedRebalanceEvents).isEqualTo(2L * periods);
     }
 
     @Test

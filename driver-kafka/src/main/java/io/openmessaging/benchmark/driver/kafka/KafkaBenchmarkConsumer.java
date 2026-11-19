@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.kafka;
 import io.openmessaging.benchmark.driver.AbandonableCreation;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
@@ -83,7 +84,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             Properties consumerConfig,
             ConsumerCallback callback,
             long pollTimeoutMs) {
-        Readiness readiness = new Readiness(topic);
+        Readiness readiness = new Readiness(topic, callback);
         consumer.subscribe(Set.of(topic), readiness);
         return new KafkaBenchmarkConsumer(consumer, consumerConfig, callback, pollTimeoutMs, readiness)
                 .creation();
@@ -209,7 +210,8 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
                 if (closing) {
                     break;
                 }
-                callback.messageReceived(consumerRecord.value(), consumerRecord.timestamp());
+                callback.messageReceived(
+                        consumerRecord.value(), consumerRecord.timestamp(), consumerRecord.partition());
                 offsetMap.put(
                         new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
                         new OffsetAndMetadata(consumerRecord.offset() + 1));
@@ -360,27 +362,51 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
+    // Gates creation on the first assignment and reports every assignment change to the callback.
+    // Kafka calls it on the poll thread.
     private static final class Readiness implements ConsumerRebalanceListener {
         private final String topic;
+        private final ConsumerCallback callback;
         private volatile boolean assigned;
 
-        private Readiness(String topic) {
+        private Readiness(String topic, ConsumerCallback callback) {
             this.topic = topic;
+            this.callback = callback;
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             assigned = false;
+            report(RebalanceEvent.Kind.REVOKED, partitions);
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             assigned = true;
+            report(RebalanceEvent.Kind.ASSIGNED, partitions);
         }
 
         @Override
         public void onPartitionsLost(Collection<TopicPartition> partitions) {
             assigned = false;
+            report(RebalanceEvent.Kind.LOST, partitions);
+        }
+
+        // Cooperative rebalancing calls the listener with empty collections; those change nothing
+        private void report(RebalanceEvent.Kind kind, Collection<TopicPartition> partitions) {
+            if (partitions.isEmpty()) {
+                return;
+            }
+            try {
+                callback.partitionsChanged(
+                        new RebalanceEvent(
+                                kind,
+                                System.currentTimeMillis(),
+                                partitions.stream().map(TopicPartition::partition).sorted().toList()));
+            } catch (RuntimeException error) {
+                // A failing callback must not abort the rebalance
+                log.warn("Rebalance callback failed for topic {}", topic, error);
+            }
         }
     }
 }

@@ -114,6 +114,14 @@ public class Workload {
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public boolean verifyDelivery;
 
+    /**
+     * Reports per-partition traffic and latency and consumer rebalances, summarized per period as
+     * {@code partitionSkew} and {@code rebalanceEvents} in the result. Needs a driver that supports
+     * partition telemetry. Off by default, which keeps the send and receive paths unchanged.
+     */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public boolean partitionTelemetry;
+
     /** Optional limits for the built-in run checks; absent uses the defaults. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public @Nullable RunChecks checks;

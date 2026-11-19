@@ -200,7 +200,8 @@ public final class WorkloadGenerator implements WorkloadRun {
                         workload.keyDistributor,
                         workload.keyDistribution,
                         workload.verifyDelivery,
-                        workload.headers);
+                        workload.headers,
+                        workload.partitionTelemetry);
         String source = payloadSource();
         log.info(
                 "Prepared {} payloads from {} in {} ms", payloads.size(), source, timer.elapsedMillis());
@@ -638,6 +639,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         Collections.shuffle(consumerAssignment.topicsSubscriptions);
         consumerAssignment.verifyDelivery = workload.verifyDelivery;
+        consumerAssignment.partitionTelemetry = workload.partitionTelemetry;
 
         Timer timer = new Timer();
 
@@ -820,6 +822,17 @@ public final class WorkloadGenerator implements WorkloadRun {
 
     // Records report intervals into the result until the duration ends. The measured window also
     // waits for any backlog to drain and then adds the aggregate and summary.
+    // Appends the period's skew summary and rebalances, indexed like the per-period series
+    private static void recordPartitionTelemetry(TestResult result, PeriodStats stats) {
+        int period = result.publishRate.size() - 1;
+        PartitionSkew skew = PartitionSkew.of(period, stats.partitions());
+        if (skew != null) {
+            result.partitionSkew.add(skew);
+        }
+        stats.rebalances().forEach(r -> result.rebalanceEvents.add(r.withPeriod(period)));
+        result.droppedRebalanceEvents += stats.droppedRebalances();
+    }
+
     void collect(TestResult result, long duration, TimeUnit unit, boolean measured)
             throws IOException, InterruptedException {
         long startTime = System.nanoTime();
@@ -846,6 +859,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             if (load != null) {
                 result.workerHealth.add(load);
             }
+            recordPartitionTelemetry(result, stats);
             lastPublishDelay99pct = period.publishDelayLatency().getValueAtPercentile(99);
 
             if (now >= endTime && !(measured && needToWaitForBacklogDraining)) {

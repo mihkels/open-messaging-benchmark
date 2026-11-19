@@ -20,16 +20,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import java.time.Duration;
 import java.util.List;
@@ -55,6 +59,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class KafkaBenchmarkConsumerReadinessTest {
     @Test
@@ -103,6 +108,53 @@ class KafkaBenchmarkConsumerReadinessTest {
             fixture.assign(Set.of());
             future.get(5, TimeUnit.SECONDS).close();
             verify(fixture.consumer, never()).position(any(TopicPartition.class), any(Duration.class));
+        } finally {
+            fixture.shutdown();
+        }
+    }
+
+    @Test
+    void reportsEachNonEmptyAssignmentChangeToTheCallback() throws Exception {
+        Fixture fixture = new Fixture();
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        CompletableFuture<BenchmarkConsumer> future = fixture.start(callback);
+        try {
+            fixture.assign(Set.of());
+            future.get(5, TimeUnit.SECONDS);
+            Set<TopicPartition> partitions =
+                    Set.of(new TopicPartition("topic", 2), new TopicPartition("topic", 0));
+            fixture.steps.add(() -> {
+                fixture.listener.get().onPartitionsAssigned(partitions);
+                fixture.listener.get().onPartitionsRevoked(Set.of());
+                fixture.listener.get().onPartitionsRevoked(partitions);
+                fixture.listener.get().onPartitionsLost(Set.of(new TopicPartition("topic", 1)));
+                return ConsumerRecords.empty();
+            });
+
+            ArgumentCaptor<RebalanceEvent> events = ArgumentCaptor.forClass(RebalanceEvent.class);
+            verify(callback, timeout(5000).times(3)).partitionsChanged(events.capture());
+            assertEquals(
+                    List.of(
+                            RebalanceEvent.Kind.ASSIGNED, RebalanceEvent.Kind.REVOKED, RebalanceEvent.Kind.LOST),
+                    events.getAllValues().stream().map(RebalanceEvent::kind).toList());
+            assertEquals(List.of(0, 2), events.getAllValues().getFirst().partitions());
+            assertEquals(List.of(1), events.getAllValues().getLast().partitions());
+            assertTrue(events.getAllValues().getFirst().timestampMillis() > 0);
+        } finally {
+            fixture.shutdown();
+        }
+    }
+
+    @Test
+    void failingRebalanceCallbackDoesNotBlockReadiness() throws Exception {
+        Fixture fixture = new Fixture();
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        doThrow(new IllegalStateException("callback")).when(callback).partitionsChanged(any());
+        CompletableFuture<BenchmarkConsumer> future = fixture.start(callback);
+        try {
+            fixture.assign(Set.of(new TopicPartition("topic", 0)));
+            future.get(5, TimeUnit.SECONDS);
+            verify(callback).partitionsChanged(any());
         } finally {
             fixture.shutdown();
         }
@@ -253,7 +305,7 @@ class KafkaBenchmarkConsumerReadinessTest {
                             return null;
                         })
                 .when(callback)
-                .messageReceived(any(byte[].class), anyLong());
+                .messageReceived(any(byte[].class), anyLong(), anyInt());
         CompletableFuture<BenchmarkConsumer> future = fixture.start(callback);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {

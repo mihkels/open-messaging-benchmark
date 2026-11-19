@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A producer handle owned by the caller after successful creation.
@@ -67,5 +68,26 @@ public interface BenchmarkProducer extends AutoCloseable {
     default CompletableFuture<Void> sendAsync(
             Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         return sendAsync(key, payload);
+    }
+
+    /**
+     * Publish a message asynchronously and report where it was written.
+     *
+     * <p>Completion, failure and ownership follow {@link #sendAsync(Optional, byte[])} and, with
+     * headers, {@link #sendAsync(Optional, byte[], Map)}. The framework calls this method only when
+     * the workload enables partition telemetry. The default delegates to {@code sendAsync} and
+     * reports {@link SendResult#UNKNOWN}. Drivers that know the partition override this method and
+     * {@link BenchmarkDriver#supportsPartitionTelemetry()}.
+     *
+     * @param key the key associated with this message
+     * @param payload the caller-owned message payload
+     * @param headers the caller-owned message headers, or {@code null} to send without headers
+     * @return a non-null future that completes with the send's result
+     */
+    default CompletableFuture<SendResult> sendAsyncWithResult(
+            Optional<String> key, byte[] payload, @Nullable Map<String, byte[]> headers) {
+        CompletableFuture<Void> send =
+                headers == null ? sendAsync(key, payload) : sendAsync(key, payload, headers);
+        return send.thenApply(ignored -> SendResult.UNKNOWN);
     }
 }

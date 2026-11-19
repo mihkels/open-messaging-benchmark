@@ -27,12 +27,15 @@
 package io.openmessaging.benchmark.driver.kafka;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import io.openmessaging.benchmark.driver.SendResult;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.jspecify.annotations.Nullable;
 
 public class KafkaBenchmarkProducer implements BenchmarkProducer {
 
@@ -53,6 +56,23 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
     @Override
     public CompletableFuture<Void> sendAsync(
             Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
+        return send(key, payload, headers, null);
+    }
+
+    @Override
+    public CompletableFuture<SendResult> sendAsyncWithResult(
+            Optional<String> key, byte[] payload, @Nullable Map<String, byte[]> headers) {
+        // Written by the client callback before it completes the send, so thenApply sees it
+        int[] partition = {ConsumerCallback.UNKNOWN_PARTITION};
+        return send(key, payload, headers == null ? Map.of() : headers, partition)
+                .thenApply(ignored -> new SendResult(partition[0]));
+    }
+
+    private CompletableFuture<Void> send(
+            Optional<String> key,
+            byte[] payload,
+            Map<String, byte[]> headers,
+            int @Nullable [] partition) {
         CompletableFuture<Void> future = pending.register();
         if (future.isDone()) {
             return future;
@@ -61,7 +81,13 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
             var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload.clone());
             headers.forEach(producerRecord.headers()::add);
             producer.send(
-                    producerRecord, (metadata, exception) -> pending.completeFromClient(future, exception));
+                    producerRecord,
+                    (metadata, exception) -> {
+                        if (partition != null && metadata != null) {
+                            partition[0] = metadata.partition();
+                        }
+                        pending.completeFromClient(future, exception);
+                    });
         } catch (RuntimeException error) {
             future.completeExceptionally(error);
         }

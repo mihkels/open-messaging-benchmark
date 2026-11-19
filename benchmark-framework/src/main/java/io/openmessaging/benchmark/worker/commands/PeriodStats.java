@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.worker.commands;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,53 @@ public record PeriodStats(
         @JsonProperty("sendErrorReasons") @JsonInclude(JsonInclude.Include.NON_EMPTY)
                 Map<String, String> sendErrorReasons,
         // Worker CPU and GC load; absent from older workers
-        @JsonProperty("load") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable WorkerLoad load) {
+        @JsonProperty("load") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable WorkerLoad load,
+        // Per-partition traffic; only sent when the workload enables partitionTelemetry
+        @JsonProperty("partitions") @JsonInclude(JsonInclude.Include.NON_EMPTY)
+                List<PartitionPeriod> partitions,
+        // Consumer assignment changes seen during the period
+        @JsonProperty("rebalances") @JsonInclude(JsonInclude.Include.NON_EMPTY)
+                List<RebalanceRecord> rebalances,
+        // Rebalance events dropped because the per-period queue was full
+        @JsonProperty("droppedRebalances") @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+                long droppedRebalances) {
+
+    // Snapshot without partition telemetry
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PeriodStats(
+            long messagesSent,
+            long messageSendErrors,
+            long bytesSent,
+            long messagesReceived,
+            long bytesReceived,
+            long totalMessagesSent,
+            long totalMessageSendErrors,
+            long totalMessagesReceived,
+            @Nullable Histogram publishLatency,
+            @Nullable Histogram publishDelayLatency,
+            @Nullable Histogram endToEndLatency,
+            @Nullable Histogram publishScheduleLatency,
+            @Nullable Map<String, String> sendErrorReasons,
+            @Nullable WorkerLoad load) {
+        this(
+                messagesSent,
+                messageSendErrors,
+                bytesSent,
+                messagesReceived,
+                bytesReceived,
+                totalMessagesSent,
+                totalMessageSendErrors,
+                totalMessagesReceived,
+                publishLatency,
+                publishDelayLatency,
+                endToEndLatency,
+                publishScheduleLatency,
+                sendErrorReasons,
+                load,
+                null,
+                null,
+                0);
+    }
 
     // Defensive copy constructor
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -57,7 +104,10 @@ public record PeriodStats(
             @Nullable Histogram endToEndLatency,
             @Nullable Histogram publishScheduleLatency,
             @Nullable Map<String, String> sendErrorReasons,
-            @Nullable WorkerLoad load) {
+            @Nullable WorkerLoad load,
+            @Nullable List<PartitionPeriod> partitions,
+            @Nullable List<RebalanceRecord> rebalances,
+            long droppedRebalances) {
         this.messagesSent = messagesSent;
         this.messageSendErrors = messageSendErrors;
         this.bytesSent = bytesSent;
@@ -74,6 +124,9 @@ public record PeriodStats(
                 publishScheduleLatency != null ? publishScheduleLatency.copy() : new Histogram(5);
         this.sendErrorReasons = sendErrorReasons != null ? Map.copyOf(sendErrorReasons) : Map.of();
         this.load = load;
+        this.partitions = partitions != null ? List.copyOf(partitions) : List.of();
+        this.rebalances = rebalances != null ? List.copyOf(rebalances) : List.of();
+        this.droppedRebalances = droppedRebalances;
     }
 
     public PeriodStats() {
@@ -101,9 +154,9 @@ public record PeriodStats(
         return endToEndLatency.copy();
     }
 
-    /** Returns a copy whose send error reasons are all tagged with the given worker id. */
+    /** Returns a copy whose send error reasons and rebalances are tagged with the given worker id. */
     public PeriodStats withWorkerId(String workerId) {
-        if (sendErrorReasons.isEmpty()) {
+        if (sendErrorReasons.isEmpty() && rebalances.isEmpty()) {
             return this;
         }
         return new PeriodStats(
@@ -119,8 +172,13 @@ public record PeriodStats(
                 publishDelayLatency,
                 endToEndLatency,
                 publishScheduleLatency,
-                Map.of(workerId, String.join("; ", sendErrorReasons.values())),
-                load);
+                sendErrorReasons.isEmpty()
+                        ? Map.of()
+                        : Map.of(workerId, String.join("; ", sendErrorReasons.values())),
+                load,
+                partitions,
+                rebalances.stream().map(r -> r.withWorker(workerId)).toList(),
+                droppedRebalances);
     }
 
     /**
@@ -157,6 +215,9 @@ public record PeriodStats(
         Histogram schedule = new Histogram(5);
         Histogram endToEnd = new Histogram(5);
         WorkerLoad load = null;
+        List<List<PartitionPeriod>> partitions = new ArrayList<>();
+        List<RebalanceRecord> rebalances = new ArrayList<>();
+        long droppedRebalances = 0;
         for (PeriodStats snapshot : snapshots) {
             sent += snapshot.messagesSent;
             errors += snapshot.messageSendErrors;
@@ -171,6 +232,9 @@ public record PeriodStats(
             schedule.add(snapshot.publishScheduleLatency);
             endToEnd.add(snapshot.endToEndLatency);
             load = WorkerLoad.max(load, snapshot.load);
+            partitions.add(snapshot.partitions);
+            rebalances.addAll(snapshot.rebalances);
+            droppedRebalances += snapshot.droppedRebalances;
         }
         return new PeriodStats(
                 sent,
@@ -186,6 +250,9 @@ public record PeriodStats(
                 endToEnd,
                 schedule,
                 merge(snapshots),
-                load);
+                load,
+                PartitionPeriod.merge(partitions),
+                rebalances,
+                droppedRebalances);
     }
 }

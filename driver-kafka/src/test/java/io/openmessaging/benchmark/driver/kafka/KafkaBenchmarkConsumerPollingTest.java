@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.driver.kafka;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.after;
@@ -46,15 +47,15 @@ class KafkaBenchmarkConsumerPollingTest {
     void deliversRecordsAndCommitsOffsetsWhenAutoCommitIsOff() throws Exception {
         KafkaConsumer<String, byte[]> client = mock(KafkaConsumer.class);
         when(client.poll(any(Duration.class)))
-                .thenReturn(records(new ConsumerRecord<>("t", 0, 4, "k", new byte[] {1})))
+                .thenReturn(records(new ConsumerRecord<>("t", 3, 4, "k", new byte[] {1})))
                 .thenReturn(ConsumerRecords.empty());
         ConsumerCallback callback = mock(ConsumerCallback.class);
 
         KafkaBenchmarkConsumer consumer =
                 new KafkaBenchmarkConsumer(client, new Properties(), callback);
-        verify(callback, timeout(2000)).messageReceived(new byte[] {1}, -1L);
+        verify(callback, timeout(2000)).messageReceived(new byte[] {1}, -1L, 3);
         verify(client, timeout(2000))
-                .commitAsync(Map.of(new TopicPartition("t", 0), new OffsetAndMetadata(5)), null);
+                .commitAsync(Map.of(new TopicPartition("t", 3), new OffsetAndMetadata(5)), null);
         consumer.close();
         verify(client).close();
     }
@@ -69,12 +70,12 @@ class KafkaBenchmarkConsumerPollingTest {
         ConsumerCallback callback = mock(ConsumerCallback.class);
         doThrow(new IllegalStateException("callback"))
                 .when(callback)
-                .messageReceived(any(byte[].class), anyLong());
+                .messageReceived(any(byte[].class), anyLong(), anyInt());
         Properties config = new Properties();
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
 
         KafkaBenchmarkConsumer consumer = new KafkaBenchmarkConsumer(client, config, callback, 1L);
-        verify(callback, timeout(2000)).messageReceived(any(byte[].class), anyLong());
+        verify(callback, timeout(2000)).messageReceived(any(byte[].class), anyLong(), anyInt());
         verify(client, after(50).never()).commitAsync(anyMap(), any());
         consumer.close();
     }

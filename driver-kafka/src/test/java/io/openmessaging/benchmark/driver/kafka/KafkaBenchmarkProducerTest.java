@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import io.openmessaging.benchmark.driver.SendResult;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +42,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.junit.jupiter.api.Test;
@@ -59,6 +63,43 @@ class KafkaBenchmarkProducerTest {
         verify(client).send(record.capture(), any());
         Header header = record.getValue().headers().lastHeader("omb_h0");
         assertArrayEquals(new byte[] {7, 8}, header.value());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void sendWithResultReportsThePartitionFromTheRecordMetadata() {
+        Producer<String, byte[]> client = mock(Producer.class);
+        KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
+
+        CompletableFuture<SendResult> result =
+                producer.sendAsyncWithResult(Optional.empty(), new byte[] {1}, Map.of("h", new byte[] {2}));
+
+        ArgumentCaptor<ProducerRecord<String, byte[]>> record =
+                ArgumentCaptor.forClass(ProducerRecord.class);
+        ArgumentCaptor<Callback> callback = ArgumentCaptor.forClass(Callback.class);
+        verify(client).send(record.capture(), callback.capture());
+        assertArrayEquals(new byte[] {2}, record.getValue().headers().lastHeader("h").value());
+        assertFalse(result.isDone());
+        callback
+                .getValue()
+                .onCompletion(new RecordMetadata(new TopicPartition("topic", 7), 0, 0, 0, 1, 1), null);
+        assertEquals(7, result.join().partition());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void failedSendWithResultCompletesExceptionally() {
+        Producer<String, byte[]> client = mock(Producer.class);
+        KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
+
+        CompletableFuture<SendResult> result =
+                producer.sendAsyncWithResult(Optional.empty(), new byte[] {1}, null);
+
+        ArgumentCaptor<Callback> callback = ArgumentCaptor.forClass(Callback.class);
+        verify(client).send(any(), callback.capture());
+        SerializationException cause = new SerializationException("broker");
+        callback.getValue().onCompletion(null, cause);
+        assertSame(cause, assertThrows(CompletionException.class, result::join).getCause());
     }
 
     @Test

@@ -229,6 +229,7 @@ public final class DistributedWorkersEnsemble implements Worker {
             ConsumerAssignment individualAssignment = new ConsumerAssignment();
             individualAssignment.topicsSubscriptions = tsl;
             individualAssignment.verifyDelivery = overallConsumerAssignment.verifyDelivery;
+            individualAssignment.partitionTelemetry = overallConsumerAssignment.partitionTelemetry;
             topicsPerWorkerMap.put(consumerWorkers.get(i++), individualAssignment);
         }
         forAll(

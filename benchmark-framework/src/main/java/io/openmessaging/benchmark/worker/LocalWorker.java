@@ -64,6 +64,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
@@ -257,7 +258,7 @@ public final class LocalWorker implements Worker {
                                                 .toList()),
                 created -> {
                     validateResources(created, "producer");
-                    current.addProducers(created);
+                    current.addProducers(created, topics);
                 },
                 LocalWorker::closeUntransferred);
 
@@ -270,6 +271,12 @@ public final class LocalWorker implements Worker {
         Timer timer = new Timer();
         AtomicInteger index = new AtomicInteger();
         boolean verify = consumerAssignment.verifyDelivery;
+        boolean telemetry = consumerAssignment.partitionTelemetry;
+        if (telemetry) {
+            requirePartitionTelemetry(current);
+        }
+        Function<TopicSubscription, ConsumerInfo> info =
+                c -> current.consumerInfo(index.getAndIncrement(), c, verify, telemetry);
 
         create(
                 current,
@@ -278,9 +285,7 @@ public final class LocalWorker implements Worker {
                         current
                                 .requireDriver()
                                 .createConsumers(
-                                        consumerAssignment.topicsSubscriptions.stream()
-                                                .map(c -> current.consumerInfo(index.getAndIncrement(), c, verify))
-                                                .toList()),
+                                        consumerAssignment.topicsSubscriptions.stream().map(info).toList()),
                 created -> {
                     validateResources(created, "consumer");
                     current.addConsumers(created);
@@ -297,6 +302,7 @@ public final class LocalWorker implements Worker {
     public void startLoad(ProducerWorkAssignment producerWorkAssignment) {
         Run current = requireRun();
         List<BenchmarkProducer> producers = current.producersBeforeLoad();
+        List<String> producerTopics = current.producerTopicsBeforeLoad();
         log.info(
                 "Starting load with {} producers, publish rate: {}",
                 producers.size(),
@@ -335,17 +341,33 @@ public final class LocalWorker implements Worker {
             // Generated once per load, so SecureRandom costs nothing on the send path
             headers = headerConfig.pool(new SecureRandom());
         }
+        boolean telemetry = producerWorkAssignment.partitionTelemetry();
+        if (telemetry) {
+            requirePartitionTelemetry(current);
+        }
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());
-        for (BenchmarkProducer producer : producers) {
+        for (int i = 0; i < producers.size(); i++) {
             startProducer(
                     current,
-                    producer,
+                    producers.get(i),
                     keyDistributors.get(),
                     payloads,
                     producerWorkAssignment.verifyDelivery() ? new DeliveryStamp() : null,
-                    headers);
+                    headers,
+                    telemetry ? producerTopics.get(i) : null);
+        }
+    }
+
+    // Refuses telemetry rather than reporting an empty summary for a driver that cannot supply it
+    private static void requirePartitionTelemetry(Run current) {
+        if (!current.requireDriver().supportsPartitionTelemetry()) {
+            throw new IllegalStateException(
+                    "Driver "
+                            + current.requireDriver().getClass().getName()
+                            + " does not support partition telemetry; remove 'partitionTelemetry' from the"
+                            + " workload");
         }
     }
 
@@ -435,7 +457,8 @@ public final class LocalWorker implements Worker {
             KeyDistributor keyDistributor,
             PayloadSampler payloads,
             @Nullable DeliveryStamp stamp,
-            @Nullable List<Map<String, byte[]>> headers) {
+            @Nullable List<Map<String, byte[]>> headers,
+            @Nullable String telemetryTopic) {
         submit(
                 current,
                 "producer task",
@@ -452,7 +475,8 @@ public final class LocalWorker implements Worker {
                                     key,
                                     stamp == null ? payload : stamp.stamp(payload),
                                     stamp != null,
-                                    headersFor(headers, sent++));
+                                    headersFor(headers, sent++),
+                                    telemetryTopic);
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -888,6 +912,8 @@ public final class LocalWorker implements Worker {
         private final Object monitor = new Object();
         private final List<TrackedTask<?>> tasks = new ArrayList<>();
         private final List<BenchmarkProducer> producers = new ArrayList<>();
+        // The topic of each producer, by index into producers
+        private final List<String> producerTopics = new ArrayList<>();
         private final List<BenchmarkConsumer> consumers = new ArrayList<>();
         private final RunCallbacks callbacks = new RunCallbacks(stats, this::recordFailure);
         private volatile boolean stopping;
@@ -906,11 +932,13 @@ public final class LocalWorker implements Worker {
         private boolean failureReported;
         private @Nullable Throwable cleanupFailure;
 
-        private ConsumerInfo consumerInfo(int index, TopicSubscription subscription, boolean verify) {
+        private ConsumerInfo consumerInfo(
+                int index, TopicSubscription subscription, boolean verify, boolean telemetry) {
+            ConsumerCallback recording = telemetry ? callbacks.forTopic(subscription.topic) : callbacks;
             ConsumerCallback callback =
                     verify
-                            ? verifier.callback(subscription.topic, subscription.subscription, callbacks)
-                            : callbacks;
+                            ? verifier.callback(subscription.topic, subscription.subscription, recording)
+                            : recording;
             return new ConsumerInfo(index, subscription.topic, subscription.subscription, callback);
         }
 
@@ -979,8 +1007,17 @@ public final class LocalWorker implements Worker {
         }
 
         // Must only be called from a transfer action, which holds the monitor.
-        private void addProducers(List<BenchmarkProducer> created) {
+        private void addProducers(List<BenchmarkProducer> created, List<String> topics) {
+            if (created.size() != topics.size()) {
+                throw new IllegalStateException(
+                        "producer creation returned "
+                                + created.size()
+                                + " handles for "
+                                + topics.size()
+                                + " topics");
+            }
             producers.addAll(created);
+            producerTopics.addAll(topics);
         }
 
         // Must only be called from a transfer action, which holds the monitor.
@@ -1000,6 +1037,14 @@ public final class LocalWorker implements Worker {
                 checkRunning();
                 checkLoadNotStarted();
                 return List.copyOf(producers);
+            }
+        }
+
+        private List<String> producerTopicsBeforeLoad() {
+            synchronized (monitor) {
+                checkRunning();
+                checkLoadNotStarted();
+                return List.copyOf(producerTopics);
             }
         }
 
@@ -1047,6 +1092,7 @@ public final class LocalWorker implements Worker {
                 List<AutoCloseable> handles = new ArrayList<>(producers);
                 handles.addAll(consumers);
                 producers.clear();
+                producerTopics.clear();
                 consumers.clear();
                 BenchmarkDriver detachedDriver = driver;
                 driver = null;

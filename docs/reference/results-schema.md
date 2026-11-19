@@ -180,6 +180,26 @@ existed have no warm-up periods.
 | `publishScheduleLatency{Avg,50pct,75pct,95pct,99pct,999pct,9999pct,Max}` | number lists | Intended send to successful completion in ms (schedule lag + service time, recorded per message)                                                      |
 | `endToEndLatency{Avg,50pct,...,Max}`                                     | number lists | End-to-end latency in ms                                                                                                                              |
 
+## Partition telemetry
+
+Present only for workloads with `partitionTelemetry: true`; see
+[ADR 0001](../development/adr/0001-partition-telemetry.md) for the design and its memory cost.
+
+|          Field           |    Type     |                                                              Description                                                               |
+|--------------------------|-------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `partitionSkew`          | object list | One entry per period in which partitions reported traffic; `period` is the index into the per-period lists                             |
+| `rebalanceEvents`        | object list | Consumer assignment changes: `period`, `timestampMillis`, `worker`, `topic`, `kind` (`ASSIGNED`, `REVOKED` or `LOST`) and `partitions` |
+| `droppedRebalanceEvents` | int         | Events a worker dropped because more than 1,000 arrived in one period; absent when zero                                                |
+
+Each `partitionSkew` entry has:
+
+|                    Field                     |    Type     |                                                       Description                                                        |
+|----------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------|
+| `partitions`                                 | int         | Partitions that published or consumed during the period                                                                  |
+| `publishMaxMeanRatio`, `consumeMaxMeanRatio` | number      | Busiest partition's message count divided by the mean; 1 is even                                                         |
+| `publishGini`, `consumeGini`                 | number      | Gini coefficient of per-partition message counts: 0 is even, close to 1 is one partition taking everything               |
+| `topPublishP99`, `topEndToEndP99`            | object list | Up to five `{topic, partition, p99Ms}` with the highest p99; per-partition histograms keep one significant digit (≈10 %) |
+
 ## Aggregates
 
 Computed over the whole measured phase, not averaged from the periods.

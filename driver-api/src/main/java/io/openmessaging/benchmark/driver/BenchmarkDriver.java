@@ -84,6 +84,21 @@ public interface BenchmarkDriver extends AutoCloseable {
     }
 
     /**
+     * Whether this driver reports partitions and rebalances: producers through {@link
+     * BenchmarkProducer#sendAsyncWithResult}, consumers through the partition-aware {@code
+     * ConsumerCallback.messageReceived} overloads and, where the broker has group membership, {@link
+     * ConsumerCallback#partitionsChanged(RebalanceEvent)}.
+     *
+     * <p>The worker refuses to start a workload that enables partition telemetry when this returns
+     * {@code false}, rather than reporting an empty summary.
+     *
+     * @return {@code true} if producers and consumers report partitions
+     */
+    default boolean supportsPartitionTelemetry() {
+        return false;
+    }
+
+    /**
      * Create a new topic with a given number of partitions.
      *
      * @param topic the topic name

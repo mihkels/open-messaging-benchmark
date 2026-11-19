@@ -13,6 +13,7 @@
  */
 package io.openmessaging.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.Finding.Severity;
 import java.util.ArrayList;
@@ -68,6 +69,7 @@ public record RepeatSummary(
      * @param file the result file, when it succeeded
      * @param failure why it failed, when it did
      * @param validity its result's verdict, when it succeeded
+     * @param result its result, when it succeeded; not written to the summary
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Repetition(
@@ -75,7 +77,8 @@ public record RepeatSummary(
             boolean succeeded,
             @Nullable String file,
             @Nullable String failure,
-            Validity.@Nullable Status validity) {}
+            Validity.@Nullable Status validity,
+            @JsonIgnore @Nullable TestResult result) {}
 
     /**
      * Spread of one metric.
@@ -115,15 +118,12 @@ public record RepeatSummary(
      * @param driver the driver name
      * @param repetitions the repetitions requested
      * @param runs each repetition that ran, in order
-     * @param successes the results of the successful runs
      * @return the summary; metrics and thresholds only when a repetition succeeded
      */
     static RepeatSummary of(
-            Workload workload,
-            String driver,
-            int repetitions,
-            List<Repetition> runs,
-            List<TestResult> successes) {
+            Workload workload, String driver, int repetitions, List<Repetition> runs) {
+        List<TestResult> successes =
+                runs.stream().map(Repetition::result).filter(Objects::nonNull).toList();
         Map<String, Stats> metrics = new LinkedHashMap<>();
         List<Finding> findings = new ArrayList<>();
         Thresholds.Result evaluated = null;
@@ -160,10 +160,10 @@ public record RepeatSummary(
         }
         // Each successful repetition's findings, tagged with its number, count toward the verdict
         List<Finding> verdictFindings = new ArrayList<>(findings);
-        List<Repetition> succeededRuns = runs.stream().filter(Repetition::succeeded).toList();
-        for (int i = 0; i < successes.size(); i++) {
-            int number = succeededRuns.get(i).repetition();
-            Validity validity = successes.get(i).validity;
+        for (Repetition run : runs) {
+            int number = run.repetition();
+            TestResult result = run.result();
+            Validity validity = result == null ? null : result.validity;
             if (validity != null) {
                 validity
                         .findings()

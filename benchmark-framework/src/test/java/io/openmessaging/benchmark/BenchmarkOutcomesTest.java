@@ -623,6 +623,8 @@ class BenchmarkOutcomesTest {
         assertThat(summary.get("succeeded").asInt()).isEqualTo(3);
         assertThat(summary.get("results").get(0).get("file").asString()).isEqualTo("result-1.json");
         assertThat(summary.get("results").get(0).get("succeeded").asBoolean()).isTrue();
+        // The in-memory result of a repetition stays out of the summary
+        assertThat(summary.get("results").get(0).has("result")).isFalse();
         JsonNode rate = summary.get("metrics").get("publishRateAvg");
         assertThat(rate.get("median").asDouble()).isEqualTo(1000);
         assertThat(rate.get("min").asDouble()).isEqualTo(990);

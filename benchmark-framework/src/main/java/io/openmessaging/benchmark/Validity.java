@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.openmessaging.benchmark.Finding.Severity;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Whether a completed run is a trustworthy measurement, written to the result's {@code validity}.
@@ -37,7 +38,16 @@ public record Validity(Status status, List<Finding> findings) {
         @JsonProperty("warning")
         WARNING,
         @JsonProperty("invalid")
-        INVALID
+        INVALID;
+
+        /**
+         * The lowercase name used in result files and logs.
+         *
+         * @return the status name in lowercase
+         */
+        public String label() {
+            return name().toLowerCase(Locale.ROOT);
+        }
     }
 
     /** The verdict of these findings. */

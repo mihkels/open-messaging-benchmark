@@ -261,14 +261,8 @@ public final class PluginRegistry {
      */
     public ResolvedDriver resolveOverride(
             String driverClass, @Nullable Map<String, Object> driverConfig, Path location) {
-        PluginBundle primary = legacyBundle(driverClass, location);
-        List<PluginBundle> result = new ArrayList<>(List.of(primary));
-        for (PluginBundle referenced : withReferences(primary, driverConfig)) {
-            if (referenced != primary) {
-                result.add(referenced);
-            }
-        }
-        return new ResolvedDriver(driverClass, result);
+        return new ResolvedDriver(
+                driverClass, withReferences(legacyBundle(driverClass, location), driverConfig));
     }
 
     private List<PluginBundle> withReferences(

@@ -18,6 +18,7 @@ import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.openmessaging.benchmark.Workload;
 import io.openmessaging.benchmark.WorkloadGenerator;
+import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
@@ -190,16 +191,12 @@ public final class ScenarioMain {
             throw failure;
         } finally {
             long cleanupStart = System.nanoTime();
-            Exception failure = null;
+            Throwable failure = null;
             for (Worker handle : handles.reversed()) {
                 try {
                     handle.close();
                 } catch (Exception e) {
-                    if (failure == null) {
-                        failure = e;
-                    } else {
-                        failure.addSuppressed(e);
-                    }
+                    failure = Failures.append(failure, e);
                 }
             }
             for (Process process : supervisors) {
@@ -209,23 +206,25 @@ public final class ScenarioMain {
                     if (!process.waitFor(5, TimeUnit.SECONDS)) {
                         process.destroyForcibly();
                         process.waitFor(5, TimeUnit.SECONDS);
-                        failure = new IllegalStateException("Supervisor exceeded shutdown deadline", failure);
+                        failure =
+                                Failures.append(
+                                        failure, new IllegalStateException("Supervisor exceeded shutdown deadline"));
                     }
                 }
                 if (!process.isAlive() && process.exitValue() != 0) {
                     failure =
-                            new IllegalStateException(
-                                    "Supervisor exited with status " + process.exitValue(), failure);
+                            Failures.append(
+                                    failure,
+                                    new IllegalStateException(
+                                            "Supervisor exited with status " + process.exitValue()));
                 }
             }
             result.put("cleanupSeconds", secondsSince(cleanupStart));
             localRegistry.close();
-            if (failure != null) {
-                if (primaryFailure == null) {
-                    throw failure;
-                }
-                primaryFailure.addSuppressed(failure);
+            if (primaryFailure == null) {
+                Failures.rethrow(failure);
             }
+            Failures.suppress(primaryFailure, failure);
         }
         Files.writeString(
                 output.resolve("result.json"),

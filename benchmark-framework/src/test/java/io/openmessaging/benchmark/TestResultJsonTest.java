@@ -313,7 +313,8 @@ class TestResultJsonTest {
         Histogram endToEnd = histogram(43_200_000_000L, 5_000, 7_000, 11_000);
         Histogram schedule = histogram(60_000_000L, 1_200);
         PeriodStats period =
-                new PeriodStats(100, 2, 1_000, 90, 900, 400, 3, 380, publish, delay, endToEnd, schedule);
+                new PeriodStats(
+                        100, 2, 1_000, 90, 900, 400, 3, 380, publish, delay, endToEnd, schedule, null, null);
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency.add(publish);
         cumulative.publishDelayLatency.add(delay);

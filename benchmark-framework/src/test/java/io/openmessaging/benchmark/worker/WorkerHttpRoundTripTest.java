@@ -192,7 +192,7 @@ class WorkerHttpRoundTripTest {
         Histogram endToEnd = histogram(55, 77);
         Histogram schedule = histogram(33, 77);
         PeriodStats period =
-                new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, publish, delay, endToEnd, schedule);
+                new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, publish, delay, endToEnd, schedule, null, null);
         CumulativeLatencies cumulative = new CumulativeLatencies();
         cumulative.publishLatency = publish;
         cumulative.publishDelayLatency = delay;

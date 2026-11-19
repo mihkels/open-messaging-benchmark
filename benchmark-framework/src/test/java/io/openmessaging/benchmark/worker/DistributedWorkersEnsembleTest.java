@@ -247,7 +247,8 @@ class DistributedWorkersEnsembleTest {
     }
 
     private static PeriodStats reason(String reason) {
-        return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, Map.of("local", reason));
+        return new PeriodStats(
+                0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, Map.of("local", reason), null);
     }
 
     @Test
@@ -362,10 +363,37 @@ class DistributedWorkersEnsembleTest {
         secondHistogram.recordValue(200);
         secondHistogram.recordValue(300);
         PeriodStats firstStats =
-                new PeriodStats(1, 0, 10, 1, 10, 1, 0, 1, firstHistogram, firstHistogram, firstHistogram);
+                new PeriodStats(
+                        1,
+                        0,
+                        10,
+                        1,
+                        10,
+                        1,
+                        0,
+                        1,
+                        firstHistogram,
+                        firstHistogram,
+                        firstHistogram,
+                        null,
+                        null,
+                        null);
         PeriodStats secondStats =
                 new PeriodStats(
-                        2, 1, 20, 2, 20, 2, 1, 2, secondHistogram, secondHistogram, secondHistogram);
+                        2,
+                        1,
+                        20,
+                        2,
+                        20,
+                        2,
+                        1,
+                        2,
+                        secondHistogram,
+                        secondHistogram,
+                        secondHistogram,
+                        null,
+                        null,
+                        null);
         CountDownLatch started = new CountDownLatch(2);
         when(first.getPeriodStats())
                 .thenAnswer(invocation -> {

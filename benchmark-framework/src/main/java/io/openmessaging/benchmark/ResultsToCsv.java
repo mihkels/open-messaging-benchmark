@@ -114,7 +114,7 @@ public class ResultsToCsv {
                 + rateStatistics(TestResult.measured(tr.phase, tr.consumeRate))
                 + ","
                 // empty for files older than schema version 3
-                + (tr.validity == null ? "" : tr.validity.status().name().toLowerCase(Locale.ROOT))
+                + (tr.validity == null ? "" : tr.validity.status().label())
                 + ","
                 + csvField(tr.workload)
                 + ","

@@ -23,7 +23,6 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import io.openmessaging.benchmark.worker.BearerTokenAuth;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
-import io.openmessaging.benchmark.worker.DriverConfiguration;
 import io.openmessaging.benchmark.worker.HttpWorkerClient;
 import io.openmessaging.benchmark.worker.ProcessWorker;
 import io.openmessaging.benchmark.worker.Worker;
@@ -444,6 +443,7 @@ public final class Benchmark {
         boolean thresholdFailed = false;
         Map<String, TestResult> written = new LinkedHashMap<>();
         Map<String, Validity> summaries = new LinkedHashMap<>();
+        Runner runner = new Runner(arguments, worker, generatorFactory, written, summaries);
         try {
             Outcome initialStop = stopPreviousWorkload(worker);
             failures = initialStop.failure();
@@ -454,8 +454,7 @@ public final class Benchmark {
                     log.error("Skipping remaining workloads because worker cleanup failed");
                     break;
                 }
-                Outcome outcome =
-                        runRepeated(combination, arguments, worker, generatorFactory, written, summaries);
+                Outcome outcome = runner.runRepeated(combination);
                 failures = append(failures, outcome.failure());
                 thresholdFailed |= outcome.thresholdFailed();
                 safeToContinue = outcome.safeToContinue();
@@ -512,10 +511,7 @@ public final class Benchmark {
                             .distinct()
                             .collect(Collectors.joining(", "));
             log.info(
-                    "{}: {}{}",
-                    file,
-                    validity.status().name().toLowerCase(Locale.ROOT),
-                    checks.isEmpty() ? "" : " (" + checks + ")");
+                    "{}: {}{}", file, validity.status().label(), checks.isEmpty() ? "" : " (" + checks + ")");
         });
     }
 
@@ -597,126 +593,265 @@ public final class Benchmark {
         return combinations;
     }
 
-    // Runs a combination --repeat (or the workload's repeat) times, each repetition with its own
-    // retries, and writes a summary of the run-to-run spread. Thresholds then judge the medians.
-    private static Outcome runRepeated(
-            Combination combination,
+    // The collaborators every run of a benchmark shares; written and summaries collect the files
+    private record Runner(
             Arguments arguments,
             Worker worker,
             GeneratorFactory generatorFactory,
             Map<String, TestResult> written,
             Map<String, Validity> summaries) {
-        Workload workload = combination.workload();
-        int repeat =
-                Objects.requireNonNullElse(
-                        arguments.repeat, Objects.requireNonNullElse(workload.repeat, 1));
-        if (repeat == 1) {
-            return runWithRetries(combination, arguments, null, worker, generatorFactory, written);
+
+        // Runs a combination --repeat (or the workload's repeat) times, each repetition with its own
+        // retries, and writes a summary of the run-to-run spread. Thresholds then judge the medians.
+        private Outcome runRepeated(Combination combination) {
+            Workload workload = combination.workload();
+            int repeat =
+                    Objects.requireNonNullElse(
+                            arguments.repeat, Objects.requireNonNullElse(workload.repeat, 1));
+            if (repeat == 1) {
+                return runWithRetries(combination, null);
+            }
+            Throwable failures = null;
+            boolean safe = true;
+            List<RepeatSummary.Repetition> runs = new ArrayList<>();
+            for (int i = 1; i <= repeat && safe; i++) {
+                log.info("Repetition {} of {}", i, repeat);
+                Outcome outcome = runWithRetries(combination, String.valueOf(i));
+                failures = append(failures, outcome.failure());
+                safe = outcome.safeToContinue();
+                TestResult result = outcome.result();
+                if (result == null) {
+                    runs.add(
+                            new RepeatSummary.Repetition(
+                                    i, false, null, reason(Objects.requireNonNull(outcome.failure())), null, null));
+                } else {
+                    Validity validity = result.validity;
+                    runs.add(
+                            new RepeatSummary.Repetition(
+                                    i,
+                                    true,
+                                    outcome.file(),
+                                    null,
+                                    validity == null ? null : validity.status(),
+                                    result));
+                }
+            }
+            if (!safe && runs.size() < repeat) {
+                log.error("Skipping the remaining repetitions because worker cleanup failed");
+            }
+            boolean thresholdFailed = false;
+            try {
+                String driverName = driverName(readDriverConfig(combination), combination);
+                RepeatSummary summary = RepeatSummary.of(workload, driverName, repeat, runs);
+                log.info("Repetitions: {} of {} succeeded", summary.succeeded(), repeat);
+                thresholdFailed = printChecks(summary.findings(), summary.thresholds());
+                String file =
+                        writeResult(summary, "repetition summary", combination, driverName, "summary");
+                summaries.put(file, summary.validity());
+                String status = summary.validity().status().label();
+                log.info("{}: {}", file, status);
+            } catch (RuntimeException e) {
+                log.error("Failed to write the repetition summary", e);
+                failures = append(failures, e);
+            }
+            return new Outcome(failures, safe, thresholdFailed, false);
         }
-        Throwable failures = null;
-        boolean safe = true;
-        List<RepeatSummary.Repetition> runs = new ArrayList<>();
-        List<TestResult> successes = new ArrayList<>();
-        for (int i = 1; i <= repeat && safe; i++) {
-            log.info("Repetition {} of {}", i, repeat);
-            Outcome outcome =
-                    runWithRetries(
-                            combination, arguments, String.valueOf(i), worker, generatorFactory, written);
-            failures = append(failures, outcome.failure());
-            safe = outcome.safeToContinue();
-            TestResult result = outcome.result();
-            if (result == null) {
-                runs.add(
-                        new RepeatSummary.Repetition(
-                                i, false, null, reason(Objects.requireNonNull(outcome.failure())), null));
-            } else {
-                successes.add(result);
-                Validity validity = result.validity;
-                runs.add(
-                        new RepeatSummary.Repetition(
-                                i, true, outcome.file(), null, validity == null ? null : validity.status()));
+
+        // Runs a combination, rerunning it from the start after a failure a retry can fix. Failures of
+        // attempts that a later attempt made up for are recorded in the result, not rethrown.
+        // repetition is the result file name suffix, or null for a single run.
+        private Outcome runWithRetries(Combination combination, @Nullable String repetition) {
+            List<String> failedAttempts = new ArrayList<>();
+            Throwable failures = null;
+            while (true) {
+                Outcome outcome = runOne(combination, repetition, failedAttempts);
+                Throwable failure = outcome.failure();
+                if (failure == null) {
+                    return outcome;
+                }
+                failures = append(failures, failure);
+                failedAttempts.add(reason(failure));
+                boolean safe = outcome.safeToContinue();
+                if (outcome.retryable() && failedAttempts.size() <= arguments.retries && !safe) {
+                    // Cleanup failed; a worker that stops cleanly now is back in a known state
+                    Outcome reset = stopPreviousWorkload(worker);
+                    safe = reset.safeToContinue();
+                    if (!safe) {
+                        failures = append(failures, reset.failure());
+                    }
+                }
+                if (!outcome.retryable() || failedAttempts.size() > arguments.retries || !safe) {
+                    return new Outcome(failures, safe, outcome.thresholdFailed(), false);
+                }
+                log.warn(
+                        "Retrying the workload '{}' for driver '{}', attempt {} of {}, after: {}",
+                        combination.workload().name,
+                        combination.driverConfig(),
+                        failedAttempts.size() + 1,
+                        arguments.retries + 1,
+                        failedAttempts.getLast());
             }
         }
-        if (!safe && runs.size() < repeat) {
-            log.error("Skipping the remaining repetitions because worker cleanup failed");
-        }
-        boolean thresholdFailed = false;
-        try {
-            String driverName = driverName(combination.driverConfig());
-            RepeatSummary summary = RepeatSummary.of(workload, driverName, repeat, runs, successes);
-            log.info("Repetitions: {} of {} succeeded", summary.succeeded(), repeat);
-            RunChecks.print(summary.findings());
-            Thresholds.Result thresholds = summary.thresholds();
-            if (thresholds != null) {
-                thresholds.print();
-                thresholdFailed = !thresholds.passed();
+
+        // Runs one attempt of a combination and always stops the worker afterwards, so the next one
+        // starts clean
+        @SuppressWarnings("java:S1181")
+        private Outcome runOne(
+                Combination combination, @Nullable String repetition, List<String> failedAttempts) {
+            Workload workload = combination.workload();
+            WorkloadRun generator = null;
+            Throwable failure = null;
+            boolean safeToContinue = true;
+            boolean thresholdFailed = false;
+            // A rerun would throw away a completed measurement, and a still-running controller could
+            // interfere with it
+            boolean measured = false;
+            boolean quiescent = true;
+            TestResult writtenResult = null;
+            String writtenFile = null;
+            try {
+                Map<String, Object> driverConfig = readDriverConfig(combination);
+                String driverName = driverName(driverConfig, combination);
+                String runId = RunId.create();
+                Instant startedAt = Instant.now();
+                worker.setRunContext(new RunContext(runId, workload.name));
+                MDC.put(MDC_RUN_ID, runId);
+                MDC.put(MDC_WORKLOAD, workload.name);
+                MDC.put(MDC_DRIVER, driverName);
+                log.info(
+                        "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
+                        workload.name,
+                        driverName);
+                worker.initializeDriver(Path.of(combination.driverConfig()));
+                generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
+                generator.includeHistograms(arguments.includeHistograms);
+                List<WorkerClock> clocksAtStart = WorkerClock.probe(worker);
+                TestResult result = runWatched(generator, worker);
+                measured = true;
+                result.schemaVersion = 3;
+                result.attempts = failedAttempts.size() + 1;
+                result.failedAttempts = List.copyOf(failedAttempts);
+                result.metadata =
+                        ResultMetadata.create(
+                                runId,
+                                startedAt,
+                                Instant.now(),
+                                worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
+                                workload,
+                                driverConfig,
+                                WorkerClock.withDrift(clocksAtStart, WorkerClock.probe(worker)));
+                result.findings =
+                        Objects.requireNonNullElseGet(workload.checks, RunChecks::new)
+                                .evaluate(workload, result);
+                result.validity = Validity.of(result.findings);
+                if (workload.thresholds != null) {
+                    result.thresholds = workload.thresholds.evaluate(result);
+                }
+                thresholdFailed = printChecks(result.findings, result.thresholds);
+                // Relative to the summary, which sits next to the results
+                writtenFile = writeResult(result, "test result", combination, driverName, repetition);
+                written.put(writtenFile, result);
+                writtenResult = result;
+            } catch (Throwable e) {
+                failure = e;
+                if (e instanceof Error) {
+                    safeToContinue = false;
+                }
+            } finally {
+                try {
+                    if (generator == null) {
+                        worker.stopAll();
+                    } else {
+                        generator.close();
+                    }
+                } catch (Throwable e) {
+                    failure = append(failure, e);
+                    safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
+                    quiescent = generator == null || isQuiescent(generator);
+                }
             }
+            boolean interrupted = Thread.currentThread().isInterrupted();
+            if (interrupted) {
+                safeToContinue = false;
+            }
+            if (failure != null) {
+                log.error(
+                        "Failed to run the workload '{}' for driver '{}'",
+                        workload.name,
+                        combination.driverConfig(),
+                        failure);
+            }
+            MDC.remove(MDC_RUN_ID);
+            MDC.remove(MDC_WORKLOAD);
+            MDC.remove(MDC_DRIVER);
+            boolean retryable =
+                    failure != null && !measured && quiescent && !interrupted && isRetryable(failure);
+            return new Outcome(
+                    failure, safeToContinue, thresholdFailed, retryable, writtenResult, writtenFile);
+        }
+
+        // Writes a result file for the combination and returns its name without the directory
+        private String writeResult(
+                Object value,
+                String description,
+                Combination combination,
+                String driverName,
+                @Nullable String suffix) {
             String fileName =
                     resultFileName(
                             arguments.output,
                             combination.workloadFileName(),
                             driverName,
                             System.getenv(RESULTS_DIR_ENV),
-                            "summary");
-            log.info("Writing repetition summary into {}", fileName);
-            writer.writeValue(new File(fileName), summary);
-            summaries.put(new File(fileName).getName(), summary.validity());
-            String status = summary.validity().status().name().toLowerCase(Locale.ROOT);
-            log.info("{}: {}", new File(fileName).getName(), status);
-        } catch (RuntimeException e) {
-            log.error("Failed to write the repetition summary", e);
-            failures = append(failures, e);
+                            suffix);
+            log.info("Writing {} into {}", description, fileName);
+            File file = new File(fileName);
+            writer.writeValue(file, value);
+            return file.getName();
         }
-        return new Outcome(failures, safe, thresholdFailed, false);
-    }
 
-    // Runs a combination, rerunning it from the start after a failure a retry can fix. Failures of
-    // attempts that a later attempt made up for are recorded in the result, not rethrown.
-    // repetition is the result file name suffix, or null for a single run.
-    private static Outcome runWithRetries(
-            Combination combination,
-            Arguments arguments,
-            @Nullable String repetition,
-            Worker worker,
-            GeneratorFactory generatorFactory,
-            Map<String, TestResult> written) {
-        List<String> failedAttempts = new ArrayList<>();
-        Throwable failures = null;
-        while (true) {
-            Outcome outcome =
-                    runOne(
-                            combination,
-                            arguments,
-                            repetition,
-                            worker,
-                            generatorFactory,
-                            written,
-                            failedAttempts);
-            Throwable failure = outcome.failure();
-            if (failure == null) {
-                return outcome;
+        // Prints the findings and threshold results; returns true if a threshold failed
+        private static boolean printChecks(
+                List<Finding> findings, Thresholds.@Nullable Result thresholds) {
+            RunChecks.print(findings);
+            if (thresholds == null) {
+                return false;
             }
-            failures = append(failures, failure);
-            failedAttempts.add(reason(failure));
-            boolean safe = outcome.safeToContinue();
-            if (outcome.retryable() && failedAttempts.size() <= arguments.retries && !safe) {
-                // Cleanup failed; a worker that stops cleanly now is back in a known state
-                Outcome reset = stopPreviousWorkload(worker);
-                safe = reset.safeToContinue();
-                if (!safe) {
-                    failures = append(failures, reset.failure());
+            thresholds.print();
+            return !thresholds.passed();
+        }
+
+        private static Map<String, Object> readDriverConfig(Combination combination) {
+            return driverConfigReader.readValue(new File(combination.driverConfig()));
+        }
+
+        private static String driverName(Map<String, Object> driverConfig, Combination combination) {
+            Object name = driverConfig.get("name");
+            if (name == null || name.toString().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Driver configuration " + combination.driverConfig() + " must specify a name");
+            }
+            return name.toString();
+        }
+
+        // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
+        private static TestResult runWatched(WorkloadRun generator, Worker worker) throws Exception {
+            try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
+                try {
+                    return generator.run();
+                } catch (Exception e) {
+                    throw watchdog.explain(e);
                 }
             }
-            if (!outcome.retryable() || failedAttempts.size() > arguments.retries || !safe) {
-                return new Outcome(failures, safe, outcome.thresholdFailed(), false);
+        }
+
+        @SuppressWarnings("java:S1181")
+        private static boolean isQuiescent(WorkloadRun generator) {
+            try {
+                return generator.isQuiescentAfterClose();
+            } catch (Throwable _) {
+                return false;
             }
-            log.warn(
-                    "Retrying the workload '{}' for driver '{}', attempt {} of {}, after: {}",
-                    combination.workload().name,
-                    combination.driverConfig(),
-                    failedAttempts.size() + 1,
-                    arguments.retries + 1,
-                    failedAttempts.getLast());
         }
     }
 
@@ -757,142 +892,6 @@ public final class Benchmark {
             root = root.getCause();
         }
         return root == failure ? failure.toString() : failure + ", caused by " + root;
-    }
-
-    // Runs one attempt of a combination and always stops the worker afterwards, so the next one
-    // starts clean
-    @SuppressWarnings("java:S1181")
-    private static Outcome runOne(
-            Combination combination,
-            Arguments arguments,
-            @Nullable String repetition,
-            Worker worker,
-            GeneratorFactory generatorFactory,
-            Map<String, TestResult> written,
-            List<String> failedAttempts) {
-        Workload workload = combination.workload();
-        WorkloadRun generator = null;
-        Throwable failure = null;
-        boolean safeToContinue = true;
-        boolean thresholdFailed = false;
-        // A rerun would throw away a completed measurement, and a still-running controller could
-        // interfere with it
-        boolean measured = false;
-        boolean quiescent = true;
-        TestResult writtenResult = null;
-        String writtenFile = null;
-        try {
-            Map<String, Object> driverConfig =
-                    driverConfigReader.readValue(new File(combination.driverConfig()));
-            String driverName = driverName(combination.driverConfig());
-            String runId = RunId.create();
-            Instant startedAt = Instant.now();
-            worker.setRunContext(new RunContext(runId, workload.name));
-            MDC.put(MDC_RUN_ID, runId);
-            MDC.put(MDC_WORKLOAD, workload.name);
-            MDC.put(MDC_DRIVER, driverName);
-            log.info(
-                    "--------------- WORKLOAD : {} --- DRIVER : {}---------------",
-                    workload.name,
-                    driverName);
-            worker.initializeDriver(Path.of(combination.driverConfig()));
-            generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
-            generator.includeHistograms(arguments.includeHistograms);
-            List<WorkerClock> clocksAtStart = WorkerClock.probe(worker);
-            TestResult result = runWatched(generator, worker);
-            measured = true;
-            result.schemaVersion = 3;
-            result.attempts = failedAttempts.size() + 1;
-            result.failedAttempts = List.copyOf(failedAttempts);
-            result.metadata =
-                    ResultMetadata.create(
-                            runId,
-                            startedAt,
-                            Instant.now(),
-                            worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
-                            workload,
-                            driverConfig,
-                            WorkerClock.withDrift(clocksAtStart, WorkerClock.probe(worker)));
-            result.findings =
-                    Objects.requireNonNullElseGet(workload.checks, RunChecks::new).evaluate(workload, result);
-            RunChecks.print(result.findings);
-            result.validity = Validity.of(result.findings);
-            if (workload.thresholds != null) {
-                result.thresholds = workload.thresholds.evaluate(result);
-                result.thresholds.print();
-                thresholdFailed = !result.thresholds.passed();
-            }
-            String fileName =
-                    resultFileName(
-                            arguments.output,
-                            combination.workloadFileName(),
-                            driverName,
-                            System.getenv(RESULTS_DIR_ENV),
-                            repetition);
-            log.info("Writing test result into {}", fileName);
-            writer.writeValue(new File(fileName), result);
-            written.put(new File(fileName).getName(), result);
-            writtenResult = result;
-            // Relative to the summary, which sits next to the results
-            writtenFile = new File(fileName).getName();
-        } catch (Throwable e) {
-            failure = e;
-            if (e instanceof Error) {
-                safeToContinue = false;
-            }
-        } finally {
-            try {
-                if (generator == null) {
-                    worker.stopAll();
-                } else {
-                    generator.close();
-                }
-            } catch (Throwable e) {
-                failure = append(failure, e);
-                safeToContinue = safeToContinue && canContinueAfterFailure(worker, generator, e);
-                quiescent = generator == null || isQuiescent(generator);
-            }
-        }
-        boolean interrupted = Thread.currentThread().isInterrupted();
-        if (interrupted) {
-            safeToContinue = false;
-        }
-        if (failure != null) {
-            log.error(
-                    "Failed to run the workload '{}' for driver '{}'",
-                    workload.name,
-                    combination.driverConfig(),
-                    failure);
-        }
-        MDC.remove(MDC_RUN_ID);
-        MDC.remove(MDC_WORKLOAD);
-        MDC.remove(MDC_DRIVER);
-        boolean retryable =
-                failure != null && !measured && quiescent && !interrupted && isRetryable(failure);
-        return new Outcome(
-                failure, safeToContinue, thresholdFailed, retryable, writtenResult, writtenFile);
-    }
-
-    private static String driverName(String driverConfig) {
-        DriverConfiguration driverConfiguration =
-                driverConfigurationReader.readValue(new File(driverConfig));
-        String driverName = driverConfiguration.name;
-        if (driverName == null || driverName.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Driver configuration " + driverConfig + " must specify a name");
-        }
-        return driverName;
-    }
-
-    // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
-    private static TestResult runWatched(WorkloadRun generator, Worker worker) throws Exception {
-        try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
-            try {
-                return generator.run();
-            } catch (Exception e) {
-                throw watchdog.explain(e);
-            }
-        }
     }
 
     // The explicit output file, or a generated name in the results directory. Without a results
@@ -957,15 +956,6 @@ public final class Benchmark {
         }
     }
 
-    @SuppressWarnings("java:S1181")
-    private static boolean isQuiescent(WorkloadRun generator) {
-        try {
-            return generator.isQuiescentAfterClose();
-        } catch (Throwable _) {
-            return false;
-        }
-    }
-
     // Explicit YAML nulls ("stages: null") keep the field default instead of breaking non-null fields
     private static final ObjectMapper mapper =
             YAMLMapper.builder()
@@ -975,10 +965,6 @@ public final class Benchmark {
             mapper.readerFor(Workers.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectReader workloadReader =
             mapper.readerFor(Workload.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    private static final ObjectReader driverConfigurationReader =
-            mapper
-                    .readerFor(DriverConfiguration.class)
-                    .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectReader driverConfigReader =
             mapper.readerFor(new TypeReference<Map<String, Object>>() {});
 

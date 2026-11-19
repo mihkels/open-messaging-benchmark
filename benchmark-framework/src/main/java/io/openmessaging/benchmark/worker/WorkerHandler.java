@@ -123,18 +123,20 @@ public class WorkerHandler implements AutoCloseable {
 
         routes.post(INITIALIZE_DRIVER, this::handleInitializeDriver);
         routes.post(SET_RUN_ID, this::handleSetRunId);
-        routes.post(SET_PHASE, this::handleSetPhase);
+        routes.post(SET_PHASE, ctx -> worker.setPhase(mapper.readValue(ctx.body(), RunPhase.class)));
         routes.post(CREATE_TOPICS, this::handleCreateTopics);
         routes.post(CREATE_PRODUCERS, this::handleCreateProducers);
-        routes.post(PROBE_PRODUCERS, this::handleProbeProducers);
+        routes.post(PROBE_PRODUCERS, _ -> worker.probeProducers());
         routes.post(CREATE_CONSUMERS, this::handleCreateConsumers);
-        routes.post(PAUSE_CONSUMERS, this::handlePauseConsumers);
-        routes.post(RESUME_CONSUMERS, this::handleResumeConsumers);
+        routes.post(PAUSE_CONSUMERS, _ -> worker.pauseConsumers());
+        routes.post(RESUME_CONSUMERS, _ -> worker.resumeConsumers());
         routes.post(START_LOAD, this::handleStartLoad);
         routes.post(ADJUST_PUBLISH_RATE, this::handleAdjustPublishRate);
         routes.post(STOP_ALL, this::handleStopAll);
-        routes.get(PERIOD_STATS, this::handlePeriodStats);
-        routes.get(CUMULATIVE_LATENCIES, this::handleCumulativeLatencies);
+        routes.get(PERIOD_STATS, ctx -> ctx.result(writer.writeValueAsString(worker.getPeriodStats())));
+        routes.get(
+                CUMULATIVE_LATENCIES,
+                ctx -> ctx.result(writer.writeValueAsString(worker.getCumulativeLatencies())));
         routes.get(COUNTERS_STATS, this::handleCountersStats);
         routes.post(RESET_STATS, this::handleResetStats);
         routes.get(HEALTH, this::handleHealth);
@@ -244,10 +246,6 @@ public class WorkerHandler implements AutoCloseable {
                         : mapper.treeToValue(body, RunContext.class));
     }
 
-    private void handleSetPhase(Context ctx) {
-        worker.setPhase(mapper.readValue(ctx.body(), RunPhase.class));
-    }
-
     private void handleCreateTopics(Context ctx) {
         TopicsInfo topicsInfo = mapper.readValue(ctx.body(), TopicsInfo.class);
         log.atInfo()
@@ -264,24 +262,12 @@ public class WorkerHandler implements AutoCloseable {
         worker.createProducers(topics);
     }
 
-    private void handleProbeProducers(Context ctx) {
-        worker.probeProducers();
-    }
-
     private void handleCreateConsumers(Context ctx) {
         var consumerAssignment = mapper.readValue(ctx.body(), ConsumerAssignment.class);
 
         log.info(
                 "Received create consumers request for topics: {}", consumerAssignment.topicsSubscriptions);
         worker.createConsumers(consumerAssignment);
-    }
-
-    private void handlePauseConsumers(Context ctx) {
-        worker.pauseConsumers();
-    }
-
-    private void handleResumeConsumers(Context ctx) {
-        worker.resumeConsumers();
     }
 
     private void handleStartLoad(Context ctx) {
@@ -306,14 +292,6 @@ public class WorkerHandler implements AutoCloseable {
     private void handleStopAll(Context ctx) {
         log.info("Stop All");
         worker.stopAll();
-    }
-
-    private void handlePeriodStats(Context ctx) {
-        ctx.result(writer.writeValueAsString(worker.getPeriodStats()));
-    }
-
-    private void handleCumulativeLatencies(Context ctx) {
-        ctx.result(writer.writeValueAsString(worker.getCumulativeLatencies()));
     }
 
     private void handleCountersStats(Context ctx) {

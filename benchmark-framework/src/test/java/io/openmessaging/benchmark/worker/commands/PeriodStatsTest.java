@@ -27,10 +27,36 @@ class PeriodStatsTest {
     void plus() {
         PeriodStats one =
                 new PeriodStats(
-                        1, 2, 3, 4, 5, 6, 7, 8, new Histogram(5), new Histogram(5), new Histogram(5));
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        new Histogram(5),
+                        new Histogram(5),
+                        new Histogram(5),
+                        null,
+                        null,
+                        null);
         PeriodStats two =
                 new PeriodStats(
-                        10, 20, 30, 40, 50, 60, 70, 80, new Histogram(5), new Histogram(5), new Histogram(5));
+                        10,
+                        20,
+                        30,
+                        40,
+                        50,
+                        60,
+                        70,
+                        80,
+                        new Histogram(5),
+                        new Histogram(5),
+                        new Histogram(5),
+                        null,
+                        null,
+                        null);
 
         PeriodStats result = one.plus(two);
         assertThat(result)
@@ -59,7 +85,20 @@ class PeriodStatsTest {
         PeriodStats one = new PeriodStats();
         PeriodStats two =
                 new PeriodStats(
-                        10, 20, 30, 40, 50, 60, 70, 80, new Histogram(5), new Histogram(5), new Histogram(5));
+                        10,
+                        20,
+                        30,
+                        40,
+                        50,
+                        60,
+                        70,
+                        80,
+                        new Histogram(5),
+                        new Histogram(5),
+                        new Histogram(5),
+                        null,
+                        null,
+                        null);
         PeriodStats result = one.plus(two);
         assertThat(result)
                 .satisfies(r -> {
@@ -88,7 +127,8 @@ class PeriodStatsTest {
         delay.recordValue(200);
         endToEnd.recordValue(3_000);
         schedule.recordValue(1_200);
-        PeriodStats stats = new PeriodStats(1, 0, 0, 1, 0, 1, 0, 1, publish, delay, endToEnd, schedule);
+        PeriodStats stats =
+                new PeriodStats(1, 0, 0, 1, 0, 1, 0, 1, publish, delay, endToEnd, schedule, null, null);
 
         publish.recordValue(5_000);
         delay.recordValue(500);
@@ -115,10 +155,12 @@ class PeriodStatsTest {
         histogram.recordValue(10);
         histogram.recordValue(60_000_000);
         PeriodStats one =
-                new PeriodStats(1, 2, 3, 4, 5, 6, 7, 8, histogram, histogram, histogram, histogram);
+                new PeriodStats(
+                        1, 2, 3, 4, 5, 6, 7, 8, histogram, histogram, histogram, histogram, null, null);
         histogram.recordValue(40_000_000_000L);
         PeriodStats two =
-                new PeriodStats(10, 20, 30, 40, 50, 60, 70, 80, histogram, histogram, histogram, histogram);
+                new PeriodStats(
+                        10, 20, 30, 40, 50, 60, 70, 80, histogram, histogram, histogram, histogram, null, null);
         PeriodStats result = PeriodStats.aggregate(List.of(one, two, one));
 
         assertThat(result).isEqualTo(one.plus(two).plus(one));
@@ -209,6 +251,6 @@ class PeriodStatsTest {
     }
 
     private static PeriodStats withReasons(Map<String, String> reasons) {
-        return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, reasons);
+        return new PeriodStats(0, 1, 0, 0, 0, 0, 1, 0, null, null, null, null, reasons, null);
     }
 }

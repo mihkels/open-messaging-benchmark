@@ -149,9 +149,8 @@ public class Workload {
      * @return the sum of the stage durations, or {@link #testDurationMinutes}
      */
     public int measuredMinutes() {
-        List<Stage> profile = stages;
-        return profile != null && !profile.isEmpty()
-                ? profile.stream().mapToInt(Stage::durationMinutes).sum()
+        return usesStages()
+                ? stages.stream().mapToInt(Stage::durationMinutes).sum()
                 : testDurationMinutes;
     }
 
@@ -161,9 +160,8 @@ public class Workload {
      * @return the distribution's weighted average size, or {@link #messageSize}
      */
     public int effectiveMessageSize() {
-        Map<String, Integer> distribution = messageSizeDistribution;
-        return distribution != null && !distribution.isEmpty()
-                ? new MessageSizeDistribution(distribution).getAvgSize()
+        return usesMessageSizeDistribution()
+                ? new MessageSizeDistribution(messageSizeDistribution).getAvgSize()
                 : messageSize;
     }
 
@@ -183,9 +181,8 @@ public class Workload {
             checks.validate();
         }
         validatePayloads();
-        List<Stage> profile = stages;
-        if (profile != null && !profile.isEmpty()) {
-            validateStages(profile);
+        if (usesStages()) {
+            validateStages(stages);
         }
         ConsumerPause pause = consumerPause;
         if (pause != null) {
@@ -208,9 +205,8 @@ public class Workload {
         if (useRandomizedPayloads && !usesMessageSizeDistribution() && randomizedPayloadPoolSize <= 0) {
             throw new IllegalArgumentException("Randomized payload pool size must be positive");
         }
-        Map<String, Integer> distribution = messageSizeDistribution;
-        if (distribution != null && !distribution.isEmpty()) {
-            new MessageSizeDistribution(distribution);
+        if (usesMessageSizeDistribution()) {
+            new MessageSizeDistribution(messageSizeDistribution);
         }
     }
 
@@ -232,15 +228,15 @@ public class Workload {
             throw new IllegalArgumentException(
                     "payloadGenerator and useRandomizedPayloads are mutually exclusive");
         }
-        Map<String, Integer> distribution = messageSizeDistribution;
-        if (distribution == null || distribution.isEmpty()) {
+        if (!usesMessageSizeDistribution()) {
             if (messageSize <= 0) {
                 throw new IllegalArgumentException("Message size must be positive with payloadGenerator");
             }
             return;
         }
         // Each bucket's weight is repeated for its poolSize payloads, and the sampler sums them as int
-        int totalWeight = Arrays.stream(new MessageSizeDistribution(distribution).getWeights()).sum();
+        int totalWeight =
+                Arrays.stream(new MessageSizeDistribution(messageSizeDistribution).getWeights()).sum();
         try {
             Math.multiplyExact(totalWeight, generator.poolSize());
         } catch (ArithmeticException e) {

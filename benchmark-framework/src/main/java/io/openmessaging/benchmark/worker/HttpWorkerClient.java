@@ -49,7 +49,6 @@ import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -194,17 +193,8 @@ public final class HttpWorkerClient implements Worker {
         }
     }
 
-    HttpWorkerClient(AsyncHttpClient httpClient, String host) {
-        this(httpClient, host, null, CLOSE_TIMEOUT);
-    }
-
     HttpWorkerClient(AsyncHttpClient httpClient, String host, Duration closeTimeout) {
-        this(httpClient, host, null, closeTimeout);
-    }
-
-    HttpWorkerClient(
-            AsyncHttpClient httpClient, String host, @Nullable String token, Duration closeTimeout) {
-        this(httpClient, host, token, closeTimeout, WorkerTimeouts.request(), WorkerTimeouts.stop());
+        this(httpClient, host, null, closeTimeout, WorkerTimeouts.request(), WorkerTimeouts.stop());
     }
 
     HttpWorkerClient(
@@ -228,7 +218,7 @@ public final class HttpWorkerClient implements Worker {
 
     @Override
     public void initializeDriver(Path configurationFile) throws IOException {
-        byte[] confFileContent = Files.readAllBytes(Paths.get(configurationFile.toString()));
+        byte[] confFileContent = Files.readAllBytes(configurationFile);
         sendPost(INITIALIZE_DRIVER, YAML_CONTENT_TYPE, confFileContent);
     }
 
@@ -356,12 +346,7 @@ public final class HttpWorkerClient implements Worker {
                 "post",
                 STOP_ALL,
                 stopTimeout,
-                timed(authorized(httpClient.preparePost(host + STOP_ALL)), stopTimeout)
-                        .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
-                        .setBody(EMPTY_BODY)
-                        .execute()
-                        .toCompletableFuture()
-                        .thenAccept(response -> checkResponse("post", STOP_ALL, response)));
+                postText(STOP_ALL, JSON_CONTENT_TYPE, EMPTY_BODY, stopTimeout));
         lastStopSucceeded = true;
     }
 
@@ -419,19 +404,7 @@ public final class HttpWorkerClient implements Worker {
     }
 
     private void sendPost(String path, String contentType, byte[] body) {
-        await(
-                "post",
-                path,
-                requestTimeout,
-                timed(authorized(httpClient.preparePost(host + path)), requestTimeout)
-                        .setHeader(CONTENT_TYPE, contentType)
-                        .setBody(body)
-                        .execute()
-                        .toCompletableFuture()
-                        .thenApply(response -> {
-                            checkResponse("post", path, response);
-                            return null;
-                        }));
+        await("post", path, requestTimeout, postText(path, contentType, body, requestTimeout));
     }
 
     private <T> T get(String path, Class<T> clazz) {
@@ -463,15 +436,22 @@ public final class HttpWorkerClient implements Worker {
                 "post",
                 path,
                 requestTimeout,
-                timed(authorized(httpClient.preparePost(host + path)), requestTimeout)
-                        .setHeader(CONTENT_TYPE, JSON_CONTENT_TYPE)
-                        .setBody(body)
-                        .execute()
-                        .toCompletableFuture()
-                        .thenApply(response -> {
-                            checkResponse("post", path, response);
-                            return mapper.readValue(response.getResponseBody(), clazz);
-                        }));
+                postText(path, JSON_CONTENT_TYPE, body, requestTimeout)
+                        .thenApply(text -> mapper.readValue(text, clazz)));
+    }
+
+    // An authorized POST of body to path whose response body is returned once the status is 200
+    private CompletableFuture<String> postText(
+            String path, String contentType, byte[] body, Duration timeout) {
+        return timed(authorized(httpClient.preparePost(host + path)), timeout)
+                .setHeader(CONTENT_TYPE, contentType)
+                .setBody(body)
+                .execute()
+                .toCompletableFuture()
+                .thenApply(response -> {
+                    checkResponse("post", path, response);
+                    return response.getResponseBody();
+                });
     }
 
     private static BoundRequestBuilder timed(BoundRequestBuilder request, Duration timeout) {

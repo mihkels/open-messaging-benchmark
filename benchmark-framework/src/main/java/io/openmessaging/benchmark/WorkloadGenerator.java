@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -52,6 +53,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.ToLongFunction;
 import org.jspecify.annotations.Nullable;
@@ -464,21 +466,32 @@ public final class WorkloadGenerator implements WorkloadRun {
         // consumerBacklogSizeGB's drain rule, floored at the backlog in flight before the pause
         long drained =
                 Math.max(steady, Math.max(1000L, (long) ((1.0 - workload.backlogDrainRatio) * peak)));
-        var watch = new StallWatch("Pause drain", "messages received", CountersStats::messagesReceived);
-        while (!runCompleted) {
+        OptionalLong drainedAt = drainTo("Pause drain", drained, clock, tickMillis, () -> runCompleted);
+        if (drainedAt.isPresent()) {
+            double seconds = (drainedAt.getAsLong() - resumed) / 1e9;
+            pauseDrainSeconds = seconds;
+            log.info("--- Drained the paused backlog in {} s ---", seconds);
+            enterPhase(RunPhase.MEASURE);
+        }
+    }
+
+    // Waits for the backlog to fall to target; returns the clock reading then, or empty once stopped
+    // reports true
+    private OptionalLong drainTo(
+            String waitName, long target, LongSupplier clock, long tickMillis, BooleanSupplier stopped)
+            throws InterruptedException {
+        var watch = new StallWatch(waitName, "messages received", CountersStats::messagesReceived);
+        while (!stopped.getAsBoolean()) {
             CountersStats stats = worker.getCountersStats();
             long now = clock.getAsLong();
             long backlog = backlog(stats);
-            if (backlog <= drained) {
-                double seconds = (now - resumed) / 1e9;
-                pauseDrainSeconds = seconds;
-                log.info("--- Drained the paused backlog in {} s ---", seconds);
-                enterPhase(RunPhase.MEASURE);
-                return;
+            if (backlog <= target) {
+                return OptionalLong.of(now);
             }
-            watch.check(now, stats, backlogProgress(backlog, "<=", drained));
+            watch.check(now, stats, backlogProgress(backlog, "<=", target));
             Thread.sleep(tickMillis);
         }
+        return OptionalLong.empty();
     }
 
     // Returns false if the run completed first
@@ -692,22 +705,11 @@ public final class WorkloadGenerator implements WorkloadRun {
         long backlogEmptyLevel = (long) ((1.0 - workload.backlogDrainRatio) * backlogMessageCapacity);
         final long minBacklog = Math.max(1000L, backlogEmptyLevel);
 
-        var drain =
-                new StallWatch("Backlog drain", "messages received", CountersStats::messagesReceived);
-        while (true) {
-            CountersStats stats = worker.getCountersStats();
-            long backlog = backlog(stats);
-            if (backlog <= minBacklog) {
-                log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
-                enterPhase(RunPhase.MEASURE);
-
-                Thread.sleep(MINUTES.toMillis(testDurationMinutes));
-
-                return;
-            }
-            drain.check(clock.getAsLong(), stats, backlogProgress(backlog, "<=", minBacklog));
-            Thread.sleep(drainTickMillis);
-        }
+        // Unlike the pause drain, this one runs until drained or interrupted, even after close
+        drainTo("Backlog drain", minBacklog, clock, drainTickMillis, () -> false);
+        log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
+        enterPhase(RunPhase.MEASURE);
+        Thread.sleep(MINUTES.toMillis(testDurationMinutes));
     }
 
     // Fails a wait loop whose counter has not moved for the stall window, and logs its progress

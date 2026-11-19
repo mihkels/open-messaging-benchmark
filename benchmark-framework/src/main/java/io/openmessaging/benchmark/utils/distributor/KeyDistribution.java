@@ -15,7 +15,6 @@ package io.openmessaging.benchmark.utils.distributor;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -44,7 +43,7 @@ public record KeyDistribution(int keys, double exponent) {
      * @return {@code distribution}, or {@link #DEFAULT} when it is null
      */
     public static KeyDistribution orDefault(@Nullable KeyDistribution distribution) {
-        return Objects.requireNonNullElse(distribution, DEFAULT);
+        return distribution != null ? distribution : DEFAULT;
     }
 
     @JsonCreator

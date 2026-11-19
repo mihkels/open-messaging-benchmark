@@ -24,7 +24,6 @@ import io.openmessaging.benchmark.driver.ResourceNames;
 import io.openmessaging.benchmark.driver.rocketmq.client.RocketMQClient5Config;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -264,7 +263,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
                             // Set the consumer group name.
                             .setConsumerGroup(fullSubName)
                             // Set the subscription for the consumer.
-                            .setSubscriptionExpressions(Collections.singletonMap(topic, filterExpression))
+                            .setSubscriptionExpressions(Map.of(topic, filterExpression))
                             .setMessageListener(messageView -> {
                                 // Handle the received message and return consume result.
                                 consumerCallback.messageReceived(

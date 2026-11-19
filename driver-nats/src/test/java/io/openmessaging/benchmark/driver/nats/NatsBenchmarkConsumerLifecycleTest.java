@@ -153,20 +153,22 @@ class NatsBenchmarkConsumerLifecycleTest {
                             Connection.class,
                             (method, args) -> {
                                 switch (method) {
-                                    case "createDispatcher":
+                                    case "createDispatcher" -> {
                                         return dispatcher;
-                                    case "closeDispatcher":
+                                    }
+                                    case "closeDispatcher" -> {
                                         assertSame(dispatcher, args[0]);
                                         dispatcherCloses.incrementAndGet();
                                         if (closeFailure != null) {
                                             throw closeFailure;
                                         }
                                         return null;
-                                    case "close":
+                                    }
+                                    case "close" -> {
                                         connectionCloses.incrementAndGet();
                                         return null;
-                                    default:
-                                        throw new AssertionError("Unexpected connection method: " + method);
+                                    }
+                                    default -> throw new AssertionError("Unexpected connection method: " + method);
                                 }
                             });
             JetStream stream =

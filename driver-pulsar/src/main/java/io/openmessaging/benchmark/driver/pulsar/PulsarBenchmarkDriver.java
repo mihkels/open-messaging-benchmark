@@ -28,8 +28,8 @@ import io.openmessaging.benchmark.driver.pulsar.config.PulsarConfig;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -231,10 +231,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                     .tenants()
                     .createTenant(
                             tenant,
-                            TenantInfo.builder()
-                                    .adminRoles(Collections.emptySet())
-                                    .allowedClusters(Collections.singleton(cluster))
-                                    .build());
+                            TenantInfo.builder().adminRoles(Set.of()).allowedClusters(Set.of(cluster)).build());
         } catch (ConflictException _) {
             // Ignore. This can happen when multiple workers are initializing at the same time
         } catch (PulsarAdminException e) {

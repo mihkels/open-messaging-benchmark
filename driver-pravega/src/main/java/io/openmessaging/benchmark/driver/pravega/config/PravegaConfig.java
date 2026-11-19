@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.driver.pravega.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
@@ -35,7 +34,7 @@ public record PravegaConfig(
     @JsonCreator
     public static PravegaConfig fromMap(Map<String, Object> properties) {
         if (properties == null) {
-            properties = Collections.emptyMap();
+            properties = Map.of();
         }
         // Jackson will deserialize nested objects into Maps, which we can use to create the nested
         // records.
@@ -45,7 +44,7 @@ public record PravegaConfig(
         PravegaWriterConfig writerConfig =
                 new PravegaWriterConfig(
                         getBoolean(
-                                        (Map<String, Object>) properties.getOrDefault("writer", Collections.emptyMap()),
+                                        (Map<String, Object>) properties.getOrDefault("writer", Map.of()),
                                         "enableConnectionPooling")
                                 .orElse(null));
 

@@ -1418,41 +1418,47 @@ class RabbitMqBenchmarkProducerTest {
         @Override
         public Object invoke(Object ignored, Method method, Object[] args) throws Throwable {
             switch (method.getName()) {
-                case "addConfirmListener":
+                case "addConfirmListener" -> {
                     beforeAddConfirm.run();
                     confirmRegistrations.incrementAndGet();
                     confirmListener = (ConfirmListener) args[0];
                     return null;
-                case "removeConfirmListener":
+                }
+                case "removeConfirmListener" -> {
                     confirmRemoveAttempts.incrementAndGet();
                     if (removeConfirmFailure != null) {
                         throw removeConfirmFailure;
                     }
                     confirmRemoved = args[0] == confirmListener;
                     return confirmRemoved;
-                case "addShutdownListener":
+                }
+                case "addShutdownListener" -> {
                     shutdownListener = (ShutdownListener) args[0];
                     if (initialShutdown != null) {
                         shutdownListener.shutdownCompleted(initialShutdown);
                     }
                     return null;
-                case "removeShutdownListener":
+                }
+                case "removeShutdownListener" -> {
                     shutdownRemoveAttempts.incrementAndGet();
                     if (removeShutdownFailure != null) {
                         throw removeShutdownFailure;
                     }
                     shutdownRemoved = args[0] == shutdownListener;
                     return null;
-                case "addRecoveryListener":
+                }
+                case "addRecoveryListener" -> {
                     recoveryListener = (RecoveryListener) args[0];
                     if (recoverOnRegistration) {
                         recover();
                     }
                     return null;
-                case "removeRecoveryListener":
+                }
+                case "removeRecoveryListener" -> {
                     recoveryRemoved = args[0] == recoveryListener;
                     return null;
-                case "getNextPublishSeqNo":
+                }
+                case "getNextPublishSeqNo" -> {
                     sequenceLookups.incrementAndGet();
                     beforeSequence.run();
                     RuntimeException failure = nextSequenceFailure.getAndSet(null);
@@ -1460,7 +1466,8 @@ class RabbitMqBenchmarkProducerTest {
                         throw failure;
                     }
                     return nextSequence.get();
-                case "basicPublish":
+                }
+                case "basicPublish" -> {
                     publishAttempts.incrementAndGet();
                     int active = concurrentPublishes.incrementAndGet();
                     maxConcurrentPublishes.accumulateAndGet(active, Math::max);
@@ -1479,20 +1486,26 @@ class RabbitMqBenchmarkProducerTest {
                         concurrentPublishes.decrementAndGet();
                     }
                     return null;
-                case "close":
+                }
+                case "close" -> {
                     closeCalls.incrementAndGet();
                     if (closeFailure != null) {
                         throw closeFailure;
                     }
                     return null;
-                case "toString":
+                }
+                case "toString" -> {
                     return "FakeChannel";
-                case "hashCode":
+                }
+                case "hashCode" -> {
                     return System.identityHashCode(proxy);
-                case "equals":
+                }
+                case "equals" -> {
                     return proxy == args[0];
-                default:
+                }
+                default -> {
                     throw new UnsupportedOperationException(method.toString());
+                }
             }
         }
 

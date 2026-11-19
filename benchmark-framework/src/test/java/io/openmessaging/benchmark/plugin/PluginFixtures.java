@@ -147,15 +147,17 @@ public final class PluginFixtures {
             throws IOException {
         Files.createDirectories(dir);
         String yaml =
-                "descriptorVersion: 1\n"
-                        + "id: "
-                        + id
-                        + "\n"
-                        + "version: 1.0\n"
-                        + "driverApiVersion: 2\n"
-                        + "drivers:\n"
-                        + drivers.stream().map(d -> "  - " + d + "\n").collect(Collectors.joining())
-                        + extraYaml;
+                """
+                descriptorVersion: 1
+                id: %s
+                version: 1.0
+                driverApiVersion: 2
+                drivers:
+                %s%s"""
+                        .formatted(
+                                id,
+                                drivers.stream().map(d -> "  - " + d + "\n").collect(Collectors.joining()),
+                                extraYaml);
         if (!extraYaml.contains("classpath:")) {
             yaml += "classpath:\n  - \"*.jar\"\n  - \"lib/*.jar\"\n";
         }
@@ -188,38 +190,38 @@ public final class PluginFixtures {
     public static String driverSource(
             String className, String prefixExpression, String initializeBody, String closeBody) {
         int dot = className.lastIndexOf('.');
-        return "package "
-                + className.substring(0, dot)
-                + ";\n"
-                + "import io.openmessaging.benchmark.driver.*;\n"
-                + "import java.util.Optional;\n"
-                + "import java.util.concurrent.CompletableFuture;\n"
-                + "public class "
-                + className.substring(dot + 1)
-                + " implements BenchmarkDriver {\n"
-                + "  public void initialize(java.nio.file.Path config,"
-                + " io.micrometer.core.instrument.MeterRegistry registry) throws java.io.IOException {\n"
-                + initializeBody
-                + "\n  }\n"
-                + "  public String getTopicNamePrefix() { return "
-                + prefixExpression
-                + "; }\n"
-                + "  public CompletableFuture<Void> createTopic(String topic, int partitions) {\n"
-                + "    if (topic.contains(\"-0000000-\") && getTopicNamePrefix().startsWith(\"crash\")) {"
-                + " Runtime.getRuntime().halt(42); }\n"
-                + "    return CompletableFuture.completedFuture(null);\n"
-                + "  }\n"
-                + "  public CompletableFuture<BenchmarkProducer> createProducer(String topic) {\n"
-                + "    return CompletableFuture.failedFuture(new UnsupportedOperationException());\n"
-                + "  }\n"
-                + "  public CompletableFuture<BenchmarkConsumer> createConsumer(String topic, String s,"
-                + " ConsumerCallback c) {\n"
-                + "    return CompletableFuture.failedFuture(new UnsupportedOperationException());\n"
-                + "  }\n"
-                + "  public void close() { "
-                + closeBody
-                + " }\n"
-                + "}\n";
+        return """
+                package %s;
+                import io.openmessaging.benchmark.driver.*;
+                import java.util.Optional;
+                import java.util.concurrent.CompletableFuture;
+                public class %s implements BenchmarkDriver {
+                  public void initialize(java.nio.file.Path config, \
+                io.micrometer.core.instrument.MeterRegistry registry) throws java.io.IOException {
+                %s
+                  }
+                  public String getTopicNamePrefix() { return %s; }
+                  public CompletableFuture<Void> createTopic(String topic, int partitions) {
+                    if (topic.contains("-0000000-") && getTopicNamePrefix().startsWith("crash")) { \
+                Runtime.getRuntime().halt(42); }
+                    return CompletableFuture.completedFuture(null);
+                  }
+                  public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+                    return CompletableFuture.failedFuture(new UnsupportedOperationException());
+                  }
+                  public CompletableFuture<BenchmarkConsumer> createConsumer(String topic, String s, \
+                ConsumerCallback c) {
+                    return CompletableFuture.failedFuture(new UnsupportedOperationException());
+                  }
+                  public void close() { %s }
+                }
+                """
+                .formatted(
+                        className.substring(0, dot),
+                        className.substring(dot + 1),
+                        initializeBody,
+                        prefixExpression,
+                        closeBody);
     }
 
     private static List<Path> driverApiClasspath() {

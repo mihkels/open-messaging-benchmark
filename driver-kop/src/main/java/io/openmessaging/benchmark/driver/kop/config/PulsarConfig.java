@@ -14,7 +14,6 @@
 package io.openmessaging.benchmark.driver.kop.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,7 +32,7 @@ public record PulsarConfig(
     @JsonCreator
     public static PulsarConfig fromMap(Map<String, Object> properties) {
         if (properties == null) {
-            properties = Collections.emptyMap();
+            properties = Map.of();
         }
         return new PulsarConfig(
                 getString(properties, "serviceUrl").orElse("pulsar://localhost:6650"),

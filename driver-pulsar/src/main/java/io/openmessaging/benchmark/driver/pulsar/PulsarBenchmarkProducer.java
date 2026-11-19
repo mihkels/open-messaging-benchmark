@@ -44,9 +44,7 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
         }
         try {
             TypedMessageBuilder<byte[]> msgBuilder = producer.newMessage().value(payload.clone());
-            if (key.isPresent()) {
-                msgBuilder.key(key.get());
-            }
+            key.ifPresent(msgBuilder::key);
             msgBuilder
                     .sendAsync()
                     .thenApply(msgId -> null)

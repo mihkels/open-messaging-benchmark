@@ -566,7 +566,7 @@ public final class ScenarioMain {
                     sample();
                     Thread.sleep(1000);
                 }
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             } catch (Exception e) {
                 failure.set(e);

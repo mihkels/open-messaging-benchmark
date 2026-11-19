@@ -18,9 +18,9 @@ import io.openmessaging.benchmark.driver.CloseOnce;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -58,7 +58,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         this.destination = destination;
         this.useAsyncSend = useAsyncSend;
         this.connection = connection;
-        this.properties = properties != null ? properties : Collections.emptyList();
+        this.properties = Objects.requireNonNullElse(properties, List.of());
     }
 
     /**

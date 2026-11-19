@@ -59,14 +59,9 @@ public class PaddingDecimalFormat extends DecimalFormat {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PaddingDecimalFormat)) {
-            return false;
-        }
-        if (!super.equals(o)) {
-            return false;
-        }
-        PaddingDecimalFormat that = (PaddingDecimalFormat) o;
-        return minimumLength == that.minimumLength;
+        return o instanceof PaddingDecimalFormat that
+                && super.equals(o)
+                && minimumLength == that.minimumLength;
     }
 
     @Override

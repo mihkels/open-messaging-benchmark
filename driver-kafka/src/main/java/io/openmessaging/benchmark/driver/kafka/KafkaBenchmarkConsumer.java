@@ -18,7 +18,6 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -84,7 +83,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             ConsumerCallback callback,
             long pollTimeoutMs) {
         Readiness readiness = new Readiness(topic);
-        consumer.subscribe(Collections.singleton(topic), readiness);
+        consumer.subscribe(Set.of(topic), readiness);
         CreationFuture creation = new CreationFuture();
         new KafkaBenchmarkConsumer(
                 consumer, consumerConfig, callback, pollTimeoutMs, readiness, creation);

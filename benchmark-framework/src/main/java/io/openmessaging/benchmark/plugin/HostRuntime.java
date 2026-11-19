@@ -109,12 +109,10 @@ public final class HostRuntime {
             String version = m.group(5);
             ArtifactCoordinates coordinates =
                     new ArtifactCoordinates(groupId, artifactId, version, classifier);
-            Optional<Path> path = locate(byFileName, loader, coordinates);
-            if (path.isPresent()) {
-                entries.add(new Entry(path.get(), coordinates));
-            } else {
-                missing.add(coordinates.toString());
-            }
+            locate(byFileName, loader, coordinates)
+                    .ifPresentOrElse(
+                            path -> entries.add(new Entry(path, coordinates)),
+                            () -> missing.add(coordinates.toString()));
         }
         if (!missing.isEmpty()) {
             throw new PluginException(

@@ -37,9 +37,7 @@ public class RocketMQBenchmarkProducer implements BenchmarkProducer {
         Message message;
         try {
             message = new Message(this.rmqTopic, payload.clone());
-            if (key.isPresent()) {
-                message.setKeys(key.get());
-            }
+            key.ifPresent(message::setKeys);
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }

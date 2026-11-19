@@ -323,7 +323,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
         int index = (int) Math.floorMod(receiveCursor.getAndIncrement(), (long) snapshot.length);
         try {
             ((Consumer) snapshot[index]).deliver(payload, System.currentTimeMillis());
-        } catch (Throwable failure) {
+        } catch (Throwable _) {
             receiveErrors.increment();
         }
     }

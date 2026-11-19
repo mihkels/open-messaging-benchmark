@@ -39,18 +39,14 @@ public class MessageSizeDistribution {
 
     private record ParsedDistribution(List<Bucket> buckets, int totalWeight) {}
 
-    /** Represents a single size bucket with min/max range and weight. */
-    public static class Bucket {
-        public final int minSize;
-        public final int maxSize;
-        public final int weight;
-
-        Bucket(int minSize, int maxSize, int weight) {
-            this.minSize = minSize;
-            this.maxSize = maxSize;
-            this.weight = weight;
-        }
-
+    /**
+     * Represents a single size bucket with min/max range and weight.
+     *
+     * @param minSize the smallest message size in bytes
+     * @param maxSize the largest message size in bytes
+     * @param weight the relative selection weight
+     */
+    public record Bucket(int minSize, int maxSize, int weight) {
         /**
          * Returns midpoint of range as the representative size for this bucket.
          *
@@ -170,7 +166,7 @@ public class MessageSizeDistribution {
     public int[] getWeights() {
         int[] weights = new int[buckets.size()];
         for (int i = 0; i < buckets.size(); i++) {
-            weights[i] = buckets.get(i).weight;
+            weights[i] = buckets.get(i).weight();
         }
         return weights;
     }
@@ -204,7 +200,7 @@ public class MessageSizeDistribution {
     public int getAvgSize() {
         double weightedSum = 0;
         for (Bucket b : buckets) {
-            weightedSum += (double) b.getRepresentativeSize() * b.weight;
+            weightedSum += (double) b.getRepresentativeSize() * b.weight();
         }
         return (int) (weightedSum / totalWeight);
     }

@@ -88,6 +88,11 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         return "test-topic";
     }

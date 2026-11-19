@@ -27,6 +27,7 @@ import java.lang.management.ThreadInfo;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -46,6 +47,21 @@ import javax.jms.Topic;
 import org.junit.jupiter.api.Test;
 
 class JMSBenchmarkTransactionProducerTest {
+    @Test
+    void headersBecomeLatin1StringProperties() throws Exception {
+        Scenario scenario = new Scenario();
+        JMSBenchmarkTransactionProducer producer = scenario.producer(false, List.of());
+
+        assertNull(
+                producer
+                        .sendAsync(
+                                Optional.empty(), new byte[] {1}, Map.of("omb_h0", new byte[] {'a', (byte) 0xE9}))
+                        .join());
+
+        assertEquals(List.of("omb_h0=a\u00e9"), scenario.stringProperties);
+        producer.close();
+    }
+
     @Test
     void missingProviderFailureDoesNotLeaveTransactionPending() throws Exception {
         Scenario scenario = new Scenario();

@@ -71,6 +71,19 @@ public interface BenchmarkDriver extends AutoCloseable {
     String getTopicNamePrefix();
 
     /**
+     * Whether this driver's producers send message headers through {@link
+     * BenchmarkProducer#sendAsync(java.util.Optional, byte[], java.util.Map)}.
+     *
+     * <p>The worker refuses to start a workload that configures headers when this returns {@code
+     * false}, rather than letting the default implementation drop them silently.
+     *
+     * @return {@code true} if producers send headers
+     */
+    default boolean supportsHeaders() {
+        return false;
+    }
+
+    /**
      * Create a new topic with a given number of partitions.
      *
      * @param topic the topic name

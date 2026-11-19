@@ -130,8 +130,10 @@
           - S6213: `record` is a contextual keyword, legal as a variable/method name
           - S106: CLI entry points print usage and argument errors to stderr before logging is set up
           - S2143: AMQP BasicProperties.timestamp takes a java.util.Date; Sonar raises it at file level (#169)
+          - S2245: LocalWorker's producer loop samples payloads with ThreadLocalRandom; the values are
+            benchmark data, never secrets (#38)
         -->
-        <sonar.issue.ignore.multicriteria>s3077,s1181,s6213,s106a,s106b,s106c,s2143</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria>s3077,s1181,s6213,s106a,s106b,s106c,s2143,s2245</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.s3077.ruleKey>java:S3077</sonar.issue.ignore.multicriteria.s3077.ruleKey>
         <sonar.issue.ignore.multicriteria.s3077.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s3077.resourceKey>
         <sonar.issue.ignore.multicriteria.s1181.ruleKey>java:S1181</sonar.issue.ignore.multicriteria.s1181.ruleKey>
@@ -146,6 +148,8 @@
         <sonar.issue.ignore.multicriteria.s106c.resourceKey>**/io/openmessaging/benchmark/worker/DriverProcessMain.java</sonar.issue.ignore.multicriteria.s106c.resourceKey>
         <sonar.issue.ignore.multicriteria.s2143.ruleKey>java:S2143</sonar.issue.ignore.multicriteria.s2143.ruleKey>
         <sonar.issue.ignore.multicriteria.s2143.resourceKey>**/io/openmessaging/benchmark/driver/rabbitmq/RabbitMqBenchmarkProducer.java</sonar.issue.ignore.multicriteria.s2143.resourceKey>
+        <sonar.issue.ignore.multicriteria.s2245.ruleKey>java:S2245</sonar.issue.ignore.multicriteria.s2245.ruleKey>
+        <sonar.issue.ignore.multicriteria.s2245.resourceKey>**/io/openmessaging/benchmark/worker/LocalWorker.java</sonar.issue.ignore.multicriteria.s2245.resourceKey>
     </properties>
     <dependencyManagement>
         <dependencies>

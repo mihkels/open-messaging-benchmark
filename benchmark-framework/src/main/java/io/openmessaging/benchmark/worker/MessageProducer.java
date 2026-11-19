@@ -17,10 +17,12 @@ import static io.openmessaging.benchmark.utils.UniformRateLimiter.interruptibleS
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.Nullable;
 
 public class MessageProducer {
 
@@ -49,7 +51,7 @@ public class MessageProducer {
 
     public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload)
             throws InterruptedException {
-        sendMessage(producer, key, payload, false);
+        sendMessage(producer, key, payload, false, null);
     }
 
     /**
@@ -60,10 +62,15 @@ public class MessageProducer {
      * @param payload the payload
      * @param stamped whether the payload carries a {@link DeliveryStamp}, so its acknowledgement
      *     counts towards the verified sends
+     * @param headers the message headers, or {@code null} to send without headers
      * @throws InterruptedException if interrupted while waiting for the send slot
      */
     public void sendMessage(
-            BenchmarkProducer producer, Optional<String> key, byte[] payload, boolean stamped)
+            BenchmarkProducer producer,
+            Optional<String> key,
+            byte[] payload,
+            boolean stamped,
+            @Nullable Map<String, byte[]> headers)
             throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();
         interruptibleSleepNs(intendedSendTime);
@@ -73,7 +80,11 @@ public class MessageProducer {
         try {
             final long sendTime = nanoClock.getAsLong();
             CompletableFuture<Void> send =
-                    Objects.requireNonNull(producer.sendAsync(key, payload), "sendAsync returned null");
+                    Objects.requireNonNull(
+                            headers == null
+                                    ? producer.sendAsync(key, payload)
+                                    : producer.sendAsync(key, payload, headers),
+                            "sendAsync returned null");
             send.whenComplete((ignored, failure) ->
                     callbacks.completeSend(
                             payload.length, intendedSendTime, sendTime, nanoClock, failure, stamped));

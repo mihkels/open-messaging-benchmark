@@ -27,6 +27,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -40,10 +41,26 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class KafkaBenchmarkProducerTest {
+    @Test
+    @SuppressWarnings("unchecked")
+    void headersAreAddedToTheRecord() {
+        Producer<String, byte[]> client = mock(Producer.class);
+        KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
+
+        producer.sendAsync(Optional.empty(), new byte[] {1}, Map.of("omb_h0", new byte[] {7, 8}));
+
+        ArgumentCaptor<ProducerRecord<String, byte[]>> record =
+                ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(client).send(record.capture(), any());
+        Header header = record.getValue().headers().lastHeader("omb_h0");
+        assertArrayEquals(new byte[] {7, 8}, header.value());
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void synchronousSendFailureCompletesReturnedFutureExceptionally() {

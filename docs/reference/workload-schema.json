@@ -70,6 +70,19 @@
       "type" : "integer",
       "minimum" : 1
     },
+    "headers" : {
+      "type" : [ "object", "null" ],
+      "properties" : {
+        "count" : {
+          "type" : "integer"
+        },
+        "valueSize" : {
+          "type" : "integer"
+        }
+      },
+      "required" : [ "count", "valueSize" ],
+      "additionalProperties" : false
+    },
     "keyDistribution" : {
       "type" : [ "object", "null" ],
       "properties" : {

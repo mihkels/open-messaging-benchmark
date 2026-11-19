@@ -131,6 +131,30 @@ drivers use them for routing or ordering. With keys, per-partition batches are u
 which raises publish latency compared with `NO_KEY`. How each driver uses keys is described on its
 page; some ignore them.
 
+## Message headers
+
+`headers` adds generated headers to every message, to measure the cost of trace context
+(`traceparent`), routing metadata or CloudEvents binary mode:
+
+```yaml
+headers:
+  count: 4
+  valueSize: 64
+```
+
+- Headers are named `omb_h0` to `omb_h<count-1>`. The names are valid identifiers for every
+  supported broker, JMS included, and cannot clash with the publish-time headers that some drivers
+  add themselves.
+- Values are random ASCII alphanumeric bytes, so brokers whose headers carry only strings (Pulsar,
+  NATS, JMS) send exactly `valueSize` bytes per value.
+- Each worker generates 64 header sets before the load starts, and each producer cycles through them.
+  The send path allocates nothing for headers, and batch compression sees varied values rather than
+  one repeated set.
+- Throughput byte counters cover payloads only, on both the producer and consumer side. Header
+  overhead appears as lower message throughput and higher latency.
+- A driver without header support fails the run before load starts instead of dropping the headers.
+  See the [driver support matrix](../drivers/index.md#message-headers).
+
 ## Comparing systems
 
 Use the same payload source, size, randomness and key strategy for every system in a comparison,

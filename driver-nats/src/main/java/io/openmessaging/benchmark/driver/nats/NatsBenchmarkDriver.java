@@ -93,6 +93,11 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         return "Nats-benchmark";
     }

@@ -17,7 +17,9 @@ import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
 import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -98,6 +100,12 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         CompletableFuture<Void> res;
         synchronized (lifecycleLock) {
             res = pending.register();
@@ -110,6 +118,11 @@ public final class JMSBenchmarkProducer implements BenchmarkProducer {
                 if (key.isPresent()) {
                     // a behaviour similar to https://activemq.apache.org/message-groups
                     bytesMessage.setStringProperty("JMSXGroupID", key.get());
+                }
+                for (Map.Entry<String, byte[]> header : headers.entrySet()) {
+                    // JMS properties cannot hold byte[]; ISO-8859-1 round-trips every byte
+                    bytesMessage.setStringProperty(
+                            header.getKey(), new String(header.getValue(), StandardCharsets.ISO_8859_1));
                 }
                 for (JMSConfig.AddProperty prop : properties) {
                     bytesMessage.setStringProperty(prop.name, prop.value);

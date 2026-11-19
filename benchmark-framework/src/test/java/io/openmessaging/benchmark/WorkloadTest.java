@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 
 class WorkloadTest {
 
@@ -258,6 +259,27 @@ class WorkloadTest {
 
         assertThat(workload.payloadGenerator)
                 .isEqualTo(new PayloadGenerator(PayloadGenerator.Type.COMPRESSIBLE, 0.45, 1000));
+    }
+
+    @Test
+    void loadsAWorkloadWithHeaders(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("headers.yaml");
+        Files.writeString(file, WorkloadYaml.minimal("headers") + "headers:\n  count: 4\n  valueSize: 64\n");
+
+        Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("headers");
+
+        assertThat(workload.headers).isEqualTo(new MessageHeaders(4, 64));
+    }
+
+    @Test
+    void loadingHeadersWithoutAValueSizeFails(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("invalid.yaml");
+        Files.writeString(file, WorkloadYaml.minimal("invalid") + "headers:\n  count: 4\n");
+        List<String> paths = List.of(file.toString());
+
+        assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'valueSize' not found");
     }
 
     @Test

@@ -58,6 +58,11 @@ import org.mockito.ArgumentCaptor;
 class PulsarBenchmarkDriverTest {
 
     @Test
+    void supportsHeaders() {
+        assertThat(new PulsarBenchmarkDriver().supportsHeaders()).isTrue();
+    }
+
+    @Test
     void refusesAuthenticationThatReadsLocalFiles() {
         String token = "org.apache.pulsar.client.impl.auth.AuthenticationToken";
         assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication(token, "file:///etc/passwd"))

@@ -35,6 +35,7 @@ import io.openmessaging.benchmark.utils.SecretRedaction;
 import io.openmessaging.benchmark.utils.Timer;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributor;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
@@ -45,9 +46,11 @@ import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
@@ -320,6 +323,18 @@ public final class LocalWorker implements Worker {
                 }
             }
         }
+        MessageHeaders headerConfig = producerWorkAssignment.headers();
+        List<Map<String, byte[]>> headers = null;
+        if (headerConfig != null) {
+            if (!current.requireDriver().supportsHeaders()) {
+                throw new IllegalStateException(
+                        "Driver "
+                                + current.requireDriver().getClass().getName()
+                                + " does not support message headers; remove 'headers' from the workload");
+            }
+            // Generated once per load, so SecureRandom costs nothing on the send path
+            headers = headerConfig.pool(new SecureRandom());
+        }
         current.beginLoad();
 
         log.info("Submitting {} producers to executor", producers.size());
@@ -329,7 +344,8 @@ public final class LocalWorker implements Worker {
                     producer,
                     keyDistributors.get(),
                     payloads,
-                    producerWorkAssignment.verifyDelivery() ? new DeliveryStamp() : null);
+                    producerWorkAssignment.verifyDelivery() ? new DeliveryStamp() : null,
+                    headers);
         }
     }
 
@@ -406,13 +422,20 @@ public final class LocalWorker implements Worker {
         return null;
     }
 
+    // Cycles through the pre-generated header sets; floorMod keeps the index valid after overflow
+    private static @Nullable Map<String, byte[]> headersFor(
+            @Nullable List<Map<String, byte[]>> headers, int sent) {
+        return headers == null ? null : headers.get(Math.floorMod(sent, headers.size()));
+    }
+
     // Sends messages from one producer on its own task until the worker stops.
     private void startProducer(
             Run current,
             BenchmarkProducer producer,
             KeyDistributor keyDistributor,
             PayloadSampler payloads,
-            @Nullable DeliveryStamp stamp) {
+            @Nullable DeliveryStamp stamp,
+            @Nullable List<Map<String, byte[]>> headers) {
         submit(
                 current,
                 "producer task",
@@ -420,14 +443,16 @@ public final class LocalWorker implements Worker {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
                         MessageProducer messageProducer = current.messageProducer;
+                        int sent = 0;
                         while (!current.stopping && !current.sendsStopped) {
                             Optional<String> key = Optional.ofNullable(keyDistributor.next());
-                            if (stamp == null) {
-                                messageProducer.sendMessage(producer, key, payloads.next(random));
-                            } else {
-                                messageProducer.sendMessage(
-                                        producer, key, stamp.stamp(payloads.next(random)), true);
-                            }
+                            byte[] payload = payloads.next(random);
+                            messageProducer.sendMessage(
+                                    producer,
+                                    key,
+                                    stamp == null ? payload : stamp.stamp(payload),
+                                    stamp != null,
+                                    headersFor(headers, sent++));
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();

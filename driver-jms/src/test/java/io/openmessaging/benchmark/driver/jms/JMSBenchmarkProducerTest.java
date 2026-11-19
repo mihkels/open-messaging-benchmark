@@ -25,6 +25,7 @@ import io.openmessaging.benchmark.driver.jms.config.JMSConfig;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -42,6 +43,26 @@ import javax.jms.Session;
 import org.junit.jupiter.api.Test;
 
 class JMSBenchmarkProducerTest {
+    @Test
+    void headersBecomeLatin1StringPropertiesBeforeConfiguredOnes() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.async = false;
+        JMSConfig.AddProperty property = new JMSConfig.AddProperty();
+        property.name = "region";
+        property.value = "eu";
+        fixture.properties = List.of(property);
+        JMSBenchmarkProducer producer = fixture.producer();
+
+        assertNull(
+                producer
+                        .sendAsync(
+                                Optional.empty(), new byte[] {1}, Map.of("omb_h0", new byte[] {'a', (byte) 0xE9}))
+                        .join());
+
+        assertEquals(List.of("omb_h0=a\u00e9", "region=eu"), fixture.stringProperties);
+        producer.close();
+    }
+
     @Test
     void closeSettlesPendingSendsAndRejectsLateAcknowledgements() throws Exception {
         Fixture fixture = new Fixture();

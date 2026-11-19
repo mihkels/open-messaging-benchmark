@@ -14,11 +14,12 @@
 
 # Java 27 image used by the regression suite for the coordinator and both benchmark workers.
 # The build context only contains the distribution tarball produced by the `package` module.
-FROM eclipse-temurin:27-jre@sha256:0dd0465f90d398fa3226b56a3973f5d3c47ac323934dceebdab45ac8910bee6e
+FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# curl ships with the image; shadow-utils provides groupadd and useradd.
+RUN dnf install -y --setopt=install_weak_deps=False shadow-utils \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
 
 ARG BENCHMARK_TARBALL=openmessaging-benchmark-bin.tar.gz
 ADD ${BENCHMARK_TARBALL} /opt/

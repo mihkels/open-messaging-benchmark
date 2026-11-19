@@ -42,7 +42,7 @@ DRIVERS=kafka docker buildx bake        # only the Kafka plugin, faster and smal
 See [docker/README.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/README.md)
 for the build targets, stages and multi-architecture builds.
 
-The image is Eclipse Temurin 27 with the distribution in `/benchmark`, which is also the working
+The image is Amazon Corretto 27 with the distribution in `/benchmark`, which is also the working
 directory and is read-only. It runs as uid 10001. Logs go to `/tmp` (`OMB_LOG_DIR`) and results
 written without `--output` to `/results` (`OMB_RESULTS_DIR`), so the root file system can be
 mounted read-only with writable volumes on those two paths.

@@ -407,7 +407,7 @@ public final class Benchmark {
             }
             List<Worker> workers =
                     arguments.workers.stream()
-                            .map(host -> (Worker) new HttpWorkerClient(host, token, caFile))
+                            .map(host -> (Worker) HttpWorkerClient.forRemoteWorker(host, token, caFile))
                             .toList();
             log.info("Using distributed workers ensemble");
             if (arguments.driverLocation != null) {

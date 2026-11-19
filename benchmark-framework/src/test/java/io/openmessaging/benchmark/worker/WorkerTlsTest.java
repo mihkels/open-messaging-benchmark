@@ -22,16 +22,22 @@ import static org.mockito.Mockito.verify;
 import com.beust.jcommander.JCommander;
 import io.javalin.Javalin;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,6 +57,7 @@ class WorkerTlsTest {
     private final Worker worker = mock(Worker.class);
     private Javalin app;
     private final List<HttpWorkerClient> clients = new ArrayList<>();
+    private final AtomicReference<String> protocol = new AtomicReference<>();
 
     @BeforeAll
     static void createCertificate() throws Exception {
@@ -78,6 +85,7 @@ class WorkerTlsTest {
                 Javalin.create(config -> {
                     config.startup.showJavalinBanner = false;
                     handler.configure(config);
+                    config.routes.before(ctx -> protocol.set(ctx.protocol()));
                     config.jetty.addConnector(https);
                 });
         app.start(LOOPBACK, 0);
@@ -85,7 +93,8 @@ class WorkerTlsTest {
 
     private HttpWorkerClient client(String scheme, Path caFile) {
         HttpWorkerClient client =
-                new HttpWorkerClient(scheme + "://" + LOOPBACK + ":" + app.port(), TOKEN, caFile);
+                HttpWorkerClient.forRemoteWorker(
+                        scheme + "://" + LOOPBACK + ":" + app.port(), TOKEN, caFile);
         clients.add(client);
         return client;
     }
@@ -95,6 +104,40 @@ class WorkerTlsTest {
         start(cert, key);
         client("https", cert).stopAll();
         verify(worker).stopAll();
+    }
+
+    @Test
+    void coordinatorNegotiatesHttp2() throws Exception {
+        start(cert, key);
+        client("https", cert).stopAll();
+        assertThat(protocol.get()).isEqualTo("HTTP/2.0");
+    }
+
+    @Test
+    void clientsWithoutAlpnGetHttp11() throws Exception {
+        start(cert, key);
+        KeyStore trusted = KeyStore.getInstance("PKCS12");
+        trusted.load(null, null);
+        try (InputStream in = Files.newInputStream(cert)) {
+            trusted.setCertificateEntry(
+                    "worker", CertificateFactory.getInstance("X.509").generateCertificate(in));
+        }
+        TrustManagerFactory trust =
+                TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trust.init(trusted);
+        SSLContext tls = SSLContext.getInstance("TLS");
+        tls.init(null, trust.getTrustManagers(), null);
+        try (Socket socket = tls.getSocketFactory().createSocket(LOOPBACK, app.port())) {
+            socket.setSoTimeout(5_000);
+            socket
+                    .getOutputStream()
+                    .write(
+                            ("GET " + WorkerHandler.HEALTH + " HTTP/1.1\r\nHost: " + LOOPBACK + "\r\n\r\n")
+                                    .getBytes(StandardCharsets.US_ASCII));
+            String reply = new String(socket.getInputStream().readNBytes(12), StandardCharsets.US_ASCII);
+            // Any status line proves the HTTP/1.1 fallback; the mock worker cannot answer 200
+            assertThat(reply).startsWith("HTTP/1.1 ");
+        }
     }
 
     @Test

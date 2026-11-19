@@ -34,7 +34,8 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.eclipse.jetty.http.HttpVersion;
+import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
+import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
@@ -45,8 +46,9 @@ import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 /**
- * Serves the worker API over HTTPS from a PEM certificate chain and private key, as written by
- * {@code bin/benchmark-tls-cert}, Helm's {@code genSelfSignedCert} or cert-manager.
+ * Serves the worker API over HTTPS, HTTP/2 or HTTP/1.1 by ALPN, from a PEM certificate chain and
+ * private key, as written by {@code bin/benchmark-tls-cert}, Helm's {@code genSelfSignedCert} or
+ * cert-manager.
  */
 final class WorkerTls {
     private static final Pattern PEM =
@@ -83,11 +85,15 @@ final class WorkerTls {
             HttpConfiguration https = new HttpConfiguration(http);
             // Callers reach workers by IP or by names the certificate does not list
             https.addCustomizer(new SecureRequestCustomizer(false));
+            HttpConnectionFactory http1 = new HttpConnectionFactory(https);
+            HTTP2ServerConnectionFactory http2 = new HTTP2ServerConnectionFactory(https);
+            // Clients without ALPN, such as older coordinators, get HTTP/1.1
+            ALPNServerConnectionFactory alpn =
+                    new ALPNServerConnectionFactory(http2.getProtocol(), http1.getProtocol());
+            alpn.setDefaultProtocol(http1.getProtocol());
             ServerConnector connector =
                     new ServerConnector(
-                            server,
-                            new SslConnectionFactory(ssl, HttpVersion.HTTP_1_1.asString()),
-                            new HttpConnectionFactory(https));
+                            server, new SslConnectionFactory(ssl, alpn.getProtocol()), alpn, http2, http1);
             connector.setHost(host);
             connector.setPort(port);
             return connector;

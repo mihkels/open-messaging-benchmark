@@ -73,7 +73,8 @@ producers and consumers run on different hosts their clocks must be synchronized
 
 At the end of the run the coordinator prints aggregated values for the measured period and writes a
 JSON file. Without `-o`, the name is `<workload file name>-<driver name>-<timestamp>.json` in the
-current directory.
+current directory. A complete result from the Quickstart setup is committed as
+[`docs/demo/quickstart-result.json`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docs/demo/quickstart-result.json).
 
 ```json
 {

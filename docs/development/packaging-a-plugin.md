@@ -135,8 +135,8 @@ they are bundled, the [compatibility rules](#compatibility-rules) decide what ha
 is a standalone Maven project (`com.example.omb:omb-driver-loopback:1.0.0`) that builds the same bundle
 layout without the benchmark's parent POM. It:
 
-- depends on `io.openmessaging.benchmark:driver-api` (version property `omb.version`, currently
-  `0.0.6`, kept in sync by release-please) with `provided` scope;
+- depends on `io.openmessaging.benchmark:driver-api` (version property `omb.version`, kept in sync
+  by release-please) with `provided` scope;
 - bundles `commons-lang3` in `lib/`, to show a third-party dependency;
 - repeats the clean, copy-dependencies and filtered resource steps of the `omb-driver-bundle` profile.
 

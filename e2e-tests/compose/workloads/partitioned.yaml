@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
+
 # One partitioned topic with keyed messages, two producers and two consumers per subscription.
 name: e2e partitioned / 4 partitions / keyed / 2p-2c / 1Kb
 

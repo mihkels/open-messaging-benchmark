@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
+
 name: 2000k rate 4 producers and 4 consumers on 500 topic
 
 topics: 500

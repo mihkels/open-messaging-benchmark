@@ -10,6 +10,8 @@ core/*.json
 *.json
 # Test fixtures, unlike benchmark results, belong in the repository
 !**/src/test/resources/**/*.json
+# Published JSON Schemas; YamlSchemaTest regenerates the workload and driver ones
+!/docs/reference/*-schema.json
 # Release and chart configuration
 !/release-please-config.json
 !/.release-please-manifest.json

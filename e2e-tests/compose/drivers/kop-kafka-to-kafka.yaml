@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
+
 name: KoP kafka producer and kafka consumer
 driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
 producerType: kafka

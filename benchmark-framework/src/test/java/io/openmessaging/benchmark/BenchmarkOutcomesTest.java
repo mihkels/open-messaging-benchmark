@@ -384,7 +384,9 @@ class BenchmarkOutcomesTest {
                         Benchmark.runWorkloads(
                                 arguments, Map.of("first", workload("first")), worker, (d, w, ignored) -> null))
                 .hasRootCauseMessage(
-                        "Driver configuration " + arguments.drivers.getFirst() + " must specify a name");
+                        "Invalid driver configuration "
+                                + arguments.drivers.getFirst()
+                                + ": required property 'name' not found");
         verify(worker, never()).initializeDriver(any());
     }
 
@@ -517,7 +519,7 @@ class BenchmarkOutcomesTest {
     void coordinatorMainExitsNonzeroAndKeepsExistingOutputWhenDriverFails() throws Exception {
         Benchmark.Arguments arguments = arguments();
         Path workload = directory.resolve("workload.yaml");
-        Files.writeString(workload, "name: workload\n");
+        Files.writeString(workload, WorkloadYaml.minimal("workload"));
         Path output = Path.of(arguments.output);
         Files.writeString(output, "previous successful result");
         String classpath =

@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
+
 name: Pravega
 driverClass: io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver
 client:

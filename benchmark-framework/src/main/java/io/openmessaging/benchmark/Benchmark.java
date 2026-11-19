@@ -64,6 +64,7 @@ import org.slf4j.MDC;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
@@ -232,6 +233,8 @@ public final class Benchmark {
         }
 
         Map<String, Workload> workloads = readWorkloads(arguments.workloads);
+        // Fail on a broken driver file before any workload runs
+        arguments.drivers.forEach(Benchmark::readDriverConfig);
         if (log.isInfoEnabled()) {
             log.info("Workloads: {}", writer.writeValueAsString(workloads));
         }
@@ -342,6 +345,13 @@ public final class Benchmark {
         }
     }
 
+    // A driver configuration file checked against the published driver schema
+    static Map<String, Object> readDriverConfig(String path) {
+        JsonNode document = mapper.readTree(new File(path));
+        YamlSchemas.validate(YamlSchemas.DRIVER, document, "Invalid driver configuration " + path);
+        return driverConfigReader.readValue(document);
+    }
+
     // Workloads keyed and ordered by file name without extension
     static Map<String, Workload> readWorkloads(List<String> paths) {
         Map<String, Workload> workloads = new TreeMap<>();
@@ -351,7 +361,9 @@ public final class Benchmark {
             int dot = fileName.lastIndexOf('.');
             String name = dot > 0 ? fileName.substring(0, dot) : fileName;
 
-            Workload workload = workloadReader.readValue(file);
+            JsonNode document = mapper.readTree(file);
+            YamlSchemas.validate(YamlSchemas.WORKLOAD, document, "Invalid workload " + path);
+            Workload workload = workloadReader.readValue(document);
             try {
                 if (workload.name == null || workload.name.isBlank()) {
                     throw new IllegalArgumentException("name is required");
@@ -641,7 +653,7 @@ public final class Benchmark {
             }
             boolean thresholdFailed = false;
             try {
-                String driverName = driverName(readDriverConfig(combination), combination);
+                String driverName = driverName(readDriverConfig(combination.driverConfig()), combination);
                 RepeatSummary summary = RepeatSummary.of(workload, driverName, repeat, runs);
                 log.info("Repetitions: {} of {} succeeded", summary.succeeded(), repeat);
                 thresholdFailed = printChecks(summary.findings(), summary.thresholds());
@@ -710,7 +722,7 @@ public final class Benchmark {
             TestResult writtenResult = null;
             String writtenFile = null;
             try {
-                Map<String, Object> driverConfig = readDriverConfig(combination);
+                Map<String, Object> driverConfig = readDriverConfig(combination.driverConfig());
                 String driverName = driverName(driverConfig, combination);
                 String runId = RunId.create();
                 Instant startedAt = Instant.now();
@@ -819,10 +831,6 @@ public final class Benchmark {
             }
             thresholds.print();
             return !thresholds.passed();
-        }
-
-        private static Map<String, Object> readDriverConfig(Combination combination) {
-            return driverConfigReader.readValue(new File(combination.driverConfig()));
         }
 
         private static String driverName(Map<String, Object> driverConfig, Combination combination) {
@@ -964,7 +972,7 @@ public final class Benchmark {
     private static final ObjectReader workersReader =
             mapper.readerFor(Workers.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectReader workloadReader =
-            mapper.readerFor(Workload.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+            mapper.readerFor(Workload.class).with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectReader driverConfigReader =
             mapper.readerFor(new TypeReference<Map<String, Object>>() {});
 

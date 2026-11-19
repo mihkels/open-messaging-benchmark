@@ -140,19 +140,20 @@ class WorkloadTest {
     @Test
     void loadingAWorkloadFileWithoutANameFailsWithTheMissingKey(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("unnamed.yaml");
-        Files.writeString(file, "topics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+        Files.writeString(
+                file, WorkloadYaml.COUNTS + "messageSize: 1024\nproducerRate: 1000\ntestDurationMinutes: 1\n");
 
         List<String> paths = List.of(file.toString());
 
         assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid workload " + file + ": name is required");
+                .hasMessage("Invalid workload " + file + ": required property 'name' not found");
     }
 
     @Test
     void workloadFilesWithTheSameNameInDifferentDirectoriesAreRejected(@TempDir Path dir)
             throws Exception {
-        String yaml = "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n";
+        String yaml = WorkloadYaml.minimal("example");
         Path a = Files.createDirectory(dir.resolve("a")).resolve("max-rate.yaml");
         Path b = Files.createDirectory(dir.resolve("b")).resolve("max-rate.yaml");
         Files.writeString(a, yaml);
@@ -168,7 +169,7 @@ class WorkloadTest {
     @Test
     void workloadFileWithoutExtensionIsKeyedByItsWholeName(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("plain");
-        Files.writeString(file, "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+        Files.writeString(file, WorkloadYaml.minimal("example"));
 
         assertThat(Benchmark.readWorkloads(List.of(file.toString()))).containsOnlyKeys("plain");
     }
@@ -176,7 +177,7 @@ class WorkloadTest {
     @Test
     void loadingANamedWorkloadFileKeysItByFileName(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("named.yaml");
-        Files.writeString(file, "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n");
+        Files.writeString(file, WorkloadYaml.minimal("example"));
 
         assertThat(Benchmark.readWorkloads(List.of(file.toString())))
                 .containsOnlyKeys("named")
@@ -189,7 +190,7 @@ class WorkloadTest {
         Path file = dir.resolve("nulls.yaml");
         Files.writeString(
                 file,
-                "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n"
+                WorkloadYaml.minimal("example")
                         + "keyDistributor: null\nstages: null\nmessageSizeDistribution: null\n");
 
         Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("nulls");
@@ -207,6 +208,10 @@ class WorkloadTest {
                 """
                 name: ramp
                 topics: 1
+                partitionsPerTopic: 1
+                subscriptionsPerTopic: 1
+                producersPerTopic: 1
+                consumerPerSubscription: 1
                 messageSize: 1024
                 stages:
                   - durationMinutes: 5
@@ -235,7 +240,14 @@ class WorkloadTest {
                 file,
                 """
                 name: compressible
+                topics: 1
+                partitionsPerTopic: 1
+                subscriptionsPerTopic: 1
+                producersPerTopic: 1
+                consumerPerSubscription: 1
                 messageSize: 1024
+                producerRate: 1000
+                testDurationMinutes: 1
                 payloadGenerator:
                   type: COMPRESSIBLE
                   targetCompressionRatio: 0.45
@@ -252,15 +264,7 @@ class WorkloadTest {
     @Test
     void loadsAWorkloadWithHeaders(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("headers.yaml");
-        Files.writeString(
-                file,
-                """
-                name: headers
-                messageSize: 1024
-                headers:
-                  count: 4
-                  valueSize: 64
-                """);
+        Files.writeString(file, WorkloadYaml.minimal("headers") + "headers:\n  count: 4\n  valueSize: 64\n");
 
         Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("headers");
 
@@ -270,17 +274,12 @@ class WorkloadTest {
     @Test
     void loadingHeadersWithoutAValueSizeFails(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("invalid.yaml");
-        Files.writeString(
-                file,
-                """
-                name: invalid
-                messageSize: 1024
-                headers:
-                  count: 4
-                """);
+        Files.writeString(file, WorkloadYaml.minimal("invalid") + "headers:\n  count: 4\n");
+        List<String> paths = List.of(file.toString());
 
-        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())))
-                .hasStackTraceContaining("headers requires count and valueSize");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'valueSize' not found");
     }
 
     @Test
@@ -290,7 +289,14 @@ class WorkloadTest {
                 file,
                 """
                 name: invalid
+                topics: 1
+                partitionsPerTopic: 1
+                subscriptionsPerTopic: 1
+                producersPerTopic: 1
+                consumerPerSubscription: 1
                 messageSize: 1024
+                producerRate: 1000
+                testDurationMinutes: 1
                 payloadGenerator:
                   type: COMPRESSIBLE
                   targetCompressionRatio: 1.5
@@ -355,6 +361,10 @@ class WorkloadTest {
                 """
                 name: pause
                 topics: 1
+                partitionsPerTopic: 1
+                subscriptionsPerTopic: 1
+                producersPerTopic: 1
+                consumerPerSubscription: 1
                 messageSize: 1024
                 producerRate: 1000
                 testDurationMinutes: 10

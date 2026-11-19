@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
+
 # Two topics, each read by two independent subscriptions (every message must arrive twice).
 name: e2e fan-out / 2 topics / 2 subscriptions / 100b
 

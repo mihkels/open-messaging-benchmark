@@ -12,6 +12,8 @@
 # limitations under the License.
 #
 
+# yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/workload-schema.json
+
 # Randomized 4Kb payloads (binary content, not compressible) through two consumers of one subscription.
 name: e2e random payload / 1 topic / 4Kb
 

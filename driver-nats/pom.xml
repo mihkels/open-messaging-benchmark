@@ -31,7 +31,7 @@
         <jacoco.min.method>0.58</jacoco.min.method>
         <jacoco.min.line>0.56</jacoco.min.line>
         <jacoco.min.branch>0.59</jacoco.min.branch>
-        <nats.version>2.26.4</nats.version>
+        <nats.version>2.27.0</nats.version>
     </properties>
 
     <dependencies>

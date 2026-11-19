@@ -292,8 +292,8 @@ The `package` module assembles:
 package/target/openmessaging-benchmark-<version>-bin.tar.gz
 ```
 
-`<version>` is the reactor version (the `revision` property in the root POM, currently
-`0.0.6`; release-please updates it, see [Releasing](releasing.md)). The assembly descriptor is
+`<version>` is the reactor version (the `revision` property in the root POM, which
+release-please updates; see [Releasing](releasing.md)). The assembly descriptor is
 [`package/src/assemble/bin.xml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/package/src/assemble/bin.xml).
 Prebuilt tarballs for the newest 10 releases are attached to the
 [GitHub releases](https://github.com/mihkels/open-messaging-benchmark/releases) together with a

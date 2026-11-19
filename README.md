@@ -32,8 +32,10 @@ Run a first benchmark against a single Kafka broker with Docker only:
 ```bash
 git clone https://github.com/mihkels/open-messaging-benchmark.git
 cd open-messaging-benchmark
-docker buildx bake                # or pull docker.io/mihkels/open-messaging-benchmark:latest
+docker buildx bake
 cd local-test && docker compose up -d
+# or skip the build and use the published image:
+# cd local-test && OMB_IMAGE=docker.io/mihkels/open-messaging-benchmark:latest docker compose up -d
 docker exec -it omb-driver bash -lc \
   'bin/benchmark --drivers /drivers/kafka.yaml \
      --workers https://omb-worker-1:8080,https://omb-worker-2:8080 \
@@ -41,14 +43,18 @@ docker exec -it omb-driver bash -lc \
 ```
 
 The [Quickstart](https://mihkels.github.io/open-messaging-benchmark/getting-started/quickstart/)
-explains each step, how to check that the environment is ready, and how to read the result.
+explains each step, how to check that the environment is ready, and how to read the result. To see
+the output without running anything, look at the committed
+[sample result](docs/demo/quickstart-result.json).
 To run any driver against its broker on a local kind cluster with the Helm chart, see
 [Local Kubernetes](https://mihkels.github.io/open-messaging-benchmark/guides/kubernetes-local/).
 
 ### From the binary distribution
 
-This README is also shipped in the distribution tarball. From its directory, with Java 27 and a
-reachable broker:
+Download `openmessaging-benchmark-<version>-bin.tar.gz` and `SHA256SUMS` from
+[GitHub Releases](https://github.com/mihkels/open-messaging-benchmark/releases), check it with
+`sha256sum -c SHA256SUMS` and unpack it. This README is also shipped in the tarball. From its
+directory, with Java 27 and a reachable broker:
 
 ```bash
 export OMB_WORKER_TOKEN=<shared-token>        # same on every worker and the coordinator

@@ -50,7 +50,6 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.exception.RemotingSendRequestException;
 import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.protocol.subscription.SubscriptionGroupConfig;
-import org.apache.rocketmq.shaded.commons.lang3.StringUtils;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
@@ -292,15 +291,11 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     }
 
     public boolean isAclEnabled() {
-        return !(StringUtils.isAnyBlank(this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey)
-                || StringUtils.isAnyEmpty(this.rmqClientConfig.accessKey, this.rmqClientConfig.secretKey));
+        return !rmqClientConfig.accessKey.isBlank() && !rmqClientConfig.secretKey.isBlank();
     }
 
     public boolean isAdminAclEnabled() {
-        return !(StringUtils.isAnyBlank(
-                        this.rmqClientConfig.adminAccessKey, this.rmqClientConfig.adminSecretKey)
-                || StringUtils.isAnyEmpty(
-                        this.rmqClientConfig.adminAccessKey, this.rmqClientConfig.adminSecretKey));
+        return !rmqClientConfig.adminAccessKey.isBlank() && !rmqClientConfig.adminSecretKey.isBlank();
     }
 
     @Override

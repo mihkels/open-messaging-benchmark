@@ -16,9 +16,6 @@ package io.openmessaging.benchmark.worker;
 import static java.util.Collections.unmodifiableList;
 import static java.util.stream.Collectors.joining;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.utils.ListPartition;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
@@ -58,15 +55,18 @@ public final class DistributedWorkersEnsemble implements Worker {
     private int totalProducers;
 
     public DistributedWorkersEnsemble(List<Worker> workers, boolean extraConsumerWorkers) {
-        Preconditions.checkArgument(workers.size() > 1, "At least two workers are required");
+        if (workers.size() < 2) {
+            throw new IllegalArgumentException("At least two workers are required");
+        }
 
         this.workers = unmodifiableList(workers);
         leader = workers.getFirst();
         int numberOfProducerWorkers = getNumberOfProducerWorkers(workers, extraConsumerWorkers);
-        List<List<Worker>> partitions =
-                Lists.partition(Lists.reverse(workers), workers.size() - numberOfProducerWorkers);
-        this.producerWorkers = partitions.get(1);
-        this.consumerWorkers = partitions.get(0);
+        // Producers come from the front of the list, consumers from the back
+        List<Worker> reversed = workers.reversed();
+        int numberOfConsumerWorkers = workers.size() - numberOfProducerWorkers;
+        this.producerWorkers = reversed.subList(numberOfConsumerWorkers, workers.size());
+        this.consumerWorkers = reversed.subList(0, numberOfConsumerWorkers);
 
         log.atInfo()
                 .setMessage("Workers list - producers: [{}]")
@@ -84,7 +84,6 @@ public final class DistributedWorkersEnsemble implements Worker {
      * For driver-jms extra consumers are required. If there is an odd number of workers then allocate the extra
      * to consumption.
      */
-    @VisibleForTesting
     static int getNumberOfProducerWorkers(List<Worker> workers, boolean extraConsumerWorkers) {
         return extraConsumerWorkers ? (workers.size() + 2) / 3 : workers.size() / 2;
     }

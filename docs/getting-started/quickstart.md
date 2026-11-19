@@ -45,7 +45,7 @@ docker buildx bake
 ```
 
 [`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)
-compiles the project inside a Maven container and produces a Java 27 (Eclipse Temurin) runtime
+compiles the project inside a Maven container and produces a Java 27 (Amazon Corretto) runtime
 image, `openmessaging-benchmark:local`, with the benchmark installed in `/benchmark`. The first
 build downloads all dependencies and takes several minutes; later builds reuse the Maven cache.
 `DRIVERS=kafka docker buildx bake` builds only the Kafka plugin and is faster. You can also pull

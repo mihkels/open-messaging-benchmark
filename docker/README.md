@@ -48,7 +48,7 @@ does not need the `.git` directory, so it also works from a linked Git worktree.
 | `builder` | `maven:3.10.0-eclipse-temurin-27`; builds the distribution tarball                                                                                                                 |
 | `dist`    | the tarball: `builder`, or a prebuilt one (`--build-arg DIST_SOURCE=prebuilt --build-context prebuilt=<dir with dist.tar.gz>`, used by CI to build every variant from one tarball) |
 | `extract` | unpacks the distribution, removes unselected drivers, makes the files read-only                                                                                                    |
-| `runtime` | `eclipse-temurin:27-jre`; the final image                                                                                                                                          |
+| `runtime` | `amazoncorretto:27-al2023-headless`; the final image, with bash, `dnf`, `ps` and `top`                                                                                             |
 
 Base images are pinned by digest and updated by Dependabot.
 

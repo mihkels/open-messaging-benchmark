@@ -327,7 +327,7 @@ part of the full build. Without `-Domb.selectDrivers` the `all-drivers` profile 
 
 [`docker/Dockerfile`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker/Dockerfile)
 is a single multi-stage BuildKit build: Maven compiles the distribution inside the build with the
-local Maven repository in a cache mount, and the runtime stage is Eclipse Temurin 27 running as a
+local Maven repository in a cache mount, and the runtime stage is Amazon Corretto 27 running as a
 non-root user. Build targets are in
 [`docker-bake.hcl`](https://github.com/mihkels/open-messaging-benchmark/blob/main/docker-bake.hcl):
 

@@ -18,6 +18,7 @@ import io.openmessaging.benchmark.driver.Failures;
 import io.openmessaging.benchmark.driver.ResourceCreationCompletion;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 
 final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFuture<T>
         implements AbandonableCreation, ResourceCreationCompletion {
@@ -30,7 +31,7 @@ final class MqttCreationFuture<T extends AutoCloseable> extends CompletableFutur
     private boolean cleanupStarted;
     private boolean handoffStarted;
     private boolean disconnectedBeforeHandoff;
-    private Throwable cleanupFailure;
+    private @Nullable Throwable cleanupFailure;
 
     MqttCreationFuture(T resource) {
         this.resource = resource;

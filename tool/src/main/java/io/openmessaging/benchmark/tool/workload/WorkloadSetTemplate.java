@@ -65,7 +65,7 @@ public record WorkloadSetTemplate(
         long consumerBacklogSizeGB,
         int testDurationMinutes,
         int warmupDurationMinutes,
-        @Nullable List<Workload.Stage> stages) {
+        List<Workload.Stage> stages) {
 
     public static final String DEFAULT_NAME_TEMPLATE =
             "${topics}-topics-${partitionsPerTopic}-partitions-${messageSize}b"
@@ -114,7 +114,7 @@ public record WorkloadSetTemplate(
         this.consumerBacklogSizeGB = consumerBacklogSizeGB;
         this.testDurationMinutes = testDurationMinutes;
         this.warmupDurationMinutes = warmupDurationMinutes;
-        this.stages = stages != null ? List.copyOf(stages) : null;
+        this.stages = stages != null ? List.copyOf(stages) : List.of();
     }
 
     // Jackson creator: boxed scalars let fields missing from the template fall back to the defaults
@@ -138,7 +138,7 @@ public record WorkloadSetTemplate(
             @JsonProperty("consumerBacklogSizeGB") Long consumerBacklogSizeGB,
             @JsonProperty("testDurationMinutes") Integer testDurationMinutes,
             @JsonProperty("warmupDurationMinutes") Integer warmupDurationMinutes,
-            @JsonProperty("stages") List<Workload.Stage> stages) {
+            @JsonProperty("stages") @Nullable List<Workload.Stage> stages) {
         return new WorkloadSetTemplate(
                 nameFormat != null ? nameFormat : DEFAULT_NAME_TEMPLATE,
                 topics,

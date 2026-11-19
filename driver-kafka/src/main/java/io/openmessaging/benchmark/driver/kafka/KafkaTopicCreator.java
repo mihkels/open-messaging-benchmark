@@ -34,6 +34,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,7 +122,7 @@ class KafkaTopicCreator {
                 return true;
             }
 
-            void finish(Throwable error) {
+            void finish(@Nullable Throwable error) {
                 synchronized (this) {
                     if (terminal) {
                         return;
@@ -157,9 +158,7 @@ class KafkaTopicCreator {
 
     // Package-private so tests can drive the retry path synchronously.
     void createWithRetry(List<TopicInfo> topicInfos) {
-        RuntimeException lastException = null;
-
-        for (int attempt = 1; attempt <= MAX_CREATION_ATTEMPTS; attempt++) {
+        for (int attempt = 1; ; attempt++) {
             try {
                 log.info("Topic creation attempt {}/{}", attempt, MAX_CREATION_ATTEMPTS);
                 createBlocking(topicInfos);
@@ -171,28 +170,26 @@ class KafkaTopicCreator {
                 if (interrupted(e)) {
                     throw e;
                 }
-                lastException = e;
                 log.warn(
                         "Topic creation attempt {}/{} failed: {}",
                         attempt,
                         MAX_CREATION_ATTEMPTS,
                         e.getMessage());
 
-                // Before retrying, check if topics were actually created
-                if (attempt < MAX_CREATION_ATTEMPTS) {
-                    if (allTopicsExist(topicInfos)) {
-                        return;
-                    }
-                    sleepBeforeRetry(attempt);
+                if (attempt == MAX_CREATION_ATTEMPTS) {
+                    throw new RuntimeException(
+                            String.format(
+                                    "Failed to create topics after %d attempts. Last error: %s",
+                                    MAX_CREATION_ATTEMPTS, e.getMessage()),
+                            e);
                 }
+                // Before retrying, check if topics were actually created
+                if (allTopicsExist(topicInfos)) {
+                    return;
+                }
+                sleepBeforeRetry(attempt);
             }
         }
-
-        throw new RuntimeException(
-                String.format(
-                        "Failed to create topics after %d attempts. Last error: %s",
-                        MAX_CREATION_ATTEMPTS, lastException.getMessage()),
-                lastException);
     }
 
     // Whether this thread was interrupted or failure is an interruption; restores the interrupt flag.
@@ -347,7 +344,7 @@ class KafkaTopicCreator {
     }
 
     private static final class FatalTopicCreationException extends RuntimeException {
-        FatalTopicCreationException(Throwable cause) {
+        FatalTopicCreationException(@Nullable Throwable cause) {
             super("Topic creation failed with a non-retriable error: " + cause, cause);
         }
     }

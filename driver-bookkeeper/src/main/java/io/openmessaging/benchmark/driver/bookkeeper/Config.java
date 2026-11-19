@@ -13,9 +13,11 @@
  */
 package io.openmessaging.benchmark.driver.bookkeeper;
 
+import org.jspecify.annotations.Nullable;
+
 public class Config {
 
-    public String dlogUri;
+    public @Nullable String dlogUri;
 
-    public String dlogConf;
+    public String dlogConf = "";
 }

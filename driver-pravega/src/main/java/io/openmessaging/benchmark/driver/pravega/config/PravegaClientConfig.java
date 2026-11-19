@@ -17,12 +17,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 public record PravegaClientConfig(String controllerURI, String scopeName) {
 
     // Use a static factory method as the creator, which takes a map.
     @JsonCreator
-    public static PravegaClientConfig fromMap(Map<String, Object> properties) {
+    public static PravegaClientConfig fromMap(@Nullable Map<String, Object> properties) {
         if (properties == null) {
             properties = Collections.emptyMap();
         }

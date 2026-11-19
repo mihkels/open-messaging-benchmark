@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Tracks one consumer's channels on a driver-owned event loop. This also captures channels created
@@ -46,8 +47,8 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     private final Map<Channel, CloseRequest> closing = new HashMap<>();
     private final Promise<Void> termination = ImmediateEventExecutor.INSTANCE.newPromise();
     private CompletableFuture<Void> pendingCloses = CompletableFuture.completedFuture(null);
-    private Throwable cleanupFailure;
-    private Set<Channel> attempt;
+    private @Nullable Throwable cleanupFailure;
+    private @Nullable Set<Channel> attempt;
     private boolean accepting = true;
 
     NsqEventLoopGroup(EventLoopGroup delegate) {
@@ -88,7 +89,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         }
     }
 
-    Throwable cleanupFailure() {
+    @Nullable Throwable cleanupFailure() {
         synchronized (lock) {
             return cleanupFailure;
         }
@@ -133,7 +134,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         return registerChannel(channel, promise);
     }
 
-    private ChannelFuture registerChannel(Channel channel, ChannelPromise promise) {
+    private ChannelFuture registerChannel(Channel channel, @Nullable ChannelPromise promise) {
         Registration registration;
         synchronized (lock) {
             registration =
@@ -153,7 +154,8 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         return registration.future();
     }
 
-    private static Registration rejectedRegistration(Channel channel, ChannelPromise promise) {
+    private static Registration rejectedRegistration(
+            Channel channel, @Nullable ChannelPromise promise) {
         ChannelPromise rejectedPromise =
                 promise == null
                         ? new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE)
@@ -164,7 +166,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
                 true);
     }
 
-    private Registration delegateRegistration(Channel channel, ChannelPromise promise) {
+    private Registration delegateRegistration(Channel channel, @Nullable ChannelPromise promise) {
         try {
             return new Registration(
                     promise == null ? delegate.register(channel) : delegate.register(promise), null, false);
@@ -179,7 +181,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     }
 
     // Returns the registration failure to report: the delegate's, else a failure to watch for close.
-    private Throwable watchClose(Channel channel, Throwable registrationFailure) {
+    private @Nullable Throwable watchClose(Channel channel, @Nullable Throwable registrationFailure) {
         try {
             channel.closeFuture().addListener(ignored -> channelClosed(channel));
         } catch (RuntimeException | Error failure) {
@@ -192,7 +194,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
     }
 
     private ChannelFuture abandonRegistration(
-            Channel channel, ChannelFuture registration, Throwable registrationFailure) {
+            Channel channel, ChannelFuture registration, @Nullable Throwable registrationFailure) {
         requestClose(channel);
         if (registrationFailure == null) {
             return registration;
@@ -291,7 +293,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         }
     }
 
-    private void forceClose(Channel channel, CloseRequest request, Throwable failure) {
+    private void forceClose(Channel channel, CloseRequest request, @Nullable Throwable failure) {
         if (failure != null) {
             recordCleanupFailure(failure);
         }
@@ -303,7 +305,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         finishClose(channel, request, null);
     }
 
-    private void finishClose(Channel channel, CloseRequest request, Throwable failure) {
+    private void finishClose(Channel channel, CloseRequest request, @Nullable Throwable failure) {
         if (failure != null) {
             forceClose(channel, request, failure);
             return;
@@ -327,7 +329,8 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         completeTerminationIfClosed();
     }
 
-    private CompletableFuture<Void> finishCloseRequest(Channel channel, CloseRequest request) {
+    private @Nullable CompletableFuture<Void> finishCloseRequest(
+            Channel channel, @Nullable CloseRequest request) {
         if (request != null && request.closed && request.settled) {
             closing.remove(channel);
             if (closing.isEmpty()) {
@@ -347,7 +350,7 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         }
     }
 
-    private static Throwable closeFailure(Throwable cause) {
+    private static Throwable closeFailure(@Nullable Throwable cause) {
         return cause == null ? new IllegalStateException("NSQ channel close failed") : cause;
     }
 
@@ -413,7 +416,8 @@ final class NsqEventLoopGroup extends AbstractEventExecutorGroup implements Even
         return termination.await(timeout, unit);
     }
 
-    private record Registration(ChannelFuture future, Throwable failure, boolean rejected) {}
+    private record Registration(
+            ChannelFuture future, @Nullable Throwable failure, boolean rejected) {}
 
     private static final class CloseRequest {
         private boolean closed;

@@ -13,13 +13,16 @@
  */
 package io.openmessaging.benchmark.driver.redis.client;
 
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import org.jspecify.annotations.Nullable;
+
 public class RedisClientConfig {
-    public String redisHost;
-    public String redisUser;
-    public String redisPass;
-    public Integer redisPort;
-    public Integer jedisPoolMaxTotal;
-    public Integer jedisPoolMaxIdle;
+    public @Nullable String redisHost;
+    public @Nullable String redisUser;
+    public @Nullable String redisPass;
+    public @Nullable Integer redisPort;
+    public int jedisPoolMaxTotal = GenericObjectPoolConfig.DEFAULT_MAX_TOTAL;
+    public int jedisPoolMaxIdle = GenericObjectPoolConfig.DEFAULT_MAX_IDLE;
     // Approximate MAXLEN for each stream; bounds Redis memory on long runs
     public long redisStreamMaxLen = 1_000_000;
 }

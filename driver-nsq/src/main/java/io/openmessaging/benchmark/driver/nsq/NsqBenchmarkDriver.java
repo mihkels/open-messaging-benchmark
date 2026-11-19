@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,12 +53,17 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private NsqConfig config;
-    private EventLoopGroup consumerEventLoops;
+    private String nsqdHost;
+    private @Nullable EventLoopGroup consumerEventLoops;
     private boolean closed;
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         config = DriverConfigs.read(configurationFile, NsqConfig.class);
+        if (config.nsqdHost == null) {
+            throw new IllegalArgumentException("NSQ config needs nsqdHost");
+        }
+        nsqdHost = config.nsqdHost;
         checkPort("nsqdHttpPort", config.nsqdHttpPort);
         checkPort("nsqdTcpPort", config.nsqdTcpPort);
         checkPort("lookupHttpPort", config.lookupHttpPort);
@@ -81,13 +87,13 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         log.info(
                 "Creating topic {} on nsqd {}:{} (partitions are ignored)",
                 topic,
-                config.nsqdHost,
+                nsqdHost,
                 config.nsqdHttpPort);
         HttpRequest request =
                 HttpRequest.newBuilder(
                                 URI.create(
                                         "http://"
-                                                + config.nsqdHost
+                                                + nsqdHost
                                                 + ":"
                                                 + config.nsqdHttpPort
                                                 + "/topic/create?topic="
@@ -114,7 +120,7 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         NSQProducer nsqProducer = null;
         try {
             nsqProducer = newProducer();
-            nsqProducer.addAddress(config.nsqdHost, config.nsqdTcpPort);
+            nsqProducer.addAddress(nsqdHost, config.nsqdTcpPort);
             nsqProducer.start();
             log.info("start a nsq producer");
             return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
@@ -135,12 +141,18 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
     @SuppressWarnings("UndefinedEquals")
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        // Only consumers need lookupHost, so producer-only runs may leave it out
+        String lookupHost = config.lookupHost;
+        if (lookupHost == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("NSQ config needs lookupHost"));
+        }
         NsqBenchmarkConsumer consumer = null;
         NsqEventLoopGroup scope = null;
         try {
             NsqLookup lookup =
-                    new NsqLookup(httpClient, Duration.ofSeconds(3), config.nsqdHost, config.nsqdHttpPort);
-            lookup.addLookupAddress(config.lookupHost, config.lookupHttpPort);
+                    new NsqLookup(httpClient, Duration.ofSeconds(3), nsqdHost, config.nsqdHttpPort);
+            lookup.addLookupAddress(lookupHost, config.lookupHttpPort);
             scope = new NsqEventLoopGroup(consumerEventLoops());
             consumer = newConsumer(lookup, topic, subscriptionName, consumerCallback, scope);
             CompletableFuture<BenchmarkConsumer> creation;
@@ -200,8 +212,9 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
         if (closed) {
             throw new IllegalStateException(CLOSED_MESSAGE);
         }
-        if (consumerEventLoops == null) {
-            consumerEventLoops =
+        EventLoopGroup eventLoops = consumerEventLoops;
+        if (eventLoops == null) {
+            eventLoops =
                     new MultiThreadIoEventLoopGroup(
                             0,
                             task -> {
@@ -210,8 +223,9 @@ public class NsqBenchmarkDriver implements BenchmarkDriver {
                                 return thread;
                             },
                             NioIoHandler.newFactory());
+            consumerEventLoops = eventLoops;
         }
-        return consumerEventLoops;
+        return eventLoops;
     }
 
     @Override

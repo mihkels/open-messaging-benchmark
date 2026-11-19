@@ -13,6 +13,8 @@
  */
 package io.openmessaging.benchmark.driver;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -20,11 +22,15 @@ import java.nio.file.Path;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
-import tools.jackson.dataformat.yaml.YAMLFactory;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 /** Reads driver configuration files. */
 public final class DriverConfigs {
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    // Explicit YAML nulls ("key: null") keep the field default instead of breaking non-null fields
+    private static final ObjectMapper mapper =
+            YAMLMapper.builder()
+                    .changeDefaultNullHandling(n -> JsonSetter.Value.forValueNulls(Nulls.SKIP))
+                    .build();
 
     private DriverConfigs() {}
 

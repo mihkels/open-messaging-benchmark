@@ -31,31 +31,38 @@ import org.apache.activemq.artemis.api.core.client.ActiveMQClient;
 import org.apache.activemq.artemis.api.core.client.ClientSession;
 import org.apache.activemq.artemis.api.core.client.ClientSessionFactory;
 import org.apache.activemq.artemis.api.core.client.ServerLocator;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ArtemisBenchmarkDriver implements BenchmarkDriver {
-    private ServerLocator serverLocator;
-    private ClientSessionFactory sessionFactory;
-    private ClientSession session;
+    private @Nullable ServerLocator serverLocator;
+    private @Nullable ClientSessionFactory sessionFactory;
+    private @Nullable ClientSession session;
 
     @Override
     public synchronized void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException {
         ArtemisConfig config = readConfig(configurationFile);
+        String brokerAddress = config.brokerAddress;
+        if (brokerAddress == null) {
+            throw new IllegalArgumentException("Artemis config needs brokerAddress");
+        }
         try {
-            serverLocator = ActiveMQClient.createServerLocator(config.brokerAddress);
+            ServerLocator locator = ActiveMQClient.createServerLocator(brokerAddress);
+            serverLocator = locator;
             // confirmation window size is in bytes, set to 1MB
-            serverLocator.setConfirmationWindowSize(1024 * 1024);
+            locator.setConfirmationWindowSize(1024 * 1024);
             // use asynchronous sending of messages where SendAcknowledgementHandler reports
             // success/failure
-            serverLocator.setBlockOnDurableSend(false);
-            serverLocator.setBlockOnNonDurableSend(false);
+            locator.setBlockOnDurableSend(false);
+            locator.setBlockOnNonDurableSend(false);
             // use async acknowledgement
-            serverLocator.setBlockOnAcknowledge(false);
+            locator.setBlockOnAcknowledge(false);
 
-            sessionFactory = serverLocator.createSessionFactory();
-            session = sessionFactory.createSession();
+            ClientSessionFactory factory = locator.createSessionFactory();
+            sessionFactory = factory;
+            session = factory.createSession();
         } catch (Exception e) {
             try {
                 close();
@@ -80,6 +87,10 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
                     new IllegalArgumentException("Partitions are not supported in Artemis"));
         }
 
+        ClientSession session = this.session;
+        if (session == null) {
+            return CompletableFuture.failedFuture(notInitialized());
+        }
         try {
             return CompletableFuture.runAsync(() -> {
                 try {
@@ -95,6 +106,10 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        ClientSessionFactory sessionFactory = this.sessionFactory;
+        if (sessionFactory == null) {
+            return CompletableFuture.failedFuture(notInitialized());
+        }
         try {
             return CompletableFuture.completedFuture(
                     ArtemisBenchmarkProducer.create(topic, sessionFactory));
@@ -107,6 +122,11 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         CompletableFuture<BenchmarkConsumer> future = new CompletableFuture<>();
+        ClientSessionFactory sessionFactory = this.sessionFactory;
+        if (sessionFactory == null) {
+            future.completeExceptionally(notInitialized());
+            return future;
+        }
         try {
             CompletableFuture.runAsync(
                             () -> {
@@ -132,6 +152,10 @@ public class ArtemisBenchmarkDriver implements BenchmarkDriver {
         }
 
         return future;
+    }
+
+    private static IllegalStateException notInitialized() {
+        return new IllegalStateException("Artemis driver is not initialized or already closed");
     }
 
     static void closeUntransferred(BenchmarkConsumer consumer) {

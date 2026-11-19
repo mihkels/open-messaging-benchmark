@@ -14,6 +14,7 @@
 package io.openmessaging.benchmark.driver.bookkeeper;
 
 import io.openmessaging.benchmark.driver.Failures;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thread-safe {@link Failures} that retains the first failure and subsequent cleanup failures,
@@ -27,7 +28,7 @@ final class DlogFailures {
         failures.addRestoringInterrupt(failure);
     }
 
-    synchronized Throwable first() {
+    synchronized @Nullable Throwable first() {
         return failures.failure();
     }
 

@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,13 +133,14 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     private volatile boolean closed;
     private boolean started;
     private boolean ready;
-    private Thread closingThread;
-    private volatile Throwable lastConnectionFailure;
-    private volatile Throwable startupFailure;
-    private NSQConfig connectionConfig;
-    private NSQConsumer dispatcher;
-    private ScheduledFuture<?> deadline;
-    private ScheduledFuture<?> refresh;
+    private @Nullable Thread closingThread;
+    private volatile @Nullable Throwable lastConnectionFailure;
+    private volatile @Nullable Throwable startupFailure;
+    // Built on the connector thread, since NSQConfig resolves the local host name
+    private @Nullable NSQConfig connectionConfig;
+    private @Nullable NSQConsumer dispatcher;
+    private @Nullable ScheduledFuture<?> deadline;
+    private @Nullable ScheduledFuture<?> refresh;
 
     NsqBenchmarkConsumer(
             NSQLookup lookup,
@@ -305,9 +307,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             return false;
         } catch (SubscriptionRejected failure) {
             for (Throwable cleanupFailure : failure.getSuppressed()) {
-                failure.getCause().addSuppressed(cleanupFailure);
+                failure.reason.addSuppressed(cleanupFailure);
             }
-            failStartup(failure.getCause());
+            failStartup(failure.reason);
             return true;
         }
     }
@@ -395,7 +397,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             if (initial) {
                 throw failure;
             }
-            log.warn("NSQ subscription rejected by {}", address, failure.getCause());
+            log.warn("NSQ subscription rejected by {}", address, failure.reason);
         } catch (InterruptedException interrupted) {
             throw interrupted;
         } catch (Exception failure) {
@@ -445,6 +447,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             }
             config = connectionConfig;
             consumer = dispatcher;
+        }
+        if (config == null || consumer == null) {
+            throw new IllegalStateException("NSQ consumer connected before it was initialized");
         }
         Connection connection;
         List<Channel> attemptChannels;
@@ -523,7 +528,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
     // attempt's channels. A close failure is rethrown only when there is no primary failure to
     // attach it to, and never before the channels are released.
     private void releaseAttempt(
-            Connection connection, List<Channel> attemptChannels, Throwable failure) {
+            Connection connection, List<Channel> attemptChannels, @Nullable Throwable failure) {
         boolean stillOwned;
         synchronized (lock) {
             stillOwned = connecting.remove(connection);
@@ -561,7 +566,9 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                             settings.lookupPeriodMillis(),
                             TimeUnit.MILLISECONDS);
             ready = true;
-            deadline.cancel(false);
+            if (deadline != null) {
+                deadline.cancel(false);
+            }
         }
         creation.complete(this);
     }
@@ -615,7 +622,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private Closing beginClose(boolean onlyStarting, Throwable failure) {
+    private @Nullable Closing beginClose(boolean onlyStarting, Throwable failure) {
         synchronized (lock) {
             if (closed || (onlyStarting && ready)) {
                 return null;
@@ -803,7 +810,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static Throwable startClose(Connection connection) {
+    private static @Nullable Throwable startClose(Connection connection) {
         try {
             if (!connection.isConnected()) {
                 return null;
@@ -814,7 +821,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static Throwable startCloseFailure(NSQFrame response) {
+    private static @Nullable Throwable startCloseFailure(@Nullable NSQFrame response) {
         if (response instanceof ErrorFrame error && error.getErrorMessage().startsWith("E_INVALID")) {
             return new IllegalStateException(error.getErrorMessage());
         }
@@ -875,7 +882,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void cleanup(Runnable action, Throwable failure) {
+    private void cleanup(Runnable action, @Nullable Throwable failure) {
         try {
             action.run();
         } catch (Throwable closeFailure) {
@@ -890,7 +897,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void recordCleanupFailure(Throwable failure, Throwable primary) {
+    private void recordCleanupFailure(@Nullable Throwable failure, @Nullable Throwable primary) {
         if (failure == null) {
             return;
         }
@@ -905,7 +912,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private Throwable cleanupOutcome() {
+    private @Nullable Throwable cleanupOutcome() {
         synchronized (cleanupLock) {
             Failures outcome = new Failures();
             cleanupFailures.forEach(outcome::add);
@@ -913,7 +920,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static void complete(CompletableFuture<Void> future, Throwable failure) {
+    private static void complete(CompletableFuture<Void> future, @Nullable Throwable failure) {
         if (failure == null) {
             future.complete(null);
         } else {
@@ -921,7 +928,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static ThreadFactory daemonFactory(String name, AtomicReference<Thread> reference) {
+    private static ThreadFactory daemonFactory(
+            String name, @Nullable AtomicReference<Thread> reference) {
         return task -> {
             Thread thread = new Thread(task, name);
             thread.setDaemon(true);
@@ -1002,8 +1010,11 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
             List<Connection> active, List<Connection> connecting, boolean ready, boolean neverStarted) {}
 
     private static final class SubscriptionRejected extends Exception {
+        private final Throwable reason;
+
         private SubscriptionRejected(Throwable cause) {
             super(cause);
+            reason = cause;
         }
     }
 }

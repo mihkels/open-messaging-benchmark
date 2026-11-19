@@ -13,10 +13,12 @@
  */
 package io.openmessaging.benchmark.driver.nsq;
 
+import org.jspecify.annotations.Nullable;
+
 public class NsqConfig {
-    public String nsqdHost;
+    public @Nullable String nsqdHost;
     public int nsqdHttpPort = 4151;
     public int nsqdTcpPort = 4150;
     public int lookupHttpPort = 4161;
-    public String lookupHost;
+    public @Nullable String lookupHost;
 }

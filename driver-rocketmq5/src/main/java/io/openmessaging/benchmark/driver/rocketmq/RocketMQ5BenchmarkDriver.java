@@ -55,19 +55,31 @@ import org.apache.rocketmq.shaded.commons.lang3.StringUtils;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
+import org.jspecify.annotations.Nullable;
 
 public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     private RocketMQClient5Config rmqClientConfig;
-    private DefaultMQAdminExt rmqAdmin;
+    private String grpcEndpoint;
+    private String clusterName;
+    private @Nullable DefaultMQAdminExt rmqAdmin;
 
     @Override
     public synchronized void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
-        if (rmqClientConfig.sendDelayMsg
-                && (rmqClientConfig.delayTimeInSec == null || rmqClientConfig.delayTimeInSec <= 0)) {
+        if (rmqClientConfig.sendDelayMsg && rmqClientConfig.delayTimeInSec <= 0) {
             throw new IllegalArgumentException("delayTimeInSec must be > 0 when sendDelayMsg is true");
         }
+        String configuredEndpoint = rmqClientConfig.grpcEndpoint;
+        if (configuredEndpoint == null) {
+            throw new IllegalArgumentException("RocketMQ5 config needs grpcEndpoint");
+        }
+        String configuredCluster = rmqClientConfig.clusterName;
+        if (configuredCluster == null) {
+            throw new IllegalArgumentException("RocketMQ5 config needs clusterName");
+        }
+        this.grpcEndpoint = configuredEndpoint;
+        this.clusterName = configuredCluster;
         RPCHook rpcHook = null;
         if (isAdminAclEnabled()) {
             rpcHook =
@@ -90,7 +102,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
         this.rmqAdmin = admin;
     }
 
-    DefaultMQAdminExt newAdmin(RPCHook hook) {
+    DefaultMQAdminExt newAdmin(@Nullable RPCHook hook) {
         return hook == null ? new DefaultMQAdminExt() : new DefaultMQAdminExt(hook);
     }
 
@@ -111,8 +123,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
         if (cached != null) {
             return cached;
         }
-        Set<String> brokerList =
-                CommandUtil.fetchMasterAddrByClusterName(adminExt, this.rmqClientConfig.clusterName);
+        Set<String> brokerList = CommandUtil.fetchMasterAddrByClusterName(adminExt, this.clusterName);
         if (brokerList.isEmpty()) {
             throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
         }
@@ -126,12 +137,13 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
     }
 
     // Masters only: slaves sync topic config from their master.
-    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+    private static void createOnMasters(
+            MQAdminExt admin, String[] masters, TopicConfig topicConfig, int partitions)
             throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
         for (int i = 0; i < Math.min(partitions, masters.length); i++) {
             topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
             topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
-            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+            admin.createAndUpdateTopicConfig(masters[i], topicConfig);
         }
     }
 
@@ -157,25 +169,29 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
             topicConfig.setAttributes(properties);
 
             try {
+                DefaultMQAdminExt admin = admin();
                 String[] masters =
-                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
-                                .toArray(String[]::new);
-                createOnMasters(masters, topicConfig, partitions);
+                        fetchMasterAddrByClusterName(admin, this.clusterName).toArray(String[]::new);
+                createOnMasters(admin, masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
-                        String.format(
-                                "Failed to create topic [%s] to cluster [%s]",
-                                topic, this.rmqClientConfig.clusterName),
+                        String.format("Failed to create topic [%s] to cluster [%s]", topic, this.clusterName),
                         e);
             } catch (Exception e) {
                 throw new RuntimeException(
-                        String.format(
-                                "Failed to create topic [%s] to cluster [%s]",
-                                topic, this.rmqClientConfig.clusterName),
+                        String.format("Failed to create topic [%s] to cluster [%s]", topic, this.clusterName),
                         e);
             }
         });
+    }
+
+    private synchronized DefaultMQAdminExt admin() {
+        DefaultMQAdminExt admin = rmqAdmin;
+        if (admin == null) {
+            throw new IllegalStateException("RocketMQ5 driver is closed");
+        }
+        return admin;
     }
 
     @Override
@@ -183,7 +199,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
         try {
             ClientServiceProvider provider = clientProvider();
             ClientConfigurationBuilder builder =
-                    ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
+                    ClientConfiguration.newBuilder().setEndpoints(this.grpcEndpoint);
             if (isAclEnabled()) {
                 builder.setCredentialProvider(
                         new StaticSessionCredentialsProvider(
@@ -209,26 +225,24 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
     public void createSubscriptionGroup(String fullSubName) {
         try {
-            Set<String> brokerList =
-                    fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName);
+            DefaultMQAdminExt admin = admin();
+            Set<String> brokerList = fetchMasterAddrByClusterName(admin, this.clusterName);
             SubscriptionGroupConfig subscriptionGroupConfig = new SubscriptionGroupConfig();
             subscriptionGroupConfig.setGroupName(fullSubName);
 
             for (String brokerAddr : brokerList) {
-                this.rmqAdmin.createAndUpdateSubscriptionGroupConfig(brokerAddr, subscriptionGroupConfig);
+                admin.createAndUpdateSubscriptionGroupConfig(brokerAddr, subscriptionGroupConfig);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException(
                     String.format(
-                            "Failed to create subscription [%s] to cluster [%s]",
-                            fullSubName, this.rmqClientConfig.clusterName),
+                            "Failed to create subscription [%s] to cluster [%s]", fullSubName, this.clusterName),
                     e);
         } catch (Exception e) {
             throw new RuntimeException(
                     String.format(
-                            "Failed to create subscription [%s] to cluster [%s]",
-                            fullSubName, this.rmqClientConfig.clusterName),
+                            "Failed to create subscription [%s] to cluster [%s]", fullSubName, this.clusterName),
                     e);
         }
     }
@@ -249,7 +263,7 @@ public class RocketMQ5BenchmarkDriver implements BenchmarkDriver {
 
             ClientServiceProvider provider = clientProvider();
             ClientConfigurationBuilder builder =
-                    ClientConfiguration.newBuilder().setEndpoints(this.rmqClientConfig.grpcEndpoint);
+                    ClientConfiguration.newBuilder().setEndpoints(this.grpcEndpoint);
             if (isAclEnabled()) {
                 builder.setCredentialProvider(
                         new StaticSessionCredentialsProvider(

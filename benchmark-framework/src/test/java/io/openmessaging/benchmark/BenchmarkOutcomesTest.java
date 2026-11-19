@@ -179,14 +179,12 @@ class BenchmarkOutcomesTest {
     @Test
     void preservesCleanupFailureAfterAnUnexpectedCoordinatorFailure() throws Exception {
         Benchmark.Arguments arguments = arguments();
-        arguments.drivers = null;
         Worker worker = mock(Worker.class);
         doThrow(new IOException("worker close failed")).when(worker).close();
 
         Throwable failure =
-                catchThrowable(() ->
-                        Benchmark.runWorkloads(
-                                arguments, Map.of("first", workload("first")), worker, (d, w, ignored) -> null));
+                catchThrowable(
+                        () -> Benchmark.runWorkloads(arguments, null, worker, (d, w, ignored) -> null));
         assertThat(messages(failure)).contains("worker close failed");
         assertThat(failure).hasCauseInstanceOf(NullPointerException.class);
         verify(worker).close();

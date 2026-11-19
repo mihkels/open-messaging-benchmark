@@ -27,6 +27,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.rocketmq.client.apis.ClientException;
@@ -111,6 +113,31 @@ class RocketMQ5BenchmarkDriverTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("delayTimeInSec");
         verify(driver.admin, times(0)).start();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"'clusterName: c1\n', grpcEndpoint", "'grpcEndpoint: localhost:8081\n', clusterName"})
+    void initializationRequiresEndpointAndCluster(String present, String missing, @TempDir Path dir)
+            throws Exception {
+        Path config = dir.resolve("rocketmq.yaml");
+        Files.writeString(config, "namesrvAddr: localhost:9876\n" + present);
+        TestDriver driver = new TestDriver();
+        assertThatThrownBy(() -> driver.initialize(config, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("RocketMQ5 config needs " + missing);
+        verify(driver.admin, times(0)).start();
+    }
+
+    @Test
+    void closedDriverFailsTopicCreation() throws Exception {
+        TestDriver driver = new TestDriver();
+        driver.initialize(configPath(), null);
+        driver.close();
+        assertThat(driver.createTopic("topic", 1))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableOfType(ExecutionException.class)
+                .havingRootCause()
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

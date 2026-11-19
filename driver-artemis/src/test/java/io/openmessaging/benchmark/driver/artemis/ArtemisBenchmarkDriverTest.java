@@ -33,6 +33,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.apache.activemq.artemis.api.core.ActiveMQException;
 import org.apache.activemq.artemis.api.core.RoutingType;
@@ -188,6 +189,35 @@ class ArtemisBenchmarkDriverTest {
         assertThat(cause.getSuppressed()).containsExactly(closeFailure);
         verify(factory).close();
         verify(locator).close();
+    }
+
+    @Test
+    void initializationRequiresABrokerAddress(@TempDir Path temp) throws Exception {
+        Path configuration = temp.resolve("artemis.yaml");
+        Files.writeString(configuration, "{}\n");
+
+        assertThatThrownBy(
+                        () -> new ArtemisBenchmarkDriver().initialize(configuration, mock(MeterRegistry.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Artemis config needs brokerAddress");
+    }
+
+    @Test
+    void uninitializedDriverFailsEveryCreation() {
+        ArtemisBenchmarkDriver driver = new ArtemisBenchmarkDriver();
+
+        assertThat(driver.createTopic("topic", 1))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableOfType(ExecutionException.class)
+                .withCauseInstanceOf(IllegalStateException.class);
+        assertThat(driver.createProducer("topic"))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableOfType(ExecutionException.class)
+                .withCauseInstanceOf(IllegalStateException.class);
+        assertThat(driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class)))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableOfType(ExecutionException.class)
+                .withCauseInstanceOf(IllegalStateException.class);
     }
 
     private static void setField(ArtemisBenchmarkDriver driver, String name, Object value)

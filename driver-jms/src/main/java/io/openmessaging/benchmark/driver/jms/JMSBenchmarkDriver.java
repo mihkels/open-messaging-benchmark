@@ -46,10 +46,10 @@ import tools.jackson.databind.ObjectMapper;
 
 public class JMSBenchmarkDriver implements BenchmarkDriver {
 
-    private ConnectionFactory connectionFactory;
-    private Connection connection;
+    private @Nullable ConnectionFactory connectionFactory;
+    private @Nullable Connection connection;
     private JMSConfig config;
-    private BenchmarkDriver delegateForAdminOperations;
+    private @Nullable BenchmarkDriver delegateForAdminOperations;
     private final Set<List<String>> subscriptions = ConcurrentHashMap.newKeySet();
 
     @Override
@@ -59,8 +59,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         // Before the admin delegate connects anywhere
         checkFactoryConfiguration(config.connectionFactoryConfigurationParam);
         try {
-            if (config.delegateForAdminOperationsClassName != null
-                    && !config.delegateForAdminOperationsClassName.isEmpty()) {
+            if (!config.delegateForAdminOperationsClassName.isEmpty()) {
                 log.info(
                         "Initializing Driver for Admin operations {}",
                         config.delegateForAdminOperationsClassName);
@@ -151,22 +150,28 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public String getTopicNamePrefix() {
-        if (delegateForAdminOperations != null) {
-            return delegateForAdminOperations.getTopicNamePrefix();
+        BenchmarkDriver delegate = delegateForAdminOperations;
+        if (delegate != null) {
+            return delegate.getTopicNamePrefix();
         }
         return config.topicNamePrefix;
     }
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
-        if (delegateForAdminOperations != null) {
-            return delegateForAdminOperations.createTopic(topic, partitions);
+        BenchmarkDriver delegate = delegateForAdminOperations;
+        if (delegate != null) {
+            return delegate.createTopic(topic, partitions);
         }
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        Connection connection = this.connection;
+        if (connection == null) {
+            return CompletableFuture.failedFuture(closedFailure());
+        }
         Session session = null;
         try {
             if (config.sendWithTransactions) {
@@ -200,15 +205,16 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
                                     + " already has a consumer (set consumerPerSubscription: 1 or"
                                     + " use20api: true)"));
         }
+        ConnectionFactory factory = connectionFactory;
+        if (factory == null) {
+            return CompletableFuture.failedFuture(closedFailure());
+        }
         Connection consumerConnection = null;
         Session session = null;
         MessageConsumer durableConsumer = null;
         try {
-            String selector =
-                    config.messageSelector != null && !config.messageSelector.isEmpty()
-                            ? config.messageSelector
-                            : null;
-            consumerConnection = connectionFactory.createConnection();
+            String selector = config.messageSelector.isEmpty() ? null : config.messageSelector;
+            consumerConnection = factory.createConnection();
             session = consumerConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             Topic destination = session.createTopic(topic);
             if (config.use20api) {
@@ -246,6 +252,10 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
         failures.closeRestoringInterruptNow(delegate);
         failures.throwIfAny();
         log.info("JMS benchmark driver successfully shut down");
+    }
+
+    private static IllegalStateException closedFailure() {
+        return new IllegalStateException("JMS benchmark driver is not initialized or already closed");
     }
 
     private static JMSConfig readConfig(Path configurationFile) throws IOException {

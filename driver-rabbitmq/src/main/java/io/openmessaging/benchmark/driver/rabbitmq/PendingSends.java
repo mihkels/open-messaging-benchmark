@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The sends of one {@link RabbitMqBenchmarkProducer} awaiting publisher confirms, keyed by channel
@@ -32,7 +33,7 @@ final class PendingSends {
         final long sequence;
         final CompletableFuture<Void> future;
         boolean decided;
-        Throwable failure;
+        @Nullable Throwable failure;
 
         PendingSend(long generation, long sequence, CompletableFuture<Void> future) {
             this.generation = generation;
@@ -43,15 +44,15 @@ final class PendingSends {
 
     record CloseResult(List<PendingSend> sends, boolean closeChannel) {}
 
-    record PublishPermit(long generation, Throwable rejection) {}
+    record PublishPermit(long generation, @Nullable Throwable rejection) {}
 
     record RecoveryStart(long generation, List<PendingSend> sends) {}
 
     private final NavigableMap<Long, PendingSend> sends = new TreeMap<>(Long::compareUnsigned);
     private final List<PendingSend> deferred = new ArrayList<>();
-    private Thread publishingThread;
-    private Throwable closedCause;
-    private Throwable lastShutdownCause;
+    private @Nullable Thread publishingThread;
+    private @Nullable Throwable closedCause;
+    private @Nullable Throwable lastShutdownCause;
     private long generation;
     private long failedGeneration = -1;
     private boolean initialized;
@@ -78,7 +79,7 @@ final class PendingSends {
         return new PublishPermit(generation, null);
     }
 
-    synchronized Throwable register(PendingSend send) {
+    synchronized @Nullable Throwable register(PendingSend send) {
         if (closedCause != null) {
             return closedCause;
         }
@@ -218,7 +219,7 @@ final class PendingSends {
         return true;
     }
 
-    synchronized RecoveryStart beginRecovery() {
+    synchronized @Nullable RecoveryStart beginRecovery() {
         if (!initialized || recovering || recoveryInProgress) {
             recoveryRequested = true;
             return null;

@@ -52,6 +52,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
@@ -448,7 +449,7 @@ public final class ScenarioMain {
      * @return the sample, or {@code null} if the line is not a resource gauge with a {@code role}
      *     label
      */
-    static ResourceSample parseResource(String line) {
+    static @Nullable ResourceSample parseResource(String line) {
         Matcher matcher = RESOURCE.matcher(line);
         if (!matcher.matches()) {
             return null;
@@ -493,13 +494,13 @@ public final class ScenarioMain {
         private double initialFixtureErrors;
         private volatile String phase = "setup";
         private volatile boolean measuring;
-        private CountersStats initial;
+        private @Nullable CountersStats initial;
         private long started;
         private long pollNanos;
         private long publishSamples;
         private long delaySamples;
         private volatile long lastSnapshotStarted;
-        private volatile CumulativeLatencies latencies;
+        private volatile @Nullable CumulativeLatencies latencies;
 
         Sampler(Path output, List<Supplier<String>> scrapes) throws Exception {
             this.writer = Files.newBufferedWriter(output.resolve("samples.jsonl"));
@@ -577,7 +578,8 @@ public final class ScenarioMain {
             if (failure.get() != null) {
                 throw new IllegalStateException("Resource sampling failed", failure.get());
             }
-            if (!measuring) {
+            CountersStats initial = this.initial;
+            if (!measuring || initial == null) {
                 throw new IllegalStateException("Measurement never started");
             }
             var end = worker.getCountersStats();
@@ -602,6 +604,7 @@ public final class ScenarioMain {
             metrics.put("resourceStart", first);
             metrics.put("resourceEnd", new LinkedHashMap<>(last));
             metrics.put("resourcePeaks", peaks);
+            CumulativeLatencies latencies = this.latencies;
             if (latencies != null) {
                 metrics.put("publishP99Micros", latencies.publishLatency.getValueAtPercentile(99));
                 metrics.put("delayP99Micros", latencies.publishDelayLatency.getValueAtPercentile(99));

@@ -46,6 +46,7 @@ import io.openmessaging.benchmark.worker.commands.TopicSubscription;
 import io.openmessaging.benchmark.worker.commands.TopicsInfo;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -331,7 +332,8 @@ public final class LocalWorker implements Worker {
                                 + current.requireDriver().getClass().getName()
                                 + " does not support message headers; remove 'headers' from the workload");
             }
-            headers = headerConfig.pool(ThreadLocalRandom.current());
+            // Generated once per load, so SecureRandom costs nothing on the send path
+            headers = headerConfig.pool(new SecureRandom());
         }
         current.beginLoad();
 

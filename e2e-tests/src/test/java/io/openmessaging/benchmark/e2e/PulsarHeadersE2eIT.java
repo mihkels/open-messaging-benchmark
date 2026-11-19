@@ -29,9 +29,10 @@ import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.pulsar.PulsarContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /** Sends with the in-process Pulsar driver and reads the headers back with a native consumer. */
@@ -39,7 +40,20 @@ import org.testcontainers.utility.DockerImageName;
 class PulsarHeadersE2eIT {
 
     @Container
-    static PulsarContainer pulsar = new PulsarContainer(DockerImageName.parse("apachepulsar/pulsar:4.0.6"));
+    // Unlike BrokerFixtures.pulsar, keeps the default advertised address so the host can connect
+    static GenericContainer<?> pulsar = new GenericContainer<>(DockerImageName.parse("apachepulsar/pulsar:4.0.6"))
+            .withExposedPorts(6650, 8080)
+            .withCommand(
+                    "sh",
+                    "-c",
+                    "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss")
+            .waitingFor(Wait.forHttp("/admin/v2/clusters")
+                    .forPort(8080)
+                    .forResponsePredicate(body -> body.contains("standalone")));
+
+    private static String serviceUrl() {
+        return "pulsar://" + pulsar.getHost() + ":" + pulsar.getMappedPort(6650);
+    }
 
     @TempDir
     Path tempDir;
@@ -67,13 +81,13 @@ class PulsarHeadersE2eIT {
                 consumer:
                   subscriptionType: Failover
                 """
-                        .formatted(pulsar.getPulsarBrokerUrl(), pulsar.getHttpServiceUrl()));
+                        .formatted(serviceUrl(), "http://" + pulsar.getHost() + ":" + pulsar.getMappedPort(8080)));
         Map<String, byte[]> headers = Map.of(
                 "omb_h0", "trace".getBytes(StandardCharsets.US_ASCII),
                 "omb_h1", "route".getBytes(StandardCharsets.US_ASCII));
 
         try (PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
-                PulsarClient client = PulsarClient.builder().serviceUrl(pulsar.getPulsarBrokerUrl()).build()) {
+                PulsarClient client = PulsarClient.builder().serviceUrl(serviceUrl()).build()) {
             driver.initialize(config, null);
             String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
             driver.createTopic(topic, 1).get(30, TimeUnit.SECONDS);

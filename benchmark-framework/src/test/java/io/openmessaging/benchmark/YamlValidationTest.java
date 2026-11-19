@@ -113,7 +113,9 @@ class YamlValidationTest {
                                 + WorkloadYaml.COUNTS
                                 + "messageSize: 1024\nstages:\n  - durationMinutes: 1\n    targetRate: 100\n");
 
-        assertThatNoException().isThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())));
+        List<String> paths = List.of(file.toString());
+
+        assertThatNoException().isThrownBy(() -> Benchmark.readWorkloads(paths));
     }
 
     @Test
@@ -126,14 +128,16 @@ class YamlValidationTest {
                                 + "producerRate: 100\ntestDurationMinutes: 1\n"
                                 + "messageSizeDistribution:\n  \"256-1024\": 1\n");
 
-        assertThatNoException().isThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())));
+        List<String> paths = List.of(file.toString());
+
+        assertThatNoException().isThrownBy(() -> Benchmark.readWorkloads(paths));
     }
 
     @Test
     void driverConfigurationWithoutADriverClassIsRejected() throws IOException {
-        Path file = write("driver", "name: fixture\nbrokerUrl: localhost\n");
+        String file = write("driver", "name: fixture\nbrokerUrl: localhost\n").toString();
 
-        assertThatThrownBy(() -> Benchmark.readDriverConfig(file.toString()))
+        assertThatThrownBy(() -> Benchmark.readDriverConfig(file))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(
                         "Invalid driver configuration " + file + ": required property 'driverClass' not found");
@@ -141,8 +145,9 @@ class YamlValidationTest {
 
     private void assertRejected(String yaml, String violation) throws IOException {
         Path file = write("workload", yaml);
+        List<String> paths = List.of(file.toString());
 
-        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(file.toString())))
+        assertThatThrownBy(() -> Benchmark.readWorkloads(paths))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageStartingWith("Invalid workload " + file + ": ")
                 .hasMessageContaining(violation);

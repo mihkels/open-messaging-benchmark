@@ -21,7 +21,7 @@ import com.github.victools.jsonschema.generator.OptionPreset;
 import com.github.victools.jsonschema.generator.SchemaGenerator;
 import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder;
 import com.github.victools.jsonschema.generator.SchemaVersion;
-import com.github.victools.jsonschema.module.jackson.JacksonModule;
+import com.github.victools.jsonschema.module.jackson.JacksonSchemaModule;
 import io.openmessaging.benchmark.worker.DriverConfiguration;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -119,7 +119,7 @@ class YamlSchemaTest {
 
     private static SchemaGeneratorConfigBuilder baseConfig() {
         return new SchemaGeneratorConfigBuilder(SchemaVersion.DRAFT_2020_12, OptionPreset.PLAIN_JSON)
-                .with(new JacksonModule());
+                .with(new JacksonSchemaModule());
     }
 
     // Nested records (stages, consumerPause, payloadGenerator, keyDistribution) need every component

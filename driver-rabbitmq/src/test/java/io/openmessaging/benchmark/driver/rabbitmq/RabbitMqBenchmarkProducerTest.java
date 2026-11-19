@@ -48,6 +48,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
@@ -68,6 +69,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class RabbitMqBenchmarkProducerTest {
+    @Test
+    void publishesWorkloadHeadersAlongsideTheTimestamp() {
+        byte[] value = {'a', 'b'};
+        producer.sendAsync(
+                Optional.empty(),
+                new byte[] {1},
+                Map.of("omb_h0", value, RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER, value));
+
+        Map<String, Object> headers = channel.published.get(0).properties().getHeaders();
+        assertThat(headers.get("omb_h0")).isSameAs(value);
+        assertThat(headers.get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER))
+                .isInstanceOf(Long.class);
+    }
 
     private FakeChannel channel;
     private RabbitMqBenchmarkProducer producer;

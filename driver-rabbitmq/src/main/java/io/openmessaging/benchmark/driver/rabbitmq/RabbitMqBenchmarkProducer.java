@@ -22,6 +22,7 @@ import com.rabbitmq.client.RecoveryListener;
 import com.rabbitmq.client.ShutdownListener;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.Failures;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -117,10 +118,17 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-        BasicProperties.Builder builder =
-                defaultProperties
-                        .builder()
-                        .headers(Map.of(PUBLISH_TIMESTAMP_HEADER, System.currentTimeMillis()));
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
+        Map<String, Object> amqpHeaders = HashMap.newHashMap(headers.size() + 1);
+        amqpHeaders.putAll(headers);
+        // Written last so a workload header cannot replace the publish time
+        amqpHeaders.put(PUBLISH_TIMESTAMP_HEADER, System.currentTimeMillis());
+        BasicProperties.Builder builder = defaultProperties.builder().headers(amqpHeaders);
         if (messagePersistence) {
             builder.deliveryMode(2);
         }

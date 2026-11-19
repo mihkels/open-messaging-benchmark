@@ -18,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
+import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.jackson.ObjectMappers;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -111,7 +113,8 @@ class ProducerWorkAssignmentTest {
         assertThat(assignment)
                 .hasToString(
                         "ProducerWorkAssignment[payloads=1 templates, sizes [3], weights [7], publishRate=10.0, "
-                                + "keyDistributorType=NO_KEY, keyDistribution=null, verifyDelivery=false]");
+                                + "keyDistributorType=NO_KEY, keyDistribution=null, verifyDelivery=false, "
+                                + "headers=null]");
     }
 
     @Test
@@ -153,6 +156,24 @@ class ProducerWorkAssignmentTest {
         assertThat(json).contains("\"keyDistribution\":{\"keys\":37,\"exponent\":1.2}");
         assertThat(mapper.readValue(json, ProducerWorkAssignment.class)).isEqualTo(assignment);
         assertThat(assignment.withPublishRate(20).keyDistribution()).isEqualTo(config);
+    }
+
+    @Test
+    void carriesHeadersOnWireAndRateChange() {
+        var headers = new MessageHeaders(4, 64);
+        var assignment =
+                new ProducerWorkAssignment(
+                        PayloadTemplates.of(List.of(new byte[] {1}), null),
+                        10,
+                        KeyDistributorType.NO_KEY,
+                        null,
+                        false,
+                        headers);
+        ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
+        String json = mapper.writeValueAsString(assignment);
+        assertThat(json).contains("\"headers\":{\"count\":4,\"valueSize\":64}");
+        assertThat(mapper.readValue(json, ProducerWorkAssignment.class)).isEqualTo(assignment);
+        assertThat(assignment.withPublishRate(20).headers()).isEqualTo(headers);
     }
 
     @Test

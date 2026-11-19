@@ -67,6 +67,11 @@ public class JMSBenchmarkDriverTest {
     }
 
     @Test
+    void supportsHeaders() {
+        assertTrue(new JMSBenchmarkDriver().supportsHeaders());
+    }
+
+    @Test
     void closesSharedConnectionFactoryAndDelegateEvenWhenClosuresFail() throws Exception {
         JMSBenchmarkDriver driver = new JMSBenchmarkDriver();
         AtomicInteger connectionCloses = new AtomicInteger();

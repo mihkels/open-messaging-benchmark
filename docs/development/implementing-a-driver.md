@@ -30,7 +30,7 @@ To package and install a driver, see [Packaging a plugin](packaging-a-plugin.md)
 |             Type             |                           Kind                           |                                            Purpose                                             |
 |------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | `BenchmarkDriver`            | interface, extends `AutoCloseable`                       | Entry point: configuration, topics, producers, consumers                                       |
-| `BenchmarkProducer`          | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`                                              |
+| `BenchmarkProducer`          | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`, plus an optional overload with headers      |
 | `BenchmarkConsumer`          | interface, extends `AutoCloseable`                       | Marker for a subscription; only `close()` is called                                            |
 | `ConsumerCallback`           | interface                                                | Implemented by the benchmark; the driver calls it for every received message                   |
 | `TopicInfo`                  | record `(topic, partitions)`                             | Argument of `createTopics`                                                                     |
@@ -245,6 +245,31 @@ those sends have completed. A driver may retain the array while its own send fut
 must stop using it when that future completes, including exceptional completion or cancellation.
 Copy into driver-owned storage before mutating bytes or retaining them beyond completion, including
 when an asynchronous client may continue using a payload after the future is cancelled.
+
+### Message headers
+
+A workload with `headers` sends through the optional overload:
+
+```java
+default CompletableFuture<Void> sendAsync(
+        Optional<String> key, byte[] payload, Map<String, byte[]> headers) { ... }
+```
+
+The default drops the headers and calls `sendAsync(key, payload)`. To send headers, override this
+overload and `BenchmarkDriver.supportsHeaders()`, which returns `false` by default. The worker
+refuses to start a workload with headers on a driver that returns `false`. The worker calls the
+overload only when headers are configured, so a driver can make the two-argument method delegate
+with `Map.of()`.
+
+- The header map and its value arrays follow the same ownership rules as the payload.
+- If the broker's headers carry only strings, decode each value with ISO-8859-1. The benchmark
+  generates ASCII alphanumeric values, which every supported broker carries; a driver may fail the
+  send for bytes its broker rejects.
+- Write any header the driver adds itself, such as a publish timestamp, after the workload headers,
+  so a workload header cannot replace it.
+
+Adding the overload does not change `DriverApiVersion`: bundles built against version 2 still load
+and report no header support.
 
 ## End-to-end publish timestamp
 

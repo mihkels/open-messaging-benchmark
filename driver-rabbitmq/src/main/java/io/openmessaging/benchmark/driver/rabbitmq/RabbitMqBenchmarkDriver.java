@@ -84,6 +84,11 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         // Distribute topics by performing a round-robin on AMQP URIs
         String primaryBrokerUri =

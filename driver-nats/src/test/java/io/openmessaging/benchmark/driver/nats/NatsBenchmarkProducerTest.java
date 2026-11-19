@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -47,6 +48,34 @@ import java.util.function.BiFunction;
 import org.junit.jupiter.api.Test;
 
 class NatsBenchmarkProducerTest {
+    @Test
+    void publishesWorkloadHeadersAsStringsAlongsideTheTimestamp() {
+        NatsBenchmarkProducer producer =
+                new NatsBenchmarkProducer(
+                        jetStream((topic, message) -> CompletableFuture.completedFuture(null)), TOPIC);
+
+        long before = System.currentTimeMillis();
+        producer
+                .sendAsync(
+                        Optional.empty(),
+                        new byte[] {1},
+                        Map.of(
+                                "omb_h0",
+                                new byte[] {'a', 'b'},
+                                NatsBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER,
+                                new byte[] {'x'}))
+                .join();
+        long after = System.currentTimeMillis();
+
+        assertEquals("ab", headers.get(0).getFirst("omb_h0"));
+        assertTimestampHeader(headers.get(0), before, after);
+        // NATS only carries ASCII header values; other bytes fail the send
+        Map<String, byte[]> invalid = Map.of("omb_h0", new byte[] {(byte) 0xE9});
+        CompletableFuture<Void> rejected =
+                producer.sendAsync(Optional.empty(), new byte[] {1}, invalid);
+        assertThrows(CompletionException.class, rejected::join);
+    }
+
     private static final String TOPIC = "test-topic";
 
     private final List<Headers> headers = new CopyOnWriteArrayList<>();

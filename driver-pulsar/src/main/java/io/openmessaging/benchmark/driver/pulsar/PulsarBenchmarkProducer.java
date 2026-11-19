@@ -15,6 +15,8 @@ package io.openmessaging.benchmark.driver.pulsar;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.pulsar.client.api.Producer;
@@ -38,6 +40,12 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         CompletableFuture<Void> send = pending.register();
         if (send.isDone()) {
             return send;
@@ -45,6 +53,9 @@ public class PulsarBenchmarkProducer implements BenchmarkProducer {
         try {
             TypedMessageBuilder<byte[]> msgBuilder = producer.newMessage().value(payload.clone());
             key.ifPresent(msgBuilder::key);
+            // Pulsar properties are strings; ISO-8859-1 round-trips every byte
+            headers.forEach((name, value) ->
+                    msgBuilder.property(name, new String(value, StandardCharsets.ISO_8859_1)));
             msgBuilder
                     .sendAsync()
                     .thenApply(msgId -> null)

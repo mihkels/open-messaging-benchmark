@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
+import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -34,6 +35,7 @@ import org.jspecify.annotations.Nullable;
  * @param keyDistributorType the message key distribution strategy
  * @param keyDistribution optional Zipfian distribution parameters
  * @param verifyDelivery whether producers stamp each payload for delivery verification
+ * @param headers optional generated headers sent with every message
  */
 @JsonPropertyOrder({
     "payloadData",
@@ -41,14 +43,25 @@ import org.jspecify.annotations.Nullable;
     "keyDistributorType",
     "payloadWeights",
     "keyDistribution",
-    "verifyDelivery"
+    "verifyDelivery",
+    "headers"
 })
 public record ProducerWorkAssignment(
         @JsonIgnore PayloadTemplates payloads,
         double publishRate,
         KeyDistributorType keyDistributorType,
         @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable KeyDistribution keyDistribution,
-        @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean verifyDelivery) {
+        @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean verifyDelivery,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable MessageHeaders headers) {
+
+    public ProducerWorkAssignment(
+            PayloadTemplates payloads,
+            double publishRate,
+            KeyDistributorType keyDistributorType,
+            @Nullable KeyDistribution keyDistribution,
+            boolean verifyDelivery) {
+        this(payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery, null);
+    }
 
     public ProducerWorkAssignment(
             PayloadTemplates payloads,
@@ -78,13 +91,15 @@ public record ProducerWorkAssignment(
             @JsonProperty("keyDistributorType") KeyDistributorType keyDistributorType,
             @JsonProperty("payloadWeights") int @Nullable [] payloadWeights,
             @JsonProperty("keyDistribution") @Nullable KeyDistribution keyDistribution,
-            @JsonProperty("verifyDelivery") boolean verifyDelivery) {
+            @JsonProperty("verifyDelivery") boolean verifyDelivery,
+            @JsonProperty("headers") @Nullable MessageHeaders headers) {
         this(
                 PayloadTemplates.of(payloadData, payloadWeights),
                 publishRate,
                 keyDistributorType,
                 keyDistribution,
-                verifyDelivery);
+                verifyDelivery,
+                headers);
     }
 
     /**
@@ -115,6 +130,6 @@ public record ProducerWorkAssignment(
      */
     public ProducerWorkAssignment withPublishRate(double publishRate) {
         return new ProducerWorkAssignment(
-                payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery);
+                payloads, publishRate, keyDistributorType, keyDistribution, verifyDelivery, headers);
     }
 }

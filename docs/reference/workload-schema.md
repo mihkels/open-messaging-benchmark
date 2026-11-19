@@ -38,6 +38,7 @@ for explanations and examples.
 | `payloadGenerator`          | object  | none     | Generated payloads with a target compression ratio; excludes `payloadFile` and `useRandomizedPayloads`. See below                                                                                             |
 | `keyDistributor`            | enum    | `NO_KEY` | `NO_KEY`, `KEY_ROUND_ROBIN`, `RANDOM_NANO` or `ZIPFIAN`                                                                                                                                                       |
 | `keyDistribution`           | object  | none     | Optional `ZIPFIAN` key count and exponent; see below                                                                                                                                                          |
+| `headers`                   | object  | none     | Generated headers sent with every message; needs a driver that supports them. See [headers](#headers)                                                                                                         |
 | `consumerBacklogSizeGB`     | long    | 0        | Build a backlog of this size during measurement; `0` disables it                                                                                                                                              |
 | `backlogDrainRatio`         | number  | 1.0      | Desired fraction to drain before the post-drain interval, subject to a 1,000-message floor                                                                                                                    |
 | `warmupDurationMinutes`     | int     | 1        | Warm-up length; its statistics are discarded                                                                                                                                                                  |
@@ -95,6 +96,23 @@ The same deterministic keys and ranks are used by every worker and producer. Eac
 precomputes and shares an O(keys) alias table; sampling takes constant time per message.
 `keyDistribution` is ignored for other distributors.
 
+## headers
+
+```yaml
+headers:
+  count: 4
+  valueSize: 64
+```
+
+Both fields are required. Every message carries `count` headers named `omb_h0` to
+`omb_h<count-1>`, each with a `valueSize`-byte ASCII alphanumeric value. Workers pre-generate 64
+header sets before the load starts and each producer cycles through them, so the send path does not
+allocate header values and batch compression cannot collapse identical headers. Header bytes are
+not counted in the throughput byte counters, which stay payload-only on both sides; the overhead
+shows up as lower throughput and higher latency. See
+[Payloads and keys](../guides/payloads-and-keys.md#message-headers) and the
+[driver support matrix](../drivers/index.md#message-headers).
+
 ## messageSizeDistribution
 
 ```yaml
@@ -114,36 +132,40 @@ messageSizeDistribution:
 
 ## Constraints
 
-|                                              Condition                                              |                                         Result                                         |
-|-----------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
-| `producerRate: 0` with `consumerBacklogSizeGB > 0`                                                  | `Cannot probe producer sustainable rate when building backlog`                         |
-| Backlog requested with a message size of zero                                                       | `Message size must be positive when building a backlog`                                |
-| `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                                              |
-| Invalid distribution range or weight                                                                | An error naming the range or weight                                                    |
-| `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                                        |
-| `payloadGenerator` missing a field                                                                  | `payloadGenerator requires type, targetCompressionRatio and poolSize`                  |
-| `targetCompressionRatio` ≤ 0, > 1 or not a number                                                   | `payloadGenerator targetCompressionRatio must be in (0, 1]`                            |
-| `payloadGenerator.poolSize` ≤ 0                                                                     | `payloadGenerator poolSize must be positive`                                           |
-| `payloadGenerator` with `payloadFile`                                                               | `payloadGenerator and payloadFile are mutually exclusive`                              |
-| `payloadGenerator` with `useRandomizedPayloads: true`                                               | `payloadGenerator and useRandomizedPayloads are mutually exclusive`                    |
-| `payloadGenerator` without `messageSizeDistribution` and `messageSize` ≤ 0                          | `Message size must be positive with payloadGenerator`                                  |
-| `payloadGenerator.poolSize` × the distribution weights above 2,147,483,647                          | `payloadGenerator poolSize times the distribution weights exceeds the supported total` |
-| `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`                                  |
-| `stages` with `producerRate` other than `0`                                                         | `stages and producerRate are mutually exclusive`                                       |
-| `stages` with `testDurationMinutes` other than `0`                                                  | `stages and testDurationMinutes are mutually exclusive`                                |
-| `stages` with `consumerBacklogSizeGB > 0`                                                           | `stages cannot be combined with a consumer backlog`                                    |
-| A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                                                    |
-| A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                                           |
-| Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                                        |
-| `consumerPause` with `consumerBacklogSizeGB > 0`                                                    | `consumerPause cannot be combined with a consumer backlog`                             |
-| `consumerPause` with `producerRate: 0` and no `stages`                                              | `consumerPause requires a fixed producerRate or stages`                                |
-| A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`                                      |
-| `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`                                       |
-| `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`                                  |
-| `repeat` below 1                                                                                    | `repeat must be at least 1`                                                            |
-| `verifyDelivery: true` with no producers or subscriptions per topic                                 | `verifyDelivery needs at least one producer and one subscription per topic`            |
-| `verifyDelivery: true` with a payload shorter than 20 bytes                                         | `verifyDelivery needs payloads of at least 20 bytes` when the load starts              |
-| `thresholds.maxLostMessages` or `maxDuplicatedMessages` without `verifyDelivery: true`              | `maxLostMessages requires verifyDelivery: true`                                        |
+|                                              Condition                                              |                                                  Result                                                   |
+|-----------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `producerRate: 0` with `consumerBacklogSizeGB > 0`                                                  | `Cannot probe producer sustainable rate when building backlog`                                            |
+| Backlog requested with a message size of zero                                                       | `Message size must be positive when building a backlog`                                                   |
+| `payloadFile` length differs from `messageSize`                                                     | `Payload length mismatch`                                                                                 |
+| Invalid distribution range or weight                                                                | An error naming the range or weight                                                                       |
+| `useRandomizedPayloads: true` without `messageSizeDistribution` and `randomizedPayloadPoolSize` ≤ 0 | `Randomized payload pool size must be positive`                                                           |
+| `payloadGenerator` missing a field                                                                  | `payloadGenerator requires type, targetCompressionRatio and poolSize`                                     |
+| `targetCompressionRatio` ≤ 0, > 1 or not a number                                                   | `payloadGenerator targetCompressionRatio must be in (0, 1]`                                               |
+| `payloadGenerator.poolSize` ≤ 0                                                                     | `payloadGenerator poolSize must be positive`                                                              |
+| `payloadGenerator` with `payloadFile`                                                               | `payloadGenerator and payloadFile are mutually exclusive`                                                 |
+| `payloadGenerator` with `useRandomizedPayloads: true`                                               | `payloadGenerator and useRandomizedPayloads are mutually exclusive`                                       |
+| `payloadGenerator` without `messageSizeDistribution` and `messageSize` ≤ 0                          | `Message size must be positive with payloadGenerator`                                                     |
+| `payloadGenerator.poolSize` × the distribution weights above 2,147,483,647                          | `payloadGenerator poolSize times the distribution weights exceeds the supported total`                    |
+| `headers` missing a field                                                                           | `headers requires count and valueSize`                                                                    |
+| `headers.count` ≤ 0                                                                                 | `headers count must be positive`                                                                          |
+| A negative `headers.valueSize`                                                                      | `headers valueSize must not be negative`                                                                  |
+| `headers` with a driver that does not support them                                                  | `Driver <class> does not support message headers; remove 'headers' from the workload`, before load starts |
+| `thresholds.minThroughputRatio` with `producerRate: 0`                                              | `minThroughputRatio requires a positive producerRate`                                                     |
+| `stages` with `producerRate` other than `0`                                                         | `stages and producerRate are mutually exclusive`                                                          |
+| `stages` with `testDurationMinutes` other than `0`                                                  | `stages and testDurationMinutes are mutually exclusive`                                                   |
+| `stages` with `consumerBacklogSizeGB > 0`                                                           | `stages cannot be combined with a consumer backlog`                                                       |
+| A stage `targetRate` ≤ 0                                                                            | `Stage targetRate must be positive`                                                                       |
+| A negative stage `durationMinutes`                                                                  | `Stage durationMinutes must not be negative`                                                              |
+| Stages adding up to 0 minutes                                                                       | `stages must last at least one minute in total`                                                           |
+| `consumerPause` with `consumerBacklogSizeGB > 0`                                                    | `consumerPause cannot be combined with a consumer backlog`                                                |
+| `consumerPause` with `producerRate: 0` and no `stages`                                              | `consumerPause requires a fixed producerRate or stages`                                                   |
+| A negative `consumerPause.afterMinutes`                                                             | `consumerPause afterMinutes must not be negative`                                                         |
+| `consumerPause.durationMinutes` ≤ 0                                                                 | `consumerPause durationMinutes must be positive`                                                          |
+| `afterMinutes + durationMinutes` ≥ the measured minutes                                             | `consumerPause must end before the measured run ends`                                                     |
+| `repeat` below 1                                                                                    | `repeat must be at least 1`                                                                               |
+| `verifyDelivery: true` with no producers or subscriptions per topic                                 | `verifyDelivery needs at least one producer and one subscription per topic`                               |
+| `verifyDelivery: true` with a payload shorter than 20 bytes                                         | `verifyDelivery needs payloads of at least 20 bytes` when the load starts                                 |
+| `thresholds.maxLostMessages` or `maxDuplicatedMessages` without `verifyDelivery: true`              | `maxLostMessages requires verifyDelivery: true`                                                           |
 
 ## Thresholds
 

@@ -149,6 +149,11 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         BenchmarkDriver delegate = delegateForAdminOperations;
         if (delegate != null) {

@@ -67,6 +67,12 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>driver-pulsar</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>driver-rabbitmq</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

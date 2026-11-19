@@ -28,6 +28,7 @@ package io.openmessaging.benchmark.driver.kafka;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.Producer;
@@ -46,12 +47,19 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         CompletableFuture<Void> future = pending.register();
         if (future.isDone()) {
             return future;
         }
         try {
             var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload.clone());
+            headers.forEach(producerRecord.headers()::add);
             producer.send(
                     producerRecord, (metadata, exception) -> pending.completeFromClient(future, exception));
         } catch (RuntimeException error) {

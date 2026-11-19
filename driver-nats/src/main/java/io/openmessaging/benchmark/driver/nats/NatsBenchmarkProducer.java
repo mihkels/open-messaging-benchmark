@@ -17,6 +17,8 @@ import io.nats.client.JetStream;
 import io.nats.client.impl.Headers;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.PendingSendTracker;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -39,6 +41,12 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
 
     @Override
     public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        return sendAsync(key, payload, Map.of());
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(
+            Optional<String> key, byte[] payload, Map<String, byte[]> headers) {
         // Close may settle the send immediately after registration, so copy the caller's data first.
         byte[] message = payload.clone();
         CompletableFuture<Void> send = pending.register();
@@ -50,10 +58,14 @@ public class NatsBenchmarkProducer implements BenchmarkProducer {
         // since a shared JetStream acknowledgement may never complete.
         PendingSendTracker tracker = pending;
         try {
-            Headers headers =
-                    new Headers().put(PUBLISH_TIMESTAMP_HEADER, Long.toString(System.currentTimeMillis()));
+            Headers natsHeaders = new Headers();
+            // NATS header values are ASCII strings; the client rejects other bytes
+            headers.forEach(
+                    (name, value) -> natsHeaders.put(name, new String(value, StandardCharsets.ISO_8859_1)));
+            // Written last so a workload header cannot replace the publish time
+            natsHeaders.put(PUBLISH_TIMESTAMP_HEADER, Long.toString(System.currentTimeMillis()));
             jetStream
-                    .publishAsync(topic, headers, message)
+                    .publishAsync(topic, natsHeaders, message)
                     .<Void>thenApply(_ -> null)
                     .whenComplete((_, failure) -> tracker.completeFromClient(send, failure));
         } catch (RuntimeException failure) {

@@ -50,6 +50,21 @@ also show how to start the broker.
 > **Note:** NATS Streaming is deprecated by its maintainers. Prefer the NATS JetStream driver for new
 > work.
 
+## Message headers
+
+Workloads with [`headers`](../reference/workload-schema.md#headers) run only on drivers that send
+them. Other drivers fail the run before load starts.
+
+|     Driver     | Headers |                                     Carried as                                     |
+|----------------|---------|------------------------------------------------------------------------------------|
+| Apache Kafka   | yes     | Record headers (`byte[]`)                                                          |
+| Apache Pulsar  | yes     | Message properties (strings, ISO-8859-1)                                           |
+| RabbitMQ       | yes     | AMQP headers (`byte[]`)                                                            |
+| Apache Artemis | yes     | Message bytes properties                                                           |
+| JMS            | yes     | String message properties (ISO-8859-1)                                             |
+| NATS JetStream | yes     | NATS headers (ASCII strings)                                                       |
+| All others     | no      | KoP, BookKeeper, Pravega, NATS Streaming, NSQ, Redis, RocketMQ, RocketMQ 5, MQTT 5 |
+
 ## Regression suite versions
 
 The opt-in [Testcontainers suite](../development/testing-a-driver.md#testcontainers-end-to-end-tests)

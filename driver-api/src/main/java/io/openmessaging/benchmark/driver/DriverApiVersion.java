@@ -26,6 +26,9 @@ package io.openmessaging.benchmark.driver;
  *
  * <ul>
  *   <li>{@code 2}: {@link BenchmarkDriver#initialize} takes a Micrometer {@code MeterRegistry}.
+ *       Later additions with default implementations, such as message headers ({@link
+ *       BenchmarkProducer#sendAsync(java.util.Optional, byte[], java.util.Map)} and {@link
+ *       BenchmarkDriver#supportsHeaders()}), keep version-2 bundles loadable.
  *   <li>{@code 1}: {@link BenchmarkDriver#initialize} took a {@code PrometheusMeterRegistry}. The
  *       registry change shipped under version {@code 1} in 0.1.0 through 0.2.0, so version-1
  *       bundles are rejected and must be rebuilt.

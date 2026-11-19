@@ -14,8 +14,12 @@
 package io.openmessaging.benchmark.e2e;
 
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,13 +30,18 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,6 +128,42 @@ class KafkaE2eIT extends BaseE2eIT {
 
         // Validate results
         validateResults(result, workload);
+    }
+
+    @Test
+    void headersArriveOnTheConsumerSide() throws Exception {
+        Map<String, byte[]> headers = Map.of(
+                "omb_h0", "trace".getBytes(StandardCharsets.US_ASCII),
+                "omb_h1", "route".getBytes(StandardCharsets.US_ASCII));
+        try (KafkaBenchmarkDriver driver = new KafkaBenchmarkDriver()) {
+            driver.initialize(driverConfigFile, null);
+            String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
+            driver.createTopic(topic, 1).get(30, TimeUnit.SECONDS);
+            try (var producer = driver.createProducer(topic).get(30, TimeUnit.SECONDS)) {
+                producer.sendAsync(Optional.empty(), new byte[] {1, 2, 3}, headers).get(30, TimeUnit.SECONDS);
+            }
+
+            Properties props = new Properties();
+            props.put("bootstrap.servers", kafka.getBootstrapServers());
+            props.put("group.id", "headers-" + UUID.randomUUID());
+            props.put("auto.offset.reset", "earliest");
+            try (var consumer =
+                    new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+                consumer.subscribe(List.of(topic));
+                ConsumerRecord<byte[], byte[]> received = null;
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+                while (received == null && System.nanoTime() < deadline) {
+                    for (ConsumerRecord<byte[], byte[]> polled : consumer.poll(Duration.ofMillis(500))) {
+                        received = polled;
+                    }
+                }
+                assertThat(received).isNotNull();
+                assertThat(received.value()).containsExactly(1, 2, 3);
+                for (var entry : headers.entrySet()) {
+                    assertThat(received.headers().lastHeader(entry.getKey()).value()).isEqualTo(entry.getValue());
+                }
+            }
+        }
     }
 
     @Test

@@ -32,6 +32,21 @@
         <jacoco.min.branch>0.59</jacoco.min.branch>
     </properties>
 
+    <dependencyManagement>
+        <!--
+            java-nats-streaming 2.2.3 is the final release (NATS Streaming is deprecated upstream) and
+            asks for protobuf-java 3.9.1. Its generated code runs on any later 3.x runtime; stay off 4.x.
+            jnats stays at the 2.6.5 the client was built against.
+        -->
+        <dependencies>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.25.9</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>com.google.guava</groupId>

@@ -32,6 +32,30 @@
         <jacoco.min.branch>0.88</jacoco.min.branch>
     </properties>
 
+    <dependencyManagement>
+        <!--
+            nsq-client 1.0.0.RC4 is the final release and asks for jackson-databind 2.6.4 and commons-pool2
+            2.4.2. It only reads nsqlookupd JSON and pools connections, which later 2.x releases keep compatible.
+        -->
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.23.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.23.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-pool2</artifactId>
+                <version>2.13.1</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>com.github.brainlag</groupId>

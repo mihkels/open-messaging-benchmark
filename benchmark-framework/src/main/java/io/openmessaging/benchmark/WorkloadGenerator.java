@@ -53,6 +53,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.ToLongFunction;
 import org.jspecify.annotations.Nullable;
@@ -465,7 +466,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         // consumerBacklogSizeGB's drain rule, floored at the backlog in flight before the pause
         long drained =
                 Math.max(steady, Math.max(1000L, (long) ((1.0 - workload.backlogDrainRatio) * peak)));
-        OptionalLong drainedAt = drainTo("Pause drain", drained, clock, tickMillis);
+        OptionalLong drainedAt = drainTo("Pause drain", drained, clock, tickMillis, () -> runCompleted);
         if (drainedAt.isPresent()) {
             double seconds = (drainedAt.getAsLong() - resumed) / 1e9;
             pauseDrainSeconds = seconds;
@@ -474,12 +475,13 @@ public final class WorkloadGenerator implements WorkloadRun {
         }
     }
 
-    // Waits for the backlog to fall to target; returns the clock reading then, or empty if the run
-    // completed first
-    private OptionalLong drainTo(String waitName, long target, LongSupplier clock, long tickMillis)
+    // Waits for the backlog to fall to target; returns the clock reading then, or empty once stopped
+    // reports true
+    private OptionalLong drainTo(
+            String waitName, long target, LongSupplier clock, long tickMillis, BooleanSupplier stopped)
             throws InterruptedException {
         var watch = new StallWatch(waitName, "messages received", CountersStats::messagesReceived);
-        while (!runCompleted) {
+        while (!stopped.getAsBoolean()) {
             CountersStats stats = worker.getCountersStats();
             long now = clock.getAsLong();
             long backlog = backlog(stats);
@@ -703,11 +705,11 @@ public final class WorkloadGenerator implements WorkloadRun {
         long backlogEmptyLevel = (long) ((1.0 - workload.backlogDrainRatio) * backlogMessageCapacity);
         final long minBacklog = Math.max(1000L, backlogEmptyLevel);
 
-        if (drainTo("Backlog drain", minBacklog, clock, drainTickMillis).isPresent()) {
-            log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
-            enterPhase(RunPhase.MEASURE);
-            Thread.sleep(MINUTES.toMillis(testDurationMinutes));
-        }
+        // Unlike the pause drain, this one runs until drained or interrupted, even after close
+        drainTo("Backlog drain", minBacklog, clock, drainTickMillis, () -> false);
+        log.info("--- Completed backlog draining in {} s ---", timer.elapsedSeconds());
+        enterPhase(RunPhase.MEASURE);
+        Thread.sleep(MINUTES.toMillis(testDurationMinutes));
     }
 
     // Fails a wait loop whose counter has not moved for the stall window, and logs its progress

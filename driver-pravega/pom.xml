@@ -38,6 +38,30 @@
         <driver.isolated>true</driver.isolated>
     </properties>
 
+    <dependencyManagement>
+        <!--
+            pravega-client 0.13.0 is the final release. Moves libraries that it and gRPC pull in at old
+            versions to newer, API-compatible releases.
+        -->
+        <dependencies>
+            <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>2.15.0</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>1.23.0</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.22.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>com.google.protobuf</groupId>

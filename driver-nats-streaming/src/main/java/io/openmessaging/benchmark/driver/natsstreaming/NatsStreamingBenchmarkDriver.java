@@ -30,13 +30,13 @@ import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.LoggerFactory;
 
 public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
-    private static final String DEFAULT_CLUSTER_ID = "test-cluster";
     private final ConnectionFactory connectionFactory;
     private String clusterId;
-    private StreamingConnection natsStreamingPublisher;
+    private @Nullable StreamingConnection natsStreamingPublisher;
     private final SubscriptionOptions.Builder subBuilder = new SubscriptionOptions.Builder();
     private final Options.Builder optsBuilder = new Options.Builder();
     private volatile boolean closed;
@@ -59,11 +59,7 @@ public class NatsStreamingBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
         NatsStreamingClientConfig config =
                 DriverConfigs.read(configurationFile, NatsStreamingClientConfig.class);
-        if (config.clusterId != null) {
-            clusterId = config.clusterId;
-        } else {
-            clusterId = DEFAULT_CLUSTER_ID;
-        }
+        clusterId = config.clusterId;
         if (config.natsHostUrl != null) {
             optsBuilder.natsUrl(config.natsHostUrl);
         }

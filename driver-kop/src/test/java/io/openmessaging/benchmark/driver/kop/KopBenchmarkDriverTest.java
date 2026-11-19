@@ -29,6 +29,13 @@ import org.junit.jupiter.api.Test;
 class KopBenchmarkDriverTest {
 
     @Test
+    void uninitializedDriverRejectsTopicCreation() {
+        assertThatThrownBy(() -> new KopBenchmarkDriver().createTopic("topic", 1))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("KoP admin client is not initialized or already closed");
+    }
+
+    @Test
     void testLoadDefaultConfig() throws URISyntaxException, IOException {
         final URL url = getClass().getClassLoader().getResource("kop_required.yaml");
         assertThat(url).isNotNull();

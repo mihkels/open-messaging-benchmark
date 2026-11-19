@@ -24,7 +24,7 @@ public class JMSConfig {
 
     public String topicNamePrefix = "";
 
-    public String messageSelector;
+    public String messageSelector = "";
 
     public List<AddProperty> properties = new ArrayList<>();
 
@@ -32,7 +32,7 @@ public class JMSConfig {
 
     public boolean sendWithTransactions = false;
 
-    public String delegateForAdminOperationsClassName;
+    public String delegateForAdminOperationsClassName = "";
 
     public static class AddProperty {
         public String name = "";

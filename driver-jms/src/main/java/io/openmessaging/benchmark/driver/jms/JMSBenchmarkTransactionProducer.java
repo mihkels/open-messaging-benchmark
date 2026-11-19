@@ -35,6 +35,7 @@ import javax.jms.Message;
 import javax.jms.MessageProducer;
 import javax.jms.Session;
 import javax.jms.Topic;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -213,9 +214,9 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         private final CountDownLatch resourcesReleased = new CountDownLatch(1);
         private final List<Exception> cleanupFailures = new ArrayList<>();
         private final SendFuture result = new SendFuture();
-        private Session session;
-        private MessageProducer producer;
-        private Throwable failure;
+        private @Nullable Session session;
+        private @Nullable MessageProducer producer;
+        private @Nullable Throwable failure;
         private boolean finished;
         private boolean resourcesClosed;
 
@@ -247,7 +248,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
             }
         }
 
-        private boolean finish(Throwable error, boolean commit) {
+        private boolean finish(@Nullable Throwable error, boolean commit) {
             Session sessionToClose;
             MessageProducer producerToClose;
             synchronized (lock) {
@@ -293,7 +294,7 @@ public final class JMSBenchmarkTransactionProducer implements BenchmarkProducer 
         }
 
         // Closes a session or producer, recording a failure instead of throwing it.
-        private void closeQuietly(AutoCloseable resource) {
+        private void closeQuietly(@Nullable AutoCloseable resource) {
             if (resource != null) {
                 try {
                     resource.close();

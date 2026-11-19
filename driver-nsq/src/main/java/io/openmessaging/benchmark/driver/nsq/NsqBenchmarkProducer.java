@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 
 public class NsqBenchmarkProducer implements BenchmarkProducer {
 
@@ -163,7 +164,7 @@ public class NsqBenchmarkProducer implements BenchmarkProducer {
         }
 
         // Release the permit before completing, so a completion callback can send again
-        private void finish(Throwable failure) {
+        private void finish(@Nullable Throwable failure) {
             if (released.compareAndSet(false, true)) {
                 semaphore.release();
             }

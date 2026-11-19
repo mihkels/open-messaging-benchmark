@@ -14,11 +14,12 @@
 package io.openmessaging.benchmark.driver.pulsar.config;
 
 import org.apache.pulsar.common.naming.TopicDomain;
+import org.jspecify.annotations.Nullable;
 
 public class PulsarClientConfig {
-    public String serviceUrl;
+    public @Nullable String serviceUrl;
 
-    public String httpUrl;
+    public @Nullable String httpUrl;
 
     public long clientMemoryLimitMB = 256;
 
@@ -28,9 +29,9 @@ public class PulsarClientConfig {
 
     public int maxConcurrentLookupRequests = 1000;
 
-    public String namespacePrefix;
+    public @Nullable String namespacePrefix;
 
-    public String clusterName;
+    public @Nullable String clusterName;
 
     public TopicDomain topicType = TopicDomain.persistent;
 
@@ -48,12 +49,12 @@ public class PulsarClientConfig {
 
     public boolean tlsEnableHostnameVerification = false;
 
-    public String tlsTrustCertsFilePath;
+    public @Nullable String tlsTrustCertsFilePath;
 
     public AuthenticationConfiguration authentication = new AuthenticationConfiguration();
 
     public static class AuthenticationConfiguration {
-        public String plugin;
-        public String data;
+        public String plugin = "";
+        public @Nullable String data;
     }
 }

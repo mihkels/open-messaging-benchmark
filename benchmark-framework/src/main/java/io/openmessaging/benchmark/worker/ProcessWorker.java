@@ -272,7 +272,7 @@ public class ProcessWorker implements Worker {
     }
 
     // Forwards a call to the driver process and reports a crash instead of the failed call.
-    private <T> T call(Function<HttpWorkerClient, T> action) {
+    private <T extends @Nullable Object> T call(Function<HttpWorkerClient, T> action) {
         DriverProcess running;
         HttpWorkerClient client;
         synchronized (this) {

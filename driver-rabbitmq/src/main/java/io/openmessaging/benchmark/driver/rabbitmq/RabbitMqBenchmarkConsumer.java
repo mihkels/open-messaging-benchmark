@@ -21,6 +21,7 @@ import com.rabbitmq.client.Envelope;
 import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
 import java.io.IOException;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +77,10 @@ public final class RabbitMqBenchmarkConsumer extends DefaultConsumer implements 
             String consumerTag, Envelope envelope, BasicProperties properties, byte[] body)
             throws IOException {
         long publishTimestamp =
-                ((Number) properties.getHeaders().get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER))
+                ((Number)
+                                Objects.requireNonNull(
+                                        properties.getHeaders().get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER),
+                                        "RabbitMQ message has no publish timestamp header"))
                         .longValue();
         callback.messageReceived(body, publishTimestamp);
         if (manualAck) {

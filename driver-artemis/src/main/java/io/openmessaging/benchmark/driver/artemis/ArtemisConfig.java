@@ -14,6 +14,8 @@
 
 package io.openmessaging.benchmark.driver.artemis;
 
+import org.jspecify.annotations.Nullable;
+
 public class ArtemisConfig {
-    public String brokerAddress;
+    public @Nullable String brokerAddress;
 }

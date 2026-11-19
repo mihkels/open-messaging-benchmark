@@ -55,6 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -219,8 +220,8 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     private static void completeSubscription(
             MqttCreationFuture<BenchmarkConsumer> future,
             List<Mqtt5Subscription> subscriptions,
-            Mqtt5SubAck subAck,
-            Throwable subscribeFailure) {
+            @Nullable Mqtt5SubAck subAck,
+            @Nullable Throwable subscribeFailure) {
         try {
             if (future.isCancelled()) {
                 return;
@@ -272,7 +273,8 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                 .send();
     }
 
-    private static Throwable connectionFailure(Mqtt5ConnAck connAck, Throwable ex) {
+    private static @Nullable Throwable connectionFailure(
+            @Nullable Mqtt5ConnAck connAck, @Nullable Throwable ex) {
         if (ex != null) {
             return ex;
         }
@@ -283,8 +285,8 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
         return null;
     }
 
-    private static Throwable subscriptionFailure(
-            Mqtt5SubAck subAck, Throwable ex, List<Mqtt5Subscription> subscriptions) {
+    private static @Nullable Throwable subscriptionFailure(
+            @Nullable Mqtt5SubAck subAck, @Nullable Throwable ex, List<Mqtt5Subscription> subscriptions) {
         if (ex != null) {
             return ex;
         }

@@ -84,6 +84,24 @@ class PulsarBenchmarkDriverTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown authentication plugin");
     }
+
+    @Test
+    void initializeRequiresServiceUrl(@TempDir Path temp) throws Exception {
+        Path configuration = temp.resolve("pulsar.yaml");
+        Files.writeString(configuration, "client:\n  httpUrl: http://localhost:8080\n");
+        assertThatThrownBy(
+                        () -> new PulsarBenchmarkDriver().initialize(configuration, mock(MeterRegistry.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("client.serviceUrl");
+    }
+
+    @Test
+    void createTopicFailsWhenNotInitialized() {
+        assertThat(new PulsarBenchmarkDriver().createTopic("topic", 2))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableThat()
+                .withCauseInstanceOf(IllegalStateException.class);
+    }
     @Test
     void consumerCallbackAcknowledgesAndReleasesMessage() throws Exception {
         PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();

@@ -53,11 +53,16 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
             throws IOException, InterruptedException {
         config = DriverConfigs.read(configurationFile, NatsConfig.class);
+        String natsHostUrl = config.natsHostUrl;
+        if (natsHostUrl == null) {
+            throw new IllegalArgumentException("NATS config needs natsHostUrl");
+        }
+        Connection connected = null;
         try {
-            this.connection =
+            connected =
                     Nats.connect(
                             new Options.Builder()
-                                    .server(config.natsHostUrl)
+                                    .server(natsHostUrl)
                                     .maxReconnects(-1) // unlimited
                                     .reconnectWait(Duration.ofSeconds(1))
                                     .connectionTimeout(Duration.ofSeconds(5))
@@ -75,11 +80,11 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                                                 }
                                             })
                                     .build());
-            this.jetStream = connection.jetStream();
-            this.jetStreamManagement = connection.jetStreamManagement();
+            this.jetStream = connected.jetStream();
+            this.jetStreamManagement = connected.jetStreamManagement();
+            this.connection = connected;
         } catch (IOException | InterruptedException | RuntimeException e) {
-            Failures.closeAfterFailure(e, connection);
-            connection = null;
+            Failures.closeAfterFailure(e, connected);
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }

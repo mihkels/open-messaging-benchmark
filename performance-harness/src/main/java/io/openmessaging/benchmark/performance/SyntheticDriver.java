@@ -36,6 +36,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
@@ -67,8 +68,8 @@ public final class SyntheticDriver implements BenchmarkDriver {
     private volatile boolean initialized;
     private volatile boolean closed;
     private Configuration configuration;
-    private ThreadPoolExecutor executor;
-    private ScheduledThreadPoolExecutor receiver;
+    private @Nullable ThreadPoolExecutor executor;
+    private @Nullable ScheduledThreadPoolExecutor receiver;
     private Counter sent;
     private Counter received;
     private Counter rejected;
@@ -227,6 +228,8 @@ public final class SyntheticDriver implements BenchmarkDriver {
 
     private final class Send implements Runnable {
         private final Map<String, Subscription> subscriptions;
+        // Swapped in once the send settles so the retained future no longer pins the caller's payload
+        private static final byte[] RELEASED = new byte[0];
         private byte[] payload;
         private final long timestamp;
         // Cancellation must not release caller-owned storage while a callback still uses it.
@@ -253,10 +256,10 @@ public final class SyntheticDriver implements BenchmarkDriver {
                     }
                 }
                 sent.increment();
-                payload = null;
+                payload = RELEASED;
                 completion.complete(null);
             } catch (Throwable failure) {
-                payload = null;
+                payload = RELEASED;
                 completion.completeExceptionally(failure);
             } finally {
                 sends.arriveAndDeregister();
@@ -264,7 +267,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
         }
 
         void fail(Throwable failure) {
-            payload = null;
+            payload = RELEASED;
             completion.completeExceptionally(failure);
             sends.arriveAndDeregister();
         }

@@ -70,7 +70,6 @@
       "consumerPerSubscription" : 2,
       "keyDistributor" : "NO_KEY",
       "messageSize" : 1024,
-      "messageSizeDistribution" : null,
       "name" : "golden",
       "partitionsPerTopic" : 3,
       "payloadFile" : null,

@@ -14,6 +14,8 @@
 package io.openmessaging.benchmark;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.MessageSizeDistribution;
@@ -40,10 +42,12 @@ public class Workload {
     public int messageSize;
 
     /** Optional weighted size buckets; when configured, this takes precedence over messageSize. */
-    public @Nullable Map<String, Integer> messageSizeDistribution;
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    public Map<String, Integer> messageSizeDistribution = Map.of();
 
     public boolean usesMessageSizeDistribution() {
-        return messageSizeDistribution != null && !messageSizeDistribution.isEmpty();
+        return !messageSizeDistribution.isEmpty();
     }
 
     public boolean useRandomizedPayloads;
@@ -119,11 +123,12 @@ public class Workload {
     public record Stage(int durationMinutes, int targetRate) {}
 
     /** Optional rate profile replacing {@link #producerRate} and {@link #testDurationMinutes}. */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public @Nullable List<Stage> stages;
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    public List<Stage> stages = List.of();
 
     public boolean usesStages() {
-        return stages != null && !stages.isEmpty();
+        return !stages.isEmpty();
     }
 
     /**

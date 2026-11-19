@@ -122,7 +122,7 @@ public final class LocalWorker implements Worker {
             Duration probeTimeout,
             Duration resetTimeout,
             Duration resourceCloseTimeout) {
-        this.stats = Objects.requireNonNull(stats);
+        this.stats = stats;
         shutdownTimeoutNanos = shutdownTimeout.toNanos();
         resourceCloseTimeoutNanos = resourceCloseTimeout.toNanos();
         probeTimeoutNanos = probeTimeout.toNanos();

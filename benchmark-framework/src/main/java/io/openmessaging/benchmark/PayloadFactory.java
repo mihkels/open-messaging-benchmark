@@ -39,9 +39,9 @@ final class PayloadFactory {
         if (generator != null) {
             return generated(workload, generator, random);
         }
-        Map<String, Integer> sizes = workload.messageSizeDistribution;
-        if (sizes != null && !sizes.isEmpty()) {
-            MessageSizeDistribution distribution = new MessageSizeDistribution(sizes);
+        if (workload.usesMessageSizeDistribution()) {
+            MessageSizeDistribution distribution =
+                    new MessageSizeDistribution(workload.messageSizeDistribution);
             List<byte[]> payloads = new ArrayList<>();
             for (int size : distribution.getBucketSizes()) {
                 payloads.add(
@@ -82,7 +82,7 @@ final class PayloadFactory {
         double target = generator.targetCompressionRatio();
         int poolSize = generator.poolSize();
         Map<String, Integer> sizes = workload.messageSizeDistribution;
-        if (sizes == null || sizes.isEmpty()) {
+        if (sizes.isEmpty()) {
             return PayloadTemplates.of(
                     CompressiblePayloads.pool(workload.messageSize, target, poolSize, random), null);
         }

@@ -14,9 +14,10 @@
 package io.openmessaging.benchmark.driver.nats;
 
 import io.nats.client.api.StorageType;
+import org.jspecify.annotations.Nullable;
 
 public class NatsConfig {
-    public String natsHostUrl;
+    public @Nullable String natsHostUrl;
 
     public int replicationFactor;
 

@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,7 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
 
     // If null, a transaction has not been started.
     @GuardedBy("this")
-    private Transaction<ByteBuffer> transaction;
+    private @Nullable Transaction<ByteBuffer> transaction;
 
     // Sends written to the open transaction; they settle only when it commits or fails.
     @GuardedBy("this")
@@ -88,21 +89,23 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
 
     @GuardedBy("this")
     private void writeToTransaction(Optional<String> key, byte[] payload) throws TxnFailedException {
-        if (transaction == null) {
-            transaction = transactionWriter.beginTxn();
+        Transaction<ByteBuffer> txn = transaction;
+        if (txn == null) {
+            txn = transactionWriter.beginTxn();
+            transaction = txn;
         }
         if (this.probeRequested(key)) {
             // Populate probe transaction with the sufficient amount of events.
             // Probe events must use the same encoding as regular events: readers expect the timestamp
             while (eventCount < this.eventsPerTransaction - 1) {
-                writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
+                writeEvent(txn, key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
                 eventCount++;
             }
         }
-        writeEvent(key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
+        writeEvent(txn, key, PravegaMessageEncoder.encode(payload, includeTimestampInEvent));
         if (++eventCount >= eventsPerTransaction) {
             eventCount = 0;
-            transaction.commit();
+            txn.commit();
             transaction = null;
             takePending().forEach(committed -> committed.complete(null));
         }
@@ -141,12 +144,13 @@ public class PravegaBenchmarkTransactionProducer implements BenchmarkProducer {
         }
     }
 
-    @GuardedBy("this")
-    private void writeEvent(Optional<String> key, ByteBuffer payload) throws TxnFailedException {
+    private static void writeEvent(
+            Transaction<ByteBuffer> txn, Optional<String> key, ByteBuffer payload)
+            throws TxnFailedException {
         if (key.isPresent()) {
-            transaction.writeEvent(key.get(), payload);
+            txn.writeEvent(key.get(), payload);
         } else {
-            transaction.writeEvent(payload);
+            txn.writeEvent(payload);
         }
     }
 

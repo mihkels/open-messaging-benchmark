@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,9 +42,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private String scopeName;
-    private StreamManager streamManager;
-    private ReaderGroupManager readerGroupManager;
-    private EventStreamClientFactory clientFactory;
+    // Cleared on close, and on a failed initialize.
+    private @Nullable StreamManager streamManager;
+    private @Nullable ReaderGroupManager readerGroupManager;
+    private @Nullable EventStreamClientFactory clientFactory;
     private final List<String> createdTopics = new ArrayList<>();
     private int activeTopicCreations;
     private boolean closing;
@@ -98,7 +100,9 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
+        StreamManager streamManager;
         synchronized (this) {
+            streamManager = this.streamManager;
             if (closing || streamManager == null) {
                 return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
             }
@@ -139,6 +143,10 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        EventStreamClientFactory clientFactory = this.clientFactory;
+        if (clientFactory == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
+        }
         try {
             topic = cleanName(topic);
             BenchmarkProducer producer;
@@ -167,6 +175,11 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        EventStreamClientFactory clientFactory = this.clientFactory;
+        ReaderGroupManager readerGroupManager = this.readerGroupManager;
+        if (clientFactory == null || readerGroupManager == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
+        }
         try {
             topic = cleanName(topic);
             subscriptionName = cleanName(subscriptionName);
@@ -220,7 +233,7 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     // Waits until no topic creation is in flight. Interruptions do not stop the wait, since cleanup
     // must see every created topic; the first one is returned so the caller can restore it.
-    private synchronized InterruptedException awaitActiveTopicCreations() {
+    private synchronized @Nullable InterruptedException awaitActiveTopicCreations() {
         InterruptedException interrupted = null;
         while (activeTopicCreations > 0) {
             try {

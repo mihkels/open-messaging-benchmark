@@ -15,7 +15,7 @@ limitations under the License.
 # NATS JetStream
 
 The NATS driver benchmarks [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream), the persistence layer
-built into the NATS server. It uses the `jnats` client (2.26.4). Each benchmark topic is a JetStream stream and each
+built into the NATS server. It uses the `jnats` client (2.27.0). Each benchmark topic is a JetStream stream and each
 subscription is a durable push consumer with a deliver group.
 
 This driver is not the NATS Streaming (STAN) driver. NATS Streaming is a separate, deprecated product with its own

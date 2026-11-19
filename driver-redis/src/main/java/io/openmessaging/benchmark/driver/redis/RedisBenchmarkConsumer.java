@@ -29,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -57,7 +58,7 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
     private final Future<?> consumerTask;
     private final long closeTimeoutNanos;
     private volatile boolean closing = false;
-    private volatile Thread consumerThread;
+    private volatile @Nullable Thread consumerThread;
 
     public RedisBenchmarkConsumer(
             final String consumerId,
@@ -151,7 +152,7 @@ public final class RedisBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private static byte[] field(StreamEntryBinary entry, byte[] name) {
+    private static byte @Nullable [] field(StreamEntryBinary entry, byte[] name) {
         for (var field : entry.getFields().entrySet()) {
             if (Arrays.equals(field.getKey(), name)) {
                 return field.getValue();

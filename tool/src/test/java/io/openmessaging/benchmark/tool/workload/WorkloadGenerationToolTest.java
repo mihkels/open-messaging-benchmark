@@ -180,10 +180,10 @@ generatedFiles =stream
         assertThat(workload.consumerBacklogSizeGB).isEqualTo(7);
         assertThat(workload.testDurationMinutes).isEqualTo(8);
         assertThat(workload.warmupDurationMinutes).isEqualTo(9);
-        assertThat(workload.messageSizeDistribution).isNull();
+        assertThat(workload.messageSizeDistribution).isEmpty();
         assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
         var document = YAML_MAPPER.readTree(yaml);
-        assertThat(document.get("messageSizeDistribution").isNull()).isTrue();
+        assertThat(document.has("messageSizeDistribution")).isFalse();
         assertThat(document.get("backlogDrainRatio").asDouble()).isEqualTo(1.0);
     }
 
@@ -227,7 +227,7 @@ generatedFiles =stream
         assertThat(workload.producersPerTopic).isEqualTo(1);
         assertThat(workload.consumerPerSubscription).isEqualTo(1);
         assertThat(workload.producerRate).isEqualTo(10000);
-        assertThat(workload.messageSizeDistribution).isNull();
+        assertThat(workload.messageSizeDistribution).isEmpty();
         assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
         assertThat(workload.thresholds).isNull();
     }

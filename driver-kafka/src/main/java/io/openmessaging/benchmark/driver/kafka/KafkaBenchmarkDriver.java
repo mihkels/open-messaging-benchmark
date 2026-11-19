@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.jspecify.annotations.Nullable;
 
 public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private static final String ZONE_ID_CONFIG = "zone.id";
@@ -48,7 +49,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private Properties producerProperties;
     private Properties consumerProperties;
 
-    private AdminClient admin;
+    private @Nullable AdminClient admin;
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
@@ -100,6 +101,11 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     public CompletableFuture<Void> createTopics(List<TopicInfo> topicInfos) {
         @SuppressWarnings({"unchecked", "rawtypes"})
         Map<String, String> topicConfigs = new HashMap<>((Map) topicProperties);
+        AdminClient admin = this.admin;
+        if (admin == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Kafka benchmark driver is not initialized or already closed"));
+        }
         KafkaTopicCreator topicCreator =
                 new KafkaTopicCreator(admin, topicConfigs, config.replicationFactor());
         return topicCreator.create(topicInfos);

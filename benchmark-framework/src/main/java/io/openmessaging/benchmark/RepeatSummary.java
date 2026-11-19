@@ -141,7 +141,8 @@ public record RepeatSummary(
                                 median(successes, r -> r.summary.publishRateAvg()),
                                 successes.getFirst().summary.targetRate());
                 // Delivery limits judge the worst repetition, not the median
-                thresholds.evaluateDelivery(evaluated, successes.stream().map(r -> r.delivery).toList());
+                thresholds.evaluateDelivery(
+                        evaluated, successes.stream().<@Nullable Delivery>map(r -> r.delivery).toList());
             }
         }
         int failed = repetitions - successes.size();

@@ -72,9 +72,7 @@ final class RunContext {
             Map<String, Integer> distribution = workload.messageSizeDistribution;
             identity.put(
                     "messageSizeDistribution",
-                    distribution == null || distribution.isEmpty()
-                            ? "none"
-                            : new TreeMap<>(distribution).toString());
+                    distribution.isEmpty() ? "none" : new TreeMap<>(distribution).toString());
         } else {
             identity.put("name", String.valueOf(result.workload));
             identity.put("messageSize", String.valueOf(result.messageSize));

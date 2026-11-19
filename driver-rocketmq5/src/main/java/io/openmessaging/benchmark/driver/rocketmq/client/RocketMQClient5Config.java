@@ -13,14 +13,19 @@
  */
 package io.openmessaging.benchmark.driver.rocketmq.client;
 
+import org.jspecify.annotations.Nullable;
+
 public class RocketMQClient5Config {
-    public String namesrvAddr;
-    public String grpcEndpoint;
-    public String clusterName;
-    public String adminAccessKey;
-    public String adminSecretKey;
-    public String accessKey;
-    public String secretKey;
+    // The RocketMQ admin client falls back to the NAMESRV_ADDR environment variable when unset.
+    public @Nullable String namesrvAddr;
+    // Required; the driver checks these in initialize.
+    public @Nullable String grpcEndpoint;
+    public @Nullable String clusterName;
+    // Blank keys disable ACL.
+    public String adminAccessKey = "";
+    public String adminSecretKey = "";
+    public String accessKey = "";
+    public String secretKey = "";
     public boolean sendDelayMsg;
-    public Long delayTimeInSec;
+    public long delayTimeInSec;
 }

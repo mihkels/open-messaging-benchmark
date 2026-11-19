@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,11 +48,11 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
     private final Object readerLock = new Object();
     private final Object closeLock = new Object();
     private final DlogFailures failures = new DlogFailures();
-    private LogReader reader;
+    private @Nullable LogReader reader;
     // Only touched by the reader thread.
     private DLSN lastDLSN = DLSN.InitialDLSN;
     private volatile boolean closing;
-    private volatile Thread readerThread;
+    private volatile @Nullable Thread readerThread;
     private boolean closeStarted;
 
     public DlogBenchmarkConsumer(
@@ -78,11 +79,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
                                 .setDaemon(true)
                                 .build());
         try {
-            this.readerTask =
-                    executor.submit(() -> {
-                        read();
-                        return null;
-                    });
+            this.readerTask = executor.submit(this::read);
         } catch (RuntimeException | Error failure) {
             try {
                 executor.shutdownNow();
@@ -121,10 +118,10 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
                 return false;
             }
             OpenedReader opened = openReader();
-            if (opened.reader() == null) {
+            current = opened.reader();
+            if (current == null) {
                 return opened.keepReading();
             }
-            current = opened.reader();
         }
         return readRecord(current);
     }
@@ -172,7 +169,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     // Outcome of opening a reader: the installed reader, or whether to retry without one.
-    private record OpenedReader(LogReader reader, boolean keepReading) {
+    private record OpenedReader(@Nullable LogReader reader, boolean keepReading) {
         private static final OpenedReader STOP = new OpenedReader(null, false);
     }
 
@@ -186,7 +183,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private LogReader currentReader() {
+    private @Nullable LogReader currentReader() {
         synchronized (readerLock) {
             return reader;
         }
@@ -202,7 +199,7 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private LogReader takeReader(LogReader expected) {
+    private @Nullable LogReader takeReader(@Nullable LogReader expected) {
         synchronized (readerLock) {
             if (expected != null && reader != expected) {
                 return null;
@@ -213,11 +210,11 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private void closeReader(LogReader owned) {
+    private void closeReader(@Nullable LogReader owned) {
         closeResource(owned, "reader");
     }
 
-    private void closeResource(AutoCloseable owned, String name) {
+    private void closeResource(@Nullable AutoCloseable owned, String name) {
         if (owned == null) {
             return;
         }
@@ -232,11 +229,11 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
         }
     }
 
-    private CompletableFuture<Void> closeAsync(AutoCloseable owned, String name) {
+    private CompletableFuture<@Nullable Void> closeAsync(@Nullable AutoCloseable owned, String name) {
         if (owned == null) {
             return CompletableFuture.completedFuture(null);
         }
-        CompletableFuture<Void> completed = new CompletableFuture<>();
+        CompletableFuture<@Nullable Void> completed = new CompletableFuture<>();
         try {
             // DistributedLog close can wait on a monitor held by the reader thread.
             Thread.ofVirtual()
@@ -291,14 +288,14 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
             }
             long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(closeWaitMillis);
             boolean stopWaiting = false;
-            CompletableFuture<Void> readerClose = closeAsync(takeReader(null), "reader");
+            CompletableFuture<@Nullable Void> readerClose = closeAsync(takeReader(null), "reader");
             try {
                 await(readerClose, deadline);
             } catch (InterruptedException | TimeoutException failure) {
                 failures.add(failure);
                 stopWaiting = true;
             }
-            CompletableFuture<Void> managerClose = closeAsync(dlm, "manager");
+            CompletableFuture<@Nullable Void> managerClose = closeAsync(dlm, "manager");
             if (!stopWaiting) {
                 try {
                     await(managerClose, deadline);

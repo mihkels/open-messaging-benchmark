@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,13 +57,13 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
     private final Object lifecycleLock = new Object();
     private final ExecutorService executor;
     private final Future<?> consumerTask;
-    private final Readiness readiness;
-    private final CreationFuture creationFuture;
+    private final @Nullable Readiness readiness;
+    private final CreationFuture creationFuture = new CreationFuture(this);
     private StartupState startupState;
-    private Throwable startupFailure;
-    private Exception closeFailure;
+    private @Nullable Throwable startupFailure;
+    private @Nullable Exception closeFailure;
     private volatile boolean closing = false;
-    private volatile Thread consumerThread;
+    private volatile @Nullable Thread consumerThread;
     private final boolean autoCommit;
 
     /**
@@ -84,10 +85,13 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             long pollTimeoutMs) {
         Readiness readiness = new Readiness(topic);
         consumer.subscribe(Set.of(topic), readiness);
-        CreationFuture creation = new CreationFuture();
-        new KafkaBenchmarkConsumer(
-                consumer, consumerConfig, callback, pollTimeoutMs, readiness, creation);
-        return creation;
+        return new KafkaBenchmarkConsumer(consumer, consumerConfig, callback, pollTimeoutMs, readiness)
+                .creation();
+    }
+
+    // Handing out the creation future is the point; a method keeps SpotBugs from reading it as a leak
+    private CreationFuture creation() {
+        return creationFuture;
     }
 
     // Tests only: skips the readiness handshake that create() performs
@@ -103,7 +107,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             Properties consumerConfig,
             ConsumerCallback callback,
             long pollTimeoutMs) {
-        this(consumer, consumerConfig, callback, pollTimeoutMs, null, new CreationFuture());
+        this(consumer, consumerConfig, callback, pollTimeoutMs, null);
     }
 
     private KafkaBenchmarkConsumer(
@@ -111,13 +115,10 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
             Properties consumerConfig,
             ConsumerCallback callback,
             long pollTimeoutMs,
-            Readiness readiness,
-            CreationFuture creation) {
+            @Nullable Readiness readiness) {
         this.consumer = consumer;
         this.readiness = readiness;
         this.startupState = readiness == null ? StartupState.HANDED_OFF : StartupState.WAITING;
-        this.creationFuture = creation;
-        creation.attach(this);
         this.autoCommit =
                 Boolean.parseBoolean(
                         (String)
@@ -189,7 +190,7 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     // Polls once; returns null when the poll failed and the iteration should be skipped.
-    private ConsumerRecords<String, byte[]> poll(long pollTimeoutMs) {
+    private @Nullable ConsumerRecords<String, byte[]> poll(long pollTimeoutMs) {
         try {
             return consumer.poll(Duration.ofMillis(pollTimeoutMs));
         } catch (Exception error) {
@@ -221,16 +222,17 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     private void checkReadiness() {
+        Readiness readiness = this.readiness;
         if (!closing && readiness != null) {
             try {
-                completeWhenReady();
+                completeWhenReady(readiness);
             } catch (Exception error) {
                 handlePollFailure(error);
             }
         }
     }
 
-    private void completeWhenReady() {
+    private void completeWhenReady(Readiness readiness) {
         if (!readiness.assigned) {
             return;
         }
@@ -312,10 +314,10 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
 
     private static final class CreationFuture extends CompletableFuture<BenchmarkConsumer>
             implements AbandonableCreation {
-        private KafkaBenchmarkConsumer owner;
+        private final KafkaBenchmarkConsumer owner;
 
-        private void attach(KafkaBenchmarkConsumer consumer) {
-            owner = consumer;
+        private CreationFuture(KafkaBenchmarkConsumer owner) {
+            this.owner = owner;
         }
 
         @Override

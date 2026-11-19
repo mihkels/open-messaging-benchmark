@@ -63,7 +63,7 @@
         <jackson.version>3.3.0</jackson.version>
         <jackson.annotations.version>2.23</jackson.annotations.version>
         <!-- Keep at least the version async-http-client is built against -->
-        <netty.version>4.2.20.Final</netty.version>
+        <netty.version>4.2.21.Final</netty.version>
         <log4j.version>2.26.1</log4j.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <jacoco.plugin.version>0.8.16</jacoco.plugin.version>
@@ -83,27 +83,28 @@
         <spotless.plugin.version>3.11.0</spotless.plugin.version>
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
         <google-java-format.version>2.0.0</google-java-format.version>
-        <sonar.plugin.version>5.8.0.7211</sonar.plugin.version>
-        <errorprone.version>2.52.0</errorprone.version>
-        <nullaway.version>0.14.3</nullaway.version>
+        <sonar.plugin.version>5.9.0.7382</sonar.plugin.version>
+        <errorprone.version>2.53.0</errorprone.version>
+        <nullaway.version>0.14.4</nullaway.version>
         <!--
             Error Prone runs its default checks plus NullAway and a set of checks promoted to ERROR because they
             map to findings that used to fail Sonar on pull requests, or are cheap to keep at zero. Production
             code also gets InterruptedExceptionSwallowed (errorprone.mainArgs); tests catch Exception too often
             for it, and run without NullAway. FutureReturnValueIgnored and ReferenceEquality stay warnings until their hits are reviewed.
-            NullAway only checks @NullMarked packages. The javac internals Error Prone needs are exported in
+            NullAway only checks @NullMarked packages (every production package), in JSpecify mode, and treats
+            BenchmarkDriver.initialize as an initializer. The javac internals Error Prone needs are exported in
             .mvn/jvm.config.
             See docs/development/building-the-project.md#static-analysis-and-null-safety.
         -->
-        <errorprone.args>-XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-(test-)?sources/.* -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:CustomInitializerAnnotations=org.openjdk.jmh.annotations.Setup -Xep:BadImport:ERROR -Xep:BooleanLiteral:ERROR -Xep:BoxingComparator:ERROR -Xep:CanonicalDuration:ERROR -Xep:CatchAndPrintStackTrace:ERROR -Xep:DefaultCharset:ERROR -Xep:EmptyBlockTag:ERROR -Xep:EqualsGetClass:ERROR -Xep:FieldCanBeLocal:ERROR -Xep:InconsistentCapitalization:ERROR -Xep:JavaTimeDefaultTimeZone:ERROR -Xep:MissingOverride:ERROR -Xep:OperatorPrecedence:ERROR -Xep:StreamResourceLeak:ERROR -Xep:StringCaseLocaleUsage:ERROR -Xep:UndefinedEquals:ERROR -Xep:UnnamedVariable:ERROR -Xep:UnnecessaryParentheses:ERROR -Xep:UnusedException:ERROR -Xep:UnusedMethod:ERROR -Xep:UnusedVariable:ERROR</errorprone.args>
+        <errorprone.args>-XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-(test-)?sources/.* -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:CustomInitializerAnnotations=org.openjdk.jmh.annotations.Setup -XepOpt:NullAway:KnownInitializers=io.openmessaging.benchmark.driver.BenchmarkDriver.initialize -XepOpt:NullAway:JSpecifyMode=true -Xep:BadImport:ERROR -Xep:BooleanLiteral:ERROR -Xep:BoxingComparator:ERROR -Xep:CanonicalDuration:ERROR -Xep:CatchAndPrintStackTrace:ERROR -Xep:DefaultCharset:ERROR -Xep:EmptyBlockTag:ERROR -Xep:EqualsGetClass:ERROR -Xep:FieldCanBeLocal:ERROR -Xep:InconsistentCapitalization:ERROR -Xep:JavaTimeDefaultTimeZone:ERROR -Xep:MissingOverride:ERROR -Xep:OperatorPrecedence:ERROR -Xep:StreamResourceLeak:ERROR -Xep:StringCaseLocaleUsage:ERROR -Xep:UndefinedEquals:ERROR -Xep:UnnamedVariable:ERROR -Xep:UnnecessaryParentheses:ERROR -Xep:UnusedException:ERROR -Xep:UnusedMethod:ERROR -Xep:UnusedVariable:ERROR</errorprone.args>
         <errorprone.mainArgs>-Xep:InterruptedExceptionSwallowed:ERROR</errorprone.mainArgs>
         <pitest.plugin.version>1.30.2</pitest.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
         <!-- PIT worker threads for the opt-in mutation profile; override with -Dpitest.threads=N -->
         <pitest.threads>4</pitest.threads>
-        <micrometer.version>1.17.2</micrometer.version>
+        <micrometer.version>1.18.0</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
-        <zstd.version>1.5.7-26</zstd.version>
+        <zstd.version>1.5.7-28</zstd.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->
         <argLine/>
         <!--

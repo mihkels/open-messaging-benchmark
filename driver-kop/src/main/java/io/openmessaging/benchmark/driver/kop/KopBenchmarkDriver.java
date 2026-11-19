@@ -53,21 +53,23 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.SubscriptionType;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.DeserializationFeature;
 
 public class KopBenchmarkDriver implements BenchmarkDriver {
 
     private Config config;
-    private AdminClient admin;
+    // Cleared on close; the Pulsar resources exist only for the Pulsar client types
+    private @Nullable AdminClient admin;
     private Properties producerProperties;
     private Properties consumerProperties;
-    private PulsarClient client = null;
+    private @Nullable PulsarClient client;
 
     // Built once in initialize() and cloned for every Pulsar producer
     @SuppressWarnings("java:S1450")
-    private ProducerBuilder<byte[]> producerBuilder = null;
+    private @Nullable ProducerBuilder<byte[]> producerBuilder;
 
-    private ConsumerBuilder<ByteBuffer> consumerBuilder = null;
+    private @Nullable ConsumerBuilder<ByteBuffer> consumerBuilder;
 
     public static Config loadConfig(Path file) throws IOException {
         return DriverConfigs.read(file, Config.class, DeserializationFeature.USE_LONG_FOR_INTS);
@@ -124,7 +126,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         // replicationFactor is meaningless in KoP
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) 1L);
         final CompletableFuture<Void> future = new CompletableFuture<>();
-        admin
+        open(admin, "admin client")
                 .createTopics(List.of(newTopic))
                 .all()
                 .whenComplete((result, throwable) -> {
@@ -150,9 +152,10 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
             }
         } else {
             try {
+                ProducerBuilder<byte[]> builder = open(producerBuilder, "Pulsar producer builder");
                 return ResourceCreator.compose(
                         CompletableFuture.completedFuture(List.of(topic)),
-                        name -> producerBuilder.clone().topic(name).createAsync(),
+                        name -> builder.clone().topic(name).createAsync(),
                         producers -> new PulsarBenchmarkProducer(producers.get(0)));
             } catch (RuntimeException error) {
                 return CompletableFuture.failedFuture(error);
@@ -181,7 +184,7 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         } else {
             try {
                 return ResourceCreator.compose(
-                        client.getPartitionsForTopic(topic, true),
+                        open(client, "Pulsar client").getPartitionsForTopic(topic, true),
                         partition ->
                                 createInternalPulsarConsumer(partition, subscriptionName, consumerCallback),
                         PulsarBenchmarkConsumer::new);
@@ -204,16 +207,25 @@ public class KopBenchmarkDriver implements BenchmarkDriver {
         failures.throwIfAny();
     }
 
-    private PulsarClient getPulsarClient(String serviceUrl) throws PulsarClientException {
-        if (client == null) {
-            client = PulsarClient.builder().serviceUrl(serviceUrl).build();
+    private static <T> T open(@Nullable T resource, String name) {
+        if (resource == null) {
+            throw new IllegalStateException("KoP " + name + " is not initialized or already closed");
         }
-        return client;
+        return resource;
+    }
+
+    private PulsarClient getPulsarClient(String serviceUrl) throws PulsarClientException {
+        PulsarClient current = client;
+        if (current == null) {
+            current = PulsarClient.builder().serviceUrl(serviceUrl).build();
+            client = current;
+        }
+        return current;
     }
 
     private CompletableFuture<Consumer<ByteBuffer>> createInternalPulsarConsumer(
             String topic, String subscriptionName, ConsumerCallback callback) {
-        return consumerBuilder
+        return open(consumerBuilder, "Pulsar consumer builder")
                 .clone()
                 .topic(topic)
                 .subscriptionName(subscriptionName)

@@ -648,7 +648,8 @@ public final class Benchmark {
                 String file =
                         writeResult(summary, "repetition summary", combination, driverName, "summary");
                 summaries.put(file, summary.validity());
-                log.info("{}: {}", file, summary.validity().status().label());
+                String status = summary.validity().status().label();
+                log.info("{}: {}", file, status);
             } catch (RuntimeException e) {
                 log.error("Failed to write the repetition summary", e);
                 failures = append(failures, e);
@@ -808,6 +809,50 @@ public final class Benchmark {
             writer.writeValue(file, value);
             return file.getName();
         }
+
+        // Prints the findings and threshold results; returns true if a threshold failed
+        private static boolean printChecks(
+                List<Finding> findings, Thresholds.@Nullable Result thresholds) {
+            RunChecks.print(findings);
+            if (thresholds == null) {
+                return false;
+            }
+            thresholds.print();
+            return !thresholds.passed();
+        }
+
+        private static Map<String, Object> readDriverConfig(Combination combination) {
+            return driverConfigReader.readValue(new File(combination.driverConfig()));
+        }
+
+        private static String driverName(Map<String, Object> driverConfig, Combination combination) {
+            Object name = driverConfig.get("name");
+            if (name == null || name.toString().isBlank()) {
+                throw new IllegalArgumentException(
+                        "Driver configuration " + combination.driverConfig() + " must specify a name");
+            }
+            return name.toString();
+        }
+
+        // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
+        private static TestResult runWatched(WorkloadRun generator, Worker worker) throws Exception {
+            try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
+                try {
+                    return generator.run();
+                } catch (Exception e) {
+                    throw watchdog.explain(e);
+                }
+            }
+        }
+
+        @SuppressWarnings("java:S1181")
+        private static boolean isQuiescent(WorkloadRun generator) {
+            try {
+                return generator.isQuiescentAfterClose();
+            } catch (Throwable _) {
+                return false;
+            }
+        }
     }
 
     // Worker, IO, timeout, stall and unhealthy-worker (WorkerUnhealthyException) failures can pass
@@ -847,41 +892,6 @@ public final class Benchmark {
             root = root.getCause();
         }
         return root == failure ? failure.toString() : failure + ", caused by " + root;
-    }
-
-    // Prints the findings and threshold results; returns true if a threshold failed
-    private static boolean printChecks(
-            List<Finding> findings, Thresholds.@Nullable Result thresholds) {
-        RunChecks.print(findings);
-        if (thresholds == null) {
-            return false;
-        }
-        thresholds.print();
-        return !thresholds.passed();
-    }
-
-    private static Map<String, Object> readDriverConfig(Combination combination) {
-        return driverConfigReader.readValue(new File(combination.driverConfig()));
-    }
-
-    private static String driverName(Map<String, Object> driverConfig, Combination combination) {
-        Object name = driverConfig.get("name");
-        if (name == null || name.toString().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Driver configuration " + combination.driverConfig() + " must specify a name");
-        }
-        return name.toString();
-    }
-
-    // Runs the workload under the worker watchdog, which fails it when a worker becomes unhealthy
-    private static TestResult runWatched(WorkloadRun generator, Worker worker) throws Exception {
-        try (WorkerWatchdog watchdog = WorkerWatchdog.watch(worker, ResultLog::periodsLogged)) {
-            try {
-                return generator.run();
-            } catch (Exception e) {
-                throw watchdog.explain(e);
-            }
-        }
     }
 
     // The explicit output file, or a generated name in the results directory. Without a results
@@ -942,15 +952,6 @@ public final class Benchmark {
                     && (generator == null || generator.isQuiescentAfterClose());
         } catch (Throwable checkFailure) {
             append(failure, checkFailure);
-            return false;
-        }
-    }
-
-    @SuppressWarnings("java:S1181")
-    private static boolean isQuiescent(WorkloadRun generator) {
-        try {
-            return generator.isQuiescentAfterClose();
-        } catch (Throwable _) {
             return false;
         }
     }

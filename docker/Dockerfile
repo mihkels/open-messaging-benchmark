@@ -41,18 +41,19 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM ${DIST_SOURCE} AS dist
 
 # Unpack, keep only the selected drivers and make everything read-only.
-FROM eclipse-temurin:27-jre@sha256:0dd0465f90d398fa3226b56a3973f5d3c47ac323934dceebdab45ac8910bee6e AS extract
+FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c AS extract
 COPY docker/select-drivers.sh docker/drivers.txt /tools/
 COPY --from=dist /dist.tar.gz /tmp/dist.tar.gz
 ARG DRIVERS=all
 RUN set -eu; \
+    dnf install -y --setopt=install_weak_deps=False tar gzip; \
     mkdir /benchmark; \
     tar -xzf /tmp/dist.tar.gz -C /benchmark --strip-components=1; \
     /tools/select-drivers.sh prune "$DRIVERS" /benchmark; \
     if [ -d /benchmark/drivers/driver-jms ]; then mkdir -p /benchmark/drivers/driver-jms/ext; fi; \
     chmod -R a-w,a+rX /benchmark
 
-FROM eclipse-temurin:27-jre@sha256:0dd0465f90d398fa3226b56a3973f5d3c47ac323934dceebdab45ac8910bee6e AS runtime
+FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c AS runtime
 ARG DRIVERS=all
 ARG VERSION=dev
 ARG REVISION=unknown
@@ -64,12 +65,15 @@ LABEL org.opencontainers.image.title="OpenMessaging Benchmark" \
       org.opencontainers.image.revision="${REVISION}" \
       io.openmessaging.benchmark.drivers="${DRIVERS}"
 
-# Upgrades OS packages so Ubuntu security fixes apply before the pinned Temurin image is rebuilt.
-# --error-on=any fails the build when an index cannot be fetched (apt-get otherwise only warns),
-# so a network failure cannot silently ship an image without the upgrades.
-RUN apt-get update --error-on=any \
-    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
+# Upgrades OS packages so Amazon Linux security fixes apply before the pinned Corretto image is
+# rebuilt. skip_if_unavailable=False fails the build when a repository cannot be fetched, so a
+# network failure cannot silently ship an image without the upgrades. shadow-utils provides
+# useradd/groupadd and procps-ng provides ps and top for interactive sessions.
+RUN dnf upgrade -y --setopt=skip_if_unavailable=False --setopt=install_weak_deps=False \
+    && dnf install -y --setopt=skip_if_unavailable=False --setopt=install_weak_deps=False \
+        shadow-utils procps-ng \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf \
     && groupadd --system --gid 10001 omb \
     && useradd --system --uid 10001 --gid omb --home-dir /tmp --shell /usr/sbin/nologin omb \
     && mkdir -p /results \

@@ -280,7 +280,7 @@ final class NetworkBenchmark implements AutoCloseable {
                             .withFileFromString(
                                     "Dockerfile",
                                     """
-                                    FROM eclipse-temurin:27-jre
+                                    FROM amazoncorretto:27-al2023-headless
                                     ADD distribution.tar.gz /opt/
                                     RUN mv /opt/openmessaging-benchmark-* /benchmark && \\
                                         mkdir -p /benchmark/drivers/driver-jms/ext

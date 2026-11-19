@@ -416,8 +416,11 @@ preflight_fail() {
 
 # --- distribution and runner image ----------------------------------------------------------------
 
+# The distribution for the root pom's <revision>; older builds left in package/target are ignored.
+VERSION=$(sed -n 's:.*<revision>\(.*\)</revision>.*:\1:p' "$REPO_DIR/pom.xml" | head -n 1)
 find_tarball() {
-    ls "$REPO_DIR"/package/target/openmessaging-benchmark-*-bin.tar.gz 2>/dev/null | head -n 1
+    local tarball="$REPO_DIR/package/target/openmessaging-benchmark-$VERSION-bin.tar.gz"
+    [ ! -f "$tarball" ] || echo "$tarball"
 }
 
 build_distribution() {
@@ -445,7 +448,10 @@ if [ "$BUILD_MODE" = docker ] || [ "$BUILD_MODE" = host ] || { [ "$BUILD_MODE" =
     build_distribution "$mode" || preflight_fail "Building the distribution failed, see build.log"
     TARBALL=$(find_tarball)
 fi
-[ -n "$TARBALL" ] || preflight_fail "Distribution tarball package/target/openmessaging-benchmark-*-bin.tar.gz is missing"
+[ -n "$TARBALL" ] || preflight_fail "Distribution tarball package/target/openmessaging-benchmark-$VERSION-bin.tar.gz is missing"
+for other in "$REPO_DIR"/package/target/openmessaging-benchmark-*-bin.tar.gz; do
+    [ "$other" = "$TARBALL" ] || log "WARNING: ignoring stale distribution $(basename "$other")"
+done
 prop "$RUN_PROPS" distribution "$(basename "$TARBALL")"
 prop "$RUN_PROPS" distribution_built_at "$(date -u -r "$TARBALL" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || stat -c %y "$TARBALL" 2>/dev/null)"
 

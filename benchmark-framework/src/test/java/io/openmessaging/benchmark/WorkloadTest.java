@@ -16,6 +16,7 @@ package io.openmessaging.benchmark;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import io.openmessaging.benchmark.utils.payload.PayloadGenerator;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -180,6 +181,21 @@ class WorkloadTest {
                 .containsOnlyKeys("named")
                 .extractingByKey("named")
                 .satisfies(workload -> assertThat(workload.name).isEqualTo("example"));
+    }
+
+    @Test
+    void explicitNullsInAWorkloadFileKeepTheFieldDefaults(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("nulls.yaml");
+        Files.writeString(
+                file,
+                "name: example\ntopics: 1\nmessageSize: 1024\nproducerRate: 1000\n"
+                        + "keyDistributor: null\nstages: null\nmessageSizeDistribution: null\n");
+
+        Workload workload = Benchmark.readWorkloads(List.of(file.toString())).get("nulls");
+
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.NO_KEY);
+        assertThat(workload.stages).isEmpty();
+        assertThat(workload.messageSizeDistribution).isEmpty();
     }
 
     @Test

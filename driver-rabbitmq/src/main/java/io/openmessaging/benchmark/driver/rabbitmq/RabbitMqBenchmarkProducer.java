@@ -133,33 +133,32 @@ public class RabbitMqBenchmarkProducer implements BenchmarkProducer {
             Thread.currentThread().interrupt();
             return CompletableFuture.failedFuture(e);
         }
-        if (permit.rejection() != null) {
-            return CompletableFuture.failedFuture(permit.rejection());
+        Throwable rejection = permit.rejection();
+        if (rejection != null) {
+            return CompletableFuture.failedFuture(rejection);
         }
 
         CompletableFuture<Void> future = new CompletableFuture<>();
-        PendingSends.PendingSend send = null;
-        boolean registered = false;
+        PendingSends.PendingSend registered = null;
         Throwable failure = null;
         try {
-            send =
+            PendingSends.PendingSend send =
                     new PendingSends.PendingSend(permit.generation(), channel.getNextPublishSeqNo(), future);
-            PendingSends.PendingSend registeredSend = send;
-            future.whenComplete((ignored, error) -> pendingSends.remove(registeredSend));
+            future.whenComplete((ignored, error) -> pendingSends.remove(send));
             failure = pendingSends.register(send);
             if (failure == null) {
-                registered = true;
+                registered = send;
                 channel.basicPublish(exchange, key.orElse(""), props, payload);
             }
         } catch (Exception e) {
-            if (registered) {
-                complete(pendingSends.fail(send, e));
+            if (registered != null) {
+                complete(pendingSends.fail(registered, e));
             } else {
                 failure = e;
             }
         } catch (Error e) {
-            if (registered) {
-                complete(pendingSends.fail(send, e));
+            if (registered != null) {
+                complete(pendingSends.fail(registered, e));
             }
             throw e;
         } finally {

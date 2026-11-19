@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
+import org.jspecify.annotations.Nullable;
 
 /** The workload fields supported by templates, including their name-format representations. */
 final class SupportedWorkloadFields {
@@ -125,7 +126,7 @@ final class SupportedWorkloadFields {
                                     workload.testDurationMinutes = 0;
                                 }
                             },
-                            workload -> workload.stages != null ? workload.stages.size() : 0));
+                            workload -> workload.stages.size()));
 
     private SupportedWorkloadFields() {}
 
@@ -135,8 +136,8 @@ final class SupportedWorkloadFields {
         }
     }
 
-    static Map<String, Object> nameVariables(Workload workload) {
-        Map<String, Object> variables = new HashMap<>();
+    static Map<String, @Nullable Object> nameVariables(Workload workload) {
+        Map<String, @Nullable Object> variables = new HashMap<>();
         for (SweepField field : SWEEP_FIELDS) {
             variables.put(field.name(), field.nameValue().apply(workload));
         }
@@ -151,7 +152,7 @@ final class SupportedWorkloadFields {
             Function<WorkloadSetTemplate, List<Integer>> templateValues,
             int defaultValue,
             ObjIntConsumer<Workload> assign,
-            Function<Workload, Object> nameValue) {
+            Function<Workload, @Nullable Object> nameValue) {
         List<Integer> valuesOrDefault(WorkloadSetTemplate template) {
             List<Integer> values = templateValues.apply(template);
             return values != null && !values.isEmpty() ? values : List.of(defaultValue);
@@ -161,7 +162,7 @@ final class SupportedWorkloadFields {
     private record FixedField(
             String name,
             BiConsumer<WorkloadSetTemplate, Workload> assign,
-            Function<Workload, Object> nameValue) {}
+            Function<Workload, @Nullable Object> nameValue) {}
 
     // Effective Zipfian parameters in file-name-safe form, such as 10k-0.99; "none" for other
     // distributors

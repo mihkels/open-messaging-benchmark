@@ -120,20 +120,26 @@ has already checked, such as the Docker image build.
   declare the exceptions a method throws instead of `throws Exception`, and restore the interrupt flag
   when you catch an `InterruptedException`. Other Error Prone warnings are printed but don't fail the
   build.
-- **NullAway** checks the packages marked `@NullMarked` in their `package-info.java`. Today that is
-  every package in `driver-api`, `benchmark-framework` and `tool`. In those packages every type is
-  non-null unless it is annotated with JSpecify `@Nullable` (`org.jspecify.annotations.Nullable`).
-  Driver modules aren't marked yet and aren't checked.
+- **NullAway** checks the packages marked `@NullMarked` in their `package-info.java`, which is every
+  production package, drivers and `performance-harness` included. A new package needs its own
+  `package-info.java`, since `@NullMarked` doesn't carry over to subpackages. In those packages every
+  type is non-null unless it is annotated with JSpecify `@Nullable` (`org.jspecify.annotations.Nullable`).
+  NullAway runs in JSpecify mode, so it also checks type arguments such as
+  `CompletableFuture<@Nullable Void>`. It treats `BenchmarkDriver.initialize` like a constructor:
+  fields that method assigns on every path need no annotation. The YAML readers for workloads, worker
+  lists and driver configs skip explicit nulls (`key: null`), so a field default survives them.
 
 Common fixes for NullAway errors:
 
-|                       Situation                        |                                      Fix                                       |
-|--------------------------------------------------------|--------------------------------------------------------------------------------|
-| A field, parameter or return value can be `null`       | Annotate it `@Nullable`; callers then have to check it                         |
-| A lifecycle field is set later, e.g. in `initialize()` | Annotate it `@Nullable`, copy it to a local variable and check that before use |
-| A YAML/JSON field is optional                          | Annotate it `@Nullable`, or give it a default value                            |
-| A YAML/JSON field is required                          | Check it where the file is loaded and throw an error that names the key        |
-| Jackson or JCommander sets the field                   | `@SuppressWarnings("NullAway.Init")` on the field or no-arg constructor        |
+|                     Situation                      |                                        Fix                                        |
+|----------------------------------------------------|-----------------------------------------------------------------------------------|
+| A field, parameter or return value can be `null`   | Annotate it `@Nullable`; callers then have to check it                            |
+| A driver field is set in `initialize()`            | Nothing, as long as every path through `initialize()` assigns it                  |
+| A lifecycle field is set later or cleared on close | Annotate it `@Nullable`, copy it to a local variable and check that before use    |
+| A YAML/JSON field is optional                      | Give it a default value, such as `List.of()`; `@Nullable` only if absence matters |
+| A YAML/JSON field is required                      | Check it where the file is loaded and throw an error that names the key           |
+| Jackson or JCommander sets the field               | `@SuppressWarnings("NullAway.Init")` on the field or no-arg constructor           |
+| A generic helper passes `null` through             | Declare the type variable `<T extends @Nullable Object>`                          |
 
 Suppress a false positive with `@SuppressWarnings("<CheckName>")` on the smallest enclosing element,
 with a comment that says why.

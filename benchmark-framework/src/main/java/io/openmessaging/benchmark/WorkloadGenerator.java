@@ -178,9 +178,8 @@ public final class WorkloadGenerator implements WorkloadRun {
 
         ensureTopicsAreReady();
 
-        List<Workload.Stage> stages = workload.stages;
-        if (stages != null && !stages.isEmpty()) {
-            targetPublishRate = stages.getFirst().targetRate();
+        if (workload.usesStages()) {
+            targetPublishRate = workload.stages.getFirst().targetRate();
         } else if (workload.producerRate > 0) {
             targetPublishRate = workload.producerRate;
         } else {
@@ -398,7 +397,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      * @param tickMillis how often the rate is recomputed
      */
     void driveStages(LongSupplier clock, long tickMillis) throws InterruptedException {
-        List<Workload.Stage> stages = Objects.requireNonNull(workload.stages);
+        List<Workload.Stage> stages = workload.stages;
         long start = clock.getAsLong();
         long total = MINUTES.toNanos(workload.measuredMinutes());
         double sent = targetPublishRate;

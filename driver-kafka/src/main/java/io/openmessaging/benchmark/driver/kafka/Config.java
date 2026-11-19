@@ -15,6 +15,7 @@ package io.openmessaging.benchmark.driver.kafka;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 
 public record Config(
         @JsonProperty("replicationFactor") short replicationFactor,
@@ -24,12 +25,16 @@ public record Config(
         @JsonProperty("consumerConfig") String consumerConfig) {
     @JsonCreator
     public Config {
-        // Compact constructor body - validation can be added here if needed
+        // Jackson passes null for a missing key; empty text adds no properties
+        topicConfig = Objects.requireNonNullElse(topicConfig, "");
+        commonConfig = Objects.requireNonNullElse(commonConfig, "");
+        producerConfig = Objects.requireNonNullElse(producerConfig, "");
+        consumerConfig = Objects.requireNonNullElse(consumerConfig, "");
     }
 
     // Default constructor for Jackson deserialization when no arguments are provided
     @SuppressWarnings("unused")
     public Config() {
-        this((short) 0, null, null, null, null);
+        this((short) 0, "", "", "", "");
     }
 }

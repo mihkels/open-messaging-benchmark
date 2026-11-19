@@ -13,20 +13,26 @@
  */
 package io.openmessaging.benchmark.driver.rocketmq.client;
 
-public class RocketMQClientConfig {
-    public String namesrvAddr;
-    public String clusterName;
-    public Boolean vipChannelEnabled;
-    public Integer maxMessageSize;
-    public Integer compressMsgBodyOverHowmuch;
-    public Boolean batchCQ;
-    public Boolean autoBatch;
-    public Integer batchMaxBytes;
-    public Integer batchMaxDelayMs;
-    public Integer totalBatchMaxBytes;
+import org.jspecify.annotations.Nullable;
 
-    public Boolean enableBackpressure;
-    public Integer backpressureConcurrency;
-    public String accessKey;
-    public String secretKey;
+public class RocketMQClientConfig {
+    // The RocketMQ client falls back to the NAMESRV_ADDR environment variable when unset.
+    public @Nullable String namesrvAddr;
+    // Required; the driver checks it in initialize.
+    public @Nullable String clusterName;
+    // Unset options keep the RocketMQ client defaults.
+    public @Nullable Boolean vipChannelEnabled;
+    public @Nullable Integer maxMessageSize;
+    public @Nullable Integer compressMsgBodyOverHowmuch;
+    public boolean batchCQ;
+    public @Nullable Boolean autoBatch;
+    public @Nullable Integer batchMaxBytes;
+    public @Nullable Integer batchMaxDelayMs;
+    public @Nullable Integer totalBatchMaxBytes;
+
+    public @Nullable Boolean enableBackpressure;
+    public @Nullable Integer backpressureConcurrency;
+    // Blank keys disable ACL.
+    public String accessKey = "";
+    public String secretKey = "";
 }

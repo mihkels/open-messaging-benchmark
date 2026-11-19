@@ -86,7 +86,7 @@ class WorkloadSetGeneratorTest {
                     assertThat(workload.consumerBacklogSizeGB).isZero();
                     assertThat(workload.testDurationMinutes).isEqualTo(5);
                     assertThat(workload.warmupDurationMinutes).isEqualTo(1);
-                    assertThat(workload.messageSizeDistribution).isNull();
+                    assertThat(workload.messageSizeDistribution).isEmpty();
                     assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
                     assertThat(workload.thresholds).isNull();
                     assertThat(workload.checks).isNull();
@@ -186,7 +186,7 @@ class WorkloadSetGeneratorTest {
             assertThat(workload.consumerBacklogSizeGB).isEqualTo(2345);
             assertThat(workload.testDurationMinutes).isEqualTo(67);
             assertThat(workload.warmupDurationMinutes).isEqualTo(89);
-            assertThat(workload.messageSizeDistribution).isNull();
+            assertThat(workload.messageSizeDistribution).isEmpty();
             assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
             assertThat(workload.name)
                     .isEqualTo(

@@ -49,20 +49,27 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.tools.admin.MQAdminExt;
 import org.apache.rocketmq.tools.command.CommandUtil;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RocketMQBenchmarkDriver implements BenchmarkDriver {
-    private DefaultMQAdminExt rmqAdmin;
+    private @Nullable DefaultMQAdminExt rmqAdmin;
     private RocketMQClientConfig rmqClientConfig;
-    DefaultMQProducer rmqProducer;
-    private RPCHook rpcHook;
+    private String clusterName;
+    @Nullable DefaultMQProducer rmqProducer;
+    private @Nullable RPCHook rpcHook;
     private boolean closed;
 
     @Override
     public synchronized void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.rmqClientConfig = readConfig(configurationFile);
+        String configuredCluster = rmqClientConfig.clusterName;
+        if (configuredCluster == null) {
+            throw new IllegalArgumentException("RocketMQ config needs clusterName");
+        }
+        this.clusterName = configuredCluster;
         if (isAclEnabled()) {
             rpcHook =
                     new AclClientRPCHook(
@@ -84,15 +91,15 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         this.rmqAdmin = admin;
     }
 
-    DefaultMQAdminExt newAdmin(RPCHook hook) {
+    DefaultMQAdminExt newAdmin(@Nullable RPCHook hook) {
         return hook == null ? new DefaultMQAdminExt() : new DefaultMQAdminExt(hook);
     }
 
-    DefaultMQProducer newProducer(String group, RPCHook hook) {
+    DefaultMQProducer newProducer(String group, @Nullable RPCHook hook) {
         return hook == null ? new DefaultMQProducer(group) : new DefaultMQProducer(group, hook);
     }
 
-    DefaultMQPushConsumer newConsumer(String subscription, RPCHook hook) {
+    DefaultMQPushConsumer newConsumer(String subscription, @Nullable RPCHook hook) {
         return hook == null
                 ? new DefaultMQPushConsumer(subscription)
                 : new DefaultMQPushConsumer(subscription, hook, new AllocateMessageQueueAveragely());
@@ -121,8 +128,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         if (cached != null) {
             return cached;
         }
-        Set<String> brokerList =
-                CommandUtil.fetchMasterAddrByClusterName(adminExt, this.rmqClientConfig.clusterName);
+        Set<String> brokerList = CommandUtil.fetchMasterAddrByClusterName(adminExt, this.clusterName);
         if (brokerList.isEmpty()) {
             throw new IllegalStateException("get brokerAddr return null, clusterName: " + clusterName);
         }
@@ -139,29 +145,25 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             topicConfig.setReadQueueNums(partitions);
             topicConfig.setWriteQueueNums(partitions);
             topicConfig.setTopicName(topic);
-            if (Boolean.TRUE.equals(this.rmqClientConfig.batchCQ)) {
+            if (this.rmqClientConfig.batchCQ) {
                 topicConfig
                         .getAttributes()
                         .put("+" + TopicAttributes.QUEUE_TYPE_ATTRIBUTE.getName(), "BatchCQ");
             }
 
             try {
+                DefaultMQAdminExt admin = admin();
                 String[] masters =
-                        fetchMasterAddrByClusterName(this.rmqAdmin, this.rmqClientConfig.clusterName)
-                                .toArray(String[]::new);
-                createOnMasters(masters, topicConfig, partitions);
+                        fetchMasterAddrByClusterName(admin, this.clusterName).toArray(String[]::new);
+                createOnMasters(admin, masters, topicConfig, partitions);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(
-                        String.format(
-                                "Failed to create topic [%s] to cluster [%s]",
-                                topic, this.rmqClientConfig.clusterName),
+                        String.format("Failed to create topic [%s] to cluster [%s]", topic, this.clusterName),
                         e);
             } catch (Exception e) {
                 throw new RuntimeException(
-                        String.format(
-                                "Failed to create topic [%s] to cluster [%s]",
-                                topic, this.rmqClientConfig.clusterName),
+                        String.format("Failed to create topic [%s] to cluster [%s]", topic, this.clusterName),
                         e);
             }
         });
@@ -172,13 +174,22 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
     }
 
     // Masters only: slaves sync topic config from their master.
-    private void createOnMasters(String[] masters, TopicConfig topicConfig, int partitions)
+    private static void createOnMasters(
+            MQAdminExt admin, String[] masters, TopicConfig topicConfig, int partitions)
             throws InterruptedException, MQBrokerException, MQClientException, RemotingException {
         for (int i = 0; i < Math.min(partitions, masters.length); i++) {
             topicConfig.setReadQueueNums(queuesForMaster(partitions, masters.length, i));
             topicConfig.setWriteQueueNums(topicConfig.getReadQueueNums());
-            rmqAdmin.createAndUpdateTopicConfig(masters[i], topicConfig);
+            admin.createAndUpdateTopicConfig(masters[i], topicConfig);
         }
+    }
+
+    private synchronized DefaultMQAdminExt admin() {
+        DefaultMQAdminExt admin = rmqAdmin;
+        if (admin == null) {
+            throw new IllegalStateException("RocketMQ driver is closed");
+        }
+        return admin;
     }
 
     @Override
@@ -186,13 +197,15 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         if (closed) {
             return CompletableFuture.failedFuture(new IllegalStateException("RocketMQ driver is closed"));
         }
-        if (rmqProducer == null) {
+        DefaultMQProducer shared = rmqProducer;
+        if (shared == null) {
             DefaultMQProducer producer = null;
             try {
                 producer = newProducer("ProducerGroup_" + ResourceNames.randomSuffix(), rpcHook);
                 configureProducer(producer);
                 producer.start();
                 rmqProducer = producer;
+                shared = producer;
             } catch (Exception e) {
                 if (producer != null) {
                     Failures.closeAfterFailure(e, producer::shutdown);
@@ -201,7 +214,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
             }
         }
 
-        return CompletableFuture.completedFuture(new RocketMQBenchmarkProducer(rmqProducer, topic));
+        return CompletableFuture.completedFuture(new RocketMQBenchmarkProducer(shared, topic));
     }
 
     private void configureProducer(DefaultMQProducer producer) {

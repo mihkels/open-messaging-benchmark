@@ -90,6 +90,9 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
         Config config = DriverConfigs.read(configurationFile, Config.class);
 
         DistributedLogConfiguration conf = dlogConfiguration(config.dlogConf);
+        if (config.dlogUri == null) {
+            throw new IllegalArgumentException("BookKeeper config needs dlogUri");
+        }
         URI dlogUri = URI.create(config.dlogUri);
 
         // BookKeeper client metrics are not exported.

@@ -355,7 +355,7 @@ public final class DistributedWorkersEnsemble implements Worker {
                 });
     }
 
-    private <T, R> List<R> mapAll(List<T> targets, Function<T, R> action) {
+    private <T, R extends @Nullable Object> List<R> mapAll(List<T> targets, Function<T, R> action) {
         try {
             return callAllLoggingCounters(targets, action::apply);
         } catch (RuntimeException e) {
@@ -365,8 +365,8 @@ public final class DistributedWorkersEnsemble implements Worker {
         }
     }
 
-    private <T, R> List<R> callAllLoggingCounters(List<T> targets, Call<T, R> action)
-            throws Exception {
+    private <T, R extends @Nullable Object> List<R> callAllLoggingCounters(
+            List<T> targets, Call<T, R> action) throws Exception {
         try {
             return callAll(targets, action);
         } catch (Exception e) {

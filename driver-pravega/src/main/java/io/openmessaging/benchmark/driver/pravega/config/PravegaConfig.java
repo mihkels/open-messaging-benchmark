@@ -47,7 +47,7 @@ public record PravegaConfig(
                         getBoolean(
                                         (Map<String, Object>) properties.getOrDefault("writer", Collections.emptyMap()),
                                         "enableConnectionPooling")
-                                .orElse(null));
+                                .orElse(true));
 
         return new PravegaConfig(
                 getBoolean(properties, "includeTimestampInEvent").orElse(true),

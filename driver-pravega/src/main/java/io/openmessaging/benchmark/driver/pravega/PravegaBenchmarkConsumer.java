@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,7 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     private final EventStreamReader<ByteBuffer> reader;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object closeLock = new Object();
-    private volatile Thread readerThread;
+    private volatile @Nullable Thread readerThread;
     private final Failures closeFailures = new Failures();
 
     /**

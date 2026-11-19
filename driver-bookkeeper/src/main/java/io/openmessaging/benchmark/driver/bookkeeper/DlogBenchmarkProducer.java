@@ -23,11 +23,12 @@ import io.openmessaging.benchmark.driver.PendingSendTracker;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 public final class DlogBenchmarkProducer implements BenchmarkProducer {
 
     private final AsyncLogWriter writer;
-    private final DistributedLogManager manager;
+    private final @Nullable DistributedLogManager manager;
     private final TimeSequencer sequencer = new TimeSequencer();
     private final Object lifecycleLock = new Object();
     private final PendingSendTracker pending = new PendingSendTracker("DistributedLog producer");
@@ -36,7 +37,7 @@ public final class DlogBenchmarkProducer implements BenchmarkProducer {
         this(null, writer);
     }
 
-    public DlogBenchmarkProducer(DistributedLogManager manager, AsyncLogWriter writer) {
+    public DlogBenchmarkProducer(@Nullable DistributedLogManager manager, AsyncLogWriter writer) {
         this.manager = manager;
         this.writer = Objects.requireNonNull(writer, "writer");
         sequencer.setLastId(writer.getLastTxId());

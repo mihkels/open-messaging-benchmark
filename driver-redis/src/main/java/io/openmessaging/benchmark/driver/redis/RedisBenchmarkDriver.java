@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -32,16 +33,26 @@ import redis.clients.jedis.JedisPool;
 
 @SuppressWarnings("unused")
 public class RedisBenchmarkDriver implements BenchmarkDriver {
-    JedisPool jedisPool;
+    @Nullable JedisPool jedisPool;
     // Consumers hold a connection inside XREADGROUP BLOCK, so they get their own unbounded pool
-    JedisPool consumerPool;
+    @Nullable JedisPool consumerPool;
     private RedisClientConfig clientConfig;
+    private String redisHost;
+    private int redisPort;
     private boolean closed;
 
     @Override
     public void initialize(final Path configurationFile, final MeterRegistry statsLogger)
             throws IOException {
         this.clientConfig = readConfig(configurationFile);
+        if (clientConfig.redisHost == null) {
+            throw new IllegalArgumentException("Redis config needs redisHost");
+        }
+        if (clientConfig.redisPort == null) {
+            throw new IllegalArgumentException("Redis config needs redisPort");
+        }
+        this.redisHost = clientConfig.redisHost;
+        this.redisPort = clientConfig.redisPort;
     }
 
     @Override
@@ -107,47 +118,45 @@ public class RedisBenchmarkDriver implements BenchmarkDriver {
         if (closed) {
             throw new IllegalStateException("Redis driver is closed");
         }
-        if (jedisPool == null) {
-            setupJedisConn();
+        JedisPool current = jedisPool;
+        if (current == null) {
+            current = setupJedisConn();
         }
-        return jedisPool;
+        return current;
     }
 
     private synchronized JedisPool consumerPool() {
         pool();
-        return consumerPool;
+        JedisPool current = consumerPool;
+        if (current == null) {
+            throw new IllegalStateException("Redis consumer pool is not set up");
+        }
+        return current;
     }
 
-    private synchronized void setupJedisConn() {
+    private synchronized JedisPool setupJedisConn() {
         GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
-        if (clientConfig.jedisPoolMaxTotal != null) {
-            poolConfig.setMaxTotal(clientConfig.jedisPoolMaxTotal);
-        }
-        if (clientConfig.jedisPoolMaxIdle != null) {
-            poolConfig.setMaxIdle(clientConfig.jedisPoolMaxIdle);
-        }
+        poolConfig.setMaxTotal(clientConfig.jedisPoolMaxTotal);
+        poolConfig.setMaxIdle(clientConfig.jedisPoolMaxIdle);
         GenericObjectPoolConfig<Jedis> consumerPoolConfig = new GenericObjectPoolConfig<>();
         consumerPoolConfig.setMaxTotal(-1);
         consumerPoolConfig.setMaxIdle(-1);
-        jedisPool = newPool(poolConfig);
+        JedisPool producers = newPool(poolConfig);
+        jedisPool = producers;
         consumerPool = newPool(consumerPoolConfig);
+        return producers;
     }
 
     private JedisPool newPool(GenericObjectPoolConfig<Jedis> poolConfig) {
-        if (clientConfig.redisPass == null) {
-            return new JedisPool(poolConfig, clientConfig.redisHost, clientConfig.redisPort, 2000);
+        String redisUser = clientConfig.redisUser;
+        String redisPass = clientConfig.redisPass;
+        if (redisPass == null) {
+            return new JedisPool(poolConfig, redisHost, redisPort, 2000);
         }
-        if (clientConfig.redisUser == null) {
-            return new JedisPool(
-                    poolConfig, clientConfig.redisHost, clientConfig.redisPort, 2000, clientConfig.redisPass);
+        if (redisUser == null) {
+            return new JedisPool(poolConfig, redisHost, redisPort, 2000, redisPass);
         }
-        return new JedisPool(
-                poolConfig,
-                clientConfig.redisHost,
-                clientConfig.redisPort,
-                2000,
-                clientConfig.redisUser,
-                clientConfig.redisPass);
+        return new JedisPool(poolConfig, redisHost, redisPort, 2000, redisUser, redisPass);
     }
 
     @Override

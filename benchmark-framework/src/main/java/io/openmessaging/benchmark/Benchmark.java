@@ -19,6 +19,8 @@ import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import io.openmessaging.benchmark.worker.BearerTokenAuth;
 import io.openmessaging.benchmark.worker.DistributedWorkersEnsemble;
 import io.openmessaging.benchmark.worker.DriverConfiguration;
@@ -66,7 +68,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
-import tools.jackson.dataformat.yaml.YAMLFactory;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 
 public final class Benchmark {
     static final int THRESHOLD_FAILURE_EXIT_CODE = 2;
@@ -90,7 +92,7 @@ public final class Benchmark {
         @Parameter(
                 names = {"-d", "--drivers"},
                 description = "Drivers list. eg.: pulsar/pulsar.yaml,kafka/kafka.yaml")
-        public @Nullable List<String> drivers;
+        public List<String> drivers = new ArrayList<>();
 
         @Parameter(
                 names = {"-w", "--workers"},
@@ -98,7 +100,7 @@ public final class Benchmark {
                         "List of worker nodes. eg: http://1.2.3.4:8080,http://4.5.6.7:8080, or a single"
                                 + " dns://<host>:<port> resolved to one worker per A/AAAA record, eg. a"
                                 + " Kubernetes headless Service")
-        public @Nullable List<String> workers;
+        public List<String> workers = new ArrayList<>();
 
         @Parameter(
                 names = {"-wf", "--workers-file"},
@@ -148,7 +150,7 @@ public final class Benchmark {
         public @Nullable String driverLocation;
 
         @Parameter(description = "Workloads")
-        public @Nullable List<String> workloads;
+        public List<String> workloads = new ArrayList<>();
 
         @Parameter(
                 names = {"-o", "--output"},
@@ -230,8 +232,7 @@ public final class Benchmark {
             log.info("Starting benchmark with config: {}", writer.writeValueAsString(arguments));
         }
 
-        Map<String, Workload> workloads =
-                readWorkloads(Objects.requireNonNull(arguments.workloads, "workloads"));
+        Map<String, Workload> workloads = readWorkloads(arguments.workloads);
         if (log.isInfoEnabled()) {
             log.info("Workloads: {}", writer.writeValueAsString(workloads));
         }
@@ -270,7 +271,7 @@ public final class Benchmark {
         if (usageError != null) {
             exitWithUsage(jc, usageError);
         }
-        if (arguments.workers != null && arguments.workersFile != null) {
+        if (!arguments.workers.isEmpty() && arguments.workersFile != null) {
             log.error("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
         }
@@ -280,10 +281,10 @@ public final class Benchmark {
     // Checks JCommander cannot express; null when the arguments are usable
     static @Nullable String usageError(Arguments arguments) {
         // Not required by JCommander because --csv needs neither
-        if (arguments.workloads == null || arguments.workloads.isEmpty()) {
+        if (arguments.workloads.isEmpty()) {
             return "At least one workload file is required";
         }
-        if (arguments.drivers == null || arguments.drivers.isEmpty()) {
+        if (arguments.drivers.isEmpty()) {
             return "At least one driver must be given with --drivers";
         }
         int combinations = arguments.workloads.size() * arguments.drivers.size();
@@ -315,7 +316,7 @@ public final class Benchmark {
     // Fills the worker list from --workers-file, or from workers.yaml when no workers are given,
     // then expands a dns:// address into one URL per resolved worker
     private static void resolveWorkers(Arguments arguments) throws InterruptedException {
-        if (arguments.workers == null && arguments.workersFile == null) {
+        if (arguments.workers.isEmpty() && arguments.workersFile == null) {
             var defaultFile = new File("workers.yaml");
             if (defaultFile.exists()) {
                 log.info("Using default worker file workers.yaml");
@@ -330,7 +331,7 @@ public final class Benchmark {
         }
 
         List<String> workers = arguments.workers;
-        if (workers != null && workers.stream().anyMatch(WorkerDiscovery::isDns)) {
+        if (workers.stream().anyMatch(WorkerDiscovery::isDns)) {
             if (workers.size() != 1) {
                 throw new IllegalArgumentException(
                         "A dns:// worker address cannot be combined with other worker addresses: " + workers);
@@ -397,7 +398,7 @@ public final class Benchmark {
     }
 
     private static Worker createWorker(Arguments arguments) {
-        if (arguments.workers != null && !arguments.workers.isEmpty()) {
+        if (!arguments.workers.isEmpty()) {
             String token =
                     BearerTokenAuth.resolveToken(System.getenv(), arguments.workerTokenFile).orElse(null);
             Path caFile = workerCaFile(arguments, System.getenv());
@@ -448,8 +449,7 @@ public final class Benchmark {
             failures = initialStop.failure();
             boolean safeToContinue = initialStop.safeToContinue();
 
-            List<String> drivers = Objects.requireNonNull(arguments.drivers, "--drivers");
-            for (Combination combination : combinations(workloads, drivers)) {
+            for (Combination combination : combinations(workloads, arguments.drivers)) {
                 if (!safeToContinue) {
                     log.error("Skipping remaining workloads because worker cleanup failed");
                     break;
@@ -966,7 +966,11 @@ public final class Benchmark {
         }
     }
 
-    private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    // Explicit YAML nulls ("stages: null") keep the field default instead of breaking non-null fields
+    private static final ObjectMapper mapper =
+            YAMLMapper.builder()
+                    .changeDefaultNullHandling(n -> JsonSetter.Value.forValueNulls(Nulls.SKIP))
+                    .build();
     private static final ObjectReader workersReader =
             mapper.readerFor(Workers.class).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     private static final ObjectReader workloadReader =

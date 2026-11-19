@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -44,7 +45,7 @@ final class NsqLookup implements NSQLookup {
     private final String nsqdHost;
     private final int nsqdHttpPort;
     private final Set<String> addresses = new HashSet<>();
-    private volatile ServerAddress publishingNode;
+    private volatile @Nullable ServerAddress publishingNode;
 
     NsqLookup(HttpClient httpClient, Duration timeout, String nsqdHost, int nsqdHttpPort) {
         this.httpClient = httpClient;

@@ -13,9 +13,11 @@
  */
 package io.openmessaging.benchmark.driver.natsstreaming;
 
+import org.jspecify.annotations.Nullable;
+
 public class NatsStreamingClientConfig {
-    public String natsHostUrl;
-    public String clusterId;
+    public @Nullable String natsHostUrl;
+    public String clusterId = "test-cluster";
 
     public int maxPubAcksInFlight = 16384;
 

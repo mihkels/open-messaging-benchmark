@@ -123,7 +123,8 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
                 Boolean.parseBoolean(
                         (String)
                                 consumerConfig.getOrDefault(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false"));
-        this.executor = Executors.newSingleThreadExecutor();
+        this.executor =
+                Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("kafka-consumer").factory());
         try {
             this.consumerTask =
                     this.executor.submit(() -> {

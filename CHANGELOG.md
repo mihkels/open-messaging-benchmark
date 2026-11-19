@@ -1,5 +1,9 @@
 # Changelog
 
+Only the latest release keeps its distribution tarball and `SHA256SUMS`; they are removed from older
+releases. See [Older versions](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/#older-versions)
+for the container images and the build-from-tag command.
+
 ## [0.5.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.4.0...v0.5.0) (2026-11-18)
 
 

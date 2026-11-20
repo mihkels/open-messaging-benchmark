@@ -18,7 +18,7 @@
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.openmessaging.benchmark</groupId>
+        <groupId>io.github.mihkels.omb</groupId>
         <artifactId>messaging-benchmark</artifactId>
         <version>${revision}</version>
     </parent>
@@ -58,6 +58,11 @@
             <version>${json.schema.validator.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.github.mihkels.omb</groupId>
+            <artifactId>metrics-otlp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
             <version>${javalin.version}</version>
@@ -73,11 +78,6 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.openmessaging.benchmark</groupId>
-            <artifactId>metrics-otlp</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>

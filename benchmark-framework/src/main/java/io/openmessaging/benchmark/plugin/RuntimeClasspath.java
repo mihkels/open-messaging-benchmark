@@ -45,6 +45,8 @@ public final class RuntimeClasspath {
     /** Artifacts whose types cross the driver SPI and must be identical in host and plugin. */
     static final Set<String> BOUNDARY_ARTIFACTS =
             Set.of(
+                    "io.github.mihkels.omb:driver-api",
+                    // groupId up to 0.6.0; bundles built against it may still carry the jar
                     "io.openmessaging.benchmark:driver-api",
                     "io.micrometer:micrometer-core",
                     "io.micrometer:micrometer-commons",

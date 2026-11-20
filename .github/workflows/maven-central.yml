@@ -1,0 +1,121 @@
+name: Maven Central
+
+# Publishes the parent POM and driver-api (io.github.mihkels.omb) to Maven Central from release tags,
+# so external driver authors can depend on driver-api without building the benchmark (#494).
+#
+# Central's free tier caps release count per month, so a tag publishes only when driver-api/ changed
+# since the previous v* tag. Run the workflow by hand with force=true to publish an unchanged tag,
+# for example the first Central release.
+#
+# Nothing runs until the repository variable MAVEN_CENTRAL_ENABLED is "true". Uploads stop at
+# VALIDATED in the Central Portal, where a person presses Publish, unless MAVEN_CENTRAL_AUTO_PUBLISH
+# is "true". Setup: docs/development/releasing.md#maven-central. Release tags use no caches, so
+# nothing a pull request writes can end up in a published artifact.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v0.7.0'
+        required: true
+        type: string
+      force:
+        description: 'Publish even if driver-api did not change since the previous tag'
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    if: vars.MAVEN_CENTRAL_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.diff.outputs.publish }}
+      tag: ${{ steps.diff.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            echo "Not a release tag: $TAG" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # shortcut: only driver-api/ counts; dependency bumps in the root pom.xml do not trigger a publish
+          prev=$(git describe --tags --abbrev=0 --match 'v*.*.*' "$TAG^" 2>/dev/null || true)
+          if [[ "$FORCE" == "true" ]]; then
+            reason="forced"
+          elif [[ -z "$prev" ]]; then
+            reason="no previous tag"
+          elif ! git diff --quiet "$prev" "$TAG" -- driver-api/; then
+            reason="driver-api changed since $prev"
+          else
+            echo "driver-api unchanged since $prev; skipping Maven Central" >> "$GITHUB_STEP_SUMMARY"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Publishing $TAG to Maven Central: $reason" >> "$GITHUB_STEP_SUMMARY"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: changes
+    if: needs.changes.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: maven-central
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.changes.outputs.tag }}
+          persist-credentials: false
+      - name: Check versions
+        env:
+          TAG: ${{ needs.changes.outputs.tag }}
+        run: GITHUB_REF="refs/tags/$TAG" .github/scripts/check-versions.sh
+      - name: Install project tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          install_args: java http:maven
+          cache: false
+      - name: Write Maven settings
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${env.CENTRAL_TOKEN_USERNAME}</username>
+                <password>${env.CENTRAL_TOKEN_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+      - name: Deploy parent POM and driver-api
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+          AUTO_PUBLISH: ${{ vars.MAVEN_CENTRAL_AUTO_PUBLISH == 'true' }}
+        run: >-
+          mvn --no-transfer-progress --batch-mode -Pcentral -pl .,driver-api deploy
+          -Dcentral.autoPublish="$AUTO_PUBLISH"

@@ -96,7 +96,7 @@ public final class HostRuntime {
         entries.add(
                 new Entry(
                         codeSource(HostRuntime.class),
-                        new ArtifactCoordinates("io.openmessaging.benchmark", "benchmark-framework", "local")));
+                        new ArtifactCoordinates("io.github.mihkels.omb", "benchmark-framework", "local")));
         List<String> missing = new ArrayList<>();
         for (String line : lines) {
             Matcher m = ARTIFACT.matcher(line);
@@ -146,7 +146,7 @@ public final class HostRuntime {
                 }
             }
         }
-        if ("driver-api".equals(c.artifactId()) && "io.openmessaging.benchmark".equals(c.groupId())) {
+        if ("driver-api".equals(c.artifactId()) && "io.github.mihkels.omb".equals(c.groupId())) {
             return Optional.of(codeSource(BenchmarkDriver.class));
         }
         return Optional.empty();

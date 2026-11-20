@@ -39,7 +39,7 @@
     <dependencies>
         <!-- Provided by the benchmark at runtime; never bundle it -->
         <dependency>
-            <groupId>io.openmessaging.benchmark</groupId>
+            <groupId>io.github.mihkels.omb</groupId>
             <artifactId>driver-api</artifactId>
             <version>${omb.version}</version>
             <scope>provided</scope>

@@ -41,7 +41,9 @@ changes it.
      `CHANGELOG.md` says so too. The "Source code" archives on every release are added by GitHub
      and cannot be removed;
    - `Helm chart`: the chart `X.Y.Z` pushed to `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`
-     and signed.
+     and signed;
+   - `Maven Central`: the parent POM and `driver-api` as `io.github.mihkels.omb`, only when
+     `driver-api/` changed since the previous tag, see [Maven Central](#maven-central).
 
 Images are published from release tags only; pushes to `main` publish nothing. Pull requests build,
 test and scan the image but never publish, and never receive registry credentials. A weekly
@@ -58,7 +60,8 @@ hand.
 - Third-party actions are pinned to full commit SHAs; Dependabot proposes updates. Checkouts do
   not persist credentials.
 - Registry credentials live in the `dockerhub` environment, which only `main` and `v*` tags can
-  use. Only the publish jobs reference it, and they never run for pull requests.
+  use. Only the publish jobs reference it, and they never run for pull requests. The Maven
+  Central token and signing key live in the `maven-central` environment under the same rules.
 - Only pushes to `main` write caches, and release tags use none, so a pull request cannot poison
   what is published.
 - Images and charts are signed keylessly with cosign through GitHub's OIDC token: no signing keys
@@ -90,6 +93,71 @@ hand.
 5. **Actions settings**: workflow permissions read-only by default, and approval required for
    workflows from fork pull requests.
 6. **Security**: enable code scanning and private vulnerability reporting.
+7. **Maven Central**: see [Maven Central setup](#maven-central-setup).
+
+## Maven Central
+
+External driver authors compile against `io.github.mihkels.omb:driver-api` with `provided` scope.
+The `Maven Central` workflow (`.github/workflows/maven-central.yml`) publishes it, with the parent
+POM `io.github.mihkels.omb:messaging-benchmark` that its POM references. No other module goes to
+Central: drivers, the tool and the distribution ship in the tarball and the Docker image.
+
+Central's free tier limits file count, size and release count per month; only the release count
+is within reach (about 7 a month). A release adds about 20 files and less than 1 MB. To save
+releases, a tag publishes only when `driver-api/` changed since the previous `v*` tag. Dependency
+upgrades in the root `pom.xml` alone do not trigger a publish. Run the workflow by hand with
+`force` to publish a tag anyway.
+
+The workflow does nothing until the repository variable `MAVEN_CENTRAL_ENABLED` is `true`. An upload
+stops at **VALIDATED** in the Central Portal, where a maintainer checks it and presses Publish,
+unless `MAVEN_CENTRAL_AUTO_PUBLISH` is `true`. Published versions cannot be deleted or replaced.
+
+The `central` Maven profile adds the sources and javadoc jars and the signatures, and uploads through
+`central-publishing-maven-plugin`. To check the bundle locally without uploading:
+
+```bash
+export MAVEN_GPG_KEY="$(gpg --armor --export-secret-keys <FINGERPRINT>)" MAVEN_GPG_PASSPHRASE=...
+mvn -Pcentral -pl .,driver-api -Dcentral.skipPublishing=true deploy
+```
+
+The plugin still reads the `central` server from `settings.xml`, so it needs one, even with dummy
+credentials.
+
+### Maven Central setup
+
+1. **Namespace**: sign in to [central.sonatype.com](https://central.sonatype.com) with the `mihkels`
+   GitHub account. **Namespaces** lists `io.github.mihkels` as verified; if not, add it and follow
+   the verification steps. It covers `io.github.mihkels.omb`.
+2. **Portal token**: Account → **Generate User Token**. Keep the username and password pair.
+3. **Signing key**: create a key without a personal email in its user ID and publish the public
+   key:
+
+   ```bash
+   gpg --quick-gen-key "Open Messaging Benchmark Release (https://github.com/mihkels/open-messaging-benchmark)" ed25519 sign 2y
+   gpg --keyserver keyserver.ubuntu.com --send-keys <FINGERPRINT>
+   gpg --armor --export-secret-keys <FINGERPRINT>    # value of MAVEN_GPG_KEY
+   ```
+
+   `keys.openpgp.org` shows user IDs only for verified emails, so use `keyserver.ubuntu.com`. Keep a
+   backup of the key and its revocation certificate offline.
+
+4. **Environment `maven-central`** (Settings → Environments): deployment branches and tags limited to
+   `main` and `v*` (`main` for manual runs). Secrets: `MAVEN_GPG_KEY`, `MAVEN_GPG_PASSPHRASE`,
+   `CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`. A required reviewer is optional.
+
+5. **Repository variables**: `MAVEN_CENTRAL_ENABLED=true`. Leave `MAVEN_CENTRAL_AUTO_PUBLISH` unset
+   for the first release.
+
+6. **First release**: Actions → `Maven Central` → Run workflow with the first tag that uses the
+   `io.github.mihkels.omb` groupId and `force` checked. In the Portal under **Deployments**, check
+   the files, then **Publish** or **Drop**.
+
+7. **Usage**: in the [Usage Center](https://central.sonatype.com/publishing/usage), check the file,
+   size and release counts, including whether the parent POM counts as a release of its own. Then
+   set `MAVEN_CENTRAL_AUTO_PUBLISH=true` if uploads should publish without a manual step.
+
+8. The artifacts appear under
+   `https://repo1.maven.org/maven2/io/github/mihkels/omb/driver-api/` some minutes after publishing.
 
 ## Verifying images and charts
 

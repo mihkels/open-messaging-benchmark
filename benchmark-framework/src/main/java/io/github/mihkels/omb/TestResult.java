@@ -20,6 +20,7 @@ import io.github.mihkels.omb.worker.commands.CumulativeLatencies;
 import io.github.mihkels.omb.worker.commands.RebalanceRecord;
 import io.github.mihkels.omb.worker.commands.RunPhase;
 import io.github.mihkels.omb.worker.commands.WorkerLoad;
+import io.github.mihkels.omb.worker.jackson.HistogramSerializer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -468,17 +469,7 @@ public class TestResult {
     }
 
     private static String encode(Histogram histogram) {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        while (true) {
-            int written = histogram.encodeIntoCompressedByteBuffer(buffer);
-            if (written < buffer.capacity()) {
-                buffer.flip();
-                byte[] encoded = new byte[buffer.remaining()];
-                buffer.get(encoded);
-                return Base64.getEncoder().encodeToString(encoded);
-            }
-            buffer = ByteBuffer.allocate(buffer.capacity() * 2);
-        }
+        return Base64.getEncoder().encodeToString(HistogramSerializer.encode(histogram, 1024));
     }
 
     // Appends the average, maximum and PERCENTILES of a microsecond histogram in milliseconds.

@@ -103,6 +103,9 @@ final class DiffCommand {
         } catch (JacksonException e) {
             err.println("Cannot read result file: " + e.getOriginalMessage());
             return 1;
+        } catch (IllegalArgumentException e) {
+            err.println(e.getMessage());
+            return 1;
         }
         List<Run> baselineRuns = sides.get(0);
         List<Run> candidateRuns = sides.get(1);

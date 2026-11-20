@@ -50,6 +50,8 @@ DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dorg.apache.pulsar.shade.io.netty.tryReflec
 # Required by Pulsar client optimized checksum calculation on other than Linux x86_64 platforms
 # reflection access to java.util.zip.CRC32C
 DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS --add-opens java.base/java.util.zip=ALL-UNNAMED"
+# Netty's leak detector samples buffers on the hot path; JvmOptions.DEFAULTS turns it off too
+DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS -Dio.netty.leakDetection.level=disabled"
 
 # Options of the driver JVM; set OMB_DRIVER_JVM_OPTS to override them completely
 if [ -z "$OMB_DRIVER_JVM_OPTS" ]

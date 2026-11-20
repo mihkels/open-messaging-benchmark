@@ -120,7 +120,7 @@ coordinator:
   affinity: {}
 
 # Driver configuration and workload. Paths are relative to /benchmark in the image. When
-# driverConfig or workloadConfig holds YAML text it is mounted from a ConfigMap at /config and used
+# driverConfig or workloadConfig holds YAML text it is mounted from a Secret at /config and used
 # instead of the path (helm install --set-file driverConfig=my-kafka.yaml).
 driver: driver-kafka/kafka-latency.yaml
 workload: workloads/1-topic-16-partitions-1kb.yaml

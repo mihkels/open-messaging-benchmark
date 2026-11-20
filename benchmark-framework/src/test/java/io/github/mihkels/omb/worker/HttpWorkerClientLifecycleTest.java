@@ -23,6 +23,8 @@ import static org.mockito.Mockito.mock;
 
 import io.javalin.Javalin;
 import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -34,6 +36,34 @@ import org.asynchttpclient.AsyncHttpClient;
 import org.junit.jupiter.api.Test;
 
 class HttpWorkerClientLifecycleTest {
+
+    @Test
+    void interruptStopsWaitingForAWorkerThatNeverAnswers() throws Exception {
+        try (ServerSocket silent = new ServerSocket(0);
+                HttpWorkerClient worker =
+                        new HttpWorkerClient("http://127.0.0.1:" + silent.getLocalPort())) {
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            AtomicBoolean interrupted = new AtomicBoolean();
+            Thread calling =
+                    Thread.ofVirtual()
+                            .start(() -> {
+                                try {
+                                    worker.getCountersStats();
+                                } catch (Throwable t) {
+                                    failure.set(t);
+                                    interrupted.set(Thread.currentThread().isInterrupted());
+                                }
+                            });
+            try (Socket ignored = silent.accept()) {
+                calling.interrupt();
+                calling.join(2000);
+                assertThat(calling.isAlive()).isFalse();
+                assertThat(failure.get()).hasMessageEndingWith("/counters-stats interrupted");
+                assertThat(interrupted).isTrue();
+            }
+        }
+    }
+
     @Test
     // The finally releases the stalled close and checks the client thread exited; closing the
     // worker again through try-with-resources would change what the test checks

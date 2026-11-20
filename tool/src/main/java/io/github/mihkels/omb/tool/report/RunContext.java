@@ -57,6 +57,9 @@ final class RunContext {
             Workload workload = metadata.workload();
             identity.put("name", String.valueOf(workload.name));
             identity.put("producerRate", String.valueOf(workload.producerRate));
+            // A staged workload has producerRate 0; its rates are in the stages
+            identity.put("stages", String.valueOf(workload.stages));
+            identity.put("consumerBacklogSizeGB", String.valueOf(workload.consumerBacklogSizeGB));
             identity.put("messageSize", String.valueOf(workload.messageSize));
             identity.put("partitionsPerTopic", String.valueOf(workload.partitionsPerTopic));
             // Settings missing from older files read as the Workload defaults, the same values a run had

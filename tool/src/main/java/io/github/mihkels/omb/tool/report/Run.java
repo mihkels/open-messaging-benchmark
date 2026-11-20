@@ -33,9 +33,17 @@ record Run(String name, TestResult result) {
      * Reads a result file.
      *
      * @throws tools.jackson.core.JacksonException if the file cannot be read or parsed
+     * @throws IllegalArgumentException if the file is JSON but not a result, such as a --repeat
+     *     summary
      */
     static Run read(Path file) {
         TestResult result = READER.readValue(file.toFile());
+        // Unknown fields are ignored, so any JSON object parses. Version 2 results carry metadata,
+        // version 1 results their per-period rates; a --repeat summary has neither.
+        if (result.metadata == null && result.publishRate.isEmpty()) {
+            throw new IllegalArgumentException(
+                    file + " is not a benchmark result: it has neither metadata nor publishRate");
+        }
         return new Run(String.valueOf(file.getFileName()), result);
     }
 

@@ -150,11 +150,12 @@ public final class DlogBenchmarkConsumer implements BenchmarkConsumer {
                 return false;
             }
             callback.messageReceived(record.getPayload(), record.getTransactionId());
-            lastDLSN = record.getDlsn();
+            // The reader's start position is inclusive, so a reopen resumes after this record
+            lastDLSN = record.getDlsn().getNextDLSN();
         } catch (IOException e) {
             if (!closing) {
                 log.info(
-                        "Encountered error on reading records from reading stream {}, last record = {}",
+                        "Encountered error on reading records from reading stream {}, next record = {}",
                         dlm.getStreamName(),
                         lastDLSN,
                         e);

@@ -16,7 +16,6 @@ package io.github.mihkels.omb.driver.kafka;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -277,7 +276,7 @@ class KafkaBenchmarkProducerTest {
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
-    void cancellationReleasesCallerPayloadAndLateCallbackCannotResettleTheSend() throws Exception {
+    void sendsThePayloadWithoutCopyingAndLateCallbackCannotResettleTheSend() throws Exception {
         Producer<String, byte[]> client = mock(Producer.class);
         KafkaBenchmarkProducer producer = new KafkaBenchmarkProducer(client, "topic");
         byte[] payload = {1, 2};
@@ -287,10 +286,9 @@ class KafkaBenchmarkProducerTest {
         verify(client).send(record.capture(), callback.capture());
         byte[] retained = (byte[]) record.getValue().value();
 
-        assertNotSame(payload, retained);
+        // KafkaProducer copies the value inside send(), so the driver does not
+        assertSame(payload, retained);
         assertTrue(send.cancel(true));
-        payload[0] = 9;
-        assertArrayEquals(new byte[] {1, 2}, retained);
         callback.getValue().onCompletion(null, null);
         assertTrue(send.isCancelled());
         producer.close();

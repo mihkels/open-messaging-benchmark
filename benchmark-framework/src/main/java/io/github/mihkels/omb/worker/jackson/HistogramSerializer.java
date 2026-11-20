@@ -15,20 +15,28 @@ package io.github.mihkels.omb.worker.jackson;
 
 import java.nio.ByteBuffer;
 import org.HdrHistogram.Histogram;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonGenerator;
 import tools.jackson.databind.SerializationContext;
 import tools.jackson.databind.ser.std.StdSerializer;
 
 public class HistogramSerializer extends StdSerializer<Histogram> {
-    private static final Logger log = LoggerFactory.getLogger(HistogramSerializer.class);
     // Compressed histograms are a few KB; serializeHistogram doubles the buffer when one is larger
     private static final int INITIAL_BUFFER_SIZE = 64 * 1024;
 
     public HistogramSerializer() {
         super(Histogram.class);
+    }
+
+    /**
+     * Encodes a histogram in the compressed form the JSON results and worker API carry.
+     *
+     * @param histogram the histogram
+     * @param initialBufferSize the first buffer size to try; larger histograms double it
+     * @return the compressed bytes
+     */
+    public static byte[] encode(Histogram histogram, int initialBufferSize) {
+        return toByteArray(serializeHistogram(histogram, ByteBuffer.allocate(initialBufferSize)));
     }
 
     static byte[] toByteArray(ByteBuffer buffer) {
@@ -41,24 +49,17 @@ public class HistogramSerializer extends StdSerializer<Histogram> {
         buffer.clear();
         while (true) {
             final int outBytes = histo.encodeIntoCompressedByteBuffer(buffer);
-            try {
-                if (outBytes != buffer.position()) {
-                    throw new IllegalStateException(
-                            "Encoded " + outBytes + " bytes but buffer position is " + buffer.position());
-                }
-            } catch (IllegalStateException e) {
-                log.error(
-                        "HdrHistogram encoding produced inconsistent results: outBytes={}, buffer.position()={}",
-                        outBytes,
-                        buffer.position(),
-                        e);
+            if (outBytes != buffer.position()) {
                 throw new IllegalArgumentException(
-                        "HdrHistogram encoding produced inconsistent results", e);
+                        "HdrHistogram encoding produced inconsistent results: outBytes="
+                                + outBytes
+                                + ", buffer.position()="
+                                + buffer.position());
             }
 
             final int capacity = buffer.capacity();
             if (outBytes < capacity) {
-                // encoding succesful
+                // encoding successful
                 break;
             }
             // We filled the entire buffer, an indication that the buffer was not

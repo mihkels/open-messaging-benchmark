@@ -21,6 +21,7 @@ final class JvmOptions {
     static final String PROPERTY = "omb.driver.jvmOpts";
     static final String ENV = "OMB_DRIVER_JVM_OPTS";
 
+    // Keep in step with OMB_DRIVER_JVM_OPTS in bin/omb-launch.sh, which replaces these when set
     static final List<String> DEFAULTS =
             List.of(
                     "-XX:+UseG1GC",

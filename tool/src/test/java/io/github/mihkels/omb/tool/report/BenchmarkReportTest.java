@@ -165,6 +165,19 @@ class BenchmarkReportTest {
     }
 
     @Test
+    void rejectsJsonThatIsNotAResult() throws IOException {
+        // A --repeat summary parses, since unknown fields are ignored, but has no periods
+        Path summary = Files.writeString(tempDir.resolve("run-summary.json"), "{\"repetitions\":3}");
+        int exit = run("diff", summary.toString(), summary.toString(), "--fail-on-regression", "5%");
+        assertThat(exit).isEqualTo(1);
+        assertThat(err()).contains("run-summary.json is not a benchmark result");
+
+        err.reset();
+        assertThat(run("html", summary.toString())).isEqualTo(1);
+        assertThat(err()).contains("is not a benchmark result");
+    }
+
+    @Test
     void reportsAnUnreadableResultFile() {
         int exit = run("diff", tempDir.resolve("missing.json").toString(), fixture("baseline-1.json"));
         assertThat(exit).isEqualTo(1);

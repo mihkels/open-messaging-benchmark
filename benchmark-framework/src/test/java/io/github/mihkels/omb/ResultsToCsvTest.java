@@ -41,6 +41,8 @@ class ResultsToCsvTest {
         Files.writeString(results.resolve("ignored.txt"), "not JSON");
         // A --repeat summary is not a result and must not become a row
         Files.writeString(results.resolve("test-result-summary.json"), "{\"repetitions\":3}");
+        // Neither is any other JSON object
+        Files.writeString(results.resolve("other.json"), "{\"name\":\"x\"}");
 
         Path csv = tempDir.resolve("results.csv");
         new ResultsToCsv().writeAllResultFiles(results.toString(), csv.toFile());

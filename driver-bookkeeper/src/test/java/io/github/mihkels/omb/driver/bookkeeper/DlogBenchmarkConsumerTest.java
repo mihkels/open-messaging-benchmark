@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
 
 class DlogBenchmarkConsumerTest {
     @Test
-    void reconnectsAtTheLastReadDlsnAndPreservesPayloadAndTimestamp() throws Exception {
+    void reconnectsAfterTheLastReadDlsnAndPreservesPayloadAndTimestamp() throws Exception {
         DistributedLogManager manager = mock(DistributedLogManager.class);
         LogReader initial = mock(LogReader.class);
         LogReader reopened = mock(LogReader.class);
@@ -54,7 +54,7 @@ class DlogBenchmarkConsumerTest {
         CompletableFuture<Received> received = new CompletableFuture<>();
         CountDownLatch reconnected = new CountDownLatch(1);
         when(initial.readNext(false)).thenReturn(record).thenThrow(new IOException("read failed"));
-        when(manager.openLogReader(lastDlsn))
+        when(manager.openLogReader(lastDlsn.getNextDLSN()))
                 .thenAnswer(invocation -> {
                     reconnected.countDown();
                     return reopened;
@@ -76,7 +76,7 @@ class DlogBenchmarkConsumerTest {
             consumer.close();
         }
 
-        verify(manager).openLogReader(lastDlsn);
+        verify(manager).openLogReader(lastDlsn.getNextDLSN());
         verify(initial, times(1)).close();
         verify(reopened, times(1)).close();
         verify(manager, times(1)).close();
@@ -391,7 +391,7 @@ class DlogBenchmarkConsumerTest {
         CountDownLatch release = new CountDownLatch(1);
         AtomicReference<Thread> worker = new AtomicReference<>();
         when(initial.readNext(false)).thenReturn(record).thenThrow(new IOException("read failed"));
-        when(manager.openLogReader(lastDlsn))
+        when(manager.openLogReader(lastDlsn.getNextDLSN()))
                 .thenAnswer(invocation -> {
                     worker.set(Thread.currentThread());
                     reopening.countDown();

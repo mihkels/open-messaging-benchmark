@@ -180,7 +180,7 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         this.settings = settings;
         ScheduledThreadPoolExecutor scheduled =
                 new ScheduledThreadPoolExecutor(
-                        1, daemonFactory("nsq-consumer-scheduler", schedulerThread));
+                        1, virtualFactory("nsq-consumer-scheduler", schedulerThread));
         scheduled.setRemoveOnCancelPolicy(true);
         scheduled.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         scheduled.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
@@ -192,8 +192,8 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
                         5,
                         TimeUnit.SECONDS,
                         new SynchronousQueue<>(),
-                        daemonFactory("nsq-consumer-connect", connectorThread));
-        callbacks = Executors.newCachedThreadPool(daemonFactory("nsq-consumer-callback", null));
+                        virtualFactory("nsq-consumer-connect", connectorThread));
+        callbacks = Executors.newCachedThreadPool(virtualFactory("nsq-consumer-callback", null));
         termination.whenComplete((ignored, failure) -> {
             if (failure != null) {
                 closeResult.completeExceptionally(failure);
@@ -926,6 +926,19 @@ public class NsqBenchmarkConsumer implements BenchmarkConsumer {
         } else {
             future.completeExceptionally(failure);
         }
+    }
+
+    // For the threads each consumer owns: workloads reach tens of thousands of consumers per
+    // worker, too many for platform threads
+    private static ThreadFactory virtualFactory(
+            String name, @Nullable AtomicReference<Thread> reference) {
+        return task -> {
+            Thread thread = Thread.ofVirtual().name(name).unstarted(task);
+            if (reference != null) {
+                reference.set(thread);
+            }
+            return thread;
+        };
     }
 
     private static ThreadFactory daemonFactory(

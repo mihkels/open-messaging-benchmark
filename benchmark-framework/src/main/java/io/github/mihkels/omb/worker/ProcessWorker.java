@@ -476,14 +476,13 @@ public class ProcessWorker implements Worker {
         DriverProcess stopping = current;
         if (stopping != null) {
             stopping.stop(failures);
+            // A child that is gone frees the worker even when stopping it failed, for example a
+            // driver close that hung and was killed; only a child still running blocks the next run
             if (stopping.isStopped()) {
                 current = null;
             } else {
                 unusable = true;
             }
-        }
-        if (failures.hasFailure()) {
-            unusable = true;
         }
         failures.throwIfAny("Failed to terminate driver process");
     }

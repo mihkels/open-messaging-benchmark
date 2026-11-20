@@ -411,6 +411,8 @@ class PulsarBenchmarkDriverTest {
         ClientBuilder clientBuilder = initialize(temp, admin, true);
 
         verify(clientBuilder).tlsTrustCertsFilePath("/certs/ca.pem");
+        // Hostname verification is on unless the configuration turns it off
+        verify(clientBuilder).enableTlsHostnameVerification(true);
         verify(clientBuilder)
                 .authentication("org.apache.pulsar.client.impl.auth.AuthenticationToken", "secret");
         verify(admin.tenants()).createTenant(org.mockito.ArgumentMatchers.eq("benchmark"), any());

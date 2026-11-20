@@ -44,7 +44,7 @@ public class HistogramDeserializer extends StdDeserializer<Histogram> {
             ByteBuffer content = ByteBuffer.wrap(encodedHistogram);
             content.get(bytes);
             log.error(
-                    "Failed to decode publish delay latency ({} bytes): {}",
+                    "Failed to decode histogram ({} bytes): {}",
                     encodedHistogram.length,
                     HexFormat.ofDelimiter(" ").formatHex(bytes));
             throw new RuntimeException(e);

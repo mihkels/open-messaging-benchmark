@@ -30,6 +30,15 @@ import org.junit.jupiter.api.parallel.Resources;
 class JvmOptionsTest {
 
     @Test
+    void launcherPassesEveryDefaultToTheDriverJvm() throws Exception {
+        // The launcher always sets OMB_DRIVER_JVM_OPTS, so DEFAULTS apply only without it
+        String launcher =
+                Files.readString(Path.of("../bin/omb-launch.sh"), StandardCharsets.UTF_8)
+                        .replace("--add-opens ", "--add-opens=");
+        assertThat(JvmOptions.DEFAULTS).allSatisfy(option -> assertThat(launcher).contains(option));
+    }
+
+    @Test
     void parsesQuotedAndEscapedOptions() {
         assertThat(
                         JvmOptions.parse(

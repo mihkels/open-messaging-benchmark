@@ -15,6 +15,7 @@ package io.github.mihkels.omb.tool.report;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.mihkels.omb.Workload;
 import io.github.mihkels.omb.tool.report.RunContext.SettingDifference;
 import io.github.mihkels.omb.utils.distributor.KeyDistribution;
 import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
@@ -62,6 +63,18 @@ class RunContextTest {
                                 + " vs 20000 (mismatched-workload.json)",
                         "Workload messageSize differs: 1024 (baseline-1.json, baseline-2.json)"
                                 + " vs 2048 (mismatched-workload.json)");
+    }
+
+    @Test
+    void reportsMismatchedStagesAndBacklog() {
+        Run baseline = Fixtures.run("baseline-1.json");
+        Run candidate = Fixtures.run("baseline-2.json");
+        baseline.result().metadata.workload().stages = List.of(new Workload.Stage(5, 50_000));
+        candidate.result().metadata.workload().stages = List.of(new Workload.Stage(5, 100_000));
+        candidate.result().metadata.workload().consumerBacklogSizeGB = 1;
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate)))
+                .anyMatch(mismatch -> mismatch.startsWith("Workload stages differs"))
+                .anyMatch(mismatch -> mismatch.startsWith("Workload consumerBacklogSizeGB differs"));
     }
 
     @Test

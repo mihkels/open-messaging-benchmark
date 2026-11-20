@@ -32,7 +32,7 @@ client:
     ackQuorum: 2
     deduplicationEnabled: false
   tlsAllowInsecureConnection: false
-  tlsEnableHostnameVerification: false
+  tlsEnableHostnameVerification: true
   tlsTrustCertsFilePath:
   authentication:
     plugin:

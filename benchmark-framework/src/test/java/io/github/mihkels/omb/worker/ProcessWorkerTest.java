@@ -127,6 +127,13 @@ class ProcessWorkerTest {
                 "while (true) { java.util.concurrent.locks.LockSupport.parkNanos(1000000000L); }",
                 lib1);
         bundle(
+                "slow-close",
+                "fixture.slowclose.SlowCloseDriver",
+                "\"slow-close\"",
+                "",
+                "while (true) { java.util.concurrent.locks.LockSupport.parkNanos(1000000000L); }",
+                lib1);
+        bundle(
                 "broken",
                 "fixture.broken.BrokenDriver",
                 "\"broken\"",
@@ -255,6 +262,23 @@ class ProcessWorkerTest {
             assertThat(worker.pid()).isNull();
             assertThat(isAlive(failedPid)).isFalse();
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
+        }
+    }
+
+    @Test
+    void killedDriverWithHungCloseLeavesTheWorkerReusable() throws Exception {
+        try (ProcessWorker worker = newWorker()) {
+            worker.initializeDriver(config("fixture.slowclose.SlowCloseDriver"));
+            long hungPid = worker.pid();
+            Path alpha = config("fixture.alpha.AlphaDriver");
+
+            // Replacing the driver reports the forced stop, but the killed child frees the worker
+            assertThatThrownBy(() -> worker.initializeDriver(alpha))
+                    .hasStackTraceContaining("did not stop");
+            assertThat(isAlive(hungPid)).isFalse();
+            assertThat(worker.health().ready()).isTrue();
+            worker.initializeDriver(alpha);
             assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
         }
     }

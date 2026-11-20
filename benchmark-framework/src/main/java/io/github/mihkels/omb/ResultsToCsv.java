@@ -75,7 +75,12 @@ public class ResultsToCsv {
                         && file.getName().endsWith(".json")
                         && !file.getName().endsWith("-summary.json")) {
                     TestResult tr = MAPPER.readValue(new File(file.getAbsolutePath()), TestResult.class);
-                    results.add(tr);
+                    // Any JSON object parses, since unknown fields are ignored; a result has periods
+                    if (tr.publishRate.isEmpty()) {
+                        log.warn("Skipping {}: not a benchmark result", file.getName());
+                    } else {
+                        results.add(tr);
+                    }
                 }
             }
 

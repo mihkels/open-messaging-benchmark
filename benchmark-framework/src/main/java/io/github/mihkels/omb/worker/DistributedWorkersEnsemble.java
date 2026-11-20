@@ -369,7 +369,12 @@ public final class DistributedWorkersEnsemble implements Worker {
         try {
             return callAll(targets, action);
         } catch (Exception e) {
-            logCountersPerWorker("Worker call failed: " + e);
+            if (!Thread.currentThread().isInterrupted()) {
+                String reason = "Worker call failed: " + e;
+                // Off the caller's thread: polling a dead worker would hold the failure for its
+                // whole request timeout
+                Thread.ofVirtual().name("worker-counters-log").start(() -> logCountersPerWorker(reason));
+            }
             throw e;
         }
     }

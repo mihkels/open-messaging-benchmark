@@ -30,6 +30,22 @@ import org.junit.jupiter.api.Test;
 
 class JMSBenchmarkConsumerTest {
     @Test
+    void messageWithoutTimestampPropertyCountsWithoutLatency() throws Exception {
+        // JMS reports a missing long property as NumberFormatException
+        Message message =
+                (Message)
+                        Proxy.newProxyInstance(
+                                Message.class.getClassLoader(),
+                                new Class<?>[] {Message.class},
+                                (proxy, method, args) -> {
+                                    throw new NumberFormatException("null");
+                                });
+
+        assertEquals(
+                ConsumerCallback.NO_PUBLISH_TIMESTAMP, JMSBenchmarkConsumer.publishTimestamp(message));
+    }
+
+    @Test
     void getBodyListenerForwardsPayloadAcknowledgesAndStartsConnection() throws Exception {
         Fixture fixture = new Fixture();
         AtomicReference<byte[]> received = new AtomicReference<>();

@@ -54,7 +54,7 @@ class HttpWorkerClientLifecycleTest {
                                     interrupted.set(Thread.currentThread().isInterrupted());
                                 }
                             });
-            try (Socket ignored = silent.accept()) {
+            try (Socket _ = silent.accept()) {
                 calling.interrupt();
                 calling.join(2000);
                 assertThat(calling.isAlive()).isFalse();

@@ -35,7 +35,7 @@ class JvmOptionsTest {
         String launcher =
                 Files.readString(Path.of("../bin/omb-launch.sh"), StandardCharsets.UTF_8)
                         .replace("--add-opens ", "--add-opens=");
-        assertThat(JvmOptions.DEFAULTS).allSatisfy(option -> assertThat(launcher).contains(option));
+        assertThat(launcher).contains(JvmOptions.DEFAULTS);
     }
 
     @Test

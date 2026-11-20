@@ -65,6 +65,16 @@ them. Other drivers fail the run before load starts.
 | NATS JetStream | yes     | NATS headers (ASCII strings)                                                       |
 | All others     | no      | KoP, BookKeeper, Pravega, NATS Streaming, NSQ, Redis, RocketMQ, RocketMQ 5, MQTT 5 |
 
+## Partition telemetry
+
+Workloads with [`partitionTelemetry`](../reference/workload-schema.md) run only on drivers that
+report partitions; other drivers fail the run before load starts.
+
+|    Driver    | Partition telemetry |                       Reports                        |
+|--------------|---------------------|------------------------------------------------------|
+| Apache Kafka | yes                 | Send and receive partitions; assign, revoke and lose |
+| All others   | no                  |                                                      |
+
 ## Regression suite versions
 
 The opt-in [Testcontainers suite](../development/testing-a-driver.md#testcontainers-end-to-end-tests)

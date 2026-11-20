@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker;
 import static io.openmessaging.benchmark.utils.UniformRateLimiter.interruptibleSleepNs;
 
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
 import io.openmessaging.benchmark.utils.UniformRateLimiter;
 import java.util.Map;
 import java.util.Objects;
@@ -72,6 +73,29 @@ public class MessageProducer {
             boolean stamped,
             @Nullable Map<String, byte[]> headers)
             throws InterruptedException {
+        sendMessage(producer, key, payload, stamped, headers, null);
+    }
+
+    /**
+     * Sends one message once the rate limiter allows it, and with a topic records the partition the
+     * driver reports into that partition's telemetry.
+     *
+     * @param producer the producer to send with
+     * @param key the message key
+     * @param payload the payload
+     * @param stamped whether the payload carries a {@link DeliveryStamp}
+     * @param headers the message headers, or {@code null} to send without headers
+     * @param telemetryTopic the producer's topic when partition telemetry is on, else {@code null}
+     * @throws InterruptedException if interrupted while waiting for the send slot
+     */
+    public void sendMessage(
+            BenchmarkProducer producer,
+            Optional<String> key,
+            byte[] payload,
+            boolean stamped,
+            @Nullable Map<String, byte[]> headers,
+            @Nullable String telemetryTopic)
+            throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();
         interruptibleSleepNs(intendedSendTime);
         if (!callbacks.beginSend()) {
@@ -79,6 +103,22 @@ public class MessageProducer {
         }
         try {
             final long sendTime = nanoClock.getAsLong();
+            if (telemetryTopic != null) {
+                Objects.requireNonNull(
+                                producer.sendAsyncWithResult(key, payload, headers),
+                                "sendAsyncWithResult returned null")
+                        .whenComplete((result, failure) ->
+                                callbacks.completeSend(
+                                        payload.length,
+                                        intendedSendTime,
+                                        sendTime,
+                                        nanoClock,
+                                        failure,
+                                        stamped,
+                                        telemetryTopic,
+                                        result == null ? ConsumerCallback.UNKNOWN_PARTITION : result.partition()));
+                return;
+            }
             CompletableFuture<Void> send =
                     Objects.requireNonNull(
                             headers == null

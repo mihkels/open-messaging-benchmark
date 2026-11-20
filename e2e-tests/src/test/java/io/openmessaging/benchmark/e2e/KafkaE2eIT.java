@@ -14,6 +14,9 @@
 package io.openmessaging.benchmark.e2e;
 
 import io.openmessaging.benchmark.Workload;
+import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
+import io.openmessaging.benchmark.driver.SendResult;
 import io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -30,6 +33,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +46,7 @@ import java.util.Properties;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -162,6 +167,60 @@ class KafkaE2eIT extends BaseE2eIT {
                 for (var entry : headers.entrySet()) {
                     assertThat(received.headers().lastHeader(entry.getKey()).value()).isEqualTo(entry.getValue());
                 }
+            }
+        }
+    }
+
+    @Test
+    void partitionTelemetryReportsPartitionsAndAssignments() throws Exception {
+        List<Integer> receivedPartitions = new CopyOnWriteArrayList<>();
+        List<RebalanceEvent> rebalances = new CopyOnWriteArrayList<>();
+        ConsumerCallback callback = new ConsumerCallback() {
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp) {
+                receivedPartitions.add(UNKNOWN_PARTITION);
+            }
+
+            @Override
+            public void messageReceived(ByteBuffer payload, long publishTimestamp) {
+                receivedPartitions.add(UNKNOWN_PARTITION);
+            }
+
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp, int partition) {
+                receivedPartitions.add(partition);
+            }
+
+            @Override
+            public void partitionsChanged(RebalanceEvent event) {
+                rebalances.add(event);
+            }
+        };
+        try (KafkaBenchmarkDriver driver = new KafkaBenchmarkDriver()) {
+            driver.initialize(driverConfigFile, null);
+            assertThat(driver.supportsPartitionTelemetry()).isTrue();
+            String topic = driver.getTopicNamePrefix() + "-" + UUID.randomUUID();
+            driver.createTopic(topic, 3).get(30, TimeUnit.SECONDS);
+            try (var consumer = driver.createConsumer(topic, "telemetry-" + UUID.randomUUID(), callback)
+                            .get(60, TimeUnit.SECONDS);
+                    var producer = driver.createProducer(topic).get(30, TimeUnit.SECONDS)) {
+                assertThat(rebalances).first().satisfies(event -> {
+                    assertThat(event.kind()).isEqualTo(RebalanceEvent.Kind.ASSIGNED);
+                    assertThat(event.partitions()).containsExactly(0, 1, 2);
+                });
+                Set<Integer> sentPartitions = new HashSet<>();
+                for (String key : List.of("a", "b", "c", "d", "e", "f")) {
+                    SendResult sent = producer.sendAsyncWithResult(Optional.of(key), new byte[] {1}, null)
+                            .get(30, TimeUnit.SECONDS);
+                    assertThat(sent.partition()).isBetween(0, 2);
+                    sentPartitions.add(sent.partition());
+                }
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+                while (receivedPartitions.size() < 6 && System.nanoTime() < deadline) {
+                    Thread.sleep(100);
+                }
+                assertThat(receivedPartitions).hasSize(6).allSatisfy(p -> assertThat(p).isBetween(0, 2));
+                assertThat(new HashSet<>(receivedPartitions)).isEqualTo(sentPartitions);
             }
         }
     }

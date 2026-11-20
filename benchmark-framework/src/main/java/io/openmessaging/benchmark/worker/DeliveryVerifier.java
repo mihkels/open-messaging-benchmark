@@ -14,10 +14,12 @@
 package io.openmessaging.benchmark.worker;
 
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Checks the {@link DeliveryStamp} of every received message against the sequence numbers already
@@ -50,23 +52,54 @@ final class DeliveryVerifier {
             @Override
             public void messageReceived(byte[] payload, long publishTimestamp) {
                 delegate.messageReceived(payload, publishTimestamp);
-                if (DeliveryStamp.isStamped(payload)) {
-                    record(producers, DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload));
-                }
+                verify(producers, payload);
+            }
+
+            @Override
+            public void messageReceived(byte[] payload, long publishTimestamp, int partition) {
+                delegate.messageReceived(payload, publishTimestamp, partition);
+                verify(producers, payload);
             }
 
             @Override
             public void messageReceived(ByteBuffer payload, long publishTimestamp) {
                 // Read before the delegate, which may consume the buffer
-                boolean stamped = DeliveryStamp.isStamped(payload);
-                long producerId = stamped ? DeliveryStamp.producerId(payload) : 0;
-                long sequence = stamped ? DeliveryStamp.sequence(payload) : 0;
+                long[] stamp = stamp(payload);
                 delegate.messageReceived(payload, publishTimestamp);
-                if (stamped) {
-                    record(producers, producerId, sequence);
-                }
+                verify(producers, stamp);
+            }
+
+            @Override
+            public void messageReceived(ByteBuffer payload, long publishTimestamp, int partition) {
+                long[] stamp = stamp(payload);
+                delegate.messageReceived(payload, publishTimestamp, partition);
+                verify(producers, stamp);
+            }
+
+            @Override
+            public void partitionsChanged(RebalanceEvent event) {
+                delegate.partitionsChanged(event);
             }
         };
+    }
+
+    private void verify(Map<Long, SequenceWindow> producers, byte[] payload) {
+        if (DeliveryStamp.isStamped(payload)) {
+            record(producers, DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload));
+        }
+    }
+
+    // The producer id and sequence of a stamped buffer, or null for an unstamped one
+    private static long @Nullable [] stamp(ByteBuffer payload) {
+        return DeliveryStamp.isStamped(payload)
+                ? new long[] {DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload)}
+                : null;
+    }
+
+    private void verify(Map<Long, SequenceWindow> producers, long @Nullable [] stamp) {
+        if (stamp != null) {
+            record(producers, stamp[0], stamp[1]);
+        }
     }
 
     private void record(Map<Long, SequenceWindow> producers, long producerId, long sequence) {

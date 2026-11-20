@@ -27,23 +27,24 @@ To package and install a driver, see [Packaging a plugin](packaging-a-plugin.md)
 
 ## The SPI
 
-|             Type             |                           Kind                           |                                            Purpose                                             |
-|------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| `BenchmarkDriver`            | interface, extends `AutoCloseable`                       | Entry point: configuration, topics, producers, consumers                                       |
-| `BenchmarkProducer`          | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`, plus an optional overload with headers      |
-| `BenchmarkConsumer`          | interface, extends `AutoCloseable`                       | Marker for a subscription; only `close()` is called                                            |
-| `ConsumerCallback`           | interface                                                | Implemented by the benchmark; the driver calls it for every received message                   |
-| `TopicInfo`                  | record `(topic, partitions)`                             | Argument of `createTopics`                                                                     |
-| `ProducerInfo`               | record `(id, topic)`                                     | Argument of `createProducers`                                                                  |
-| `ConsumerInfo`               | record `(id, topic, subscriptionName, consumerCallback)` | Argument of `createConsumers`                                                                  |
-| `ResourceCreator`            | helper class                                             | Batched creation with retries, for `createProducers` / `createConsumers`                       |
-| `DriverConfigs`              | helper class                                             | `read(configurationFile, MyConfig.class)` reads the driver YAML and ignores unknown properties |
-| `PendingSendTracker`         | helper class                                             | Tracks a producer's sends independently of the client library's close behavior                 |
-| `ResourceNames`              | helper class                                             | `randomSuffix()` returns a short random suffix for broker-side resource names                  |
-| `Failures`                   | helper class                                             | Collects failures of a multi-step cleanup so every step runs and none is lost                  |
-| `AbandonableCreation`        | interface                                                | Optional cooperative stop signal for a resource-creation future                                |
-| `ResourceCreationCompletion` | interface                                                | Optional completion barrier for a resource-creation future, including cleanup                  |
-| `DriverApiVersion`           | constant `CURRENT = 2`                                   | SPI version that plugin bundles declare                                                        |
+|              Type              |                           Kind                           |                                                   Purpose                                                    |
+|--------------------------------|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `BenchmarkDriver`              | interface, extends `AutoCloseable`                       | Entry point: configuration, topics, producers, consumers                                                     |
+| `BenchmarkProducer`            | interface, extends `AutoCloseable`                       | `sendAsync(Optional<String> key, byte[] payload)`, plus an optional overload with headers                    |
+| `BenchmarkConsumer`            | interface, extends `AutoCloseable`                       | Marker for a subscription; only `close()` is called                                                          |
+| `ConsumerCallback`             | interface                                                | Implemented by the benchmark; the driver calls it for every received message and, optionally, for rebalances |
+| `SendResult`, `RebalanceEvent` | records                                                  | Optional [partition telemetry](#partition-telemetry): where a send went, and an assignment change            |
+| `TopicInfo`                    | record `(topic, partitions)`                             | Argument of `createTopics`                                                                                   |
+| `ProducerInfo`                 | record `(id, topic)`                                     | Argument of `createProducers`                                                                                |
+| `ConsumerInfo`                 | record `(id, topic, subscriptionName, consumerCallback)` | Argument of `createConsumers`                                                                                |
+| `ResourceCreator`              | helper class                                             | Batched creation with retries, for `createProducers` / `createConsumers`                                     |
+| `DriverConfigs`                | helper class                                             | `read(configurationFile, MyConfig.class)` reads the driver YAML and ignores unknown properties               |
+| `PendingSendTracker`           | helper class                                             | Tracks a producer's sends independently of the client library's close behavior                               |
+| `ResourceNames`                | helper class                                             | `randomSuffix()` returns a short random suffix for broker-side resource names                                |
+| `Failures`                     | helper class                                             | Collects failures of a multi-step cleanup so every step runs and none is lost                                |
+| `AbandonableCreation`          | interface                                                | Optional cooperative stop signal for a resource-creation future                                              |
+| `ResourceCreationCompletion`   | interface                                                | Optional completion barrier for a resource-creation future, including cleanup                                |
+| `DriverApiVersion`             | constant `CURRENT = 2`                                   | SPI version that plugin bundles declare                                                                      |
 
 The records are nested in `BenchmarkDriver`. The full `BenchmarkDriver` interface is:
 
@@ -270,6 +271,37 @@ with `Map.of()`.
 
 Adding the overload does not change `DriverApiVersion`: bundles built against version 2 still load
 and report no header support.
+
+### Partition telemetry
+
+A workload with [`partitionTelemetry: true`](../reference/workload-schema.md) asks the driver where
+each message went and when consumer assignments changed, so the result can show partition skew and
+line latency spikes up with rebalances. Every method has a default, so drivers that do not take part
+keep working; the design is in [ADR 0001](adr/0001-partition-telemetry.md).
+
+```java
+// BenchmarkProducer: called instead of sendAsync only when the workload enables telemetry
+default CompletableFuture<SendResult> sendAsyncWithResult(
+        Optional<String> key, byte[] payload, @Nullable Map<String, byte[]> headers) { ... }
+
+// ConsumerCallback: call these instead of the two-argument variants
+default void messageReceived(byte[] payload, long publishTimestamp, int partition) { ... }
+default void messageReceived(ByteBuffer payload, long publishTimestamp, int partition) { ... }
+default void partitionsChanged(RebalanceEvent event) {}
+```
+
+To take part, override `BenchmarkDriver.supportsPartitionTelemetry()`, which returns `false` by
+default; the worker refuses to start a telemetry workload on a driver that returns `false`.
+
+- `sendAsyncWithResult` follows the completion and ownership rules of `sendAsync`. Complete it with
+  the partition the broker reports, or `SendResult.UNKNOWN`.
+- Consumers may always call the three-argument `messageReceived`: without telemetry the benchmark's
+  default drops the partition. Pass `ConsumerCallback.UNKNOWN_PARTITION` when it is not known.
+- Drivers with group membership call `partitionsChanged` from their rebalance listener, with the
+  wall-clock time and the partitions concerned. It may run on the client's thread and does not block.
+  Skip empty changes, which some protocols report on every rebalance.
+
+The Kafka driver is the reference implementation. The additions do not change `DriverApiVersion`.
 
 ## End-to-end publish timestamp
 

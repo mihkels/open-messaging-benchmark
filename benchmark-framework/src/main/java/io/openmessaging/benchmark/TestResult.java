@@ -17,6 +17,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
+import io.openmessaging.benchmark.worker.commands.RebalanceRecord;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.nio.ByteBuffer;
@@ -126,6 +127,21 @@ public class TestResult {
      */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<WorkerLoad> workerHealth = new ArrayList<>();
+
+    /**
+     * How unevenly each period's traffic and latency spread over partitions; present only for {@code
+     * partitionTelemetry} workloads, and only for periods in which partitions reported traffic.
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<PartitionSkew> partitionSkew = new ArrayList<>();
+
+    /** Consumer partition assignment changes, each tagged with the period it was collected in. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    public List<RebalanceRecord> rebalanceEvents = new ArrayList<>();
+
+    /** Rebalance events workers dropped because a period's queue was full. */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public long droppedRebalanceEvents;
 
     /**
      * One step of the max-rate probe that runs for {@code producerRate: 0}.

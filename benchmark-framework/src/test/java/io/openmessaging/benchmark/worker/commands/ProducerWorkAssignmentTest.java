@@ -114,7 +114,7 @@ class ProducerWorkAssignmentTest {
                 .hasToString(
                         "ProducerWorkAssignment[payloads=1 templates, sizes [3], weights [7], publishRate=10.0, "
                                 + "keyDistributorType=NO_KEY, keyDistribution=null, verifyDelivery=false, "
-                                + "headers=null]");
+                                + "headers=null, partitionTelemetry=false]");
     }
 
     @Test

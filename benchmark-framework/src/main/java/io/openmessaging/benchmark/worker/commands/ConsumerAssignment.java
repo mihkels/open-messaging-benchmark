@@ -23,4 +23,8 @@ public class ConsumerAssignment {
     /** Whether consumers check the delivery stamp of each message; see {@code verifyDelivery}. */
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public boolean verifyDelivery;
+
+    /** Whether consumers report partitions and rebalances; see {@code partitionTelemetry}. */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public boolean partitionTelemetry;
 }

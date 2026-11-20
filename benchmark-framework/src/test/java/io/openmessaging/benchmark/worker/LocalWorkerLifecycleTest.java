@@ -16,6 +16,7 @@ package io.openmessaging.benchmark.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -32,6 +33,8 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.openmessaging.benchmark.driver.RebalanceEvent;
+import io.openmessaging.benchmark.driver.SendResult;
 import io.openmessaging.benchmark.driver.ResourceCreator;
 import io.openmessaging.benchmark.utils.distributor.KeyDistribution;
 import io.openmessaging.benchmark.utils.distributor.KeyDistributorType;
@@ -39,6 +42,8 @@ import io.openmessaging.benchmark.utils.payload.MessageHeaders;
 import io.openmessaging.benchmark.utils.payload.PayloadTemplates;
 import io.openmessaging.benchmark.worker.commands.ConsumerAssignment;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
+import io.openmessaging.benchmark.worker.commands.PartitionPeriod;
+import io.openmessaging.benchmark.worker.commands.PeriodStats;
 import io.openmessaging.benchmark.worker.commands.ProducerWorkAssignment;
 import io.openmessaging.benchmark.worker.commands.RunPhase;
 import io.openmessaging.benchmark.worker.commands.TopicSubscription;
@@ -1220,6 +1225,79 @@ class LocalWorkerLifecycleTest {
         }
     }
 
+    @Test
+    void reportsPartitionTelemetryWhenTheWorkloadAndDriverEnableIt() throws Exception {
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        when(producer.sendAsyncWithResult(any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(new SendResult(3)));
+        Scenario scenario = new Scenario(List.of(producer));
+        scenario.consumers = List.of(mock(BenchmarkConsumer.class));
+        scenario.supportsPartitionTelemetry = true;
+        try (LocalWorker worker = worker(scenario, Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            worker.createConsumers(telemetryConsumerAssignment());
+            scenario.callback.partitionsChanged(new RebalanceEvent(RebalanceEvent.Kind.ASSIGNED, 5L, List.of(1)));
+            scenario.callback.messageReceived(new byte[8], System.currentTimeMillis(), 1);
+            worker.startLoad(telemetryAssignment());
+            waitUntil(() -> worker.getCountersStats().messagesSent() > 0);
+
+            PeriodStats stats = worker.getPeriodStats();
+            assertThat(stats.partitions())
+                    .extracting(PartitionPeriod::topic, PartitionPeriod::partition)
+                    .containsExactlyInAnyOrder(tuple("topic", 1), tuple("topic", 3));
+            assertThat(stats.partitions()).filteredOn(p -> p.partition() == 1).singleElement().satisfies(p -> {
+                assertThat(p.messagesReceived()).isEqualTo(1);
+                assertThat(p.endToEndLatency().getTotalCount()).isEqualTo(1);
+            });
+            assertThat(stats.partitions()).filteredOn(p -> p.partition() == 3).singleElement().satisfies(p -> {
+                assertThat(p.messagesSent()).isPositive();
+                assertThat(p.publishLatency().getTotalCount()).isPositive();
+            });
+            assertThat(stats.rebalances())
+                    .singleElement()
+                    .satisfies(r -> {
+                        assertThat(r.topic()).isEqualTo("topic");
+                        assertThat(r.kind()).isEqualTo(RebalanceEvent.Kind.ASSIGNED);
+                        assertThat(r.partitions()).containsExactly(1);
+                    });
+            verify(producer, times(0)).sendAsync(any(), any());
+        }
+    }
+
+    @Test
+    void rejectsPartitionTelemetryWhenTheDriverDoesNotSupportIt() throws Exception {
+        BenchmarkProducer producer = mock(BenchmarkProducer.class);
+        try (LocalWorker worker = worker(new Scenario(List.of(producer)), Duration.ofSeconds(2))) {
+            worker.createProducers(List.of("topic"));
+            ConsumerAssignment consumers = telemetryConsumerAssignment();
+            assertThatThrownBy(() -> worker.createConsumers(consumers))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("does not support partition telemetry");
+            ProducerWorkAssignment assignment = telemetryAssignment();
+            assertThatThrownBy(() -> worker.startLoad(assignment))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("does not support partition telemetry");
+            verify(producer, times(0)).sendAsyncWithResult(any(), any(), any());
+        }
+    }
+
+    private static ProducerWorkAssignment telemetryAssignment() {
+        return new ProducerWorkAssignment(
+                PayloadTemplates.of(List.of(new byte[32]), null),
+                10_000,
+                KeyDistributorType.NO_KEY,
+                null,
+                false,
+                null,
+                true);
+    }
+
+    private static ConsumerAssignment telemetryConsumerAssignment() {
+        ConsumerAssignment assignment = assignmentForConsumer();
+        assignment.partitionTelemetry = true;
+        return assignment;
+    }
+
     private static ProducerWorkAssignment headersAssignment() {
         return new ProducerWorkAssignment(
                 PayloadTemplates.of(List.of(new byte[32]), null),
@@ -1335,6 +1413,7 @@ class LocalWorkerLifecycleTest {
         private Runnable onClose = () -> {};
         private Exception closeFailure;
         private boolean supportsHeaders;
+        private boolean supportsPartitionTelemetry;
 
         private Scenario(List<BenchmarkProducer> producers) {
             createProducers = () -> CompletableFuture.completedFuture(producers);
@@ -1359,6 +1438,11 @@ class LocalWorkerLifecycleTest {
         @Override
         public boolean supportsHeaders() {
             return scenario.supportsHeaders;
+        }
+
+        @Override
+        public boolean supportsPartitionTelemetry() {
+            return scenario.supportsPartitionTelemetry;
         }
 
         @Override

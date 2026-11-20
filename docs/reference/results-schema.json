@@ -352,6 +352,116 @@
         "additionalProperties": false
       }
     },
+    "partitionSkew": {
+      "description": "How unevenly each period's traffic and latency spread over partitions. Present only for workloads with partitionTelemetry, and only for periods in which partitions reported traffic.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "period",
+          "partitions",
+          "publishMaxMeanRatio",
+          "consumeMaxMeanRatio",
+          "publishGini",
+          "consumeGini",
+          "topPublishP99",
+          "topEndToEndP99"
+        ],
+        "properties": {
+          "period": {
+            "description": "Index of the period in the per-period series.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "partitions": {
+            "description": "Partitions that published or consumed during the period.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "publishMaxMeanRatio": {
+            "description": "Busiest partition's publish count divided by the mean; 1 is even, 0 when nothing was published.",
+            "type": "number",
+            "minimum": 0
+          },
+          "consumeMaxMeanRatio": {
+            "description": "Busiest partition's consume count divided by the mean; 1 is even, 0 when nothing was consumed.",
+            "type": "number",
+            "minimum": 0
+          },
+          "publishGini": {
+            "description": "Gini coefficient of per-partition publish counts: 0 is even, close to 1 is one partition taking everything.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "consumeGini": {
+            "description": "Gini coefficient of per-partition consume counts.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "topPublishP99": {
+            "description": "Up to five partitions with the highest publish p99, highest first.",
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/$defs/partitionLatency"
+            }
+          },
+          "topEndToEndP99": {
+            "description": "Up to five partitions with the highest end-to-end p99, highest first.",
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/$defs/partitionLatency"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rebalanceEvents": {
+      "description": "Consumer partition assignment changes. Present only for workloads with partitionTelemetry on drivers with group membership.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["period", "timestampMillis", "worker", "topic", "kind", "partitions"],
+        "properties": {
+          "period": {
+            "description": "Index of the period the event was collected in.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "timestampMillis": {
+            "description": "Wall-clock time of the change, in epoch milliseconds.",
+            "type": "integer"
+          },
+          "worker": {
+            "description": "The worker whose consumer saw the change.",
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": ["ASSIGNED", "REVOKED", "LOST"]
+          },
+          "partitions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "droppedRebalanceEvents": {
+      "description": "Rebalance events workers dropped because more than 1,000 arrived in one period. Absent when zero.",
+      "type": "integer",
+      "minimum": 1
+    },
     "rateProbe": {
       "description": "Steps of the max-rate probe. Present only for producerRate: 0 runs.",
       "type": "array",
@@ -401,6 +511,25 @@
     }
   },
   "$defs": {
+    "partitionLatency": {
+      "description": "One partition's p99 latency. Per-partition histograms keep one significant digit, so the value is accurate to about 10%.",
+      "type": "object",
+      "required": ["topic", "partition", "p99Ms"],
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "partition": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p99Ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "numberSeries": {
       "type": "array",
       "items": {

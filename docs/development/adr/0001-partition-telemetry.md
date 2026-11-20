@@ -14,7 +14,7 @@ limitations under the License.
 
 # ADR 0001: Per-partition skew telemetry and consumer rebalance events
 
-- **Status:** Proposed
+- **Status:** Accepted, implemented
 - **Issue:** [#36](https://github.com/mihkels/open-messaging-benchmark/issues/36)
 - **Scope:** `driver-api`, `benchmark-framework` (worker and coordinator), `driver-kafka`
 
@@ -231,6 +231,19 @@ path as the run-wide metrics.
 - `KafkaBenchmarkDriver.supportsPartitionTelemetry()` returns `true`. KoP reuses the Kafka producer
   and consumer classes, so it gets the plumbing, but keeps the flag `false` until it is verified
   against a KoP broker.
+
+## Implementation notes
+
+Small refinements made while implementing the decision:
+
+- Each `partitionSkew` entry carries its `period` index, because periods without per-partition
+  traffic have no entry.
+- `TestResult.droppedRebalanceEvents` reports the rebalance events workers dropped at the
+  per-period cap.
+- The Kafka listener skips empty assignment changes, which the cooperative protocol reports on
+  every rebalance.
+- Merged per-partition histograms are auto-resizing, so histograms from workers with another range
+  still add.
 
 ## Alternatives considered
 

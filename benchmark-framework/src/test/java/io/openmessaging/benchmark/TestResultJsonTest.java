@@ -17,10 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.openmessaging.benchmark.driver.RebalanceEvent;
 import io.openmessaging.benchmark.worker.Worker;
 import io.openmessaging.benchmark.worker.commands.CountersStats;
 import io.openmessaging.benchmark.worker.commands.CumulativeLatencies;
 import io.openmessaging.benchmark.worker.commands.PeriodStats;
+import io.openmessaging.benchmark.worker.commands.RebalanceRecord;
 import io.openmessaging.benchmark.worker.commands.WorkerLoad;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -123,6 +125,41 @@ class TestResultJsonTest {
         assertThat(json.get("rateProbe").get(0).has("publishDelayLatency99pct")).isFalse();
         assertThat(read.workerHealth).isEqualTo(result.workerHealth);
         assertThat(read.rateProbe).isEqualTo(result.rateProbe);
+    }
+
+    @Test
+    void partitionTelemetryIsOptionalAndSurvivesARoundTrip() throws Exception {
+        ObjectNode empty = toTree(new TestResult());
+        assertThat(empty.has("partitionSkew")).isFalse();
+        assertThat(empty.has("rebalanceEvents")).isFalse();
+        assertThat(empty.has("droppedRebalanceEvents")).isFalse();
+
+        TestResult result = new TestResult();
+        result.partitionSkew =
+                List.of(
+                        new PartitionSkew(
+                                2,
+                                4,
+                                1.5,
+                                1.2,
+                                0.1,
+                                0.05,
+                                List.of(new PartitionSkew.PartitionLatency("t", 3, 12.5)),
+                                List.of()));
+        result.rebalanceEvents =
+                List.of(
+                        new RebalanceRecord(
+                                2, 1_000L, "local", "t", RebalanceEvent.Kind.REVOKED, List.of(1, 3)));
+        result.droppedRebalanceEvents = 7;
+
+        ObjectNode json = toTree(result);
+        TestResult read = mapper.treeToValue(json, TestResult.class);
+
+        assertThat(json.get("schemaVersion").intValue()).isEqualTo(3);
+        assertThat(json.get("rebalanceEvents").get(0).get("kind").stringValue()).isEqualTo("REVOKED");
+        assertThat(read.partitionSkew).isEqualTo(result.partitionSkew);
+        assertThat(read.rebalanceEvents).isEqualTo(result.rebalanceEvents);
+        assertThat(read.droppedRebalanceEvents).isEqualTo(7);
     }
 
     @Test

@@ -93,6 +93,11 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsPartitionTelemetry() {
+        return true;
+    }
+
+    @Override
     public String getTopicNamePrefix() {
         return "test-topic";
     }

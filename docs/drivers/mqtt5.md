@@ -23,7 +23,7 @@ work but are not tested here.
 |------------------------|---------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `mqtt5`                                                                                                 |
 | Module                 | `driver-mqtt5`                                                                                          |
-| `driverClass`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                                           |
+| `driverClass`          | `io.github.mihkels.omb.driver.mqtt5.MqttBenchmarkDriver`                                                |
 | Example config shipped | `driver-mqtt5/mqtt5.yaml` (`tcp://localhost:1883`, no authentication)                                   |
 | Tested broker          | `eclipse-mosquitto:2.0.22`, anonymous listener on 1883 (Compose stack `mqtt5`)                          |
 | Regression cases       | `mqtt5-contract` (publish/subscribe through Mosquitto)                                                  |
@@ -80,7 +80,7 @@ The shipped `driver-mqtt5/mqtt5.yaml`:
 
 ```yaml
 name: MQTT
-driverClass: io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.mqtt5.MqttBenchmarkDriver
 
 client:
   serverUri: tcp://localhost:1883
@@ -242,7 +242,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-mqtt5/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-mqtt5/src/main/java/io/openmessaging/benchmark/driver/mqtt5)
+- Driver source: [`driver-mqtt5/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-mqtt5/src/main/java/io/github/mihkels/omb/driver/mqtt5)
 - Shipped config: [`driver-mqtt5/mqtt5.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-mqtt5/mqtt5.yaml)
 - Regression config: [`e2e-tests/compose/drivers/mqtt5.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/mqtt5.yaml)
 - Stack file: [`e2e-tests/compose/stacks/mqtt5.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/mqtt5.yaml)

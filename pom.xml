@@ -17,11 +17,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>io.openmessaging.benchmark</groupId>
+    <groupId>io.github.mihkels.omb</groupId>
     <artifactId>messaging-benchmark</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
     <name>Messaging Benchmark</name>
+    <description>Benchmark framework for messaging systems: Kafka, Pulsar, RabbitMQ, NATS and others.</description>
+    <!-- Children keep the repository URL instead of appending their artifactId -->
+    <url child.project.url.inherit.append.path="false">https://github.com/mihkels/open-messaging-benchmark</url>
     <inceptionYear>2017</inceptionYear>
     <organization>
         <name>OpenMessaging Project</name>
@@ -34,6 +37,14 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+    <!-- Maven Central requires developers; no email is published on purpose -->
+    <developers>
+        <developer>
+            <id>mihkels</id>
+            <name>Mihkel Selgal</name>
+            <url>https://github.com/mihkels</url>
+        </developer>
+    </developers>
     <modules>
         <module>benchmark-framework</module>
         <module>driver-api</module>
@@ -41,6 +52,12 @@
         <module>package</module>
         <module>tool</module>
     </modules>
+    <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+        <connection>scm:git:https://github.com/mihkels/open-messaging-benchmark.git</connection>
+        <developerConnection>scm:git:git@github.com:mihkels/open-messaging-benchmark.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/mihkels/open-messaging-benchmark</url>
+    </scm>
     <properties>
         <!-- x-release-please-start-version -->
         <revision>0.6.0</revision>
@@ -79,6 +96,14 @@
         <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
         <maven.site.plugin.version>3.22.0</maven.site.plugin.version>
         <flatten.plugin.version>1.9.0</flatten.plugin.version>
+        <maven.source.plugin.version>3.4.0</maven.source.plugin.version>
+        <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
+        <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
+        <central.publishing.plugin.version>0.12.0</central.publishing.plugin.version>
+        <!-- central profile: false stops the upload at VALIDATED, so a person presses Publish in the Portal -->
+        <central.autoPublish>false</central.autoPublish>
+        <!-- central profile: true skips the upload; javadoc, sources and signing still run -->
+        <central.skipPublishing>false</central.skipPublishing>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
         <spotless.plugin.version>3.11.0</spotless.plugin.version>
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
@@ -96,7 +121,7 @@
             .mvn/jvm.config.
             See docs/development/building-the-project.md#static-analysis-and-null-safety.
         -->
-        <errorprone.args>-XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-(test-)?sources/.* -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:CustomInitializerAnnotations=org.openjdk.jmh.annotations.Setup -XepOpt:NullAway:KnownInitializers=io.openmessaging.benchmark.driver.BenchmarkDriver.initialize -XepOpt:NullAway:JSpecifyMode=true -Xep:BadImport:ERROR -Xep:BooleanLiteral:ERROR -Xep:BoxingComparator:ERROR -Xep:CanonicalDuration:ERROR -Xep:CatchAndPrintStackTrace:ERROR -Xep:DefaultCharset:ERROR -Xep:EmptyBlockTag:ERROR -Xep:EqualsGetClass:ERROR -Xep:FieldCanBeLocal:ERROR -Xep:InconsistentCapitalization:ERROR -Xep:JavaTimeDefaultTimeZone:ERROR -Xep:MissingOverride:ERROR -Xep:OperatorPrecedence:ERROR -Xep:StreamResourceLeak:ERROR -Xep:StringCaseLocaleUsage:ERROR -Xep:UndefinedEquals:ERROR -Xep:UnnamedVariable:ERROR -Xep:UnnecessaryParentheses:ERROR -Xep:UnusedException:ERROR -Xep:UnusedMethod:ERROR -Xep:UnusedVariable:ERROR</errorprone.args>
+        <errorprone.args>-XepDisableWarningsInGeneratedCode -XepExcludedPaths:.*/target/generated-(test-)?sources/.* -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:AcknowledgeRestrictiveAnnotations=true -XepOpt:NullAway:CustomInitializerAnnotations=org.openjdk.jmh.annotations.Setup -XepOpt:NullAway:KnownInitializers=io.github.mihkels.omb.driver.BenchmarkDriver.initialize -XepOpt:NullAway:JSpecifyMode=true -Xep:BadImport:ERROR -Xep:BooleanLiteral:ERROR -Xep:BoxingComparator:ERROR -Xep:CanonicalDuration:ERROR -Xep:CatchAndPrintStackTrace:ERROR -Xep:DefaultCharset:ERROR -Xep:EmptyBlockTag:ERROR -Xep:EqualsGetClass:ERROR -Xep:FieldCanBeLocal:ERROR -Xep:InconsistentCapitalization:ERROR -Xep:JavaTimeDefaultTimeZone:ERROR -Xep:MissingOverride:ERROR -Xep:OperatorPrecedence:ERROR -Xep:StreamResourceLeak:ERROR -Xep:StringCaseLocaleUsage:ERROR -Xep:UndefinedEquals:ERROR -Xep:UnnamedVariable:ERROR -Xep:UnnecessaryParentheses:ERROR -Xep:UnusedException:ERROR -Xep:UnusedMethod:ERROR -Xep:UnusedVariable:ERROR</errorprone.args>
         <errorprone.mainArgs>-Xep:InterruptedExceptionSwallowed:ERROR</errorprone.mainArgs>
         <pitest.plugin.version>1.30.2</pitest.plugin.version>
         <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
@@ -122,7 +147,7 @@
         <!-- Reports written by the jacoco-maven-plugin report execution in every module -->
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/*/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <!-- Same CLI entry points the jacoco-maven-plugin excludes; otherwise Sonar counts them as 0% covered -->
-        <sonar.coverage.exclusions>**/benchmark/worker/BenchmarkWorker.java,**/benchmark/worker/DriverProcessMain.java</sonar.coverage.exclusions>
+        <sonar.coverage.exclusions>**/omb/worker/BenchmarkWorker.java,**/omb/worker/DriverProcessMain.java</sonar.coverage.exclusions>
         <!--
           Rules suppressed as verified false positives / deliberate design, see issue #146:
           - S3077: volatile fields only publish immutable or thread-safe objects (Thread, Path, clients)
@@ -141,15 +166,15 @@
         <sonar.issue.ignore.multicriteria.s6213.ruleKey>java:S6213</sonar.issue.ignore.multicriteria.s6213.ruleKey>
         <sonar.issue.ignore.multicriteria.s6213.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.s6213.resourceKey>
         <sonar.issue.ignore.multicriteria.s106a.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106a.ruleKey>
-        <sonar.issue.ignore.multicriteria.s106a.resourceKey>**/io/openmessaging/benchmark/Benchmark.java</sonar.issue.ignore.multicriteria.s106a.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106a.resourceKey>**/io/github/mihkels/omb/Benchmark.java</sonar.issue.ignore.multicriteria.s106a.resourceKey>
         <sonar.issue.ignore.multicriteria.s106b.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106b.ruleKey>
-        <sonar.issue.ignore.multicriteria.s106b.resourceKey>**/io/openmessaging/benchmark/worker/BenchmarkWorker.java</sonar.issue.ignore.multicriteria.s106b.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106b.resourceKey>**/io/github/mihkels/omb/worker/BenchmarkWorker.java</sonar.issue.ignore.multicriteria.s106b.resourceKey>
         <sonar.issue.ignore.multicriteria.s106c.ruleKey>java:S106</sonar.issue.ignore.multicriteria.s106c.ruleKey>
-        <sonar.issue.ignore.multicriteria.s106c.resourceKey>**/io/openmessaging/benchmark/worker/DriverProcessMain.java</sonar.issue.ignore.multicriteria.s106c.resourceKey>
+        <sonar.issue.ignore.multicriteria.s106c.resourceKey>**/io/github/mihkels/omb/worker/DriverProcessMain.java</sonar.issue.ignore.multicriteria.s106c.resourceKey>
         <sonar.issue.ignore.multicriteria.s2143.ruleKey>java:S2143</sonar.issue.ignore.multicriteria.s2143.ruleKey>
-        <sonar.issue.ignore.multicriteria.s2143.resourceKey>**/io/openmessaging/benchmark/driver/rabbitmq/RabbitMqBenchmarkProducer.java</sonar.issue.ignore.multicriteria.s2143.resourceKey>
+        <sonar.issue.ignore.multicriteria.s2143.resourceKey>**/io/github/mihkels/omb/driver/rabbitmq/RabbitMqBenchmarkProducer.java</sonar.issue.ignore.multicriteria.s2143.resourceKey>
         <sonar.issue.ignore.multicriteria.s2245.ruleKey>java:S2245</sonar.issue.ignore.multicriteria.s2245.ruleKey>
-        <sonar.issue.ignore.multicriteria.s2245.resourceKey>**/io/openmessaging/benchmark/worker/LocalWorker.java</sonar.issue.ignore.multicriteria.s2245.resourceKey>
+        <sonar.issue.ignore.multicriteria.s2245.resourceKey>**/io/github/mihkels/omb/worker/LocalWorker.java</sonar.issue.ignore.multicriteria.s2245.resourceKey>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -668,9 +693,9 @@
                 <configuration>
                     <excludes>
                         <!-- CLI entry points: argument parsing, server wiring and System.exit only -->
-                        <exclude>io/openmessaging/benchmark/worker/BenchmarkWorker*.class</exclude>
+                        <exclude>io/github/mihkels/omb/worker/BenchmarkWorker*.class</exclude>
                         <!-- Driver process entry point; ProcessWorkerTest runs it in a child JVM without the agent -->
-                        <exclude>io/openmessaging/benchmark/worker/DriverProcessMain*.class</exclude>
+                        <exclude>io/github/mihkels/omb/worker/DriverProcessMain*.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>
@@ -956,6 +981,75 @@
                                 </configuration>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <!--
+                Maven Central release of the parent POM and driver-api only (issue #494):
+                mvn -Pcentral -pl .,driver-api deploy
+                Signing uses the BouncyCastle signer, which reads the armored key from MAVEN_GPG_KEY and
+                its passphrase from MAVEN_GPG_PASSPHRASE. The Portal user token comes from the server
+                "central" in settings.xml. See docs/development/releasing.md#maven-central.
+            -->
+            <id>central</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <configuration>
+                            <signer>bc</signer>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <phase>verify</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven.source.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central.publishing.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>${central.autoPublish}</autoPublish>
+                            <skipPublishing>${central.skipPublishing}</skipPublishing>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

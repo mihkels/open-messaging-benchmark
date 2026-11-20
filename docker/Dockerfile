@@ -63,7 +63,7 @@ LABEL org.opencontainers.image.title="OpenMessaging Benchmark" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \
-      io.openmessaging.benchmark.drivers="${DRIVERS}"
+      io.github.mihkels.omb.drivers="${DRIVERS}"
 
 # Upgrades OS packages so Amazon Linux security fixes apply before the pinned Corretto image is
 # rebuilt. skip_if_unavailable=False fails the build when a repository cannot be fetched, so a

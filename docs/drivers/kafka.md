@@ -22,7 +22,7 @@ with `KafkaProducer` and consumes with one `KafkaConsumer` per benchmark consume
 |-------------------|-----------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `kafka`                                                                                                   |
 | Module            | `driver-kafka`                                                                                            |
-| `driverClass`     | `io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`                                            |
+| `driverClass`     | `io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`                                                 |
 | Example configs   | 14 files `driver-kafka/kafka-*.yaml`, see [Shipped configurations](#shipped-configurations)               |
 | Client library    | `org.apache.kafka:kafka-clients` 4.4.0                                                                    |
 | Tested broker     | `apache/kafka:4.4.0`, single KRaft node (Compose stack `kafka`)                                           |
@@ -106,7 +106,7 @@ A single-broker test needs replication factor 1. Save this as `my-kafka.yaml`; i
 
 ```yaml
 name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver
 
 replicationFactor: 1
 
@@ -154,13 +154,13 @@ cluster, see [Using your broker](../getting-started/using-your-broker.md).
 
 ## Configuration reference
 
-The driver reads these keys (record `io.openmessaging.benchmark.driver.kafka.Config`). Unknown keys
+The driver reads these keys (record `io.github.mihkels.omb.driver.kafka.Config`). Unknown keys
 are ignored.
 
 |         Key         |           Type           |    Default     |                                                                     Description                                                                     |
 |---------------------|--------------------------|----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | `name`              | string                   | required       | Used in the result file name and the result's `driver` field.                                                                                       |
-| `driverClass`       | string                   | required       | `io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`                                                                                      |
+| `driverClass`       | string                   | required       | `io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`                                                                                           |
 | `replicationFactor` | short                    | `0` if omitted | Replication factor of every created topic. Set it explicitly: the broker rejects `0`. `-1` asks the broker to use its `default.replication.factor`. |
 | `topicConfig`       | Java properties (string) | required       | Topic configs sent with every `CreateTopics` request, for example `min.insync.replicas`.                                                            |
 | `commonConfig`      | Java properties (string) | required       | Client properties for the Admin client, every producer and every consumer. Put `bootstrap.servers` and security settings here.                      |
@@ -337,7 +337,7 @@ See also [Troubleshooting](../guides/troubleshooting.md).
 
 Source and configuration files:
 
-- Driver source: [`driver-kafka/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kafka/src/main/java/io/openmessaging/benchmark/driver/kafka)
+- Driver source: [`driver-kafka/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kafka/src/main/java/io/github/mihkels/omb/driver/kafka)
 - Shipped configurations: [`driver-kafka/`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kafka)
 - Regression driver configs:
   [`kafka.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/kafka.yaml),

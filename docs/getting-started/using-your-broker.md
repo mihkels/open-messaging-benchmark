@@ -44,7 +44,7 @@ cp driver-kafka/kafka-latency.yaml my-kafka.yaml
 
 ```yaml
 name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver
 
 replicationFactor: 3
 

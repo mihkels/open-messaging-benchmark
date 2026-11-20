@@ -1,0 +1,261 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.tool.workload;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.github.mihkels.omb.Workload;
+import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
+import io.github.mihkels.omb.utils.distributor.KeyDistribution;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.dataformat.yaml.YAMLFactory;
+
+class WorkloadGenerationToolTest {
+
+    private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void generatesZipfianWorkload() throws Exception {
+        Path template = tempDir.resolve("zipf.yaml");
+        Path output = tempDir.resolve("out");
+        Files.createDirectories(output);
+        Files.writeString(template, """
+                nameFormat: zipf-${keyDistribution}
+                keyDistributor: ZIPFIAN
+                keyDistribution:
+                  keys: 123
+                  exponent: 1.1
+                """);
+        WorkloadGenerationTool.main(new String[] {"-t", template.toString(), "-o", output.toString()});
+        Workload workload =
+                YAML_MAPPER.readValue(output.resolve("zipf-123-1.1.yaml").toFile(), Workload.class);
+        assertThat(workload.name).isEqualTo("zipf-123-1.1");
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.ZIPFIAN);
+        assertThat(workload.keyDistribution).isEqualTo(new KeyDistribution(123, 1.1));
+    }
+
+    @Test
+    void namesEffectiveKeyDistribution() throws Exception {
+        WorkloadSetTemplate zipfian =
+                YAML_MAPPER.readValue(
+                        "nameFormat: k-${keyDistribution}\nkeyDistributor: ZIPFIAN\n",
+                        WorkloadSetTemplate.class);
+        WorkloadSetTemplate roundRobin =
+                YAML_MAPPER.readValue(
+                        "nameFormat: k-${keyDistribution}\nkeyDistributor: KEY_ROUND_ROBIN\n",
+                        WorkloadSetTemplate.class);
+        assertThat(new WorkloadSetGenerator(zipfian).generate().getFirst().name)
+                .isEqualTo("k-10k-0.99");
+        assertThat(new WorkloadSetGenerator(roundRobin).generate().getFirst().name)
+                .isEqualTo("k-none");
+    }
+
+    @Test
+    void generatesOneFilePerWorkloadCombination() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+
+        Files.writeString(
+                templateFile,
+                """
+                nameFormat: "workload-${topics}-${messageSize}"
+                topics: [1, 2]
+                partitionsPerTopic: [1]
+                messageSize: [128, 256]
+                subscriptionsPerTopic: [1]
+                producersPerTopic: [1]
+                consumerPerSubscription: [1]
+                producerRate: [100]
+                keyDistributor: NO_KEY
+                useRandomizedPayloads: false
+                randomBytesRatio: 0.0
+                randomizedPayloadPoolSize: 0
+                consumerBacklogSizeGB: 0
+                testDurationMinutes: 1
+                warmupDurationMinutes: 0
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        List<String> generatedFiles ;
+try (Stream<Path> stream = Files.list(outputDir)) {
+generatedFiles =stream
+                        .map(path -> path.getFileName().toString())
+                        .sorted()
+                        .toList();}
+
+        assertThat(generatedFiles)
+                .containsExactly(
+                        "workload-1-128.yaml",
+                        "workload-1-256.yaml",
+                        "workload-2-128.yaml",
+                        "workload-2-256.yaml");
+    }
+
+    @Test
+    void writesGeneratedWorkloadsAsReadableYamlFiles() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+
+        Files.writeString(
+                templateFile,
+                """
+                nameFormat: "single-workload"
+                topics: [3]
+                partitionsPerTopic: [2]
+                messageSize: [1024]
+                subscriptionsPerTopic: [4]
+                producersPerTopic: [5]
+                consumerPerSubscription: [6]
+                producerRate: [700]
+                keyDistributor: KEY_ROUND_ROBIN
+                payloadFile: "payload/custom.data"
+                useRandomizedPayloads: true
+                randomBytesRatio: 0.5
+                randomizedPayloadPoolSize: 10
+                consumerBacklogSizeGB: 7
+                testDurationMinutes: 8
+                warmupDurationMinutes: 9
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        Path generatedFile = outputDir.resolve("single-workload.yaml");
+        assertThat(generatedFile).exists();
+
+        String yaml = Files.readString(generatedFile);
+        assertThat(yaml)
+                .isNotBlank()
+                .contains(
+                        "name: \"single-workload\"",
+                        "topics: 3",
+                        "partitionsPerTopic: 2",
+                        "messageSize: 1024");
+
+        Workload workload = YAML_MAPPER.readValue(generatedFile.toFile(), Workload.class);
+
+        assertThat(workload.name).isEqualTo("single-workload");
+        assertThat(workload.topics).isEqualTo(3);
+        assertThat(workload.partitionsPerTopic).isEqualTo(2);
+        assertThat(workload.messageSize).isEqualTo(1024);
+        assertThat(workload.subscriptionsPerTopic).isEqualTo(4);
+        assertThat(workload.producersPerTopic).isEqualTo(5);
+        assertThat(workload.consumerPerSubscription).isEqualTo(6);
+        assertThat(workload.producerRate).isEqualTo(700);
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.KEY_ROUND_ROBIN);
+        assertThat(workload.payloadFile).isEqualTo("payload/custom.data");
+        assertThat(workload.useRandomizedPayloads).isTrue();
+        assertThat(workload.randomBytesRatio).isEqualTo(0.5);
+        assertThat(workload.randomizedPayloadPoolSize).isEqualTo(10);
+        assertThat(workload.consumerBacklogSizeGB).isEqualTo(7);
+        assertThat(workload.testDurationMinutes).isEqualTo(8);
+        assertThat(workload.warmupDurationMinutes).isEqualTo(9);
+        assertThat(workload.messageSizeDistribution).isEmpty();
+        assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+        var document = YAML_MAPPER.readTree(yaml);
+        assertThat(document.has("messageSizeDistribution")).isFalse();
+        assertThat(document.get("backlogDrainRatio").asDouble()).isEqualTo(1.0);
+    }
+
+    @Test
+    void ignoresUnsupportedTemplateFieldsAndKeepsWorkloadDefaults() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+        Files.writeString(
+                templateFile,
+                """
+                nameFormat: "unsupported-fields"
+                messageSize: []
+                keyDistributor: NO_KEY
+                useRandomizedPayloads: false
+                randomBytesRatio: 0.0
+                randomizedPayloadPoolSize: 0
+                consumerBacklogSizeGB: 0
+                testDurationMinutes: 5
+                warmupDurationMinutes: 1
+                messageSizeDistribution:
+                  "32": 100
+                backlogDrainRatio: 0.25
+                thresholds:
+                  maxPublishLatency99Ms: 25
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        Workload workload =
+                YAML_MAPPER.readValue(
+                        outputDir.resolve("unsupported-fields.yaml").toFile(), Workload.class);
+        assertThat(workload.topics).isEqualTo(1);
+        assertThat(workload.partitionsPerTopic).isEqualTo(1);
+        assertThat(workload.messageSize).isEqualTo(1024);
+        assertThat(workload.subscriptionsPerTopic).isEqualTo(1);
+        assertThat(workload.producersPerTopic).isEqualTo(1);
+        assertThat(workload.consumerPerSubscription).isEqualTo(1);
+        assertThat(workload.producerRate).isEqualTo(10000);
+        assertThat(workload.messageSizeDistribution).isEmpty();
+        assertThat(workload.backlogDrainRatio).isEqualTo(1.0);
+        assertThat(workload.thresholds).isNull();
+    }
+
+    @Test
+    void appliesTemplateDefaultsForMissingFields() throws Exception {
+        Path templateFile = tempDir.resolve("template.yaml");
+        Path outputDir = tempDir.resolve("out");
+        Files.createDirectories(outputDir);
+        Files.writeString(
+                templateFile,
+                """
+                topics: [1]
+                messageSize: [100]
+                """);
+
+        WorkloadGenerationTool.main(
+                new String[] {
+                    "-t", templateFile.toString(),
+                    "-o", outputDir.toString()
+                });
+
+        Path generatedFile = outputDir.resolve("1-topics-1-partitions-100b-1p-1c-10k.yaml");
+        assertThat(outputDir.resolve("null.yaml")).doesNotExist();
+        assertThat(generatedFile).exists();
+        Workload workload = YAML_MAPPER.readValue(generatedFile.toFile(), Workload.class);
+        assertThat(workload.keyDistributor).isEqualTo(KeyDistributorType.NO_KEY);
+        assertThat(workload.testDurationMinutes).isEqualTo(5);
+        assertThat(workload.warmupDurationMinutes).isEqualTo(1);
+    }
+}

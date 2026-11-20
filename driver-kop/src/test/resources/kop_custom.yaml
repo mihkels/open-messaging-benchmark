@@ -15,7 +15,7 @@
 # The KoP config file whose optional items are customized with different values from default.
 
 name: Kafka-on-Pulsar
-driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kop.KopBenchmarkDriver
 
 producerType: kafka
 consumerType: pulsar

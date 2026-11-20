@@ -24,7 +24,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/redis.md#local-docker-compos
 [kind cluster](../docs/drivers/redis.md#local-kind-cluster).
 
 - Plugin ID: `redis`
-- `driverClass`: `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver`
 - Shipped config: [`redis.yaml`](redis.yaml) (`127.0.0.1:6379`)
 - Tested with: `redis:7.4-alpine` ([stack file](../e2e-tests/compose/stacks/redis.yaml))
 

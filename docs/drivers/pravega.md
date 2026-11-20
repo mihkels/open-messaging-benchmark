@@ -22,7 +22,7 @@ is a reader group. Producers can write events directly or in transactions.
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `pravega`                                                                                                                                           |
 | Module            | `driver-pravega`                                                                                                                                    |
-| `driverClass`     | `io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver`                                                                                  |
+| `driverClass`     | `io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver`                                                                                       |
 | Shipped configs   | `driver-pravega/pravega.yaml`, `driver-pravega/pravega-exactly-once.yaml`                                                                           |
 | Client library    | `pravega-client` 0.13.0                                                                                                                             |
 | Tested broker     | `pravega/pravega:0.13.0` in standalone mode (Compose stack `pravega`, amd64 image only)                                                             |
@@ -95,7 +95,7 @@ docker run -d --name pravega --platform linux/amd64 \
 
 ```yaml
 name: Pravega
-driverClass: io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver
 client:
   controllerURI: tcp://localhost:9090
   scopeName: examples
@@ -256,7 +256,7 @@ See also [Troubleshooting](../guides/troubleshooting.md) and [Results](../guides
 
 Source and configuration files:
 
-- Driver source: [`driver-pravega/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pravega/src/main/java/io/openmessaging/benchmark/driver/pravega)
+- Driver source: [`driver-pravega/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pravega/src/main/java/io/github/mihkels/omb/driver/pravega)
 - Shipped configs: [`pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pravega/pravega.yaml), [`pravega-exactly-once.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pravega/pravega-exactly-once.yaml)
 - Compose driver configs: [`drivers/pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pravega.yaml), [`drivers/pravega-transactions.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pravega-transactions.yaml)
 - Compose stack: [`stacks/pravega.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/pravega.yaml)

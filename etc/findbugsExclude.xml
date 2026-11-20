@@ -16,94 +16,94 @@
 <FindBugsFilter>
   <!-- TestResult's public fields are the documented result JSON schema; it also fills them itself. -->
   <Match>
-    <Class name="io.openmessaging.benchmark.TestResult" />
+    <Class name="io.github.mihkels.omb.TestResult" />
     <Bug pattern="PA_PUBLIC_PRIMITIVE_ATTRIBUTE" />
   </Match>
   <!-- Failures hands out the recorded failure itself so callers can rethrow or suppress into it. -->
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.Failures" />
+    <Class name="io.github.mihkels.omb.driver.Failures" />
     <Method name="failure" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pulsar.config.PulsarClientConfig$AuthenticationConfiguration" />
+    <Class name="io.github.mihkels.omb.driver.pulsar.config.PulsarClientConfig$AuthenticationConfiguration" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.jms.JMSBenchmarkConsumer" />
+    <Class name="io.github.mihkels.omb.driver.jms.JMSBenchmarkConsumer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.jms.JMSBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.jms.JMSBenchmarkProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.jms.JMSBenchmarkTransactionProducer" />
+    <Class name="io.github.mihkels.omb.driver.jms.JMSBenchmarkTransactionProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.kafka.KafkaTopicCreator" />
+    <Class name="io.github.mihkels.omb.driver.kafka.KafkaTopicCreator" />
     <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.kop.config.PulsarConfig" />
+    <Class name="io.github.mihkels.omb.driver.kop.config.PulsarConfig" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.config.PravegaClientConfig" />
+    <Class name="io.github.mihkels.omb.driver.pravega.config.PravegaClientConfig" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
   </Match>
   <!-- Pravega can propagate checked controller/client failures without declaring them. -->
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver" />
+    <Class name="io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver" />
     <Method name="initialize" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF,BC_VACUOUS_INSTANCEOF" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver" />
+    <Class name="io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver" />
     <Method name="sealAndDeleteTopics" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkConsumer" />
+    <Class name="io.github.mihkels.omb.driver.pravega.PravegaBenchmarkConsumer" />
     <Method name="closeReader" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkTransactionProducer" />
+    <Class name="io.github.mihkels.omb.driver.pravega.PravegaBenchmarkTransactionProducer" />
     <Method name="abortAfterFailure" />
     <Bug pattern="BC_IMPOSSIBLE_INSTANCEOF" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkProducer" />
     <Bug pattern="RV_RETURN_VALUE_OF_PUTIFABSENT_IGNORED" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkConsumer" />
+    <Class name="io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkConsumer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkConsumer" />
+    <Class name="io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkConsumer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.nsq.NsqBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.nsq.NsqBenchmarkProducer" />
     <Bug pattern="NP_NONNULL_PARAM_VIOLATION" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.redis.RedisBenchmarkConsumer" />
+    <Class name="io.github.mihkels.omb.driver.redis.RedisBenchmarkConsumer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.redis.RedisBenchmarkProducer" />
+    <Class name="io.github.mihkels.omb.driver.redis.RedisBenchmarkProducer" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <!--
@@ -111,69 +111,69 @@
     writable PATH entry substitute another binary (SonarCloud java:S4036).
   -->
   <Match>
-    <Class name="io.openmessaging.benchmark.ResultMetadata" />
+    <Class name="io.github.mihkels.omb.ResultMetadata" />
     <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.ResultsToCsv" />
+    <Class name="io.github.mihkels.omb.ResultsToCsv" />
     <Bug pattern="DM_DEFAULT_ENCODING" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.WorkloadGenerator" />
+    <Class name="io.github.mihkels.omb.WorkloadGenerator" />
     <Bug pattern="DLS_DEAD_LOCAL_STORE" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.WorkloadGenerator" />
+    <Class name="io.github.mihkels.omb.WorkloadGenerator" />
     <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.utils.PaddingDecimalFormat" />
+    <Class name="io.github.mihkels.omb.utils.PaddingDecimalFormat" />
     <Bug pattern="EQ_DOESNT_OVERRIDE_EQUALS" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.utils.distributor.KeyDistributor" />
+    <Class name="io.github.mihkels.omb.utils.distributor.KeyDistributor" />
     <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.LocalWorker" />
+    <Class name="io.github.mihkels.omb.worker.LocalWorker" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <!-- WorkerHandler delegates commands to the Worker instance supplied by its supervisor. -->
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.WorkerHandler" />
+    <Class name="io.github.mihkels.omb.worker.WorkerHandler" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.WorkerHandler" />
+    <Class name="io.github.mihkels.omb.worker.WorkerHandler" />
     <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.jackson.HistogramDeserializer" />
+    <Class name="io.github.mihkels.omb.worker.jackson.HistogramDeserializer" />
     <Bug pattern="SE_BAD_FIELD" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.jackson.HistogramSerializer" />
+    <Class name="io.github.mihkels.omb.worker.jackson.HistogramSerializer" />
     <Bug pattern="SE_BAD_FIELD" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.jackson.ObjectMappers" />
+    <Class name="io.github.mihkels.omb.worker.jackson.ObjectMappers" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.WorkerStats" />
+    <Class name="io.github.mihkels.omb.worker.WorkerStats" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.worker.WorkerStats" />
+    <Class name="io.github.mihkels.omb.worker.WorkerStats" />
     <Bug pattern="EI_EXPOSE_REP" />
   </Match>
   <!-- Thresholds fields are populated by Jackson from the workload YAML. -->
   <Match>
-    <Class name="io.openmessaging.benchmark.Thresholds" />
+    <Class name="io.github.mihkels.omb.Thresholds" />
     <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD" />
   </Match>
   <Match>
-    <Class name="io.openmessaging.benchmark.driver.ResourceCreator" />
+    <Class name="io.github.mihkels.omb.driver.ResourceCreator" />
     <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE" />
   </Match>
 </FindBugsFilter>

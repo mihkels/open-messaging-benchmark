@@ -1,0 +1,96 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver.mqtt5;
+
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import com.hivemq.client.mqtt.datatypes.MqttUtf8String;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
+import com.hivemq.client.mqtt.mqtt5.datatypes.Mqtt5UserProperties;
+import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
+import io.github.mihkels.omb.driver.BenchmarkProducer;
+import io.github.mihkels.omb.driver.PublicationLifecycle;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class MqttBenchmarkProducer implements BenchmarkProducer {
+
+    private final String topic;
+    private final MqttQos qos;
+    private final Mqtt5AsyncClient client;
+    private final AtomicBoolean closed;
+    private final PublicationLifecycle lifecycle = new PublicationLifecycle("MQTT producer");
+
+    /**
+     * Creates a producer that publishes through {@code client}.
+     *
+     * @param topic the topic to publish to
+     * @param qosCode the MQTT QoS level, 0 to 2
+     * @param client the client, closed with the producer
+     * @param closed set once the producer is closed, so the client stops reconnecting
+     */
+    MqttBenchmarkProducer(String topic, int qosCode, Mqtt5AsyncClient client, AtomicBoolean closed) {
+        this.topic = topic;
+        this.qos = MqttBenchmarkDriver.intToQoS(qosCode);
+        this.client = client;
+        this.closed = closed;
+    }
+
+    @Override
+    public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
+        Mqtt5Publish message;
+        try {
+            Mqtt5UserProperties properties =
+                    Mqtt5UserProperties.builder()
+                            .add(
+                                    MqttBenchmarkDriver.USER_PROPERTY_KEY_PUBLISH_TIMESTAMP,
+                                    MqttUtf8String.of(String.valueOf(System.currentTimeMillis())))
+                            .build();
+            message =
+                    Mqtt5Publish.builder()
+                            .topic(topic)
+                            .payload(payload.clone())
+                            .qos(qos)
+                            .userProperties(properties)
+                            .build();
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+        return lifecycle.publish(settle ->
+                client
+                        .publish(message)
+                        .whenComplete((result, ex) -> {
+                            try {
+                                if (ex != null) {
+                                    settle.complete(ex);
+                                } else if (result == null) {
+                                    settle.complete(new IllegalStateException("Missing MQTT publish result"));
+                                } else if (result.getError().isPresent()) {
+                                    Throwable error = result.getError().get();
+                                    settle.complete(error);
+                                } else {
+                                    settle.complete(null);
+                                }
+                            } catch (Exception failure) {
+                                settle.complete(failure);
+                            }
+                        }));
+    }
+
+    @Override
+    public void close() throws Exception {
+        closed.set(true);
+        lifecycle.close(() -> MqttBenchmarkDriver.closeClient(client));
+    }
+}

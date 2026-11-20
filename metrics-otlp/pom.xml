@@ -18,7 +18,7 @@
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.openmessaging.benchmark</groupId>
+        <groupId>io.github.mihkels.omb</groupId>
         <artifactId>messaging-benchmark</artifactId>
         <version>${revision}</version>
     </parent>
@@ -106,15 +106,15 @@
                             <relocations>
                                 <relocation>
                                     <pattern>io.micrometer.registry.otlp</pattern>
-                                    <shadedPattern>io.openmessaging.benchmark.metrics.otlp.shaded.registry</shadedPattern>
+                                    <shadedPattern>io.github.mihkels.omb.metrics.otlp.shaded.registry</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>io.opentelemetry.proto</pattern>
-                                    <shadedPattern>io.openmessaging.benchmark.metrics.otlp.shaded.proto</shadedPattern>
+                                    <shadedPattern>io.github.mihkels.omb.metrics.otlp.shaded.proto</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.google.protobuf</pattern>
-                                    <shadedPattern>io.openmessaging.benchmark.metrics.otlp.shaded.protobuf</shadedPattern>
+                                    <shadedPattern>io.github.mihkels.omb.metrics.otlp.shaded.protobuf</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>

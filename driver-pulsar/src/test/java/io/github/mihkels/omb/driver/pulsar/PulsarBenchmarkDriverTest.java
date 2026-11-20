@@ -1,0 +1,569 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver.pulsar;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.BenchmarkProducer;
+import io.github.mihkels.omb.driver.ConsumerCallback;
+import io.github.mihkels.omb.driver.pulsar.config.PulsarConfig;
+import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.apache.pulsar.client.admin.PulsarAdmin;
+import org.apache.pulsar.client.admin.PulsarAdminBuilder;
+import org.apache.pulsar.client.admin.PulsarAdminException;
+import org.apache.pulsar.client.admin.Tenants;
+import org.apache.pulsar.client.api.ClientBuilder;
+import org.apache.pulsar.client.api.Consumer;
+import org.apache.pulsar.client.api.ConsumerBuilder;
+import org.apache.pulsar.client.api.Message;
+import org.apache.pulsar.client.api.MessageListener;
+import org.apache.pulsar.client.api.Producer;
+import org.apache.pulsar.client.api.ProducerBuilder;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.Schema;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
+
+class PulsarBenchmarkDriverTest {
+
+    @Test
+    void supportsHeaders() {
+        assertThat(new PulsarBenchmarkDriver().supportsHeaders()).isTrue();
+    }
+
+    @Test
+    void refusesAuthenticationThatReadsLocalFiles() {
+        String token = "org.apache.pulsar.client.impl.auth.AuthenticationToken";
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication(token, "file:///etc/passwd"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file:");
+        String oauth = "org.apache.pulsar.client.impl.auth.oauth2.AuthenticationOAuth2";
+        String oauthParams = "{\"issuerUrl\":\"https://idp\",\"privateKey\":\"FILE:/home/u/key.json\"}";
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication(oauth, oauthParams))
+                .isInstanceOf(IllegalArgumentException.class);
+        // Inline tokens and TLS parameter names that merely end in "File" stay allowed
+        PulsarBenchmarkDriver.checkAuthentication(token, "token:eyJhbGciOiJIUzI1NiJ9.e30.x");
+        PulsarBenchmarkDriver.checkAuthentication(token, null);
+        PulsarBenchmarkDriver.checkAuthentication(
+                "org.apache.pulsar.client.impl.auth.AuthenticationTls",
+                "tlsCertFile:/certs/client.pem,tlsKeyFile:/certs/client.key");
+    }
+
+    @Test
+    void refusesAuthenticationPluginsThatAreNotAuthentication() {
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication("java.lang.String", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not implement");
+        assertThatThrownBy(() -> PulsarBenchmarkDriver.checkAuthentication("no.such.Plugin", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown authentication plugin");
+    }
+
+    @Test
+    void initializeRequiresServiceUrl(@TempDir Path temp) throws Exception {
+        Path configuration = temp.resolve("pulsar.yaml");
+        Files.writeString(configuration, "client:\n  httpUrl: http://localhost:8080\n");
+        assertThatThrownBy(
+                        () -> new PulsarBenchmarkDriver().initialize(configuration, mock(MeterRegistry.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("client.serviceUrl");
+    }
+
+    @Test
+    void createTopicFailsWhenNotInitialized() {
+        assertThat(new PulsarBenchmarkDriver().createTopic("topic", 2))
+                .failsWithin(1, TimeUnit.SECONDS)
+                .withThrowableThat()
+                .withCauseInstanceOf(IllegalStateException.class);
+    }
+    @Test
+    void consumerCallbackAcknowledgesAndReleasesMessage() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> builder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        Consumer<ByteBuffer> consumer = mock();
+        Message<ByteBuffer> message = mock();
+        ByteBuffer payload = ByteBuffer.wrap(new byte[] {1, 2, 3});
+        when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(builder);
+        when(builder.subscribeAsync()).thenReturn(CompletableFuture.completedFuture(consumer));
+        when(message.getValue()).thenReturn(payload);
+        when(message.getPublishTime()).thenReturn(123L);
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        assertThat(driver.createInternalConsumer("topic", "subscription", callback).join())
+                .isSameAs(consumer);
+        ArgumentCaptor<MessageListener<ByteBuffer>> listener =
+                ArgumentCaptor.forClass(MessageListener.class);
+        verify(builder).messageListener(listener.capture());
+
+        listener.getValue().received(consumer, message);
+
+        verify(callback).messageReceived(payload, 123L);
+        verify(consumer).acknowledgeAsync(message);
+        verify(message).release();
+    }
+
+    @Test
+    void consumerReleasesMessageWhenCallbackFailsWithoutAcknowledging() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> builder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        Consumer<ByteBuffer> consumer = mock();
+        Message<ByteBuffer> message = mock();
+        when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(builder);
+        when(builder.subscribeAsync()).thenReturn(CompletableFuture.completedFuture(consumer));
+        when(message.getValue()).thenReturn(ByteBuffer.wrap(new byte[] {7}));
+        IllegalStateException failure = new IllegalStateException("callback failed");
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        doThrow(failure).when(callback).messageReceived(any(ByteBuffer.class), anyLong());
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+        CompletableFuture<Consumer<ByteBuffer>> created =
+                driver.createInternalConsumer("topic", "subscription", callback);
+        ArgumentCaptor<MessageListener<ByteBuffer>> listener =
+                ArgumentCaptor.forClass(MessageListener.class);
+        verify(builder).messageListener(listener.capture());
+
+        assertThatThrownBy(() -> listener.getValue().received(consumer, message)).isSameAs(failure);
+
+        verify(consumer, never()).acknowledgeAsync(message);
+        verify(message).release();
+        assertThat(created.join()).isSameAs(consumer);
+    }
+
+    @Test
+    void producerCreationUsesIndependentBuilderClones() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        ProducerBuilder<byte[]> template = mock();
+        ProducerBuilder<byte[]> firstBuilder = mock(ProducerBuilder.class, RETURNS_SELF);
+        ProducerBuilder<byte[]> secondBuilder = mock(ProducerBuilder.class, RETURNS_SELF);
+        Producer<byte[]> first = mock();
+        Producer<byte[]> second = mock();
+        when(template.clone()).thenReturn(firstBuilder, secondBuilder);
+        when(firstBuilder.createAsync()).thenReturn(CompletableFuture.completedFuture(first));
+        when(secondBuilder.createAsync()).thenReturn(CompletableFuture.completedFuture(second));
+        set(driver, "producerBuilder", template);
+
+        BenchmarkProducer firstHandle = driver.createProducer("first").join();
+        BenchmarkProducer secondHandle = driver.createProducer("second").join();
+        verify(firstBuilder).topic("first");
+        verify(secondBuilder).topic("second");
+        verify(template, never()).topic(any());
+        firstHandle.close();
+        secondHandle.close();
+        verify(first).close();
+        verify(second).close();
+    }
+
+    @Test
+    void cancellationClosesLateProducerCreation() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        ProducerBuilder<byte[]> template = mock();
+        ProducerBuilder<byte[]> builder = mock(ProducerBuilder.class, RETURNS_SELF);
+        CompletableFuture<Producer<byte[]>> pending = new CompletableFuture<>();
+        Producer<byte[]> producer = mock();
+        when(template.clone()).thenReturn(builder);
+        when(builder.createAsync()).thenReturn(pending);
+        set(driver, "producerBuilder", template);
+
+        CompletableFuture<BenchmarkProducer> result = driver.createProducer("topic");
+        assertThat(result.cancel(true)).isTrue();
+        assertThat(pending.complete(producer)).isTrue();
+        verify(producer, times(1)).close();
+    }
+
+    @Test
+    void consumerFailureClosesPartialAndLatePartitionConsumers() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> firstBuilder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        ConsumerBuilder<ByteBuffer> secondBuilder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        ConsumerBuilder<ByteBuffer> thirdBuilder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        CompletableFuture<Consumer<ByteBuffer>> first = new CompletableFuture<>();
+        CompletableFuture<Consumer<ByteBuffer>> second = new CompletableFuture<>();
+        CompletableFuture<Consumer<ByteBuffer>> third = new CompletableFuture<>();
+        Consumer<ByteBuffer> partial = mock();
+        Consumer<ByteBuffer> late = mock();
+        when(client.getPartitionsForTopic("topic", true))
+                .thenReturn(CompletableFuture.completedFuture(List.of("p0", "p1", "p2")));
+        when(client.newConsumer(Schema.BYTEBUFFER))
+                .thenReturn(firstBuilder, secondBuilder, thirdBuilder);
+        when(firstBuilder.subscribeAsync()).thenReturn(first);
+        when(secondBuilder.subscribeAsync()).thenReturn(second);
+        when(thirdBuilder.subscribeAsync()).thenReturn(third);
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+
+        CompletableFuture<BenchmarkConsumer> result =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class));
+        first.complete(partial);
+        RuntimeException failure = new RuntimeException("subscription failed");
+        second.completeExceptionally(failure);
+        assertThatThrownBy(result::join).hasCause(failure);
+        verify(partial, times(1)).close();
+        third.complete(late);
+        verify(late, times(1)).close();
+        verify(firstBuilder).topic("p0");
+        verify(secondBuilder).topic("p1");
+        verify(thirdBuilder).topic("p2");
+    }
+
+    @Test
+    void cancelledConsumerDiscoveryDoesNotStartSubscriptions() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        CompletableFuture<List<String>> discovery = new CompletableFuture<>();
+        when(client.getPartitionsForTopic("topic", true)).thenReturn(discovery);
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+
+        CompletableFuture<BenchmarkConsumer> result =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class));
+        assertThat(result.cancel(true)).isTrue();
+        discovery.complete(List.of("p0"));
+        verify(client, never()).newConsumer(any());
+    }
+
+    @Test
+    void emptyPartitionDiscoveryDoesNotReturnAReadyConsumer() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        when(client.getPartitionsForTopic("topic", true))
+                .thenReturn(CompletableFuture.completedFuture(List.of()));
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+
+        CompletableFuture<BenchmarkConsumer> result =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class));
+        assertThatThrownBy(result::join)
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least one partition");
+    }
+
+    @Test
+    void cancellationClosesPartialAndLatePartitionConsumers() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        ConsumerBuilder<ByteBuffer> firstBuilder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        ConsumerBuilder<ByteBuffer> secondBuilder = mock(ConsumerBuilder.class, RETURNS_SELF);
+        CompletableFuture<Consumer<ByteBuffer>> first = new CompletableFuture<>();
+        CompletableFuture<Consumer<ByteBuffer>> second = new CompletableFuture<>();
+        Consumer<ByteBuffer> partial = mock();
+        Consumer<ByteBuffer> late = mock();
+        when(client.getPartitionsForTopic("topic", true))
+                .thenReturn(CompletableFuture.completedFuture(List.of("p0", "p1")));
+        when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(firstBuilder, secondBuilder);
+        when(firstBuilder.subscribeAsync()).thenReturn(first);
+        when(secondBuilder.subscribeAsync()).thenReturn(second);
+        set(driver, "client", client);
+        set(driver, "config", new PulsarConfig());
+
+        CompletableFuture<BenchmarkConsumer> result =
+                driver.createConsumer("topic", "subscription", mock(ConsumerCallback.class));
+        first.complete(partial);
+        assertThat(result.cancel(true)).isTrue();
+        verify(partial, times(1)).close();
+        second.complete(late);
+        verify(late, times(1)).close();
+    }
+
+    @Test
+    void consumerCloseAttemptsEveryPartition() throws Exception {
+        Consumer<ByteBuffer> first = mock();
+        Consumer<ByteBuffer> second = mock();
+        RuntimeException firstFailure = new RuntimeException("first close");
+        RuntimeException secondFailure = new RuntimeException("second close");
+        doThrow(firstFailure).when(first).close();
+        doThrow(secondFailure).when(second).close();
+        PulsarBenchmarkConsumer consumer = new PulsarBenchmarkConsumer(List.of(first, second));
+
+        assertThatThrownBy(consumer::close).isSameAs(firstFailure);
+        assertThat(firstFailure.getSuppressed()).containsExactly(secondFailure);
+        verify(first).close();
+        verify(second).close();
+    }
+
+    @Test
+    void failedInitializationClosesAllCreatedClients(@TempDir Path temp) throws Exception {
+        Path configuration = temp.resolve("pulsar.yaml");
+        Files.writeString(
+                configuration,
+                "client:\n  serviceUrl: pulsar://localhost:6650\n  httpUrl: http://localhost:8080\n");
+        ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
+        PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
+        PulsarClient client = mock();
+        PulsarAdmin admin = mock();
+        RuntimeException initializationFailure = new RuntimeException("producer builder failed");
+        RuntimeException clientCloseFailure = new RuntimeException("client close failed");
+        RuntimeException adminCloseFailure = new RuntimeException("admin close failed");
+        when(clientBuilder.build()).thenReturn(client);
+        when(adminBuilder.build()).thenReturn(admin);
+        when(client.newProducer()).thenThrow(initializationFailure);
+        doThrow(clientCloseFailure).when(client).close();
+        doThrow(adminCloseFailure).when(admin).close();
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+
+        try (var clients = mockStatic(PulsarClient.class);
+                var admins = mockStatic(PulsarAdmin.class)) {
+            clients.when(PulsarClient::builder).thenReturn(clientBuilder);
+            admins.when(PulsarAdmin::builder).thenReturn(adminBuilder);
+            assertThatThrownBy(() -> driver.initialize(configuration, mock(MeterRegistry.class)))
+                    .isSameAs(initializationFailure);
+        }
+        assertThat(initializationFailure.getSuppressed())
+                .containsExactly(clientCloseFailure, adminCloseFailure);
+        verify(client).close();
+        verify(admin).close();
+        driver.close();
+        verify(client, times(1)).close();
+        verify(admin, times(1)).close();
+    }
+
+    @Test
+    void driverCloseAttemptsBothClientsAndPreservesFailures() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        PulsarAdmin admin = mock();
+        RuntimeException clientFailure = new RuntimeException("client close failed");
+        RuntimeException adminFailure = new RuntimeException("admin close failed");
+        doThrow(clientFailure).when(client).close();
+        doThrow(adminFailure).when(admin).close();
+        set(driver, "client", client);
+        set(driver, "adminClient", admin);
+
+        assertThatThrownBy(driver::close).isSameAs(clientFailure);
+        assertThat(clientFailure.getSuppressed()).containsExactly(adminFailure);
+        driver.close();
+        verify(client, times(1)).close();
+        verify(admin, times(1)).close();
+    }
+
+    @Test
+    void consumerCloseIsIdempotentAndHandlesInterruptionAndSharedFailures() throws Exception {
+        Consumer<ByteBuffer> healthy = mock();
+        PulsarBenchmarkConsumer quiet = new PulsarBenchmarkConsumer(List.of(healthy));
+        quiet.close();
+        quiet.close();
+        verify(healthy, times(1)).close();
+
+        Consumer<ByteBuffer> interrupted = mock();
+        Consumer<ByteBuffer> sharedOne = mock();
+        Consumer<ByteBuffer> sharedTwo = mock();
+        InterruptedException interruption = new InterruptedException("close");
+        org.mockito.Mockito.doAnswer(
+                        invocation -> {
+                            throw interruption;
+                        })
+                .when(interrupted)
+                .close();
+        RuntimeException shared = new RuntimeException("shared");
+        doThrow(shared).when(sharedOne).close();
+        doThrow(shared).when(sharedTwo).close();
+        PulsarBenchmarkConsumer consumer =
+                new PulsarBenchmarkConsumer(List.of(sharedOne, sharedTwo, interrupted));
+        try {
+            assertThatThrownBy(consumer::close).isSameAs(shared);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(shared.getSuppressed()).containsExactly(interruption);
+    }
+
+    @Test
+    void initializesTlsAuthenticatedClientsAndCreatesMissingTenant(@TempDir Path temp)
+            throws Exception {
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of());
+        ClientBuilder clientBuilder = initialize(temp, admin, true);
+
+        verify(clientBuilder).tlsTrustCertsFilePath("/certs/ca.pem");
+        verify(clientBuilder)
+                .authentication("org.apache.pulsar.client.impl.auth.AuthenticationToken", "secret");
+        verify(admin.tenants()).createTenant(org.mockito.ArgumentMatchers.eq("benchmark"), any());
+    }
+
+    @Test
+    void existingTenantIsReusedWithoutTls(@TempDir Path temp) throws Exception {
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of("benchmark"));
+        ClientBuilder clientBuilder = initialize(temp, admin, false);
+
+        verify(clientBuilder, never()).tlsTrustCertsFilePath(any());
+        verify(admin.tenants(), never()).createTenant(any(), any());
+    }
+
+    @Test
+    void concurrentTenantCreationFailureIsToleratedOnlyWhenTheTenantExists(@TempDir Path temp)
+            throws Exception {
+        PulsarAdmin racing = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(racing.tenants().getTenants()).thenReturn(List.of(), List.of("benchmark"));
+        Tenants racingTenants = racing.tenants();
+        doThrow(new PulsarAdminException("server error"))
+                .when(racingTenants)
+                .createTenant(any(), any());
+        initialize(temp, racing, false);
+
+        PulsarAdmin conflicting = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(conflicting.tenants().getTenants()).thenReturn(List.of());
+        Tenants conflictingTenants = conflicting.tenants();
+        doThrow(new PulsarAdminException.ConflictException(null, "tenant exists", 409))
+                .when(conflictingTenants)
+                .createTenant(any(), any());
+        initialize(temp, conflicting, false);
+        verify(conflictingTenants, times(1)).getTenants();
+
+        PulsarAdmin missing = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(missing.tenants().getTenants()).thenReturn(List.of());
+        PulsarAdminException failure = new PulsarAdminException("server error");
+        Tenants missingTenants = missing.tenants();
+        doThrow(failure).when(missingTenants).createTenant(any(), any());
+        assertThatThrownBy(() -> initialize(temp, missing, false))
+                .isInstanceOf(java.io.IOException.class)
+                .hasCause(failure);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void configureProducerDisablesSendTimeoutAndMessageCountBatchLimit() {
+        ProducerBuilder<byte[]> builder = mock(ProducerBuilder.class, RETURNS_SELF);
+
+        assertThat(PulsarBenchmarkDriver.configureProducer(builder, false, 7, 4096, false, 123))
+                .isSameAs(builder);
+
+        verify(builder).enableBatching(false);
+        verify(builder).batchingMaxPublishDelay(7, TimeUnit.MILLISECONDS);
+        verify(builder).batchingMaxMessages(Integer.MAX_VALUE);
+        verify(builder).batchingMaxBytes(4096);
+        verify(builder).blockIfQueueFull(false);
+        verify(builder).sendTimeout(0, TimeUnit.MILLISECONDS);
+        verify(builder).maxPendingMessages(123);
+    }
+
+    @Test
+    void singlePartitionTopicsNeedNoAdminCall() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.topics().createPartitionedTopicAsync("topic", 4))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        set(driver, "adminClient", admin);
+
+        assertThat(driver.createTopic("topic", 1).join()).isNull();
+        assertThat(driver.createTopic("topic", 4).join()).isNull();
+        verify(admin.topics(), times(1)).createPartitionedTopicAsync("topic", 4);
+    }
+
+    @Test
+    void interruptedClientCloseAndSharedCloseFailure() throws Exception {
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        PulsarClient client = mock();
+        PulsarAdmin admin = mock();
+        RuntimeException shared = new RuntimeException("shared");
+        doThrow(shared).when(client).close();
+        doThrow(shared).when(admin).close();
+        set(driver, "client", client);
+        set(driver, "adminClient", admin);
+        assertThatThrownBy(driver::close).isSameAs(shared);
+        assertThat(shared.getSuppressed()).isEmpty();
+
+        PulsarClient interrupted = mock();
+        InterruptedException interruption = new InterruptedException("close");
+        org.mockito.Mockito.doAnswer(
+                        invocation -> {
+                            throw interruption;
+                        })
+                .when(interrupted)
+                .close();
+        set(driver, "client", interrupted);
+        try {
+            assertThatThrownBy(driver::close).isSameAs(interruption);
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    private static ClientBuilder initialize(Path temp, PulsarAdmin admin, boolean secure)
+            throws Exception {
+        Path configuration = Files.createTempFile(temp, "pulsar", ".yaml");
+        String secureConfiguration =
+                """
+                client:
+                  serviceUrl: pulsar+ssl://localhost:6651
+                  httpUrl: https://localhost:8443
+                  tlsTrustCertsFilePath: /certs/ca.pem
+                  namespacePrefix: benchmark/ns
+                  clusterName: local
+                  authentication:
+                    plugin: org.apache.pulsar.client.impl.auth.AuthenticationToken
+                    data: secret
+                """;
+        String plainConfiguration =
+                """
+                client:
+                  serviceUrl: pulsar://localhost:6650
+                  httpUrl: http://localhost:8080
+                  namespacePrefix: benchmark/ns
+                  clusterName: local
+                  authentication:
+                    plugin: ""
+                """;
+        Files.writeString(configuration, secure ? secureConfiguration : plainConfiguration);
+        ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
+        PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
+        PulsarClient client = mock();
+        when(clientBuilder.build()).thenReturn(client);
+        when(adminBuilder.build()).thenReturn(admin);
+        ProducerBuilder<byte[]> producerBuilder = mock(ProducerBuilder.class, RETURNS_SELF);
+        when(client.newProducer()).thenReturn(producerBuilder);
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        try (var clients = mockStatic(PulsarClient.class);
+                var admins = mockStatic(PulsarAdmin.class)) {
+            clients.when(PulsarClient::builder).thenReturn(clientBuilder);
+            admins.when(PulsarAdmin::builder).thenReturn(adminBuilder);
+            driver.initialize(configuration, mock(MeterRegistry.class));
+        }
+        assertThat(driver.getTopicNamePrefix()).startsWith("persistent://benchmark/ns-");
+        driver.close();
+        return clientBuilder;
+    }
+
+    private static void set(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+}

@@ -18,7 +18,7 @@ version: ${project.version}
 driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
-  - io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver
+  - io.github.mihkels.omb.driver.rocketmq.RocketMQ5BenchmarkDriver
 classpath:
   - ${project.build.finalName}.jar
   - lib/*.jar

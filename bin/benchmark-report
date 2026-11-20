@@ -27,4 +27,4 @@ then
     HEAP_OPTS="-Xmx512m"
 fi
 
-exec java -cp "$CLASSPATH" $HEAP_OPTS io.openmessaging.benchmark.tool.report.BenchmarkReport "$@"
+exec java -cp "$CLASSPATH" $HEAP_OPTS io.github.mihkels.omb.tool.report.BenchmarkReport "$@"

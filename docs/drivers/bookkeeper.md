@@ -23,7 +23,7 @@ ledger API, so results include the DistributedLog writer and reader layers.
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `bookkeeper`                                                                                                                           |
 | Module            | `driver-bookkeeper`                                                                                                                    |
-| `driverClass`     | `io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver`                                                                     |
+| `driverClass`     | `io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkDriver`                                                                          |
 | Shipped config    | `driver-bookkeeper/bookkeeper.yaml`                                                                                                    |
 | Client library    | `distributedlog-core-shaded` 4.18.2 (BookKeeper version from the root `pom.xml`)                                                       |
 | Tested cluster    | ZooKeeper and one bookie from `apachepulsar/pulsar:4.0.6`, plus a bound DL namespace (Compose stack `bookkeeper`)                      |
@@ -107,7 +107,7 @@ values of the Compose driver configuration:
 
 ```yaml
 name: BookKeeper
-driverClass: io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkDriver
 dlogUri: distributedlog://localhost:2181/streams
 dlogConf: |
   bkcEnsembleSize=1
@@ -275,7 +275,7 @@ See also [Troubleshooting](../guides/troubleshooting.md) and [Results](../guides
 
 Source and configuration files:
 
-- Driver source: [`driver-bookkeeper/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-bookkeeper/src/main/java/io/openmessaging/benchmark/driver/bookkeeper)
+- Driver source: [`driver-bookkeeper/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-bookkeeper/src/main/java/io/github/mihkels/omb/driver/bookkeeper)
 - Shipped config: [`bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-bookkeeper/bookkeeper.yaml)
 - Compose driver config: [`drivers/bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/bookkeeper.yaml)
 - Compose stack: [`stacks/bookkeeper.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/bookkeeper.yaml)

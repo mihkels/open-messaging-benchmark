@@ -24,7 +24,7 @@ created through KoP's Kafka Admin API.
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `kop`                                                                                                                                                 |
 | Module            | `driver-kop`                                                                                                                                          |
-| `driverClass`     | `io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver`                                                                                            |
+| `driverClass`     | `io.github.mihkels.omb.driver.kop.KopBenchmarkDriver`                                                                                                 |
 | Example configs   | `driver-kop/kafka_to_kafka.yaml`, `driver-kop/kafka_to_pulsar.yaml`, `driver-kop/pulsar_to_kafka.yaml`                                                |
 | Client libraries  | `kafka-clients` 4.4.0 (from the Kafka driver), `pulsar-client-all` 4.2.5 (from the Pulsar driver), `kafka-payload-processor` 4.1.0.10                 |
 | Tested broker     | `apachepulsar/pulsar:2.10.4` standalone with the KoP 2.10.4.6 protocol handler (Compose stack `kop`)                                                  |
@@ -131,7 +131,7 @@ functional checks only; see [Fair comparisons](../methodology/fair-comparisons.m
 
 ```yaml
 name: KoP-kafka-to-kafka
-driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kop.KopBenchmarkDriver
 
 producerType: kafka
 consumerType: kafka
@@ -178,13 +178,13 @@ see [Distributed runs](../getting-started/distributed-runs.md); for an existing 
 
 ## Configuration reference
 
-The driver reads these keys (record `io.openmessaging.benchmark.driver.kop.config.Config`). Unknown
+The driver reads these keys (record `io.github.mihkels.omb.driver.kop.config.Config`). Unknown
 keys are ignored.
 
 |       Key       |           Type           |  Default  |                                                                                          Description                                                                                           |
 |-----------------|--------------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `name`          | string                   | required  | Used in the result file name and the result's `driver` field.                                                                                                                                  |
-| `driverClass`   | string                   | required  | `io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver`                                                                                                                                     |
+| `driverClass`   | string                   | required  | `io.github.mihkels.omb.driver.kop.KopBenchmarkDriver`                                                                                                                                          |
 | `producerType`  | `kafka` or `pulsar`      | `kafka`   | Client used by benchmark producers.                                                                                                                                                            |
 | `consumerType`  | `kafka` or `pulsar`      | `kafka`   | Client used by benchmark consumers.                                                                                                                                                            |
 | `kafkaConfig`   | Java properties (string) | required  | Kafka client properties. Must contain `bootstrap.servers`. The same properties are used for the Admin client, the Kafka producers and the Kafka consumers, also when only one side uses Kafka. |
@@ -327,7 +327,7 @@ See also [Troubleshooting](../guides/troubleshooting.md).
 
 Source and configuration files:
 
-- Driver source: [`driver-kop/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kop/src/main/java/io/openmessaging/benchmark/driver/kop)
+- Driver source: [`driver-kop/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kop/src/main/java/io/github/mihkels/omb/driver/kop)
 - Shipped configurations: [`driver-kop/`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-kop)
 - Regression driver configs:
   [`kop-kafka-to-kafka.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/kop-kafka-to-kafka.yaml),

@@ -57,7 +57,7 @@ classpath:
 ```
 
 The fields, as defined by
-[`PluginDescriptor`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/PluginDescriptor.java):
+[`PluginDescriptor`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/PluginDescriptor.java):
 
 |           Field            | Required |                                                     Rules                                                     |
 |----------------------------|----------|---------------------------------------------------------------------------------------------------------------|
@@ -135,7 +135,7 @@ they are bundled, the [compatibility rules](#compatibility-rules) decide what ha
 is a standalone Maven project (`com.example.omb:omb-driver-loopback:1.0.0`) that builds the same bundle
 layout without the benchmark's parent POM. It:
 
-- depends on `io.openmessaging.benchmark:driver-api` (version property `omb.version`, kept in sync
+- depends on `io.github.mihkels.omb:driver-api` (version property `omb.version`, kept in sync
   by release-please) with `provided` scope;
 - bundles `commons-lang3` in `lib/`, to show a third-party dependency;
 - repeats the clean, copy-dependencies and filtered resource steps of the `omb-driver-bundle` profile.
@@ -157,6 +157,28 @@ the standalone project can resolve it. `loopback.yaml` is the driver configurati
 name: Loopback
 driverClass: com.example.omb.loopback.LoopbackBenchmarkDriver
 ```
+
+### Getting `driver-api` from Maven Central
+
+Releases that change `driver-api` are published to Maven Central together with the parent POM
+`io.github.mihkels.omb:messaging-benchmark`, see [Maven Central](releasing.md#maven-central). A
+plugin built against such a version needs no local reactor build:
+
+```xml
+<dependency>
+    <groupId>io.github.mihkels.omb</groupId>
+    <artifactId>driver-api</artifactId>
+    <version>${omb.version}</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+Check [the Central listing](https://central.sonatype.com/artifact/io.github.mihkels.omb/driver-api)
+for the published versions. A release that did not change `driver-api` is not on Central; use the
+closest earlier version, which has the same API, or `mvn install` the tag. Up to 0.6.0 the groupId
+and the Java packages were `io.openmessaging.benchmark`; those versions are not on Central. To
+migrate a plugin, change the dependency and replace `io.openmessaging.benchmark` with
+`io.github.mihkels.omb` in imports and in `plugin.yaml`.
 
 ## Compatibility rules
 
@@ -181,7 +203,7 @@ every version-1 bundle. To upgrade an external plugin:
    worker.
 
 All bundles run on top of the benchmark core in the driver JVM.
-[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
+[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/RuntimeClasspath.java)
 builds the classpath with the core first and checks every bundle jar that contains Maven metadata
 (`META-INF/maven/**/pom.properties`). Jars without that metadata are added as they are.
 
@@ -196,7 +218,7 @@ builds the classpath with the core first and checks every bundle jar that contai
 
 Boundary artifacts are the types shared between the benchmark and the driver:
 
-- `io.openmessaging.benchmark:driver-api`
+- `io.github.mihkels.omb:driver-api`
 - `io.micrometer:micrometer-core`, `micrometer-commons`, `micrometer-observation`,
   `micrometer-registry-prometheus`
 - `io.prometheus:prometheus-metrics-core`, `prometheus-metrics-model`

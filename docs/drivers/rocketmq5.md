@@ -23,7 +23,7 @@ and the brokers directly. For the classic remoting client, see [RocketMQ](rocket
 |-------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `rocketmq5`                                                                                                                                 |
 | Module            | `driver-rocketmq5`                                                                                                                          |
-| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver`                                                                       |
+| `driverClass`     | `io.github.mihkels.omb.driver.rocketmq.RocketMQ5BenchmarkDriver`                                                                            |
 | Shipped config    | `driver-rocketmq5/rocketmq.yaml` (the file is named `rocketmq.yaml`, like the classic plugin's)                                             |
 | Client library    | `rocketmq-client-java` 5.0.7 (gRPC); `rocketmq-tools` 5.1.0 for administration                                                              |
 | Tested broker     | `apache/rocketmq:5.3.2`: name server, one broker and a proxy (Compose stack `rocketmq5`)                                                    |
@@ -105,7 +105,7 @@ run on the same Compose network.
 
 ```yaml
 name: RocketMQ5
-driverClass: io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.rocketmq.RocketMQ5BenchmarkDriver
 namesrvAddr: localhost:9876
 clusterName: DefaultCluster
 grpcEndpoint: localhost:8081
@@ -228,7 +228,7 @@ See also [Troubleshooting](../guides/troubleshooting.md) and [Results](../guides
 
 Source and configuration files:
 
-- Driver source: [`driver-rocketmq5/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rocketmq5/src/main/java/io/openmessaging/benchmark/driver/rocketmq)
+- Driver source: [`driver-rocketmq5/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rocketmq5/src/main/java/io/github/mihkels/omb/driver/rocketmq)
 - Shipped config: [`driver-rocketmq5/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-rocketmq5/rocketmq.yaml)
 - Compose driver config: [`drivers/rocketmq5.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rocketmq5.yaml)
 - Compose stacks: [`stacks/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rocketmq.yaml), [`stacks/rocketmq5-proxy.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rocketmq5-proxy.yaml)

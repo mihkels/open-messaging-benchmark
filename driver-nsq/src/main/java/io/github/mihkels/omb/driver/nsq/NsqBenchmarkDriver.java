@@ -1,0 +1,253 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver.nsq;
+
+import com.github.brainlag.nsq.NSQProducer;
+import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.BenchmarkDriver;
+import io.github.mihkels.omb.driver.BenchmarkProducer;
+import io.github.mihkels.omb.driver.ConsumerCallback;
+import io.github.mihkels.omb.driver.DriverConfigs;
+import io.github.mihkels.omb.driver.Failures;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class NsqBenchmarkDriver implements BenchmarkDriver {
+    private static final String CLOSED_MESSAGE = "NSQ driver is closed";
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+    // Identity set: futures have no value equality
+    private final Set<CompletableFuture<BenchmarkConsumer>> consumerCreations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private NsqConfig config;
+    private String nsqdHost;
+    private @Nullable EventLoopGroup consumerEventLoops;
+    private boolean closed;
+
+    @Override
+    public void initialize(Path configurationFile, MeterRegistry statsLogger) throws IOException {
+        config = DriverConfigs.read(configurationFile, NsqConfig.class);
+        if (config.nsqdHost == null) {
+            throw new IllegalArgumentException("NSQ config needs nsqdHost");
+        }
+        nsqdHost = config.nsqdHost;
+        checkPort("nsqdHttpPort", config.nsqdHttpPort);
+        checkPort("nsqdTcpPort", config.nsqdTcpPort);
+        checkPort("lookupHttpPort", config.lookupHttpPort);
+    }
+
+    private static void checkPort(String name, int port) {
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException(name + " must be between 1 and 65535");
+        }
+    }
+
+    @Override
+    public String getTopicNamePrefix() {
+        return "Nsq-Benchmark";
+    }
+
+    @Override
+    public CompletableFuture<Void> createTopic(String topic, int partitions) {
+        // Create the topic up front so nsqd registers it with nsqlookupd before consumers look it up;
+        // otherwise consumers only find it at their next periodic lookup
+        log.info(
+                "Creating topic {} on nsqd {}:{} (partitions are ignored)",
+                topic,
+                nsqdHost,
+                config.nsqdHttpPort);
+        HttpRequest request =
+                HttpRequest.newBuilder(
+                                URI.create(
+                                        "http://"
+                                                + nsqdHost
+                                                + ":"
+                                                + config.nsqdHttpPort
+                                                + "/topic/create?topic="
+                                                + URLEncoder.encode(topic, StandardCharsets.UTF_8)))
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build();
+        return httpClient
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    if (response.statusCode() != 200) {
+                        throw new IllegalStateException(
+                                "Failed to create NSQ topic "
+                                        + topic
+                                        + ": HTTP "
+                                        + response.statusCode()
+                                        + " "
+                                        + response.body());
+                    }
+                });
+    }
+
+    @Override
+    public CompletableFuture<BenchmarkProducer> createProducer(final String topic) {
+        NSQProducer nsqProducer = null;
+        try {
+            nsqProducer = newProducer();
+            nsqProducer.addAddress(nsqdHost, config.nsqdTcpPort);
+            nsqProducer.start();
+            log.info("start a nsq producer");
+            return CompletableFuture.completedFuture(new NsqBenchmarkProducer(nsqProducer, topic));
+        } catch (Exception failure) {
+            if (nsqProducer != null) {
+                Failures.closeAfterFailure(failure, nsqProducer::shutdown);
+            }
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    NSQProducer newProducer() {
+        return new NSQProducer();
+    }
+
+    @Override
+    // consumerCreations is an identity set, so removing a future by reference is well defined
+    @SuppressWarnings("UndefinedEquals")
+    public CompletableFuture<BenchmarkConsumer> createConsumer(
+            String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+        // Only consumers need lookupHost, so producer-only runs may leave it out
+        String lookupHost = config.lookupHost;
+        if (lookupHost == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("NSQ config needs lookupHost"));
+        }
+        NsqBenchmarkConsumer consumer = null;
+        NsqEventLoopGroup scope = null;
+        try {
+            NsqLookup lookup =
+                    new NsqLookup(httpClient, Duration.ofSeconds(3), nsqdHost, config.nsqdHttpPort);
+            lookup.addLookupAddress(lookupHost, config.lookupHttpPort);
+            scope = new NsqEventLoopGroup(consumerEventLoops());
+            consumer = newConsumer(lookup, topic, subscriptionName, consumerCallback, scope);
+            CompletableFuture<BenchmarkConsumer> creation;
+            boolean cancel;
+            synchronized (this) {
+                if (closed) {
+                    return consumer.failBeforeStart(new IllegalStateException(CLOSED_MESSAGE));
+                }
+                creation = Objects.requireNonNull(consumer.startAsync(), "NSQ consumer creation future");
+                cancel = closed;
+                if (!cancel) {
+                    consumerCreations.add(creation);
+                }
+            }
+            if (cancel) {
+                return cancelAfterClose(creation, consumer, scope);
+            }
+            creation.whenComplete((handle, failure) -> {
+                synchronized (this) {
+                    consumerCreations.remove(creation);
+                }
+            });
+            return creation;
+        } catch (Exception failure) {
+            Failures.closeAfterFailure(failure, consumer, scope == null ? null : scope::closeChannels);
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+
+    // The driver closed while this creation was being registered. A creation that can no longer be
+    // cancelled has already completed, so close whatever it produced and fail the request.
+    private static CompletableFuture<BenchmarkConsumer> cancelAfterClose(
+            CompletableFuture<BenchmarkConsumer> creation,
+            NsqBenchmarkConsumer consumer,
+            NsqEventLoopGroup scope) {
+        if (creation.cancel(true) || creation.isCompletedExceptionally()) {
+            return creation;
+        }
+        IllegalStateException failure = new IllegalStateException(CLOSED_MESSAGE);
+        BenchmarkConsumer handle = creation.getNow(null);
+        Failures.closeAfterFailure(
+                failure, handle, handle == consumer ? null : consumer, scope::closeChannels);
+        return CompletableFuture.failedFuture(failure);
+    }
+
+    NsqBenchmarkConsumer newConsumer(
+            NsqLookup lookup,
+            String topic,
+            String subscriptionName,
+            ConsumerCallback consumerCallback,
+            NsqEventLoopGroup scope) {
+        return new NsqBenchmarkConsumer(
+                lookup, topic, subscriptionName, consumerCallback, lookup::includesPublishingNode, scope);
+    }
+
+    private synchronized EventLoopGroup consumerEventLoops() {
+        if (closed) {
+            throw new IllegalStateException(CLOSED_MESSAGE);
+        }
+        EventLoopGroup eventLoops = consumerEventLoops;
+        if (eventLoops == null) {
+            eventLoops =
+                    new MultiThreadIoEventLoopGroup(
+                            0,
+                            task -> {
+                                Thread thread = new Thread(task, "nsq-consumer-io");
+                                thread.setDaemon(true);
+                                return thread;
+                            },
+                            NioIoHandler.newFactory());
+            consumerEventLoops = eventLoops;
+        }
+        return eventLoops;
+    }
+
+    @Override
+    public void close() throws InterruptedException {
+        EventLoopGroup eventLoops;
+        List<CompletableFuture<BenchmarkConsumer>> pending;
+        synchronized (this) {
+            closed = true;
+            eventLoops = consumerEventLoops;
+            consumerEventLoops = null;
+            pending = new ArrayList<>(consumerCreations);
+            consumerCreations.clear();
+        }
+        pending.forEach(creation -> creation.cancel(true));
+        try {
+            if (eventLoops != null) {
+                eventLoops.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).sync();
+            }
+        } finally {
+            httpClient.close();
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(NsqBenchmarkDriver.class);
+}

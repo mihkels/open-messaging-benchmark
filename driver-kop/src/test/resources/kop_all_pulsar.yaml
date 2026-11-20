@@ -13,7 +13,7 @@
 #
 
 name: Kafka-on-Pulsar
-driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kop.KopBenchmarkDriver
 
 producerType: pulsar
 consumerType: pulsar

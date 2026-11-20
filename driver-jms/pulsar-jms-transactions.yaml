@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: JMS
-driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver
 
 connectionFactoryClassName: com.datastax.oss.pulsar.jms.PulsarConnectionFactory
 connectionFactoryConfigurationParam: '{"brokerServiceUrl": "pulsar://localhost:6650", "webServiceUrl": "http://localhost:8080", "enableTransaction":"true", "producerConfig":{"blockIfQueueFull":"true"}}'
@@ -24,7 +24,7 @@ sendWithTransactions: true
 
 # JMS API do not provide functions to admin the cluster
 # So we are going to delegate the initialization to another specific Driver
-delegateForAdminOperationsClassName: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
+delegateForAdminOperationsClassName: io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver
 
 # Pulsar specific configuration
 # the code that handles this configuration is the PulsarBenchmarkDriver

@@ -23,7 +23,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/rabbitmq.md#local-docker-com
 [kind cluster](../docs/drivers/rabbitmq.md#local-kind-cluster).
 
 - Plugin ID: `rabbitmq`
-- `driverClass`: `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkDriver`
 - Shipped config: [`rabbitmq.yaml`](rabbitmq.yaml) (quorum queues, `amqp://localhost`)
 - Tested with: `rabbitmq:4.1-management` ([stack file](../e2e-tests/compose/stacks/rabbitmq.yaml))
 

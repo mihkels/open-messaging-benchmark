@@ -12,5 +12,5 @@
 # limitations under the License.
 #
 
-connectionFactoryClassName: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriverTest$PropertiesFactory
+connectionFactoryClassName: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriverTest$PropertiesFactory
 connectionFactoryConfigurationParam: '{"bootstrap.servers": "localhost:9092"}'

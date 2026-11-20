@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: RocketMQ
-driverClass: io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.rocketmq.RocketMQBenchmarkDriver
 clusterName: DefaultCluster
 namesrvAddr: namesrv:9876
 vipChannelEnabled: false

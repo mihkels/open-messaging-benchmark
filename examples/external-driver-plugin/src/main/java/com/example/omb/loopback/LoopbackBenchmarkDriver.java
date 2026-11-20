@@ -14,10 +14,10 @@
 package com.example.omb.loopback;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.openmessaging.benchmark.driver.BenchmarkConsumer;
-import io.openmessaging.benchmark.driver.BenchmarkDriver;
-import io.openmessaging.benchmark.driver.BenchmarkProducer;
-import io.openmessaging.benchmark.driver.ConsumerCallback;
+import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.BenchmarkDriver;
+import io.github.mihkels.omb.driver.BenchmarkProducer;
+import io.github.mihkels.omb.driver.ConsumerCallback;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;

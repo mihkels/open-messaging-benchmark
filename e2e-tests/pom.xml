@@ -18,7 +18,7 @@
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.openmessaging.benchmark</groupId>
+        <groupId>io.github.mihkels.omb</groupId>
         <artifactId>messaging-benchmark</artifactId>
         <version>${revision}</version>
     </parent>
@@ -84,7 +84,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.openmessaging.benchmark</groupId>
+            <groupId>io.github.mihkels.omb</groupId>
             <artifactId>driver-bookkeeper</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

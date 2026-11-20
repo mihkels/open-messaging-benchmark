@@ -1,0 +1,45 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver;
+
+/**
+ * Binary compatibility contract of the driver plugin SPI ({@link BenchmarkDriver}, {@link
+ * BenchmarkProducer}, {@link BenchmarkConsumer} and {@link ConsumerCallback}).
+ *
+ * <p>Driver plugin bundles declare the contract they were built against in the {@code
+ * driverApiVersion} field of their {@code plugin.yaml}. The benchmark host only launches bundles
+ * declaring the contract it implements. Incompatible SPI changes normally increment the value,
+ * independently of the project version.
+ *
+ * <p>Version history:
+ *
+ * <ul>
+ *   <li>{@code 2}: {@link BenchmarkDriver#initialize} takes a Micrometer {@code MeterRegistry}.
+ *       Later additions with default implementations, such as message headers ({@link
+ *       BenchmarkProducer#sendAsync(java.util.Optional, byte[], java.util.Map)} and {@link
+ *       BenchmarkDriver#supportsHeaders()}) and partition telemetry ({@link
+ *       BenchmarkProducer#sendAsyncWithResult}, {@link ConsumerCallback#partitionsChanged} and
+ *       {@link BenchmarkDriver#supportsPartitionTelemetry()}), keep version-2 bundles loadable.
+ *   <li>{@code 1}: {@link BenchmarkDriver#initialize} took a {@code PrometheusMeterRegistry}. The
+ *       registry change shipped under version {@code 1} in 0.1.0 through 0.2.0, so version-1
+ *       bundles are rejected and must be rebuilt.
+ * </ul>
+ */
+public final class DriverApiVersion {
+
+    /** The driver SPI contract implemented by this version of driver-api. */
+    public static final int CURRENT = 2;
+
+    private DriverApiVersion() {}
+}

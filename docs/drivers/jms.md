@@ -23,7 +23,7 @@ Pulsar driver, for providers that cannot create topics through JMS.
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `jms`                                                                                                                                                                                   |
 | Module            | `driver-jms`                                                                                                                                                                            |
-| `driverClass`     | `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`                                                                                                                              |
+| `driverClass`     | `io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver`                                                                                                                                   |
 | Example configs   | `driver-jms/artemis-jms.yaml`, `artemis-jms-transactions.yaml`, `pulsar-jms.yaml`, `pulsar-jms-selectors.yaml`, `pulsar-jms-transactions.yaml`, `kafka-jms.yaml`                        |
 | Client library    | `jakarta.jms-api` 2.0.3 (package `javax.jms`) plus a provider jar you supply                                                                                                            |
 | Tested providers  | `artemis-jms-client-all` 2.57.0 with Artemis 2.57.0; `pulsar-jms-all` 6.0.11 with Pulsar 4.0.6; Confluent `kafka-jms-client` (user-built) with Kafka 4.4.0                              |
@@ -138,7 +138,7 @@ file uses `name: JMS`). It needs only the Artemis provider jar:
 
 ```yaml
 name: JMS-Artemis
-driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver
 connectionFactoryClassName: org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory
 connectionFactoryConfigurationParam: 'tcp://localhost:61616'
 use20api: true
@@ -165,20 +165,20 @@ see [Distributed runs](../getting-started/distributed-runs.md); for an existing 
 
 ## Configuration reference
 
-Keys read by the JMS driver (`io.openmessaging.benchmark.driver.jms.config.JMSConfig`). Unknown keys are
+Keys read by the JMS driver (`io.github.mihkels.omb.driver.jms.config.JMSConfig`). Unknown keys are
 ignored by the JMS driver and passed on to the delegate, which reads the same file.
 
 |                  Key                  |          Type           | Default  |                                                                                                                  Description                                                                                                                   |
 |---------------------------------------|-------------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `name`                                | string                  | required | Used in the result file name and the result's `driver` field.                                                                                                                                                                                  |
-| `driverClass`                         | string                  | required | `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`                                                                                                                                                                                     |
+| `driverClass`                         | string                  | required | `io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver`                                                                                                                                                                                          |
 | `connectionFactoryClassName`          | string                  | required | Provider's `javax.jms.ConnectionFactory` class. The default is a placeholder that fails.                                                                                                                                                       |
 | `connectionFactoryConfigurationParam` | string                  | `""`     | Passed to the factory. If the class has a `String` constructor, the value is passed as is (Artemis URL, Pulsar JMS JSON). Otherwise, if it has a `Properties` constructor, the value is parsed as a JSON object into `Properties` (Confluent). |
 | `use20api`                            | boolean                 | `false`  | `true`: JMS 2.0 asynchronous send and shared durable subscriptions. `false`: JMS 1.1 synchronous send and non-durable consumers. See [Semantics](#semantics).                                                                                  |
 | `sendWithTransactions`                | boolean                 | `false`  | Send each message in its own transacted session and commit it. See [Transactions](#transactions).                                                                                                                                              |
 | `messageSelector`                     | string                  | none     | JMS message selector applied to every consumer. See [Selectors](#selectors-and-message-properties).                                                                                                                                            |
 | `properties`                          | list of `{name, value}` | `[]`     | String properties set on every message.                                                                                                                                                                                                        |
-| `delegateForAdminOperationsClassName` | string                  | none     | `BenchmarkDriver` class used for topic creation and the topic prefix, for example `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`.                                                                                            |
+| `delegateForAdminOperationsClassName` | string                  | none     | `BenchmarkDriver` class used for topic creation and the topic prefix, for example `io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver`.                                                                                                 |
 | `topicNamePrefix`                     | string                  | `""`     | Topic prefix when there is no delegate.                                                                                                                                                                                                        |
 
 > **Note:** With no delegate and the default empty `topicNamePrefix`, topic names start with a hyphen
@@ -241,7 +241,7 @@ In a source checkout, use `driver-jms/target/omb-plugin/ext` as the target direc
   classes collide with the Pulsar plugin.
 - Connection factory: `com.datastax.oss.pulsar.jms.PulsarConnectionFactory`, parameter a JSON object with
   at least `brokerServiceUrl` and `webServiceUrl`.
-- Delegate: `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`, which needs the `pulsar`
+- Delegate: `io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver`, which needs the `pulsar`
   plugin and reads the `client` and `producer` sections of the same file (see the [Pulsar driver](pulsar.md)).
   It creates a namespace `public/default-<random>` per run through the admin URL `client.httpUrl`, and
   the JMS producers and consumers use topics in it.
@@ -262,7 +262,7 @@ In a source checkout, use `driver-jms/target/omb-plugin/ext` as the target direc
   durable subscribers used by the driver, so consumers are plain `createConsumer` consumers, and the
   consumer group is `group.id` from the connection factory parameter, not the benchmark subscription
   name.
-- Delegate: `io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`, which needs the `kafka` plugin
+- Delegate: `io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`, which needs the `kafka` plugin
   and reads `replicationFactor`, `topicConfig`, `commonConfig`, `producerConfig` and `consumerConfig` from
   the same file (see the [Kafka driver](kafka.md#configuration-reference)). All four property blocks must
   be present.
@@ -400,7 +400,7 @@ See also [Troubleshooting](../guides/troubleshooting.md).
 
 Source and configuration files:
 
-- Driver source: [`driver-jms/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-jms/src/main/java/io/openmessaging/benchmark/driver/jms)
+- Driver source: [`driver-jms/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-jms/src/main/java/io/github/mihkels/omb/driver/jms)
 - Shipped configurations and packaging scripts: [`driver-jms/`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-jms)
 - Regression driver configs: [`e2e-tests/compose/drivers/`](https://github.com/mihkels/open-messaging-benchmark/tree/main/e2e-tests/compose/drivers)
 - Related drivers: [Apache ActiveMQ Artemis](artemis.md), [Kafka](kafka.md), [Pulsar](pulsar.md)

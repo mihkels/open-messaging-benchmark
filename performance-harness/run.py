@@ -161,7 +161,7 @@ def execute_scenario(args, scenario, directory, cp):
     invocation = [
         "java", *coordinator_options,
         "-Domb.driver.jvmOpts=" + shlex.join(driver_options),
-        "-cp", cp, "io.openmessaging.benchmark.performance.ScenarioMain",
+        "-cp", cp, "io.github.mihkels.omb.performance.ScenarioMain",
         str(directory / "scenario.json"), str(directory), str(MODULE / "target/omb-plugin"),
     ]
     write_json(directory / "command.json", invocation)

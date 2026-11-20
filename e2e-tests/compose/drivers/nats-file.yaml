@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: NATS-file
-driverClass: io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver
 natsHostUrl: nats://nats:4222
 replicationFactor: 1
 storageType: file

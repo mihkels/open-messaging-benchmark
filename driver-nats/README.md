@@ -25,7 +25,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/nats.md#local-docker-compose
 [kind cluster](../docs/drivers/nats.md#local-kind-cluster).
 
 - Plugin ID: `nats`
-- `driverClass`: `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver`
 - Shipped config: [`nats.yaml`](nats.yaml) (`localhost:4222`, `replicationFactor: 3`)
 - Tested with: `nats:2.11-alpine -js` ([stack file](../e2e-tests/compose/stacks/nats.yaml))
 

@@ -27,7 +27,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/nats-streaming.md#local-dock
 [kind cluster](../docs/drivers/nats-streaming.md#local-kind-cluster).
 
 - Plugin ID: `nats-streaming`
-- `driverClass`: `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver`
 - Shipped config: [`nats-streaming.yaml`](nats-streaming.yaml) (`nats://localhost:4222`, cluster ID `mycluster`)
 - Tested with: `nats-streaming:0.25.6` ([stack file](../e2e-tests/compose/stacks/nats-streaming.yaml))
 

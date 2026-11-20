@@ -18,12 +18,14 @@
         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.openmessaging.benchmark</groupId>
+        <groupId>io.github.mihkels.omb</groupId>
         <artifactId>messaging-benchmark</artifactId>
         <version>${revision}</version>
     </parent>
 
     <artifactId>driver-api</artifactId>
+    <name>Messaging Benchmark Driver API</name>
+    <description>Service provider interface that benchmark driver plugins implement.</description>
 
     <properties>
         <!-- Coverage floors, see docs/development/building-the-project.md#coverage-thresholds -->
@@ -128,10 +130,10 @@
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
                             <targetClasses>
-                                <param>io.openmessaging.benchmark.driver.*</param>
+                                <param>io.github.mihkels.omb.driver.*</param>
                             </targetClasses>
                             <targetTests>
-                                <param>io.openmessaging.benchmark.driver.*Test</param>
+                                <param>io.github.mihkels.omb.driver.*Test</param>
                             </targetTests>
                         </configuration>
                     </plugin>

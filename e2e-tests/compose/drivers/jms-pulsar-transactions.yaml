@@ -15,12 +15,12 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: JMS-Pulsar-transactions
-driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver
 connectionFactoryClassName: com.datastax.oss.pulsar.jms.PulsarConnectionFactory
 connectionFactoryConfigurationParam: '{"brokerServiceUrl": "pulsar://pulsar:6650", "webServiceUrl": "http://pulsar:8080", "enableTransaction":"true", "producerConfig":{"blockIfQueueFull":"true"}}'
 use20api: true
 sendWithTransactions: true
-delegateForAdminOperationsClassName: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
+delegateForAdminOperationsClassName: io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver
 client:
   serviceUrl: pulsar://pulsar:6650
   httpUrl: http://pulsar:8080

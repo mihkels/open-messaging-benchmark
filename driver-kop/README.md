@@ -26,7 +26,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/kop.md#local-docker-compose)
 ## Plugin and configuration files
 
 - Plugin ID: `kop`
-- `driverClass`: `io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.kop.KopBenchmarkDriver`
 - Configurations in this directory:
 
 |          File          | Producer | Consumer |

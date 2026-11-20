@@ -12,5 +12,5 @@
 # limitations under the License.
 #
 
-connectionFactoryClassName: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriverTest$NotAFactory
+connectionFactoryClassName: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriverTest$NotAFactory
 connectionFactoryConfigurationParam: test

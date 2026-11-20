@@ -22,7 +22,7 @@ NSQ channel. It uses the `com.github.brainlag:nsq-client` library (1.0.0.RC4).
 |------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `nsq`                                                                                                                                                           |
 | Module                 | `driver-nsq`                                                                                                                                                    |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                                                                                                      |
+| `driverClass`          | `io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver`                                                                                                           |
 | Example config shipped | `driver-nsq/nsq.yaml` (`nsqd` and `nsqlookupd` on `localhost`)                                                                                                  |
 | Tested broker          | `nsqio/nsq:v1.3.0` (Compose stack `nsq`, NSQ 1.3.0 with `nsqlookupd` and one `nsqd`)                                                                            |
 | Regression cases       | `nsq-contract` (nsqd publish, consumer discovery via nsqlookupd), `nsq-fanout` (2 topics x 2 channels)                                                          |
@@ -93,7 +93,7 @@ The shipped `driver-nsq/nsq.yaml`:
 
 ```yaml
 name: Nsq
-driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver
 
 nsqdHost: localhost
 nsqdHttpPort: 4151
@@ -243,7 +243,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-nsq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nsq/src/main/java/io/openmessaging/benchmark/driver/nsq)
+- Driver source: [`driver-nsq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nsq/src/main/java/io/github/mihkels/omb/driver/nsq)
 - Shipped config: [`driver-nsq/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nsq/nsq.yaml)
 - Regression config: [`e2e-tests/compose/drivers/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nsq.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nsq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nsq.yaml)

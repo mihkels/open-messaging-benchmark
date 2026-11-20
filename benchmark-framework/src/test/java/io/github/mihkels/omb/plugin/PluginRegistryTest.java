@@ -1,0 +1,616 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.plugin;
+
+import static io.github.mihkels.omb.plugin.PluginFixtures.artifactJar;
+import static io.github.mihkels.omb.plugin.PluginFixtures.compileJar;
+import static io.github.mihkels.omb.plugin.PluginFixtures.descriptor;
+import static io.github.mihkels.omb.plugin.PluginFixtures.driverSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.github.mihkels.omb.driver.DriverApiVersion;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.jar.JarFile;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
+import org.junit.jupiter.api.io.TempDir;
+
+// Sets the plugin home property while concurrent ProcessWorkerTest methods read system properties
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
+class PluginRegistryTest {
+
+    private static final String KAFKA = "test.kafka.KafkaDriver";
+    private static final String JMS = "test.jms.JmsDriver";
+
+    @TempDir Path dir;
+
+    private Path bundle(String id, List<String> drivers, String extraYaml) throws IOException {
+        Path bundle = descriptor(dir.resolve("drivers").resolve(id), id, drivers, extraYaml);
+        PluginFixtures.writeJar(bundle.resolve(id + ".jar"), Map.of("marker-" + id, new byte[0]));
+        return bundle;
+    }
+
+    private PluginRegistry discover() {
+        return PluginRegistry.discover(List.of(dir.resolve("drivers")));
+    }
+
+    @Test
+    void resolvesDriverToItsBundleClasspath() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path lib = artifactJar(kafka.resolve("lib"), "org.example", "client", "1.0");
+        bundle("other", List.of("test.other.OtherDriver"), "");
+
+        ResolvedDriver resolved = discover().resolve(KAFKA, Map.of());
+
+        assertThat(resolved.bundles()).extracting(PluginBundle::id).containsExactly("kafka");
+        assertThat(real(resolved.primary().classpath()))
+                .containsExactly(kafka.resolve("kafka.jar").toRealPath(), lib.toRealPath());
+    }
+
+    @Test
+    void rejectsStaleVersionOneBundleBuiltAgainstPrometheusRegistrySpi() throws Exception {
+        String oldDriver = "fixture.legacy.LegacyDriver";
+        String oldApi =
+                """
+                package io.github.mihkels.omb.driver;
+                public interface BenchmarkDriver extends AutoCloseable {
+                  void initialize(java.nio.file.Path config, \
+                io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry) \
+                throws java.io.IOException, InterruptedException;
+                }
+                """;
+        String oldDriverSource =
+                driverSource(oldDriver, "\"legacy\"", "")
+                        .replace(
+                                "io.micrometer.core.instrument.MeterRegistry registry",
+                                "io.micrometer.prometheusmetrics.PrometheusMeterRegistry registry");
+        Path legacyBundle = descriptor(dir.resolve("drivers/legacy"), "legacy", List.of(oldDriver), "");
+        Path legacyDescriptor = legacyBundle.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                legacyDescriptor,
+                Files.readString(legacyDescriptor).replace("driverApiVersion: 2", "driverApiVersion: 1"));
+        Path jar = legacyBundle.resolve("legacy.jar");
+        URL prometheusClasspath =
+                PrometheusMeterRegistry.class.getProtectionDomain().getCodeSource().getLocation();
+        compileJar(
+                jar,
+                Map.of(
+                        "io.github.mihkels.omb.driver.BenchmarkDriver",
+                        oldApi,
+                        oldDriver,
+                        oldDriverSource),
+                List.of(Path.of(prometheusClasspath.toURI())));
+        String entry = "fixture/legacy/LegacyDriver.class";
+        byte[] legacyClass;
+        try (JarFile compiled = new JarFile(jar.toFile())) {
+            legacyClass = compiled.getInputStream(compiled.getJarEntry(entry)).readAllBytes();
+        }
+        PluginFixtures.writeJar(jar, Map.of(entry, legacyClass));
+
+        PluginRegistry registry = discover();
+
+        assertThat(DriverApiVersion.CURRENT).isEqualTo(2);
+        assertThat(registry.errors())
+                .anySatisfy(error ->
+                        assertThat(error)
+                                .contains("legacy")
+                                .contains("bundle targets driverApiVersion 1")
+                                .contains("implements driverApiVersion 2")
+                                .contains("rebuild the bundle"));
+        assertThatThrownBy(() -> registry.resolve(oldDriver, Map.of()))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("driverApiVersion 1");
+    }
+
+    @Test
+    void followsClassReferencePropertiesToOtherBundles() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        bundle(
+                "jms",
+                List.of(JMS),
+                """
+                optionalClasspath:
+                  - "ext/*.jar"
+                classReferenceProperties:
+                  - delegateForAdminOperationsClassName
+                """);
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(JMS, Map.of()).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+        assertThat(
+                        registry.resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA)).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms", "kafka");
+        Map<String, Object> missingDelegate =
+                Map.of("delegateForAdminOperationsClassName", "x.Missing");
+        assertThatThrownBy(() -> registry.resolve(JMS, missingDelegate))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("delegateForAdminOperationsClassName")
+                .hasMessageContaining("x.Missing");
+    }
+
+    @Test
+    void reportsUnknownDriverClass() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+
+        PluginRegistry registry = discover();
+
+        assertThatThrownBy(() -> registry.resolve("x.Unknown", Map.of()))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("x.Unknown")
+                .hasMessageContaining(KAFKA);
+    }
+
+    @Test
+    void resolvesEveryDeclaredDriverNameAsAnAliasForItsBundle() throws IOException {
+        String alias = "test.kafka.LegacyKafkaDriver";
+        bundle("kafka", List.of(KAFKA, alias), "");
+
+        assertThat(discover().resolve(alias, Map.of()).primary().id()).isEqualTo("kafka");
+    }
+
+    @Test
+    void rejectsMissingOrMismatchedOverrideLocations() throws IOException {
+        Path wrongDriver = descriptor(dir.resolve("other"), "other", List.of(JMS), "");
+        PluginFixtures.writeJar(wrongDriver.resolve("other.jar"), Map.of("marker", new byte[0]));
+
+        PluginRegistry registry = discover();
+        Path missing = dir.resolve("missing");
+
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), missing))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not exist");
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), wrongDriver))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not provide")
+                .hasMessageContaining(JMS);
+    }
+
+    @Test
+    void collectsErrorsOfAllInvalidBundles() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        Path badVersion = bundle("bad-version", List.of("a.A"), "");
+        Files.writeString(
+                badVersion.resolve(PluginBundle.DESCRIPTOR_FILE),
+                Files.readString(badVersion.resolve(PluginBundle.DESCRIPTOR_FILE))
+                        .replace("descriptorVersion: 1", "descriptorVersion: 2")
+                        .replace("driverApiVersion: 2", "driverApiVersion: 99"));
+        bundle("escape", List.of("b.B"), "classpath:\n  - \"../kafka/kafka.jar\"\n");
+        bundle("missing", List.of("c.C"), "classpath:\n  - absent.jar\n");
+        bundle("unknown-field", List.of("d.D"), "surprise: true\n");
+        bundle("kafka-copy", List.of(KAFKA), "");
+
+        PluginRegistry registry = discover();
+
+        assertThat(registry.errors())
+                .anySatisfy(e -> assertThat(e).contains("unsupported descriptorVersion 2"))
+                .anySatisfy(e -> assertThat(e).contains("driverApiVersion 99"))
+                .anySatisfy(e -> assertThat(e).contains("escapes the bundle directory"))
+                .anySatisfy(e -> assertThat(e).contains("'absent.jar' does not match any file"))
+                .anySatisfy(e -> assertThat(e).contains("surprise"))
+                .anySatisfy(e -> assertThat(e).contains(KAFKA).contains("kafka-copy"));
+        assertThatThrownBy(() -> registry.resolve(KAFKA, Map.of()))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("Invalid driver plugin bundles");
+    }
+
+    @Test
+    void rejectsDuplicateIds() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        descriptor(dir.resolve("drivers").resolve("kafka2"), "kafka", List.of("e.E"), "");
+        PluginFixtures.writeJar(dir.resolve("drivers/kafka2/x.jar"), Map.of("x", new byte[0]));
+
+        assertThat(discover().errors())
+                .anySatisfy(e -> assertThat(e).contains("Duplicate plugin id 'kafka'"));
+    }
+
+    @Test
+    void unrelatedInvalidBundleDoesNotBlockAValidDriver() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        Path invalid = bundle("invalid", List.of("test.invalid.InvalidDriver"), "");
+        Path descriptor = invalid.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                descriptor,
+                Files.readString(descriptor).replace("driverApiVersion: 2", "driverApiVersion: 99"));
+        PluginRegistry registry = discover();
+
+        assertThat(registry.errors())
+                .anySatisfy(error -> assertThat(error).contains("driverApiVersion 99"));
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThatThrownBy(() -> registry.resolve("test.invalid.InvalidDriver", Map.of()))
+                .hasMessageContaining("test.invalid.InvalidDriver")
+                .hasMessageContaining("driverApiVersion 99");
+    }
+
+    @Test
+    void malformedClasspathEntriesAreReportedWithoutBlockingOtherDrivers() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        bundle("invalid-glob", List.of("test.invalid.GlobDriver"), "classpath:\n  - \"bad[*\"\n");
+        bundle("invalid-path", List.of("test.invalid.PathDriver"), "classpath:\n  - \"bad\\0path\"\n");
+        Path invalidNull = bundle("invalid-null", List.of("test.invalid.NullDriver"), "");
+        Path descriptor = invalidNull.resolve(PluginBundle.DESCRIPTOR_FILE);
+        Files.writeString(
+                descriptor,
+                Files.readString(descriptor).replace("  - test.invalid.NullDriver", "  - null"));
+
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThat(registry.errors())
+                .anySatisfy(error -> assertThat(error).contains("invalid-glob"))
+                .anySatisfy(error -> assertThat(error).contains("invalid-path"))
+                .anySatisfy(error -> assertThat(error).contains("invalid-null"));
+    }
+
+    @Test
+    void unrelatedDuplicateDriversDoNotBlockAValidDriver() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        bundle("other", List.of("test.other.OtherDriver"), "");
+        bundle("other-copy", List.of("test.other.OtherDriver"), "");
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(KAFKA, Map.of()).primary().id()).isEqualTo("kafka");
+        assertThatThrownBy(() -> registry.resolve("test.other.OtherDriver", Map.of()))
+                .hasMessageContaining("test.other.OtherDriver")
+                .hasMessageContaining("other-copy");
+    }
+
+    @Test
+    void rejectsBothDriversOfBundlesWithTheSameId() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        descriptor(
+                dir.resolve("drivers").resolve("duplicate"), "kafka", List.of("test.other.Driver"), "");
+        PluginFixtures.writeJar(dir.resolve("drivers/duplicate/x.jar"), Map.of("x", new byte[0]));
+        PluginRegistry registry = discover();
+
+        assertThatThrownBy(() -> registry.resolve(KAFKA, Map.of()))
+                .hasMessageContaining("Duplicate plugin id 'kafka'");
+        assertThatThrownBy(() -> registry.resolve("test.other.Driver", Map.of()))
+                .hasMessageContaining("Duplicate plugin id 'kafka'");
+    }
+
+    @Test
+    void rejectsBundledDriverApiArtifactsWithAnotherVersion() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        artifactJar(kafka.resolve("lib"), "io.micrometer", "micrometer-core", "0.1");
+        artifactJar(kafka.resolve("lib"), "org.example", "shared", "0.1");
+        HostRuntime host =
+                new HostRuntime(
+                        List.of(
+                                hostEntry("io.micrometer", "micrometer-core", "1.0"),
+                                hostEntry("org.example", "shared", "1.0")));
+        ResolvedDriver resolved = discover().resolve(KAFKA, Map.of());
+
+        assertThatThrownBy(() -> RuntimeClasspath.compose(host, resolved))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("io.micrometer:micrometer-core:0.1")
+                .hasMessageContaining("provided scope");
+    }
+
+    @Test
+    void prefersHostCopiesOfOtherSharedArtifacts() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path bundled = artifactJar(kafka.resolve("lib"), "org.example", "shared", "0.1");
+        Path same = artifactJar(kafka.resolve("lib"), "org.example", "same", "1.0");
+        HostRuntime.Entry hostShared = hostEntry("org.example", "shared", "1.0");
+        HostRuntime.Entry hostSame = hostEntry("org.example", "same", "1.0");
+
+        RuntimeClasspath classpath =
+                RuntimeClasspath.compose(
+                        new HostRuntime(List.of(hostShared, hostSame)), discover().resolve(KAFKA, Map.of()));
+
+        assertThat(real(classpath.entries()))
+                .startsWith(hostShared.path().toRealPath(), hostSame.path().toRealPath())
+                .contains(kafka.resolve("kafka.jar").toRealPath())
+                .doesNotContain(bundled.toRealPath(), same.toRealPath());
+        assertThat(classpath.warnings()).singleElement().asString().contains("org.example:shared:0.1");
+    }
+
+    @Test
+    void rejectsConflictingVersionsBetweenBundlesOfOneProcess() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        artifactJar(kafka.resolve("lib"), "org.example", "client", "1.0");
+        artifactJar(jms.resolve("lib"), "org.example", "client", "2.0");
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+
+        HostRuntime host = new HostRuntime(List.of());
+
+        assertThatThrownBy(() -> RuntimeClasspath.compose(host, resolved))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("org.example:client:1.0")
+                .hasMessageContaining("org.example:client:2.0");
+    }
+
+    @Test
+    void usesHighestVersionOfAnnotationArtifactsSharedByBundlesOfOneProcess() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path older =
+                artifactJar(
+                        jms.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.5.1");
+        Path newer =
+                artifactJar(
+                        kafka.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.41.0");
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(newer.toRealPath())
+                .doesNotContain(older.toRealPath());
+        assertThat(classpath.warnings())
+                .singleElement()
+                .asString()
+                .contains("error_prone_annotations:2.41.0");
+    }
+
+    @Test
+    void comparesAnnotationVersionsWithMavenQualifierOrdering() {
+        assertThat(RuntimeClasspath.compareVersions("2.0-rc1", "2.0")).isNegative();
+        assertThat(RuntimeClasspath.compareVersions("2.0", "2.0-rc1")).isPositive();
+        assertThat(RuntimeClasspath.compareVersions("2.10", "2.9")).isPositive();
+        assertThat(RuntimeClasspath.compareVersions("2.0-final", "2.0")).isZero();
+        assertThat(RuntimeClasspath.compareVersions("2.0-sp1", "2.0")).isPositive();
+    }
+
+    @Test
+    void prefersAReleaseAnnotationArtifactOverItsPrerelease() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path candidate =
+                artifactJar(
+                        jms.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.0-rc1");
+        Path release =
+                artifactJar(
+                        kafka.resolve("lib"), "com.google.errorprone", "error_prone_annotations", "2.0");
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(release.toRealPath())
+                .doesNotContain(candidate.toRealPath());
+    }
+
+    @Test
+    void reportsCorruptPluginJarsInsteadOfSilentlyUsingThem() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jar = kafka.resolve("lib/broken.jar");
+        Files.createDirectories(jar.getParent());
+        Files.writeString(jar, "not a jar");
+
+        HostRuntime host = new HostRuntime(List.of());
+        ResolvedDriver resolved = discover().resolve(KAFKA, Map.of());
+
+        assertThatThrownBy(() -> RuntimeClasspath.compose(host, resolved))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("broken.jar")
+                .hasMessageContaining("inspect");
+    }
+
+    @Test
+    void retainsDistinctNativeClassifiersAndDeduplicatesMatchingVariants() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path jms =
+                bundle(
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegateForAdminOperationsClassName\n");
+        Path jmsLib = jms.resolve("lib");
+        Path kafkaLib = kafka.resolve("lib");
+        Path generic = artifactJar(jmsLib, "io.netty", "native", "1.0");
+        Path arm = classifiedArtifact(jmsLib, "linux-aarch_64");
+        Path x86 = classifiedArtifact(kafkaLib, "linux-x86_64");
+        Path duplicate = classifiedArtifact(kafkaLib, "linux-aarch_64");
+
+        ResolvedDriver resolved =
+                discover().resolve(JMS, Map.of("delegateForAdminOperationsClassName", KAFKA));
+        RuntimeClasspath classpath = RuntimeClasspath.compose(new HostRuntime(List.of()), resolved);
+
+        assertThat(real(classpath.entries()))
+                .contains(generic.toRealPath(), arm.toRealPath(), x86.toRealPath())
+                .doesNotContain(duplicate.toRealPath());
+    }
+
+    @Test
+    void hostUnclassifiedArtifactDoesNotReplaceClassifiedPluginArtifact() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        HostRuntime.Entry host = hostEntry("io.netty", "native", "1.0");
+        Path nativeJar = classifiedArtifact(kafka.resolve("lib"), "linux-x86_64");
+
+        RuntimeClasspath classpath =
+                RuntimeClasspath.compose(
+                        new HostRuntime(List.of(host)), discover().resolve(KAFKA, Map.of()));
+
+        assertThat(real(classpath.entries()))
+                .contains(host.path().toRealPath(), nativeJar.toRealPath());
+    }
+
+    @Test
+    void resolvesUnpackagedDriverDirectoryOverride() throws IOException {
+        Path module = dir.resolve("module with spaces");
+        Files.createDirectories(module.resolve("target/classes"));
+        Path lib = artifactJar(module.resolve("lib"), "org.example", "client", "1.0");
+
+        ResolvedDriver resolved = discover().resolveOverride(KAFKA, Map.of(), module);
+
+        assertThat(real(resolved.primary().classpath()))
+                .contains(module.resolve("target/classes").toRealPath(), lib.toRealPath());
+    }
+
+    @Test
+    void discoversBundlesFromTheHomeDirectoryAndPluginPath() throws IOException {
+        Path kafka = bundle("kafka", List.of(KAFKA), "");
+        Path extra = descriptor(dir.resolve("extra/jms"), "jms", List.of(JMS), "");
+        PluginFixtures.writeJar(extra.resolve("jms.jar"), Map.of("marker", new byte[0]));
+        Files.createDirectories(dir.resolve("extra/no-descriptor"));
+        Files.createDirectories(dir.resolve("module/target"));
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        String oldPath = System.getProperty(PluginRegistry.PLUGIN_PATH_PROPERTY);
+        try {
+            System.setProperty(PluginRegistry.HOME_PROPERTY, dir.toString());
+            System.setProperty(
+                    PluginRegistry.PLUGIN_PATH_PROPERTY,
+                    String.join(java.io.File.pathSeparator, " ", "extra", " drivers/kafka ", "absent"));
+
+            PluginRegistry registry = PluginRegistry.discover();
+
+            assertThat(registry.errors()).isEmpty();
+            assertThat(registry.bundles())
+                    .extracting(PluginBundle::directory)
+                    .containsExactly(kafka.toRealPath(), extra.toRealPath());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+            restoreProperty(PluginRegistry.PLUGIN_PATH_PROPERTY, oldPath);
+        }
+    }
+
+    @Test
+    void homeFallsBackToTheWorkingDirectoryWhenBlank() {
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        try {
+            System.setProperty(PluginRegistry.HOME_PROPERTY, " ");
+            assertThat(PluginRegistry.home()).isEqualTo(Path.of("").toAbsolutePath().normalize());
+
+            System.setProperty(PluginRegistry.HOME_PROPERTY, dir.toString());
+            assertThat(PluginRegistry.home()).isEqualTo(dir.toAbsolutePath().normalize());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+        }
+    }
+
+    @Test
+    void homeFallsBackToTheWorkingDirectoryWhenUnset() {
+        assumeTrue(System.getenv(PluginRegistry.HOME_ENV) == null);
+        String oldHome = System.getProperty(PluginRegistry.HOME_PROPERTY);
+        try {
+            System.clearProperty(PluginRegistry.HOME_PROPERTY);
+            assertThat(PluginRegistry.home()).isEqualTo(Path.of("").toAbsolutePath().normalize());
+        } finally {
+            restoreProperty(PluginRegistry.HOME_PROPERTY, oldHome);
+        }
+    }
+
+    @Test
+    void ignoresBlankAndSelfReferencesAndNullConfigs() throws IOException {
+        bundle("jms", List.of(JMS), "classReferenceProperties:\n  - delegate\n");
+        PluginRegistry registry = discover();
+
+        assertThat(registry.resolve(JMS, null).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+        assertThat(registry.resolve(JMS, Map.of("delegate", " ")).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+        assertThat(registry.resolve(JMS, Map.of("delegate", JMS)).bundles())
+                .extracting(PluginBundle::id)
+                .containsExactly("jms");
+    }
+
+    @Test
+    void overrideBundleFollowsClassReferencesToDiscoveredBundles() throws IOException {
+        bundle("kafka", List.of(KAFKA), "");
+        Path override =
+                descriptor(
+                        dir.resolve("override"),
+                        "jms",
+                        List.of(JMS),
+                        "classReferenceProperties:\n  - delegate\n");
+        PluginFixtures.writeJar(override.resolve("jms.jar"), Map.of("marker", new byte[0]));
+
+        ResolvedDriver resolved = discover().resolveOverride(JMS, Map.of("delegate", KAFKA), override);
+
+        assertThat(resolved.bundles()).extracting(PluginBundle::id).containsExactly("jms", "kafka");
+    }
+
+    @Test
+    void resolvesJarOverrideAndRejectsOtherFiles() throws IOException {
+        Path jar = PluginFixtures.writeJar(dir.resolve("standalone.jar"), Map.of("m", new byte[0]));
+        Path text = Files.writeString(dir.resolve("standalone.txt"), "text");
+
+        PluginRegistry registry = discover();
+        ResolvedDriver resolved = registry.resolveOverride(KAFKA, Map.of(), jar);
+
+        assertThat(real(resolved.primary().classpath())).containsExactly(jar.toRealPath());
+        assertThatThrownBy(() -> registry.resolveOverride(KAFKA, Map.of(), text))
+                .isInstanceOf(PluginException.class)
+                .hasMessageContaining("does not exist");
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
+    }
+
+    private static List<Path> real(List<Path> paths) {
+        return paths.stream()
+                .map(p -> {
+                    try {
+                        return p.toRealPath();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                })
+                .toList();
+    }
+
+    private static Path classifiedArtifact(Path dir, String classifier) throws IOException {
+        Path jar = artifactJar(dir.resolve("staging"), "io.netty", "native", "1.0");
+        return Files.move(jar, dir.resolve("native-1.0-" + classifier + ".jar"));
+    }
+
+    private HostRuntime.Entry hostEntry(String groupId, String artifactId, String version)
+            throws IOException {
+        Path jar = artifactJar(dir.resolve("host"), groupId, artifactId, version);
+        return new HostRuntime.Entry(jar, new ArtifactCoordinates(groupId, artifactId, version));
+    }
+
+    @Test
+    void realPathFallsBackToTheNormalizedAbsolutePathWhenThePathIsMissing() {
+        Path missing = dir.resolve("missing").resolve("..").resolve("bundle");
+
+        assertThat(PluginRegistry.realPath(missing)).isEqualTo(dir.resolve("bundle").toAbsolutePath());
+    }
+}

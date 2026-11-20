@@ -1,0 +1,92 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.utils.distributor;
+
+import java.util.Base64;
+import java.util.Random;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
+
+public abstract class KeyDistributor {
+
+    private static final int UNIQUE_COUNT = 10_000;
+    private static final int KEY_BYTE_SIZE = 7;
+
+    private static final String[] randomKeys = new String[UNIQUE_COUNT];
+
+    static {
+        // Generate a number of random keys to be used when publishing
+        byte[] buffer = new byte[KEY_BYTE_SIZE];
+        Random random = new Random();
+        for (int i = 0; i < randomKeys.length; i++) {
+            random.nextBytes(buffer);
+            randomKeys[i] = Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
+        }
+    }
+
+    protected String get(int index) {
+        return randomKeys[index];
+    }
+
+    protected int getLength() {
+        return UNIQUE_COUNT;
+    }
+
+    public abstract @Nullable String next();
+
+    public static KeyDistributor build(KeyDistributorType keyType) {
+        return build(keyType, null);
+    }
+
+    public static KeyDistributor build(
+            KeyDistributorType keyType, @Nullable KeyDistribution distribution) {
+        return switch (keyType) {
+            case NO_KEY -> new NoKeyDistributor();
+            case KEY_ROUND_ROBIN -> new KeyRoundRobin();
+            case RANDOM_NANO -> new RandomNano();
+            case ZIPFIAN -> new ZipfianKeyDistributor(KeyDistribution.orDefault(distribution));
+        };
+    }
+
+    /**
+     * Returns the source of distributors for the producers of one load. Zipfian distributors are
+     * immutable, so their O(keys) table is built once here and shared. The others keep per-instance
+     * state and are not thread-safe, so every call returns a new one.
+     *
+     * @param keyType the distribution strategy
+     * @param distribution the Zipfian parameters, or null for the default
+     * @return a supplier to call once per producer
+     */
+    public static Supplier<KeyDistributor> supplier(
+            KeyDistributorType keyType, @Nullable KeyDistribution distribution) {
+        if (keyType == KeyDistributorType.ZIPFIAN) {
+            KeyDistributor shared = build(keyType, distribution);
+            return () -> shared;
+        }
+        return () -> build(keyType);
+    }
+}

@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: JMS-Pulsar-selectors
-driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver
 connectionFactoryClassName: com.datastax.oss.pulsar.jms.PulsarConnectionFactory
 connectionFactoryConfigurationParam: '{"brokerServiceUrl": "pulsar://pulsar:6650", "jms.enableClientSideEmulation": "true", "webServiceUrl": "http://pulsar:8080", "producerConfig":{"blockIfQueueFull":"true"}}'
 use20api: true
@@ -23,7 +23,7 @@ properties:
   - name: foo
     value: bar
 messageSelector: foo = 'bar'
-delegateForAdminOperationsClassName: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
+delegateForAdminOperationsClassName: io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver
 client:
   serviceUrl: pulsar://pulsar:6650
   httpUrl: http://pulsar:8080

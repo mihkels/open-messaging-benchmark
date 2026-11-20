@@ -50,7 +50,7 @@ mvn -DskipTests install
 mvn -q -pl tool dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
 mkdir my-workloads
 java -cp "tool/target/classes:$(cat tool/target/classpath.txt)" \
-  io.openmessaging.benchmark.tool.workload.WorkloadGenerationTool \
+  io.github.mihkels.omb.tool.workload.WorkloadGenerationTool \
   --template-file template.yaml --output-folder my-workloads
 ```
 

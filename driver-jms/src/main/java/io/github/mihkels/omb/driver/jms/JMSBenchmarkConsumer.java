@@ -1,0 +1,91 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver.jms;
+
+import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.ConsumerCallback;
+import javax.jms.BytesMessage;
+import javax.jms.Connection;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
+
+    // Closing the connection also closes the session and consumer created from it
+    private final Connection connection;
+
+    // Private constructor - cannot throw exceptions
+    private JMSBenchmarkConsumer(Connection connection) {
+        this.connection = connection;
+    }
+
+    /**
+     * Creates and starts a JMS consumer. The caller retains ownership of the supplied resources until
+     * this method succeeds and must close them if initialization fails.
+     *
+     * @param connection the JMS connection
+     * @param consumer the message consumer
+     * @param callback the callback to handle received messages
+     * @param useGetBody whether to use getBody method for message extraction
+     * @return a new JMSBenchmarkConsumer instance
+     * @throws JMSException if initialization fails
+     */
+    public static JMSBenchmarkConsumer create(
+            Connection connection,
+            MessageConsumer consumer,
+            ConsumerCallback callback,
+            boolean useGetBody)
+            throws JMSException {
+
+        consumer.setMessageListener(message -> {
+            try {
+                byte[] payload = getPayload(message, useGetBody);
+                callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
+                message.acknowledge();
+            } catch (Throwable e) {
+                log.warn("Failed to acknowledge message", e);
+            }
+        });
+        // Kafka JMS client does not allow you to add a listener after the connection has been started.
+        connection.start();
+        return new JMSBenchmarkConsumer(connection);
+    }
+
+    @Override
+    public void close() throws Exception {
+        // This exception may be thrown: java.util.concurrent.ExecutionException:
+        // java.util.ConcurrentModificationException: KafkaConsumer is not safe for multi-threaded
+        // access
+        // See https://jakarta.ee/specifications/platform/8/apidocs/javax/jms/session#close--
+        // and https://jakarta.ee/specifications/platform/8/apidocs/javax/jms/connection#close--
+        // It should be enough to just close the connection.
+        connection.close();
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(JMSBenchmarkConsumer.class);
+
+    private static byte[] getPayload(Message message, boolean useGetBody) throws JMSException {
+        if (useGetBody) {
+            return message.getBody(byte[].class);
+        } else {
+            BytesMessage msg = (BytesMessage) message;
+            byte[] res = new byte[(int) msg.getBodyLength()];
+            msg.readBytes(res);
+            return res;
+        }
+    }
+}

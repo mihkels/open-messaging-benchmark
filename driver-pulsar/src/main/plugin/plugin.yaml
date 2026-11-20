@@ -19,7 +19,7 @@ version: ${project.version}
 driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
-  - io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
+  - io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver
 classpath:
   - ${project.build.finalName}.jar
   - lib/*.jar

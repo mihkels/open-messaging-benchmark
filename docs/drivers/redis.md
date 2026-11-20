@@ -23,7 +23,7 @@ Redis endpoint.
 |------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `redis`                                                                                                                                                                                                     |
 | Module                 | `driver-redis`                                                                                                                                                                                              |
-| `driverClass`          | `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`                                                                                                                                              |
+| `driverClass`          | `io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver`                                                                                                                                                   |
 | Example config shipped | `driver-redis/redis.yaml` (`127.0.0.1:6379`)                                                                                                                                                                |
 | Tested broker          | `redis:7.4-alpine` (Compose stack `redis`, Redis 7.4)                                                                                                                                                       |
 | Regression cases       | `redis-contract`, `redis-fanout`, `redis-random-payload`                                                                                                                                                    |
@@ -81,7 +81,7 @@ The shipped `driver-redis/redis.yaml`:
 
 ```yaml
 name: Redis
-driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver
 
 redisPort: 6379
 redisHost: 127.0.0.1
@@ -242,7 +242,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-redis/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-redis/src/main/java/io/openmessaging/benchmark/driver/redis)
+- Driver source: [`driver-redis/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-redis/src/main/java/io/github/mihkels/omb/driver/redis)
 - Shipped config: [`driver-redis/redis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-redis/redis.yaml)
 - Regression config: [`e2e-tests/compose/drivers/redis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/redis.yaml)
 - Stack file: [`e2e-tests/compose/stacks/redis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/redis.yaml)

@@ -21,7 +21,7 @@ back-pressure) and consumers are push consumers in a consumer group named after 
 For the gRPC client that goes through the RocketMQ 5 proxy, use [`driver-rocketmq5`](../driver-rocketmq5).
 
 - Plugin ID: `rocketmq`
-- `driverClass`: `io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.rocketmq.RocketMQBenchmarkDriver`
 - Config: [`rocketmq.yaml`](rocketmq.yaml)
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/rocketmq/>

@@ -16,7 +16,7 @@
 
 
 name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver
 
 # Kafka client-specific configuration
 replicationFactor: 1

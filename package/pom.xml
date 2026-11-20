@@ -19,7 +19,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.openmessaging.benchmark</groupId>
+        <groupId>io.github.mihkels.omb</groupId>
         <artifactId>messaging-benchmark</artifactId>
         <version>${revision}</version>
     </parent>

@@ -23,7 +23,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/mqtt5.md#local-docker-compos
 [kind cluster](../docs/drivers/mqtt5.md#local-kind-cluster).
 
 - Plugin ID: `mqtt5`
-- `driverClass`: `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.mqtt5.MqttBenchmarkDriver`
 - Shipped config: [`mqtt5.yaml`](mqtt5.yaml) (`tcp://localhost:1883`, no authentication, QoS 1)
 - Tested with: `eclipse-mosquitto:2.0.22` ([stack file](../e2e-tests/compose/stacks/mqtt5.yaml))
 

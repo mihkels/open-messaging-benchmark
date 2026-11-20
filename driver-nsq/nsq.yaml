@@ -16,7 +16,7 @@
 
 
 name: Nsq
-driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver
 
 # NSQ hosts. Topic creation uses nsqd's HTTP port, producers its TCP port, consumers nsqlookupd's HTTP port.
 

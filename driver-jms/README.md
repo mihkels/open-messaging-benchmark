@@ -26,7 +26,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/jms.md#local-docker-compose)
 ## Plugin and configuration files
 
 - Plugin ID: `jms`
-- `driverClass`: `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver`
 - Configurations in this directory:
 
 |              File               |      Provider       |                     Notes                     |
@@ -81,8 +81,8 @@ The Confluent client cannot be redistributed, so build it yourself:
 ## Admin delegate
 
 `delegateForAdminOperationsClassName` (for example
-`io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver` or
-`io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`) creates topics and provides the topic
+`io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver` or
+`io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`) creates topics and provides the topic
 prefix. The delegate is initialized with the same YAML file, so its keys (`client`/`producer` for
 Pulsar, `replicationFactor` and the four property blocks for Kafka) go in the JMS file. The runtime
 loads the delegate's plugin into the same process, so that plugin must be installed. Without a delegate,

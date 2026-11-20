@@ -296,7 +296,7 @@ stack | compose files in stacks/ (space separated) | architecture | prerequisite
 
 ```yaml
 name: Redis
-driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver
 redisPort: 6379
 redisHost: redis
 jedisPoolMaxTotal: 8

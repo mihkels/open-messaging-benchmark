@@ -19,6 +19,6 @@ version: ${project.version}
 driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
-  - io.openmessaging.benchmark.performance.SyntheticDriver
+  - io.github.mihkels.omb.performance.SyntheticDriver
 classpath:
   - ${project.build.finalName}.jar

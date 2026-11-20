@@ -19,7 +19,7 @@ one scope, partitions are stream segments, subscriptions are reader groups, and 
 routing keys. Producers write events directly or, optionally, in transactions.
 
 - Plugin ID: `pravega`
-- `driverClass`: `io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver`
 - Configs: [`pravega.yaml`](pravega.yaml), [`pravega-exactly-once.yaml`](pravega-exactly-once.yaml)
 
 `pravega-exactly-once.yaml` enables transactional writes. Its `eventPerTransaction: 1` key is

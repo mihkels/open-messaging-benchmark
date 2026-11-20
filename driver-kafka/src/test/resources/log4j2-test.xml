@@ -21,7 +21,7 @@
         </Console>
     </Appenders>
     <Loggers>
-        <Logger name="io.openmessaging.benchmark.driver.kafka" level="debug"/>
+        <Logger name="io.github.mihkels.omb.driver.kafka" level="debug"/>
         <Root level="info">
             <AppenderRef ref="Console"/>
         </Root>

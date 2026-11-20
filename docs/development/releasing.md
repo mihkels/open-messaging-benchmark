@@ -35,8 +35,11 @@ changes it.
      `openmessaging-benchmark-X.Y.Z-bin.tar.gz` and a `SHA256SUMS` file are attached to the GitHub
      release as soon as the distribution is built, even if the image scan fails. Only the latest
      release keeps these two assets; older releases keep their notes and tag
-     (`.github/scripts/prune-release-assets.sh`). The "Source code" archives on every release are
-     added by GitHub and cannot be removed;
+     (`.github/scripts/prune-release-assets.sh`, `KEEP=1`). This is deliberate: users get older
+     versions from their image or by building the tag, see
+     [Older versions](building-the-project.md#older-versions). The note at the top of
+     `CHANGELOG.md` says so too. The "Source code" archives on every release are added by GitHub
+     and cannot be removed;
    - `Helm chart`: the chart `X.Y.Z` pushed to `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`
      and signed.
 

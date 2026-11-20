@@ -18,7 +18,9 @@ This page shows how to point the benchmark at a messaging system you already run
 have a benchmark runtime from the [Quickstart](quickstart.md): the `openmessaging-benchmark:local`
 image, or an unpacked distribution or source build (see
 [Building the project](../development/building-the-project.md)). Commands are the same in all
-three; they run from the benchmark directory (`/benchmark` in the image).
+three; they run from the benchmark directory (`/benchmark` in the image). Only the latest release
+ships a tarball; for an older version, see
+[Older versions](../development/building-the-project.md#older-versions).
 
 ## 1. Choose the driver
 

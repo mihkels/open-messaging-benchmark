@@ -68,6 +68,12 @@ Driver YAML files are in `driver-*/`, plugin bundles in `drivers/`, and example 
 `workloads/`. See [Using your broker](https://mihkels.github.io/open-messaging-benchmark/getting-started/using-your-broker/)
 and the [CLI reference](https://mihkels.github.io/open-messaging-benchmark/reference/cli/).
 
+Only the latest [release](https://github.com/mihkels/open-messaging-benchmark/releases/latest)
+ships a tarball. For an older version, pull the image
+`docker.io/mihkels/open-messaging-benchmark:<version>` (0.4.0 and later) or build from its tag with
+JDK 27: `git checkout v<version> && mvn -B package -DskipTests`, which writes the tarball to
+`package/target/`. See [Older versions](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/#older-versions).
+
 ## Documentation
 
 |                                              Section                                              |                                 Covers                                 |

@@ -292,13 +292,33 @@ The `package` module assembles:
 package/target/openmessaging-benchmark-<version>-bin.tar.gz
 ```
 
-`<version>` is the reactor version (the `revision` property in the root POM, which
-release-please updates; see [Releasing](releasing.md)). The assembly descriptor is
+`<version>` is the reactor version (the `revision` property in the root POM; release-please
+updates it, see [Releasing](releasing.md)). The assembly descriptor is
 [`package/src/assemble/bin.xml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/package/src/assemble/bin.xml).
-A prebuilt tarball is attached only to the latest
-[GitHub release](https://github.com/mihkels/open-messaging-benchmark/releases), together with a
-`SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`. Older releases have both
-removed (see [Releasing](releasing.md)), so build an older version from its tag.
+A prebuilt tarball for the latest release is attached to its
+[GitHub release](https://github.com/mihkels/open-messaging-benchmark/releases/latest) together with
+a `SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`.
+
+### Older versions
+
+Only the latest release keeps its tarball; when a new version is released, the tarball and
+`SHA256SUMS` are removed from older releases. Their notes, tags and "Source code" archives stay. To
+get an older version:
+
+- Pull its container image, `docker.io/mihkels/open-messaging-benchmark:<version>` (for example
+  `0.4.0`). Images are kept for every release from 0.4.0 on; see
+  [Containers and Kubernetes](../guides/containers-and-kubernetes.md).
+- Build the tarball from its tag. Every release so far needs JDK 27; the `java` entry in the tag's
+  `mise.toml` names the version.
+
+  ```bash
+  git clone https://github.com/mihkels/open-messaging-benchmark.git
+  cd open-messaging-benchmark
+  git checkout v0.4.0
+  mvn -B package -DskipTests
+  ```
+
+  The tarball is `package/target/openmessaging-benchmark-0.4.0-bin.tar.gz`.
 
 The tarball contains a single `openmessaging-benchmark-<version>/` directory with this layout:
 

@@ -60,7 +60,7 @@
     </scm>
     <properties>
         <!-- x-release-please-start-version -->
-        <revision>0.6.0</revision>
+        <revision>0.7.0</revision>
         <!-- x-release-please-end -->
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

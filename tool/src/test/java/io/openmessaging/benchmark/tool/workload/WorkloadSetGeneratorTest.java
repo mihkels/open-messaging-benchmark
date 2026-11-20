@@ -60,7 +60,8 @@ class WorkloadSetGeneratorTest {
                                                 "repeat",
                                                 "verifyDelivery",
                                                 "consumerPause",
-                                                "headers"))
+                                                "headers",
+                                                "partitionTelemetry"))
                                 .toList());
     }
 

@@ -233,6 +233,18 @@ class SecretRedactionTest {
     }
 
     @Test
+    void masksSecretUriParameters() {
+        assertEquals(
+                "brokerURL: tcp://h:61617?sslEnabled=true;trustStorePassword=[REDACTED]",
+                SecretRedaction.redactString(
+                        "brokerURL: tcp://h:61617?sslEnabled=true;trustStorePassword=changeit"));
+        assertEquals(
+                "amqps://h/v?password=[REDACTED]&heartbeat=10",
+                SecretRedaction.redactString("amqps://h/v?password=x&heartbeat=10"));
+        assertEquals("http://h/?page=2&sort=a", SecretRedaction.redactString("http://h/?page=2&sort=a"));
+    }
+
+    @Test
     void masksBareUserInfoBecauseItMayBeAToken() {
         assertEquals(
                 "nats://[REDACTED]@host:4222", SecretRedaction.redactString("nats://s3cr3ttoken@host:4222"));

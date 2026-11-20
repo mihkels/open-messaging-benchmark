@@ -160,7 +160,7 @@ class RabbitMqBenchmarkDriverTest {
                         });
         Connection connection =
                 proxy(Connection.class, (method, args) -> method.equals("createChannel") ? channel : null);
-        connections(driver).put("amqp://test", connection);
+        connections(driver).put("producers amqp://test", connection);
         try {
             var producer = driver.createProducer("amqp://test?exchange=example");
             CompletionException failure = assertThrows(CompletionException.class, producer::join);
@@ -192,7 +192,7 @@ class RabbitMqBenchmarkDriverTest {
                         });
         Connection connection =
                 proxy(Connection.class, (method, args) -> method.equals("createChannel") ? channel : null);
-        connections(driver).put("amqp://test", connection);
+        connections(driver).put("consumers amqp://test", connection);
         try {
             var consumer = driver.createConsumer("amqp://test?exchange=example", "sub", null);
             CompletionException failure = assertThrows(CompletionException.class, consumer::join);
@@ -228,7 +228,7 @@ class RabbitMqBenchmarkDriverTest {
                         });
         Connection connection =
                 proxy(Connection.class, (method, args) -> method.equals("createChannel") ? channel : null);
-        connections(driver).put("amqp://test", connection);
+        connections(driver).put("producers amqp://test", connection);
         try {
             CompletableFuture<BenchmarkProducer> future =
                     driver.createProducer("amqp://test?exchange=example");

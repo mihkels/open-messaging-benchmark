@@ -50,6 +50,16 @@ class ResultFileNameTest {
     }
 
     @Test
+    void driverNameCannotLeaveTheResultsDirectory() {
+        Path file = Path.of(Benchmark.resultFileName(null, "w", "../Kafka/KRaft", "/results", null));
+
+        assertThat(file).hasParentRaw(Path.of("/results"));
+        assertThat(file.getFileName().toString()).startsWith("w-.._Kafka_KRaft-");
+        assertThat(Benchmark.resultFileName(null, "w", "Nats Streaming", null, null))
+                .startsWith("w-Nats Streaming-");
+    }
+
+    @Test
     void suffixGoesBeforeTheExtension() {
         assertThat(Benchmark.resultFileName("out/result.json", "w", "Kafka", null, "2"))
                 .isEqualTo("out/result-2.json");

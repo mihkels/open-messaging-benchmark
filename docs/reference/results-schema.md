@@ -196,7 +196,7 @@ Each `partitionSkew` entry has:
 |                    Field                     |    Type     |                                                       Description                                                        |
 |----------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------|
 | `partitions`                                 | int         | Partitions that published or consumed during the period                                                                  |
-| `publishMaxMeanRatio`, `consumeMaxMeanRatio` | number      | Busiest partition's message count divided by the mean; 1 is even                                                         |
+| `publishMaxMeanRatio`, `consumeMaxMeanRatio` | number      | Busiest partition's message count divided by the mean over all the workload's partitions, idle ones included; 1 is even  |
 | `publishGini`, `consumeGini`                 | number      | Gini coefficient of per-partition message counts: 0 is even, close to 1 is one partition taking everything               |
 | `topPublishP99`, `topEndToEndP99`            | object list | Up to five `{topic, partition, p99Ms}` with the highest p99; per-partition histograms keep one significant digit (≈10 %) |
 

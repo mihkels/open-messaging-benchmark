@@ -47,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
@@ -148,10 +149,13 @@ class MqttBenchmarkDriverOptionsTest {
         when(start.addSubscriptions(anyList())).thenReturn(complete);
         when(complete.callback(any())).thenReturn(call);
         ConsumerCallback callback = mock(ConsumerCallback.class);
+        Executor executor = Runnable::run;
 
-        new MqttBenchmarkDriver(new MqttConfig()).subscribeConsumer(client, List.of(), callback);
+        new MqttBenchmarkDriver(new MqttConfig())
+                .subscribeConsumer(client, List.of(), callback, executor);
         ArgumentCaptor<Consumer<Mqtt5Publish>> handler = ArgumentCaptor.forClass(Consumer.class);
         verify(complete).callback(handler.capture());
+        verify(call).executor(executor);
 
         Mqtt5Publish stamped =
                 publish(
@@ -312,7 +316,8 @@ class MqttBenchmarkDriverOptionsTest {
         CompletableFuture<Mqtt5SubAck> subscribeConsumer(
                 Mqtt5AsyncClient client,
                 List<Mqtt5Subscription> subscriptions,
-                ConsumerCallback consumerCallback) {
+                ConsumerCallback consumerCallback,
+                Executor callbackExecutor) {
             this.subscriptions = subscriptions;
             return subscription;
         }

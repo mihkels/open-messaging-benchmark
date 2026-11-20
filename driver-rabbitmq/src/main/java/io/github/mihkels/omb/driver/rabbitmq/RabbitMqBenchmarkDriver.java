@@ -116,7 +116,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                         Channel channel = null;
                         try {
                             String uri = topic.split("\\?")[0];
-                            Connection connection = getOrCreateConnection(uri);
+                            Connection connection = getOrCreateConnection(uri, false);
                             channel = Objects.requireNonNull(connection.createChannel(), "channel");
                             String exchange = getExchangeName(topic);
                             channel.exchangeDeclare(exchange, BuiltinExchangeType.FANOUT, true);
@@ -175,7 +175,7 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                         Channel channel = null;
                         try {
                             String uri = topic.split("\\?")[0];
-                            Connection connection = getOrCreateConnection(uri);
+                            Connection connection = getOrCreateConnection(uri, true);
                             channel = Objects.requireNonNull(connection.createChannel(), "channel");
                             String exchange = getExchangeName(topic);
                             String queueName = exchange + "-" + subscriptionName;
@@ -213,19 +213,23 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
         return parameters.get("exchange").get(0);
     }
 
-    private Connection getOrCreateConnection(String topicUri) {
+    private Connection getOrCreateConnection(String topicUri, boolean forConsumers) {
         // Topic names carry no credentials, so key connections by the redacted URI.
         String primaryBrokerUri = withoutUserInfo(topicUri);
+        // Consumers get their own connection: a paused consumer callback fills the client's
+        // delivery queue, which then blocks the connection's reader thread and with it the
+        // publisher confirms of every producer on the same connection.
+        String key = (forConsumers ? "consumers " : "producers ") + primaryBrokerUri;
         if (closed.get()) {
             throw new IllegalStateException("RabbitMQ driver is closed");
         }
         Connection connection =
                 connections.computeIfAbsent(
-                        primaryBrokerUri,
-                        p -> {
+                        key,
+                        k -> {
                             String configured =
                                     config.amqpUris.stream()
-                                            .filter(s -> withoutUserInfo(s).equals(p))
+                                            .filter(s -> withoutUserInfo(s).equals(primaryBrokerUri))
                                             .findFirst()
                                             .orElse(topicUri);
                             // RabbitMQ will pick the first available address from the list. Future reconnection
@@ -243,11 +247,12 @@ public class RabbitMqBenchmarkDriver implements BenchmarkDriver {
                                 connectionFactory.setUri(configured);
                                 return connectionFactory.newConnection(addresses);
                             } catch (Exception e) {
-                                throw new RuntimeException("Couldn't establish connection to: " + p, e);
+                                throw new RuntimeException(
+                                        "Couldn't establish connection to: " + primaryBrokerUri, e);
                             }
                         });
         if (closed.get()) {
-            if (connections.remove(primaryBrokerUri, connection)) {
+            if (connections.remove(key, connection)) {
                 closeDiscarded(connection);
             }
             throw new IllegalStateException("RabbitMQ driver is closed");

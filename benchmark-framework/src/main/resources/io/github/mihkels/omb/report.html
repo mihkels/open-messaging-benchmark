@@ -202,7 +202,7 @@
   draw("throughput", function () {
     var series = [], selected = {};
     runs.forEach(function (e) {
-      var name = e[0], r = e[1], mb = r.messageSize ? r.messageSize / (1024 * 1024) : null;
+      var name = e[0], r = e[1], mb = r.messageSize ? r.messageSize / 1e6 : null;
       var target = r.summary && r.summary.targetRate > 0 ? r.summary.targetRate : null;
       // A staged run's target moves, so it is drawn per period instead of as one flat line
       if (has(r.stage) && has(r.targetRate)) {

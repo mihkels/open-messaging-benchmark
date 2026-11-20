@@ -51,6 +51,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -160,7 +161,8 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                         ConsumerCallback guardedCallback = consumer.guardedCallback(consumerCallback);
                         CompletableFuture<Mqtt5SubAck> subscription =
                                 Objects.requireNonNull(
-                                        subscribeConsumer(client, subscriptions, guardedCallback),
+                                        subscribeConsumer(
+                                                client, subscriptions, guardedCallback, consumer.callbackExecutor()),
                                         "MQTT subscription future");
                         awaitSubscription(future, subscriptions, subscription);
                     });
@@ -260,7 +262,10 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
     CompletableFuture<Mqtt5SubAck> subscribeConsumer(
             Mqtt5AsyncClient client,
             List<Mqtt5Subscription> subscriptions,
-            ConsumerCallback consumerCallback) {
+            ConsumerCallback consumerCallback,
+            Executor callbackExecutor) {
+        // Off the client's shared application scheduler: a paused consumer blocks inside its
+        // callback, and on that scheduler it would also block publish completions of producers
         return client
                 .subscribeWith()
                 .addSubscriptions(subscriptions)
@@ -269,6 +274,7 @@ public class MqttBenchmarkDriver implements BenchmarkDriver {
                     consumerCallback.messageReceived(message.getPayloadAsBytes(), publishTime);
                     message.acknowledge();
                 })
+                .executor(callbackExecutor)
                 .manualAcknowledgement(true)
                 .send();
     }

@@ -24,7 +24,6 @@ import static org.mockito.Mockito.mock;
 import io.javalin.Javalin;
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -54,7 +53,7 @@ class HttpWorkerClientLifecycleTest {
                                     interrupted.set(Thread.currentThread().isInterrupted());
                                 }
                             });
-            try (Socket _ = silent.accept()) {
+            try (var _ = silent.accept()) {
                 calling.interrupt();
                 calling.join(2000);
                 assertThat(calling.isAlive()).isFalse();

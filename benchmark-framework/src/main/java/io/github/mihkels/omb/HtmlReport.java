@@ -41,8 +41,9 @@ public final class HtmlReport {
     public static String render(Map<String, TestResult> runs) {
         Map<String, TestResult> ordered = new LinkedHashMap<>(runs);
         String json = ObjectMappers.DEFAULT.writer().writeValueAsString(ordered);
-        // Keep result strings from closing the script element the JSON sits in
-        return template().replace(DATA_PLACEHOLDER, json.replace("</", "<\\/"));
+        // Escape every '<': "</script" would close the data element and "<!--" followed by "<script"
+        // would make the parser swallow the page script. '<' only occurs inside JSON strings.
+        return template().replace(DATA_PLACEHOLDER, json.replace("<", "\\u003c"));
     }
 
     private static String template() {

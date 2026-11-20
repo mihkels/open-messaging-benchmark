@@ -110,6 +110,28 @@ class RabbitMqBenchmarkConsumerTest {
     }
 
     @Test
+    void messageWithoutTimestampHeaderCountsWithoutLatency() throws Exception {
+        AtomicReference<byte[]> received = new AtomicReference<>();
+        AtomicReference<Long> timestamp = new AtomicReference<>();
+        RabbitMqBenchmarkConsumer consumer =
+                new RabbitMqBenchmarkConsumer(new Fixture().channel, callback(received, timestamp), false);
+
+        // A foreign message on the exchange: no headers at all, or the header with the wrong type
+        consumer.handleDelivery(
+                "tag", new Envelope(1L, false, "", "queue"), new BasicProperties(), new byte[] {1});
+        assertEquals(ConsumerCallback.NO_PUBLISH_TIMESTAMP, timestamp.get());
+        consumer.handleDelivery(
+                "tag",
+                new Envelope(2L, false, "", "queue"),
+                new BasicProperties.Builder()
+                        .headers(Map.of(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER, "soon"))
+                        .build(),
+                new byte[] {2});
+        assertEquals(ConsumerCallback.NO_PUBLISH_TIMESTAMP, timestamp.get());
+        assertArrayEquals(new byte[] {2}, received.get());
+    }
+
+    @Test
     void closeClosesChannel() throws Exception {
         Fixture fixture = new Fixture();
 

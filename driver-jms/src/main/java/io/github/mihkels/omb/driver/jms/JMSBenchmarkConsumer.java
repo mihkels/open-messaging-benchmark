@@ -20,6 +20,7 @@ import javax.jms.Connection;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
+import javax.jms.MessageFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,7 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
         consumer.setMessageListener(message -> {
             try {
                 byte[] payload = getPayload(message, useGetBody);
-                callback.messageReceived(payload, message.getLongProperty("E2EStartMillis"));
+                callback.messageReceived(payload, publishTimestamp(message));
                 message.acknowledge();
             } catch (Throwable e) {
                 log.warn("Failed to acknowledge message", e);
@@ -63,6 +64,16 @@ public final class JMSBenchmarkConsumer implements BenchmarkConsumer {
         // Kafka JMS client does not allow you to add a listener after the connection has been started.
         connection.start();
         return new JMSBenchmarkConsumer(connection);
+    }
+
+    // A message published outside the benchmark has no timestamp property, so it counts without a
+    // latency sample. JMS reports a missing property as NumberFormatException.
+    static long publishTimestamp(Message message) throws JMSException {
+        try {
+            return message.getLongProperty("E2EStartMillis");
+        } catch (NumberFormatException | MessageFormatException _) {
+            return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
+        }
     }
 
     @Override

@@ -21,7 +21,7 @@ import com.rabbitmq.client.Envelope;
 import io.github.mihkels.omb.driver.BenchmarkConsumer;
 import io.github.mihkels.omb.driver.ConsumerCallback;
 import java.io.IOException;
-import java.util.Objects;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,16 +76,21 @@ public final class RabbitMqBenchmarkConsumer extends DefaultConsumer implements 
     public void handleDelivery(
             String consumerTag, Envelope envelope, BasicProperties properties, byte[] body)
             throws IOException {
-        long publishTimestamp =
-                ((Number)
-                                Objects.requireNonNull(
-                                        properties.getHeaders().get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER),
-                                        "RabbitMQ message has no publish timestamp header"))
-                        .longValue();
-        callback.messageReceived(body, publishTimestamp);
+        callback.messageReceived(body, publishTimestamp(properties));
         if (manualAck) {
             channel.basicAck(envelope.getDeliveryTag(), false);
         }
+    }
+
+    // A message published outside the benchmark has no timestamp header. Throwing here would close
+    // the channel, so the message counts without a latency sample instead.
+    static long publishTimestamp(BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        Object value =
+                headers == null ? null : headers.get(RabbitMqBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER);
+        return value instanceof Number number
+                ? number.longValue()
+                : ConsumerCallback.NO_PUBLISH_TIMESTAMP;
     }
 
     @Override

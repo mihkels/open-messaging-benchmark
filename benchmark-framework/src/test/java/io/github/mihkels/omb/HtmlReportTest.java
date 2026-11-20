@@ -106,6 +106,17 @@ class HtmlReportTest {
     }
 
     @Test
+    void resultStringsCannotOpenAnEscapedScriptState() {
+        TestResult result = result("A", 1);
+        result.workload = "<!--<script";
+
+        String html = HtmlReport.render(Map.of("r.json", result));
+
+        assertThat(html).doesNotContain("<!--<script");
+        assertThat(data(html).get("r.json").get("workload").stringValue()).isEqualTo("<!--<script");
+    }
+
+    @Test
     void writesNothingWithoutAReportPathOrResults() throws Exception {
         Path report = directory.resolve("report.html");
         Benchmark.writeHtmlReport(null, Map.of("r.json", result("A", 1)));

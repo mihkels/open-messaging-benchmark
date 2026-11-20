@@ -69,14 +69,22 @@ public record PartitionSkew(
      *
      * @param period index of the period
      * @param partitions the merged per-partition traffic of all workers
+     * @param totalPartitions the partitions the workload created; those without traffic count as zero
      * @return the summary, or {@code null} when no partition reported traffic
      */
-    static @Nullable PartitionSkew of(int period, List<PartitionPeriod> partitions) {
+    static @Nullable PartitionSkew of(
+            int period, List<PartitionPeriod> partitions, int totalPartitions) {
         if (partitions.isEmpty()) {
             return null;
         }
-        long[] sent = partitions.stream().mapToLong(PartitionPeriod::messagesSent).toArray();
-        long[] received = partitions.stream().mapToLong(PartitionPeriod::messagesReceived).toArray();
+        // Idle partitions are skew too, so they join the ratios as zeros
+        int n = Math.max(totalPartitions, partitions.size());
+        long[] sent = new long[n];
+        long[] received = new long[n];
+        for (int i = 0; i < partitions.size(); i++) {
+            sent[i] = partitions.get(i).messagesSent();
+            received[i] = partitions.get(i).messagesReceived();
+        }
         return new PartitionSkew(
                 period,
                 partitions.size(),

@@ -19,6 +19,8 @@ import io.github.mihkels.omb.driver.ConsumerCallback;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MqttBenchmarkConsumer implements BenchmarkConsumer {
@@ -26,6 +28,9 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
     private final AtomicBoolean closed;
     private final CompletableFuture<Void> closeCompletion = new CompletableFuture<>();
     private final ThreadLocal<Boolean> inCallback = new ThreadLocal<>();
+    // One thread keeps this consumer's messages in order
+    private final ExecutorService callbackExecutor =
+            Executors.newSingleThreadExecutor(Thread.ofVirtual().name("mqtt-consumer-", 0).factory());
 
     /**
      * Creates a consumer that receives through {@code client}.
@@ -49,6 +54,9 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
                 closeCompletion.complete(null);
             } catch (Exception | Error failure) {
                 closeCompletion.completeExceptionally(failure);
+            } finally {
+                // Interrupts a callback still paused by the benchmark
+                callbackExecutor.shutdownNow();
             }
         }
         try {
@@ -65,6 +73,10 @@ public class MqttBenchmarkConsumer implements BenchmarkConsumer {
             }
             throw e;
         }
+    }
+
+    ExecutorService callbackExecutor() {
+        return callbackExecutor;
     }
 
     ConsumerCallback guardedCallback(ConsumerCallback callback) {

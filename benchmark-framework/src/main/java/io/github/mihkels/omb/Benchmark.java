@@ -918,8 +918,10 @@ public final class Benchmark {
             return hasExtension ? output.substring(0, dot) + tail + output.substring(dot) : output + tail;
         }
         String timestamp = LocalDateTime.now(ZoneId.systemDefault()).format(RESULT_TIMESTAMP);
+        // The driver name is free text: path separators or other characters must not end the run
+        String safeDriver = driverName.replaceAll("[^\\w .-]", "_");
         String fileName =
-                String.format("%s-%s-%s%s.json", workloadFileName, driverName, timestamp, tail);
+                String.format("%s-%s-%s%s.json", workloadFileName, safeDriver, timestamp, tail);
         if (resultsDirectory == null || resultsDirectory.isEmpty()) {
             return fileName;
         }

@@ -304,9 +304,9 @@ public final class WorkloadGenerator implements WorkloadRun {
         // first publishing
         // some message on the topic, which will then trigger the partitions assignment to the consumers
 
-        int expectedMessages = workload.topics * workload.subscriptionsPerTopic;
+        int expectedMessages = expectedProbeMessages(workload);
 
-        // In this case we just publish 1 message and then wait for consumers to receive the data
+        // Every producer publishes one message, and every subscription must receive each of them
         worker.probeProducers();
 
         long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
@@ -327,6 +327,11 @@ public final class WorkloadGenerator implements WorkloadRun {
             }
             TimeUnit.NANOSECONDS.sleep(Math.min(remaining, TimeUnit.SECONDS.toNanos(2)));
         }
+    }
+
+    // One probe per producer, delivered once to each subscription of its topic
+    static int expectedProbeMessages(Workload workload) {
+        return workload.topics * workload.producersPerTopic * workload.subscriptionsPerTopic;
     }
 
     /**
@@ -823,9 +828,10 @@ public final class WorkloadGenerator implements WorkloadRun {
     // Records report intervals into the result until the duration ends. The measured window also
     // waits for any backlog to drain and then adds the aggregate and summary.
     // Appends the period's skew summary and rebalances, indexed like the per-period series
-    private static void recordPartitionTelemetry(TestResult result, PeriodStats stats) {
+    private void recordPartitionTelemetry(TestResult result, PeriodStats stats) {
         int period = result.publishRate.size() - 1;
-        PartitionSkew skew = PartitionSkew.of(period, stats.partitions());
+        PartitionSkew skew =
+                PartitionSkew.of(period, stats.partitions(), workload.topics * workload.partitionsPerTopic);
         if (skew != null) {
             result.partitionSkew.add(skew);
         }

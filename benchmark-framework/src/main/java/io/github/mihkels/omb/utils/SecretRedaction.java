@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -33,7 +34,9 @@ import tools.jackson.databind.ObjectWriter;
  *   <li>a string that is a JSON object is parsed and masked recursively;
  *   <li>each {@code key=value} or {@code key: value} line whose key names a credential has its
  *       value masked, as in Kafka {@code producerConfig} properties strings;
- *   <li>the password in URI userinfo is masked, as in {@code amqp://user:pass@host}.
+ *   <li>the password in URI userinfo is masked, as in {@code amqp://user:pass@host};
+ *   <li>each {@code ?name=value}, {@code &name=value} or {@code ;name=value} parameter whose name
+ *       names a credential has its value masked, as in {@code tcp://host?trustStorePassword=x}.
  * </ul>
  *
  * Everything else in the string is kept.
@@ -56,6 +59,9 @@ public final class SecretRedaction {
     private static final Pattern SECRET_SUFFIX =
             Pattern.compile("(?:pass|pwd)$", Pattern.CASE_INSENSITIVE);
     private static final String SCHEME_SEPARATOR = "://";
+    // A URI query or ;-separated parameter: separator, name and value
+    private static final Pattern PARAMETER =
+            Pattern.compile("([?&;])([^=?&;#\\s\"']+)=([^?&;#\\s\"']+)");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final ObjectWriter PRETTY = MAPPER.writerWithDefaultPrettyPrinter();
 
@@ -170,7 +176,16 @@ public final class SecretRedaction {
                 return maskAfter(line, separator);
             }
         }
-        return redactUriUserInfo(line);
+        return redactParameters(redactUriUserInfo(line));
+    }
+
+    private static String redactParameters(String text) {
+        return PARAMETER
+                .matcher(text)
+                .replaceAll(m ->
+                        isSecretKey(m.group(2))
+                                ? Matcher.quoteReplacement(m.group(1) + m.group(2) + "=" + REDACTED)
+                                : Matcher.quoteReplacement(m.group()));
     }
 
     private static String maskAfter(String line, int separator) {

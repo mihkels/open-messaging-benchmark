@@ -64,6 +64,16 @@ class WorkloadGeneratorLifecycleTest {
     @TempDir Path directory;
 
     @Test
+    void readinessWaitsForTheProbeOfEveryProducer() {
+        Workload workload = workload();
+        workload.topics = 100;
+        workload.producersPerTopic = 4;
+        workload.subscriptionsPerTopic = 2;
+
+        assertThat(WorkloadGenerator.expectedProbeMessages(workload)).isEqualTo(800);
+    }
+
+    @Test
     void nonemptyPeriodSnapshotsPreserveResultValuesAndOutputShape() throws Exception {
         Histogram publish = histogram(1_000, 3_000);
         Histogram delay = histogram(100, 500);

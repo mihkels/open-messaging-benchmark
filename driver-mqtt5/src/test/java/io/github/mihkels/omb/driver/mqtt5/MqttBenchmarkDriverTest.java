@@ -56,6 +56,7 @@ import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -712,7 +713,8 @@ class MqttBenchmarkDriverTest {
         CompletableFuture<Mqtt5SubAck> subscribeConsumer(
                 Mqtt5AsyncClient client,
                 List<Mqtt5Subscription> subscriptions,
-                ConsumerCallback consumerCallback) {
+                ConsumerCallback consumerCallback,
+                Executor callbackExecutor) {
             this.subscriptions = subscriptions;
             this.callback = consumerCallback;
             if (subscribeStartFailure != null) {

@@ -47,18 +47,30 @@ class RabbitMqBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void createsProducerAndStreamConsumerOnACachedConnection() throws Exception {
+    void createsProducerAndStreamConsumerOnSeparateCachedConnections() throws Exception {
         RabbitMqBenchmarkDriver driver =
                 driver("amqpUris: [amqp://test]\nqueueType: STREAM\nmessagePersistence: true\n");
-        List<String> calls = new ArrayList<>();
-        Channel channel = recording(Channel.class, calls);
-        connections(driver).put("amqp://test", recording(Connection.class, calls, channel));
+        List<String> producerCalls = new ArrayList<>();
+        List<String> consumerCalls = new ArrayList<>();
+        connections(driver)
+                .put(
+                        "producers amqp://test",
+                        recording(Connection.class, producerCalls, recording(Channel.class, producerCalls)));
+        connections(driver)
+                .put(
+                        "consumers amqp://test",
+                        recording(Connection.class, consumerCalls, recording(Channel.class, consumerCalls)));
 
         BenchmarkProducer producer = driver.createProducer("amqp://test?exchange=ex").join();
         BenchmarkConsumer consumer =
                 driver.createConsumer("amqp://test?exchange=ex", "sub", null).join();
-        assertThat(calls)
-                .contains("exchangeDeclare", "confirmSelect", "queueDeclare", "queueBind", "basicQos");
+        // A paused consumer must not block the connection that carries publisher confirms
+        assertThat(producerCalls)
+                .contains("exchangeDeclare", "confirmSelect")
+                .doesNotContain("queueDeclare");
+        assertThat(consumerCalls)
+                .contains("exchangeDeclare", "queueDeclare", "queueBind", "basicQos")
+                .doesNotContain("confirmSelect");
         producer.close();
         consumer.close();
         driver.close();
@@ -68,8 +80,10 @@ class RabbitMqBenchmarkDriverOptionsTest {
     void missingExchangeParameterFailsAndClosesTheChannel() throws Exception {
         RabbitMqBenchmarkDriver driver = driver("amqpUris: [amqp://test]\n");
         List<String> calls = new ArrayList<>();
-        connections(driver)
-                .put("amqp://test", recording(Connection.class, calls, recording(Channel.class, calls)));
+        for (String key : List.of("producers amqp://test", "consumers amqp://test")) {
+            connections(driver)
+                    .put(key, recording(Connection.class, calls, recording(Channel.class, calls)));
+        }
         assertThatThrownBy(() -> driver.createProducer("amqp://test").join())
                 .hasCauseInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Missing exchange param");
@@ -82,7 +96,8 @@ class RabbitMqBenchmarkDriverOptionsTest {
     @Test
     void nullChannelFailsWithoutAnythingToClose() throws Exception {
         RabbitMqBenchmarkDriver driver = driver("amqpUris: [amqp://test]\n");
-        connections(driver).put("amqp://test", recording(Connection.class, new ArrayList<>()));
+        connections(driver)
+                .put("producers amqp://test", recording(Connection.class, new ArrayList<>()));
         assertThatThrownBy(() -> driver.createProducer("amqp://test?exchange=e").join())
                 .hasCauseInstanceOf(NullPointerException.class);
         driver.close();

@@ -22,7 +22,7 @@ subscription is a durable multicast queue bound to that address.
 |-------------------|-------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `artemis`                                                                                                   |
 | Module            | `driver-artemis`                                                                                            |
-| `driverClass`     | `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`                                          |
+| `driverClass`     | `io.github.mihkels.omb.driver.artemis.ArtemisBenchmarkDriver`                                               |
 | Example config    | `driver-artemis/artemis.yaml`                                                                               |
 | Client library    | `org.apache.artemis:artemis-core-client` 2.57.0                                                             |
 | Tested broker     | `apache/artemis:2.57.0` (Compose stack `artemis`)                                                           |
@@ -109,7 +109,7 @@ workload and follow [Fair comparisons](../methodology/fair-comparisons.md).
 
 ```yaml
 name: Artemis
-driverClass: io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.artemis.ArtemisBenchmarkDriver
 
 brokerAddress: tcp://localhost:61616
 ```
@@ -140,7 +140,7 @@ use `partitionsPerTopic: 1`. For remote workers, see
 |       Key       |  Type  | Default  |                                             Description                                              |
 |-----------------|--------|----------|------------------------------------------------------------------------------------------------------|
 | `name`          | string | required | Used in the result file name and the result's `driver` field.                                        |
-| `driverClass`   | string | required | `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`                                   |
+| `driverClass`   | string | required | `io.github.mihkels.omb.driver.artemis.ArtemisBenchmarkDriver`                                        |
 | `brokerAddress` | string | required | Artemis client URL passed to `ActiveMQClient.createServerLocator`, for example `tcp://broker:61616`. |
 
 `brokerAddress` accepts the URL syntax of the Artemis core client, including URL parameters such as
@@ -233,7 +233,7 @@ See also [Troubleshooting](../guides/troubleshooting.md).
 
 Source and configuration files:
 
-- Driver source: [`driver-artemis/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-artemis/src/main/java/io/openmessaging/benchmark/driver/artemis)
+- Driver source: [`driver-artemis/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-artemis/src/main/java/io/github/mihkels/omb/driver/artemis)
 - Shipped configuration: [`driver-artemis/artemis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-artemis/artemis.yaml)
 - Regression driver config: [`e2e-tests/compose/drivers/artemis.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/artemis.yaml)
 - Related driver: [JMS](jms.md)

@@ -176,7 +176,7 @@
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <targetPath>io/openmessaging/benchmark/schema</targetPath>
+                <targetPath>io/github/mihkels/omb/schema</targetPath>
                 <!-- The published schemas are the single committed copy; the CLI validates against them -->
                 <directory>${project.basedir}/../docs/reference</directory>
                 <includes>
@@ -265,43 +265,43 @@
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
                             <targetClasses>
-                                <param>io.openmessaging.benchmark.RateController*</param>
-                                <param>io.openmessaging.benchmark.Thresholds*</param>
-                                <param>io.openmessaging.benchmark.Workload</param>
-                                <param>io.openmessaging.benchmark.Workload$*</param>
-                                <param>io.openmessaging.benchmark.ResultsToCsv*</param>
-                                <param>io.openmessaging.benchmark.plugin.ArtifactCoordinates*</param>
-                                <param>io.openmessaging.benchmark.plugin.PluginDescriptor*</param>
-                                <param>io.openmessaging.benchmark.utils.*</param>
-                                <param>io.openmessaging.benchmark.worker.commands.*</param>
-                                <param>io.openmessaging.benchmark.worker.jackson.*</param>
-                                <param>io.openmessaging.benchmark.worker.JvmOptions*</param>
-                                <param>io.openmessaging.benchmark.worker.LatencyMetric*</param>
-                                <param>io.openmessaging.benchmark.worker.WorkerStats*</param>
+                                <param>io.github.mihkels.omb.RateController*</param>
+                                <param>io.github.mihkels.omb.Thresholds*</param>
+                                <param>io.github.mihkels.omb.Workload</param>
+                                <param>io.github.mihkels.omb.Workload$*</param>
+                                <param>io.github.mihkels.omb.ResultsToCsv*</param>
+                                <param>io.github.mihkels.omb.plugin.ArtifactCoordinates*</param>
+                                <param>io.github.mihkels.omb.plugin.PluginDescriptor*</param>
+                                <param>io.github.mihkels.omb.utils.*</param>
+                                <param>io.github.mihkels.omb.worker.commands.*</param>
+                                <param>io.github.mihkels.omb.worker.jackson.*</param>
+                                <param>io.github.mihkels.omb.worker.JvmOptions*</param>
+                                <param>io.github.mihkels.omb.worker.LatencyMetric*</param>
+                                <param>io.github.mihkels.omb.worker.WorkerStats*</param>
                             </targetClasses>
                             <excludedClasses>
                                 <!-- Wall-clock helper; mutants only change elapsed-time readings -->
-                                <param>io.openmessaging.benchmark.utils.Timer*</param>
+                                <param>io.github.mihkels.omb.utils.Timer*</param>
                                 <!-- File-system permissions, not logic -->
-                                <param>io.openmessaging.benchmark.utils.SecureTempFiles*</param>
+                                <param>io.github.mihkels.omb.utils.SecureTempFiles*</param>
                             </excludedClasses>
                             <targetTests>
-                                <param>io.openmessaging.benchmark.RateControllerTest</param>
-                                <param>io.openmessaging.benchmark.ThresholdsTest</param>
-                                <param>io.openmessaging.benchmark.WorkloadTest</param>
-                                <param>io.openmessaging.benchmark.ResultsToCsvTest</param>
-                                <param>io.openmessaging.benchmark.plugin.ArtifactCoordinatesTest</param>
-                                <param>io.openmessaging.benchmark.plugin.PluginDescriptorTest</param>
-                                <param>io.openmessaging.benchmark.utils.*Test</param>
-                                <param>io.openmessaging.benchmark.worker.commands.*Test</param>
-                                <param>io.openmessaging.benchmark.worker.jackson.*Test</param>
-                                <param>io.openmessaging.benchmark.worker.JvmOptionsTest</param>
-                                <param>io.openmessaging.benchmark.worker.LatencyMetricTest</param>
-                                <param>io.openmessaging.benchmark.worker.WorkerStatsTest</param>
+                                <param>io.github.mihkels.omb.RateControllerTest</param>
+                                <param>io.github.mihkels.omb.ThresholdsTest</param>
+                                <param>io.github.mihkels.omb.WorkloadTest</param>
+                                <param>io.github.mihkels.omb.ResultsToCsvTest</param>
+                                <param>io.github.mihkels.omb.plugin.ArtifactCoordinatesTest</param>
+                                <param>io.github.mihkels.omb.plugin.PluginDescriptorTest</param>
+                                <param>io.github.mihkels.omb.utils.*Test</param>
+                                <param>io.github.mihkels.omb.worker.commands.*Test</param>
+                                <param>io.github.mihkels.omb.worker.jackson.*Test</param>
+                                <param>io.github.mihkels.omb.worker.JvmOptionsTest</param>
+                                <param>io.github.mihkels.omb.worker.LatencyMetricTest</param>
+                                <param>io.github.mihkels.omb.worker.WorkerStatsTest</param>
                             </targetTests>
                             <excludedTestClasses>
-                                <param>io.openmessaging.benchmark.utils.TimerTest</param>
-                                <param>io.openmessaging.benchmark.utils.SecureTempFilesTest</param>
+                                <param>io.github.mihkels.omb.utils.TimerTest</param>
+                                <param>io.github.mihkels.omb.utils.SecureTempFilesTest</param>
                             </excludedTestClasses>
                         </configuration>
                     </plugin>

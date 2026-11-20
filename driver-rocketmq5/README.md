@@ -20,7 +20,7 @@ consumer groups are created with the classic admin API (`rocketmq-tools` 5.1.0) 
 server and brokers. It can also send delay messages.
 
 - Plugin ID: `rocketmq5`
-- `driverClass`: `io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.rocketmq.RocketMQ5BenchmarkDriver`
 - Config: [`rocketmq.yaml`](rocketmq.yaml). The file has the same name as the classic plugin's
   config, so always use the full path `driver-rocketmq5/rocketmq.yaml`.
 

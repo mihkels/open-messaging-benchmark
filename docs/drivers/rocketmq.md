@@ -24,7 +24,7 @@ see [RocketMQ 5](rocketmq5.md).
 |-------------------|------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `rocketmq`                                                                                                       |
 | Module            | `driver-rocketmq`                                                                                                |
-| `driverClass`     | `io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver`                                             |
+| `driverClass`     | `io.github.mihkels.omb.driver.rocketmq.RocketMQBenchmarkDriver`                                                  |
 | Shipped config    | `driver-rocketmq/rocketmq.yaml`                                                                                  |
 | Client library    | `rocketmq-client` and `rocketmq-tools` 5.5.1, `rocketmq-acl` 5.3.2                                               |
 | Tested broker     | `apache/rocketmq:5.3.2`: one name server and one broker (Compose stack `rocketmq`)                               |
@@ -104,7 +104,7 @@ docker run -d --name broker --network rocketmq -p 10911:10911 \
 
 ```yaml
 name: RocketMQ
-driverClass: io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.rocketmq.RocketMQBenchmarkDriver
 clusterName: DefaultCluster
 namesrvAddr: 127.0.0.1:9876
 vipChannelEnabled: false
@@ -233,7 +233,7 @@ See also [Troubleshooting](../guides/troubleshooting.md) and [Results](../guides
 
 Source and configuration files:
 
-- Driver source: [`driver-rocketmq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rocketmq/src/main/java/io/openmessaging/benchmark/driver/rocketmq)
+- Driver source: [`driver-rocketmq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rocketmq/src/main/java/io/github/mihkels/omb/driver/rocketmq)
 - Shipped config: [`rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-rocketmq/rocketmq.yaml)
 - Compose driver config: [`drivers/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rocketmq.yaml)
 - Compose stack: [`stacks/rocketmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rocketmq.yaml)

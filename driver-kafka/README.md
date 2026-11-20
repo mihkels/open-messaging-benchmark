@@ -26,7 +26,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/kafka.md#local-docker-compos
 ## Plugin and configuration files
 
 - Plugin ID: `kafka`
-- `driverClass`: `io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`
 - Example configurations in this directory: `kafka-latency.yaml`, `kafka-throughput.yaml`,
   `kafka-no-linger.yaml`, `kafka-sync.yaml`, `kafka-big-batches*.yaml`, `kafka-compression-*.yaml` and
   `kafka-exactly-once.yaml`. The full page compares them.

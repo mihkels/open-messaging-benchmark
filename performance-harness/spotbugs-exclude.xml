@@ -17,7 +17,7 @@
 <FindBugsFilter>
     <!-- JMH generates padding fields and execution scaffolding, not application logic. -->
     <Match>
-        <Class name="~io\.openmessaging\.benchmark\.(worker|driver)\.jmh_generated\..*" />
+        <Class name="~io\.github\.mihkels\.omb\.(worker|driver)\.jmh_generated\..*" />
     </Match>
     <!--
         This harness-only producer returns an already-completed future solely to MessageProducer,
@@ -25,7 +25,7 @@
         allocation from this completed-future accounting benchmark.
     -->
     <Match>
-        <Class name="io.openmessaging.benchmark.worker.WorkerHotPathBenchmark$Fixture$1" />
+        <Class name="io.github.mihkels.omb.worker.WorkerHotPathBenchmark$Fixture$1" />
         <Method name="sendAsync" />
         <Bug pattern="EI_EXPOSE_REP" />
     </Match>

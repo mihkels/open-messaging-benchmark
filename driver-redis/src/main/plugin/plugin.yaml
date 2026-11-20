@@ -19,7 +19,7 @@ version: ${project.version}
 driverApiVersion: 2
 javaVersion: ${maven.compiler.release}
 drivers:
-  - io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+  - io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver
 classpath:
   - ${project.build.finalName}.jar
   - lib/*.jar

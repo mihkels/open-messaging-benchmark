@@ -20,13 +20,13 @@ benchmarks, start with the [Quickstart](../getting-started/quickstart.md) and
 [Distributed runs](../getting-started/distributed-runs.md).
 
 The classes mentioned here are in
-[`benchmark-framework/src/main/java/io/openmessaging/benchmark`](https://github.com/mihkels/open-messaging-benchmark/tree/main/benchmark-framework/src/main/java/io/openmessaging/benchmark),
+[`benchmark-framework/src/main/java/io/github/mihkels/omb`](https://github.com/mihkels/open-messaging-benchmark/tree/main/benchmark-framework/src/main/java/io/github/mihkels/omb),
 mostly in the `worker` and `plugin` packages.
 
 ## Components at a glance
 
 ```text
-coordinator JVM: bin/benchmark  (io.openmessaging.benchmark.Benchmark)
+coordinator JVM: bin/benchmark  (io.github.mihkels.omb.Benchmark)
   WorkloadGenerator --> Worker
                           |
       local mode          |          distributed mode (--workers / --workers-file)
@@ -54,11 +54,11 @@ driver JVM  (DriverProcessMain)
 
 The runtime uses three kinds of JVM:
 
-|     JVM     |                      Main class                       |                             Started by                              |                           Classpath                           |
-|-------------|-------------------------------------------------------|---------------------------------------------------------------------|---------------------------------------------------------------|
-| Coordinator | `io.openmessaging.benchmark.Benchmark`                | `bin/benchmark`                                                     | Benchmark core                                                |
-| Supervisor  | `io.openmessaging.benchmark.worker.BenchmarkWorker`   | `bin/benchmark-worker`                                              | Benchmark core                                                |
-| Driver      | `io.openmessaging.benchmark.worker.DriverProcessMain` | `ProcessWorker`, in the coordinator (local mode) or in a supervisor | Benchmark core plus the jars of the selected plugin bundle(s) |
+|     JVM     |                    Main class                    |                             Started by                              |                           Classpath                           |
+|-------------|--------------------------------------------------|---------------------------------------------------------------------|---------------------------------------------------------------|
+| Coordinator | `io.github.mihkels.omb.Benchmark`                | `bin/benchmark`                                                     | Benchmark core                                                |
+| Supervisor  | `io.github.mihkels.omb.worker.BenchmarkWorker`   | `bin/benchmark-worker`                                              | Benchmark core                                                |
+| Driver      | `io.github.mihkels.omb.worker.DriverProcessMain` | `ProcessWorker`, in the coordinator (local mode) or in a supervisor | Benchmark core plus the jars of the selected plugin bundle(s) |
 
 Drivers never appear on the coordinator or supervisor classpath.
 
@@ -98,7 +98,7 @@ For each workload and each driver file, the coordinator:
 ## The `Worker` interface
 
 Every layer implements
-[`Worker`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/Worker.java).
+[`Worker`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/worker/Worker.java).
 The same calls therefore pass through the ensemble, over HTTP, through the supervisor and into the
 driver process.
 
@@ -122,7 +122,7 @@ scripts keep working.
 
 ### `WorkerHandler` routes
 
-[`WorkerHandler`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/WorkerHandler.java)
+[`WorkerHandler`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/worker/WorkerHandler.java)
 maps HTTP routes to `Worker` methods. The supervisor and the driver process serve the same routes.
 
 | Method |          Path           |                                        `Worker` call                                        |
@@ -156,7 +156,7 @@ JSON string, of a driver YAML file that already exists on the same host.
 
 ## Distributed mode (`DistributedWorkersEnsemble`)
 
-[`DistributedWorkersEnsemble`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/DistributedWorkersEnsemble.java)
+[`DistributedWorkersEnsemble`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/worker/DistributedWorkersEnsemble.java)
 needs at least two workers. It takes the workers in the order given on the command line and splits
 them into producer workers (the start of the list) and consumer workers (the rest):
 
@@ -195,7 +195,7 @@ Two consequences matter for driver authors:
 
 ## Isolated driver JVM (`ProcessWorker` and `DriverProcessMain`)
 
-[`ProcessWorker`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/ProcessWorker.java)
+[`ProcessWorker`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/worker/ProcessWorker.java)
 runs the selected driver in a child JVM. It resolves the bundle(s) and classpath and delegates the
 child JVM to the package-private `DriverProcess`. On every `initializeDriver` call:
 
@@ -223,7 +223,7 @@ empty list, because driver configs arrive over the worker API and both would let
 files. All settings are listed in
 [Runtime and plugins](../reference/runtime-and-plugins.md).
 
-[`DriverProcessMain`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/worker/DriverProcessMain.java)
+[`DriverProcessMain`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/worker/DriverProcessMain.java)
 creates a `LocalWorker` with its own `PrometheusMeterRegistry` and serves the `WorkerHandler` routes
 on an ephemeral `127.0.0.1` port. It writes that port atomically to the `--port-file` and never
 listens on a non-loopback address.
@@ -242,7 +242,7 @@ Process lifetime:
 
 ## Plugin discovery and the shared runtime
 
-[`PluginRegistry`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/PluginRegistry.java)
+[`PluginRegistry`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/PluginRegistry.java)
 discovers bundles each time a driver is initialized. It searches these locations in order:
 
 1. `<home>/drivers/*`, the binary distribution layout;
@@ -264,7 +264,7 @@ Discovery rejects a bundle whose `driverApiVersion` differs from `DriverApiVersi
 `2`, after the SPI's `initialize` switched to Micrometer `MeterRegistry`), so a stale bundle fails
 before its driver JVM starts.
 
-[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
+[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/RuntimeClasspath.java)
 puts the benchmark core first, followed by the bundle jars. The core is the artifact list recorded at
 build time in `META-INF/omb/worker-runtime-artifacts.txt` (read by `HostRuntime`).
 [`benchmark-framework/pom.xml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/pom.xml)

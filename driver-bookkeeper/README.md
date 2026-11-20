@@ -21,7 +21,7 @@ back by log readers. Namespace and log metadata live in ZooKeeper. The plugin do
 ledger API.
 
 - Plugin ID: `bookkeeper`
-- `driverClass`: `io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkDriver`
 - Config: [`bookkeeper.yaml`](bookkeeper.yaml) (`dlogUri` plus a `dlogConf` properties block)
 
 Full documentation: <https://mihkels.github.io/open-messaging-benchmark/drivers/bookkeeper/>

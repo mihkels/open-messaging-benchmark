@@ -21,7 +21,7 @@
         </Console>
     </Appenders>
     <Loggers>
-        <Logger name="io.openmessaging" level="debug"/>
+        <Logger name="io.github.mihkels.omb" level="debug"/>
         <Root level="info">
             <AppenderRef ref="Console"/>
         </Root>

@@ -19,7 +19,7 @@ API to create a tenant (if missing), a new namespace with the configured persist
 deduplication policies, and partitioned topics.
 
 - Plugin ID: `pulsar`
-- `driverClass`: `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver`
 - Configs: [`pulsar.yaml`](pulsar.yaml), [`pulsar-effectively-once.yaml`](pulsar-effectively-once.yaml)
   (broker-side deduplication only; no transactions)
 

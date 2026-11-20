@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: Redis
-driverClass: io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver
 
 # Redis client-specific configuration
 redisPort: 6379

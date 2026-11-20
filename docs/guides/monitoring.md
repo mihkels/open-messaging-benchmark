@@ -219,7 +219,7 @@ Each phase change logs one event with `"event": "phase"`, the new `phase`, the r
 `@timestamp`:
 
 ```json
-{"@timestamp":"2026-01-01T10:00:00.000Z","log.level":"INFO","message":"Run phase: MEASURE","log.logger":"io.openmessaging.benchmark.WorkloadGenerator","event":"phase","phase":"MEASURE","run_id":"018f...","workload":"quick","driver":"Kafka"}
+{"@timestamp":"2026-01-01T10:00:00.000Z","log.level":"INFO","message":"Run phase: MEASURE","log.logger":"io.github.mihkels.omb.WorkloadGenerator","event":"phase","phase":"MEASURE","run_id":"018f...","workload":"quick","driver":"Kafka"}
 ```
 
 Workers log `Run phase: ...` too and expose the current phase as the `benchmark_phase` gauge, so a

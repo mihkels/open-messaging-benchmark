@@ -25,7 +25,7 @@ server and client; see [NATS Streaming](nats-streaming.md).
 |------------------------|---------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `nats`                                                                                                  |
 | Module                 | `driver-nats`                                                                                           |
-| `driverClass`          | `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`                                            |
+| `driverClass`          | `io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver`                                                 |
 | Example config shipped | `driver-nats/nats.yaml` (`localhost:4222`, `replicationFactor: 3`, file storage by default)             |
 | Tested broker          | `nats:2.11-alpine` with `-js` (Compose stack `nats`, NATS 2.11 with JetStream)                          |
 | Regression cases       | `nats-contract` (file storage), `nats-memory-fanout` (memory storage, 2 subjects x 2 durable consumers) |
@@ -88,7 +88,7 @@ The shipped `driver-nats/nats.yaml`:
 
 ```yaml
 name: NATS
-driverClass: io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver
 
 natsHostUrl: localhost:4222
 
@@ -100,7 +100,7 @@ explicit storage:
 
 ```yaml
 name: NATS
-driverClass: io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver
 natsHostUrl: nats://localhost:4222
 replicationFactor: 1
 storageType: file
@@ -237,7 +237,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-nats/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats/src/main/java/io/openmessaging/benchmark/driver/nats)
+- Driver source: [`driver-nats/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats/src/main/java/io/github/mihkels/omb/driver/nats)
 - Shipped config: [`driver-nats/nats.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nats/nats.yaml)
 - Regression configs: [`nats-file.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-file.yaml), [`nats-memory.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-memory.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nats.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nats.yaml)

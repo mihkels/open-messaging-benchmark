@@ -57,7 +57,7 @@ classpath:
 ```
 
 The fields, as defined by
-[`PluginDescriptor`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/PluginDescriptor.java):
+[`PluginDescriptor`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/PluginDescriptor.java):
 
 |           Field            | Required |                                                     Rules                                                     |
 |----------------------------|----------|---------------------------------------------------------------------------------------------------------------|
@@ -176,7 +176,9 @@ plugin built against such a version needs no local reactor build:
 Check [the Central listing](https://central.sonatype.com/artifact/io.github.mihkels.omb/driver-api)
 for the published versions. A release that did not change `driver-api` is not on Central; use the
 closest earlier version, which has the same API, or `mvn install` the tag. Up to 0.6.0 the groupId
-was `io.openmessaging.benchmark`, and those versions were never on Central.
+and the Java packages were `io.openmessaging.benchmark`; those versions are not on Central. To
+migrate a plugin, change the dependency and replace `io.openmessaging.benchmark` with
+`io.github.mihkels.omb` in imports and in `plugin.yaml`.
 
 ## Compatibility rules
 
@@ -201,7 +203,7 @@ every version-1 bundle. To upgrade an external plugin:
    worker.
 
 All bundles run on top of the benchmark core in the driver JVM.
-[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/openmessaging/benchmark/plugin/RuntimeClasspath.java)
+[`RuntimeClasspath`](https://github.com/mihkels/open-messaging-benchmark/blob/main/benchmark-framework/src/main/java/io/github/mihkels/omb/plugin/RuntimeClasspath.java)
 builds the classpath with the core first and checks every bundle jar that contains Maven metadata
 (`META-INF/maven/**/pom.properties`). Jars without that metadata are added as they are.
 
@@ -216,7 +218,7 @@ builds the classpath with the core first and checks every bundle jar that contai
 
 Boundary artifacts are the types shared between the benchmark and the driver:
 
-- `io.github.mihkels.omb:driver-api` (and `io.openmessaging.benchmark:driver-api`, its groupId up to 0.6.0)
+- `io.github.mihkels.omb:driver-api`
 - `io.micrometer:micrometer-core`, `micrometer-commons`, `micrometer-observation`,
   `micrometer-registry-prometheus`
 - `io.prometheus:prometheus-metrics-core`, `prometheus-metrics-model`

@@ -27,7 +27,7 @@ and each subscription is a queue group.
 |------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `nats-streaming`                                                                                                                                                |
 | Module                 | `driver-nats-streaming`                                                                                                                                         |
-| `driverClass`          | `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`                                                                                  |
+| `driverClass`          | `io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver`                                                                                       |
 | Example config shipped | `driver-nats-streaming/nats-streaming.yaml` (`nats://localhost:4222`, cluster ID `mycluster`)                                                                   |
 | Tested broker          | `nats-streaming:0.25.6` with in-memory store (Compose stack `nats-streaming`)                                                                                   |
 | Regression cases       | `nats-streaming-contract` (queue subscription with acknowledgements), `nats-streaming-fanout` (2 channels x 2 queue groups)                                     |
@@ -35,7 +35,7 @@ and each subscription is a queue group.
 
 > **Renamed in 0.3.0:** the driver package moved from `driver.natsStreaming` to `driver.natsstreaming` (#175).
 > Update `driverClass` in existing driver YAML files to
-> `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver`; the old name no longer resolves.
+> `io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver`; the old name no longer resolves.
 
 ## Local Docker Compose
 
@@ -94,7 +94,7 @@ The shipped `driver-nats-streaming/nats-streaming.yaml`:
 
 ```yaml
 name: Nats Streaming
-driverClass: io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver
 
 natsHostUrl: nats://localhost:4222
 clusterId: mycluster
@@ -221,7 +221,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-nats-streaming/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats-streaming/src/main/java/io/openmessaging/benchmark/driver/natsstreaming)
+- Driver source: [`driver-nats-streaming/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-nats-streaming/src/main/java/io/github/mihkels/omb/driver/natsstreaming)
 - Shipped config: [`driver-nats-streaming/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-nats-streaming/nats-streaming.yaml)
 - Regression config: [`e2e-tests/compose/drivers/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/nats-streaming.yaml)
 - Stack file: [`e2e-tests/compose/stacks/nats-streaming.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/nats-streaming.yaml)

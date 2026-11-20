@@ -21,7 +21,7 @@ uses the Pulsar admin client to create a tenant, a namespace and partitioned top
 |-------------------|------------------------------------------------------------------------------------------------------------------|
 | Plugin ID         | `pulsar`                                                                                                         |
 | Module            | `driver-pulsar`                                                                                                  |
-| `driverClass`     | `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`                                                 |
+| `driverClass`     | `io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver`                                                      |
 | Shipped configs   | `driver-pulsar/pulsar.yaml`, `driver-pulsar/pulsar-effectively-once.yaml`                                        |
 | Client library    | Pulsar Java client and admin client 4.2.5                                                                        |
 | Tested broker     | `apachepulsar/pulsar:4.0.6`, standalone mode (Compose stack `pulsar`)                                            |
@@ -113,7 +113,7 @@ default 8 rather than 16):
 
 ```yaml
 name: Pulsar
-driverClass: io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver
 
 client:
   serviceUrl: pulsar://localhost:6650
@@ -325,7 +325,7 @@ See also [Troubleshooting](../guides/troubleshooting.md) and [Results](../guides
 
 Source and configuration files:
 
-- Driver source: [`driver-pulsar/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pulsar/src/main/java/io/openmessaging/benchmark/driver/pulsar)
+- Driver source: [`driver-pulsar/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-pulsar/src/main/java/io/github/mihkels/omb/driver/pulsar)
 - Shipped configs: [`pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pulsar/pulsar.yaml), [`pulsar-effectively-once.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-pulsar/pulsar-effectively-once.yaml)
 - Compose driver configs: [`pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar.yaml), [`pulsar-shared-nobatch.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar-shared-nobatch.yaml), [`pulsar-key-shared-dedup.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/pulsar-key-shared-dedup.yaml)
 - Compose stack: [`stacks/pulsar.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/pulsar.yaml)

@@ -16,7 +16,7 @@ limitations under the License.
 
 A driver adapts one messaging system to the benchmark. It implements the service provider interface
 (SPI) in the
-[`driver-api`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-api/src/main/java/io/openmessaging/benchmark/driver)
+[`driver-api`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-api/src/main/java/io/github/mihkels/omb/driver)
 module. The benchmark generates load, measures it and reports the results. The driver only creates
 topics, producers and consumers, and moves bytes.
 

@@ -1,0 +1,193 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.driver.nats;
+
+import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.BenchmarkDriver;
+import io.github.mihkels.omb.driver.BenchmarkProducer;
+import io.github.mihkels.omb.driver.ConsumerCallback;
+import io.github.mihkels.omb.driver.DriverConfigs;
+import io.github.mihkels.omb.driver.Failures;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.nats.client.Connection;
+import io.nats.client.Dispatcher;
+import io.nats.client.ErrorListener;
+import io.nats.client.JetStream;
+import io.nats.client.JetStreamManagement;
+import io.nats.client.Message;
+import io.nats.client.Nats;
+import io.nats.client.Options;
+import io.nats.client.PushSubscribeOptions;
+import io.nats.client.api.ConsumerConfiguration;
+import io.nats.client.api.StreamConfiguration;
+import io.nats.client.api.StreamInfo;
+import io.nats.client.impl.Headers;
+import io.nats.client.support.JsonUtils;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@SuppressWarnings("unused")
+public class NatsBenchmarkDriver implements BenchmarkDriver {
+    private NatsConfig config;
+    private Connection connection;
+    private JetStream jetStream;
+    private JetStreamManagement jetStreamManagement;
+
+    @Override
+    public void initialize(Path configurationFile, MeterRegistry statsLogger)
+            throws IOException, InterruptedException {
+        config = DriverConfigs.read(configurationFile, NatsConfig.class);
+        String natsHostUrl = config.natsHostUrl;
+        if (natsHostUrl == null) {
+            throw new IllegalArgumentException("NATS config needs natsHostUrl");
+        }
+        Connection connected = null;
+        try {
+            connected =
+                    Nats.connect(
+                            new Options.Builder()
+                                    .server(natsHostUrl)
+                                    .maxReconnects(-1) // unlimited
+                                    .reconnectWait(Duration.ofSeconds(1))
+                                    .connectionTimeout(Duration.ofSeconds(5))
+                                    .pingInterval(Duration.ofSeconds(60))
+                                    .errorListener(
+                                            new ErrorListener() {
+                                                @Override
+                                                public void errorOccurred(Connection conn, String error) {
+                                                    log.error("Error on connection {}: {}", conn, error);
+                                                }
+
+                                                @Override
+                                                public void exceptionOccurred(Connection conn, Exception exp) {
+                                                    log.error("Exception on connection {}", conn, exp);
+                                                }
+                                            })
+                                    .build());
+            this.jetStream = connected.jetStream();
+            this.jetStreamManagement = connected.jetStreamManagement();
+            this.connection = connected;
+        } catch (IOException | InterruptedException | RuntimeException e) {
+            Failures.closeAfterFailure(e, connected);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public boolean supportsHeaders() {
+        return true;
+    }
+
+    @Override
+    public String getTopicNamePrefix() {
+        return "Nats-benchmark";
+    }
+
+    @Override
+    public CompletableFuture<Void> createTopic(String topic, int partitions) {
+        try {
+            JetStreamManagement jsm = connection.jetStreamManagement();
+            StreamInfo streamInfo =
+                    jsm.addStream(
+                            StreamConfiguration.builder()
+                                    .name(topic)
+                                    .subjects(topic)
+                                    .storageType(config.storageType)
+                                    .maxBytes(config.maxBytes)
+                                    .replicas(config.replicationFactor)
+                                    .build());
+            if (log.isInfoEnabled()) {
+                log.info("Created stream {} -- {}", topic, JsonUtils.getFormatted(streamInfo));
+            }
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            CompletableFuture<Void> f = new CompletableFuture<>();
+            f.completeExceptionally(e);
+            return f;
+        }
+    }
+
+    @Override
+    public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
+        return CompletableFuture.completedFuture(new NatsBenchmarkProducer(jetStream, topic));
+    }
+
+    @Override
+    public CompletableFuture<BenchmarkConsumer> createConsumer(
+            String topic, String subscriptionName, ConsumerCallback consumerCallback) {
+
+        Dispatcher dispatcher = null;
+        try {
+            ConsumerConfiguration cc =
+                    ConsumerConfiguration.builder()
+                            .durable("durable-" + subscriptionName)
+                            .filterSubject(topic)
+                            .deliverSubject("delivery-subject-" + subscriptionName)
+                            .deliverGroup("group-" + subscriptionName)
+                            .build();
+            PushSubscribeOptions pso = PushSubscribeOptions.builder().configuration(cc).build();
+            jetStreamManagement.addOrUpdateConsumer(topic, cc);
+            dispatcher = Objects.requireNonNull(connection.createDispatcher(), "dispatcher");
+            Objects.requireNonNull(
+                    jetStream.subscribe(
+                            topic,
+                            dispatcher,
+                            (Message msg) -> {
+                                consumerCallback.messageReceived(msg.getData(), publishTimestamp(msg));
+                                msg.ack();
+                            },
+                            false,
+                            pso),
+                    "JetStream subscription");
+            return CompletableFuture.completedFuture(new NatsBenchmarkConsumer(connection, dispatcher));
+        } catch (Exception e) {
+            Dispatcher created = dispatcher;
+            Failures.closeAfterFailure(
+                    e, created == null ? null : () -> connection.closeDispatcher(created));
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    @Override
+    public void close() throws InterruptedException {
+        if (this.connection != null) {
+            this.connection.close();
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(NatsBenchmarkDriver.class);
+
+    // A message without a readable timestamp header is counted but gives no latency sample.
+    static long publishTimestamp(Message msg) {
+        Headers headers = msg.getHeaders();
+        String value =
+                headers == null ? null : headers.getFirst(NatsBenchmarkProducer.PUBLISH_TIMESTAMP_HEADER);
+        if (value != null) {
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException _) {
+                // fall through to the placeholder
+            }
+        }
+        return ConsumerCallback.NO_PUBLISH_TIMESTAMP;
+    }
+}

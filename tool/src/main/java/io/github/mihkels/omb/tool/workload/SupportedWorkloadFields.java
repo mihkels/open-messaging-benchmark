@@ -1,0 +1,197 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.github.mihkels.omb.tool.workload;
+
+import io.github.mihkels.omb.Workload;
+import io.github.mihkels.omb.utils.distributor.KeyDistribution;
+import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.ObjIntConsumer;
+import org.jspecify.annotations.Nullable;
+
+/** The workload fields supported by templates, including their name-format representations. */
+final class SupportedWorkloadFields {
+    private static final long MAX_PRODUCER_RATE = 10_000_000;
+
+    // Order defines the Cartesian-product traversal; the last field varies fastest.
+    static final List<SweepField> SWEEP_FIELDS =
+            List.of(
+                    new SweepField(
+                            "topics",
+                            WorkloadSetTemplate::topics,
+                            1,
+                            (workload, value) -> workload.topics = value,
+                            workload -> countToDisplaySize(workload.topics)),
+                    new SweepField(
+                            "partitionsPerTopic",
+                            WorkloadSetTemplate::partitionsPerTopic,
+                            1,
+                            (workload, value) -> workload.partitionsPerTopic = value,
+                            workload -> countToDisplaySize(workload.partitionsPerTopic)),
+                    new SweepField(
+                            "messageSize",
+                            WorkloadSetTemplate::messageSize,
+                            1024,
+                            (workload, value) -> workload.messageSize = value,
+                            workload -> countToDisplaySize(workload.messageSize)),
+                    new SweepField(
+                            "subscriptionsPerTopic",
+                            WorkloadSetTemplate::subscriptionsPerTopic,
+                            1,
+                            (workload, value) -> workload.subscriptionsPerTopic = value,
+                            workload -> countToDisplaySize(workload.subscriptionsPerTopic)),
+                    new SweepField(
+                            "producersPerTopic",
+                            WorkloadSetTemplate::producersPerTopic,
+                            1,
+                            (workload, value) -> workload.producersPerTopic = value,
+                            workload -> countToDisplaySize(workload.producersPerTopic)),
+                    new SweepField(
+                            "consumerPerSubscription",
+                            WorkloadSetTemplate::consumerPerSubscription,
+                            1,
+                            (workload, value) -> workload.consumerPerSubscription = value,
+                            workload -> countToDisplaySize(workload.consumerPerSubscription)),
+                    new SweepField(
+                            "producerRate",
+                            WorkloadSetTemplate::producerRate,
+                            10000,
+                            (workload, value) -> workload.producerRate = value,
+                            SupportedWorkloadFields::producerRateName));
+
+    private static final List<FixedField> FIXED_FIELDS =
+            List.of(
+                    new FixedField(
+                            "keyDistributor",
+                            (template, workload) -> workload.keyDistributor = template.keyDistributor(),
+                            workload -> workload.keyDistributor),
+                    new FixedField(
+                            "keyDistribution",
+                            (template, workload) -> workload.keyDistribution = template.keyDistribution(),
+                            SupportedWorkloadFields::keyDistributionName),
+                    new FixedField(
+                            "payloadFile",
+                            (template, workload) -> workload.payloadFile = template.payloadFile(),
+                            workload -> workload.payloadFile),
+                    new FixedField(
+                            "useRandomizedPayloads",
+                            (template, workload) ->
+                                    workload.useRandomizedPayloads = template.useRandomizedPayloads(),
+                            workload -> workload.useRandomizedPayloads),
+                    new FixedField(
+                            "randomBytesRatio",
+                            (template, workload) -> workload.randomBytesRatio = template.randomBytesRatio(),
+                            workload -> workload.randomBytesRatio),
+                    new FixedField(
+                            "randomizedPayloadPoolSize",
+                            (template, workload) ->
+                                    workload.randomizedPayloadPoolSize = template.randomizedPayloadPoolSize(),
+                            workload -> countToDisplaySize(workload.randomizedPayloadPoolSize)),
+                    new FixedField(
+                            "consumerBacklogSizeGB",
+                            (template, workload) ->
+                                    workload.consumerBacklogSizeGB = template.consumerBacklogSizeGB(),
+                            workload -> countToDisplaySize(workload.consumerBacklogSizeGB)),
+                    new FixedField(
+                            "testDurationMinutes",
+                            (template, workload) -> workload.testDurationMinutes = template.testDurationMinutes(),
+                            workload -> workload.testDurationMinutes),
+                    new FixedField(
+                            "warmupDurationMinutes",
+                            (template, workload) ->
+                                    workload.warmupDurationMinutes = template.warmupDurationMinutes(),
+                            workload -> workload.warmupDurationMinutes),
+                    // Last, so a profile overrides the producerRate sweep and testDurationMinutes
+                    new FixedField(
+                            "stages",
+                            (template, workload) -> {
+                                workload.stages = template.stages();
+                                if (workload.usesStages()) {
+                                    workload.producerRate = 0;
+                                    workload.testDurationMinutes = 0;
+                                }
+                            },
+                            workload -> workload.stages.size()));
+
+    private SupportedWorkloadFields() {}
+
+    static void applyFixedFields(WorkloadSetTemplate template, Workload workload) {
+        for (FixedField field : FIXED_FIELDS) {
+            field.assign().accept(template, workload);
+        }
+    }
+
+    static Map<String, @Nullable Object> nameVariables(Workload workload) {
+        Map<String, @Nullable Object> variables = new HashMap<>();
+        for (SweepField field : SWEEP_FIELDS) {
+            variables.put(field.name(), field.nameValue().apply(workload));
+        }
+        for (FixedField field : FIXED_FIELDS) {
+            variables.put(field.name(), field.nameValue().apply(workload));
+        }
+        return variables;
+    }
+
+    record SweepField(
+            String name,
+            Function<WorkloadSetTemplate, List<Integer>> templateValues,
+            int defaultValue,
+            ObjIntConsumer<Workload> assign,
+            Function<Workload, @Nullable Object> nameValue) {
+        List<Integer> valuesOrDefault(WorkloadSetTemplate template) {
+            List<Integer> values = templateValues.apply(template);
+            return values != null && !values.isEmpty() ? values : List.of(defaultValue);
+        }
+    }
+
+    private record FixedField(
+            String name,
+            BiConsumer<WorkloadSetTemplate, Workload> assign,
+            Function<Workload, @Nullable Object> nameValue) {}
+
+    // Effective Zipfian parameters in file-name-safe form, such as 10k-0.99; "none" for other
+    // distributors
+    private static String keyDistributionName(Workload workload) {
+        if (workload.keyDistributor != KeyDistributorType.ZIPFIAN) {
+            return "none";
+        }
+        KeyDistribution distribution = KeyDistribution.orDefault(workload.keyDistribution);
+        return countToDisplaySize(distribution.keys()) + "-" + distribution.exponent();
+    }
+
+    private static String producerRateName(Workload workload) {
+        if (workload.usesStages()) {
+            return "stages";
+        }
+        return workload.producerRate >= MAX_PRODUCER_RATE
+                ? "max-rate"
+                : countToDisplaySize(workload.producerRate);
+    }
+
+    private static String countToDisplaySize(long size) {
+        if (size / 1_000_000_000L > 0L) {
+            return size / 1_000_000_000L + "g";
+        } else if (size / 1_000_000L > 0L) {
+            return size / 1_000_000L + "m";
+        } else if (size / 1_000L > 0L) {
+            return size / 1_000 + "k";
+        } else {
+            return size + "";
+        }
+    }
+}

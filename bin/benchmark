@@ -14,4 +14,4 @@
 #
 
 # shellcheck source=bin/omb-launch.sh
-. "$(dirname "$0")/omb-launch.sh" benchmark io.openmessaging.benchmark.Benchmark "$@"
+. "$(dirname "$0")/omb-launch.sh" benchmark io.github.mihkels.omb.Benchmark "$@"

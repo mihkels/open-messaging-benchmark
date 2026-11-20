@@ -15,6 +15,6 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: Nsq
-driverClass: io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver
 nsqdHost: nsqd
 lookupHost: nsqlookupd

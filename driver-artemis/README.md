@@ -30,7 +30,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/artemis.md#local-docker-comp
 ## Plugin and configuration files
 
 - Plugin ID: `artemis`
-- `driverClass`: `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.artemis.ArtemisBenchmarkDriver`
 - Configuration: [`artemis.yaml`](artemis.yaml), with a single key, `brokerAddress`
   (`tcp://localhost:61616`). It accepts Artemis client URL parameters.
 

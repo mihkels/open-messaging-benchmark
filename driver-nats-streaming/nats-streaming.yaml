@@ -16,7 +16,7 @@
 
 
 name: Nats Streaming
-driverClass: io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver
 
 # RabbitMq client specific configurations
 

@@ -23,7 +23,7 @@ Local quickstarts: [Docker Compose](../docs/drivers/nsq.md#local-docker-compose)
 [kind cluster](../docs/drivers/nsq.md#local-kind-cluster).
 
 - Plugin ID: `nsq`
-- `driverClass`: `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`
+- `driverClass`: `io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver`
 - Shipped config: [`nsq.yaml`](nsq.yaml) (`localhost`)
 - Tested with: `nsqio/nsq:v1.3.0` ([stack file](../e2e-tests/compose/stacks/nsq.yaml))
 

@@ -16,7 +16,7 @@
 
 
 name: RabbitMQ
-driverClass: io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkDriver
 
 # RabbitMq client specific configurations
 

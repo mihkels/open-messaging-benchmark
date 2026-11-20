@@ -22,7 +22,7 @@ stream, selected with `queueType`.
 |------------------------|--------------------------------------------------------------------------------------------------------------------|
 | Plugin ID              | `rabbitmq`                                                                                                         |
 | Module                 | `driver-rabbitmq`                                                                                                  |
-| `driverClass`          | `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`                                               |
+| `driverClass`          | `io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkDriver`                                                    |
 | Example config shipped | `driver-rabbitmq/rabbitmq.yaml` (quorum queues, `amqp://localhost`)                                                |
 | Tested broker          | `rabbitmq:4.1-management` (Compose stack `rabbitmq`, RabbitMQ 4.1)                                                 |
 | Regression cases       | `rabbitmq-contract` (quorum), `rabbitmq-classic-fanout` (classic, persistent messages), `rabbitmq-stream` (stream) |
@@ -83,7 +83,7 @@ The shipped `driver-rabbitmq/rabbitmq.yaml`:
 
 ```yaml
 name: RabbitMQ
-driverClass: io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkDriver
 
 producerCreationDelay: 100
 producerCreationBatchSize: 5
@@ -259,7 +259,7 @@ General advice is in [Troubleshooting](../guides/troubleshooting.md); result int
 
 Source and configuration files:
 
-- Driver source: [`driver-rabbitmq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rabbitmq/src/main/java/io/openmessaging/benchmark/driver/rabbitmq)
+- Driver source: [`driver-rabbitmq/src/main/java`](https://github.com/mihkels/open-messaging-benchmark/tree/main/driver-rabbitmq/src/main/java/io/github/mihkels/omb/driver/rabbitmq)
 - Shipped config: [`driver-rabbitmq/rabbitmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/driver-rabbitmq/rabbitmq.yaml)
 - Regression configs: [`rabbitmq-quorum.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-quorum.yaml), [`rabbitmq-classic.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-classic.yaml), [`rabbitmq-stream.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/drivers/rabbitmq-stream.yaml)
 - Stack file: [`e2e-tests/compose/stacks/rabbitmq.yaml`](https://github.com/mihkels/open-messaging-benchmark/blob/main/e2e-tests/compose/stacks/rabbitmq.yaml)

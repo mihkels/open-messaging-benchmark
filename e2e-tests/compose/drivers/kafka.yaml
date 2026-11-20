@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: Kafka
-driverClass: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver
 replicationFactor: 1
 topicConfig: |
   min.insync.replicas=1

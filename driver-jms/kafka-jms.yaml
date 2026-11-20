@@ -15,7 +15,7 @@
 # yaml-language-server: $schema=https://mihkels.github.io/open-messaging-benchmark/reference/driver-schema.json
 
 name: JMS
-driverClass: io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver
 
 connectionFactoryClassName: io.confluent.kafka.jms.KafkaConnectionFactory
 connectionFactoryConfigurationParam: '{"bootstrap.servers":"localhost:9092","client.id":"benchmarks","allow.out.of.order.acknowledge":"true","group.id":"jmsconsumergroup1"}'
@@ -25,7 +25,7 @@ use20api: false
 
 # JMS API do not provide functions to admin the cluster
 # So we are going to delegate the initialization to another specific Driver
-delegateForAdminOperationsClassName: io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver
+delegateForAdminOperationsClassName: io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver
 
 # the code that handles this configuration is the KafkaBenchmarkDriver
 replicationFactor: 3

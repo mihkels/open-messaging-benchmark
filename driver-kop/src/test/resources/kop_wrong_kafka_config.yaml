@@ -15,7 +15,7 @@
 # The KoP config file whose kafka config is wrong (without required configs)
 
 name: Kafka-on-Pulsar
-driverClass: io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver
+driverClass: io.github.mihkels.omb.driver.kop.KopBenchmarkDriver
 
 kafkaConfig:
   linger.ms=1

@@ -20,23 +20,23 @@ driver configuration file selects the plugin through its `driverClass`. See
 
 ## Drivers
 
-|                  Driver                  |    Plugin ID     |                                 `driverClass`                                  |                        Shipped configurations                         |
-|------------------------------------------|------------------|--------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| [Apache Kafka](kafka.md)                 | `kafka`          | `io.openmessaging.benchmark.driver.kafka.KafkaBenchmarkDriver`                 | `driver-kafka/kafka-*.yaml` (14 files)                                |
-| [Kafka on Pulsar (KoP)](kop.md)          | `kop`            | `io.openmessaging.benchmark.driver.kop.KopBenchmarkDriver`                     | `kafka_to_kafka.yaml`, `kafka_to_pulsar.yaml`, `pulsar_to_kafka.yaml` |
-| [Apache Pulsar](pulsar.md)               | `pulsar`         | `io.openmessaging.benchmark.driver.pulsar.PulsarBenchmarkDriver`               | `pulsar.yaml`, `pulsar-effectively-once.yaml`                         |
-| [Apache BookKeeper](bookkeeper.md)       | `bookkeeper`     | `io.openmessaging.benchmark.driver.bookkeeper.DlogBenchmarkDriver`             | `bookkeeper.yaml`                                                     |
-| [Pravega](pravega.md)                    | `pravega`        | `io.openmessaging.benchmark.driver.pravega.PravegaBenchmarkDriver`             | `pravega.yaml`, `pravega-exactly-once.yaml`                           |
-| [RabbitMQ](rabbitmq.md)                  | `rabbitmq`       | `io.openmessaging.benchmark.driver.rabbitmq.RabbitMqBenchmarkDriver`           | `rabbitmq.yaml`                                                       |
-| [Apache ActiveMQ Artemis](artemis.md)    | `artemis`        | `io.openmessaging.benchmark.driver.artemis.ArtemisBenchmarkDriver`             | `artemis.yaml`                                                        |
-| [JMS](jms.md)                            | `jms`            | `io.openmessaging.benchmark.driver.jms.JMSBenchmarkDriver`                     | `artemis-jms*.yaml`, `pulsar-jms*.yaml`, `kafka-jms.yaml`             |
-| [NATS JetStream](nats.md)                | `nats`           | `io.openmessaging.benchmark.driver.nats.NatsBenchmarkDriver`                   | `nats.yaml`                                                           |
-| [NATS Streaming](nats-streaming.md)      | `nats-streaming` | `io.openmessaging.benchmark.driver.natsstreaming.NatsStreamingBenchmarkDriver` | `nats-streaming.yaml`                                                 |
-| [NSQ](nsq.md)                            | `nsq`            | `io.openmessaging.benchmark.driver.nsq.NsqBenchmarkDriver`                     | `nsq.yaml`                                                            |
-| [Redis Streams](redis.md)                | `redis`          | `io.openmessaging.benchmark.driver.redis.RedisBenchmarkDriver`                 | `redis.yaml`                                                          |
-| [Apache RocketMQ](rocketmq.md)           | `rocketmq`       | `io.openmessaging.benchmark.driver.rocketmq.RocketMQBenchmarkDriver`           | `driver-rocketmq/rocketmq.yaml`                                       |
-| [Apache RocketMQ 5 (gRPC)](rocketmq5.md) | `rocketmq5`      | `io.openmessaging.benchmark.driver.rocketmq.RocketMQ5BenchmarkDriver`          | `driver-rocketmq5/rocketmq.yaml`                                      |
-| [MQTT 5](mqtt5.md)                       | `mqtt5`          | `io.openmessaging.benchmark.driver.mqtt5.MqttBenchmarkDriver`                  | `mqtt5.yaml`                                                          |
+|                  Driver                  |    Plugin ID     |                               `driverClass`                               |                        Shipped configurations                         |
+|------------------------------------------|------------------|---------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| [Apache Kafka](kafka.md)                 | `kafka`          | `io.github.mihkels.omb.driver.kafka.KafkaBenchmarkDriver`                 | `driver-kafka/kafka-*.yaml` (14 files)                                |
+| [Kafka on Pulsar (KoP)](kop.md)          | `kop`            | `io.github.mihkels.omb.driver.kop.KopBenchmarkDriver`                     | `kafka_to_kafka.yaml`, `kafka_to_pulsar.yaml`, `pulsar_to_kafka.yaml` |
+| [Apache Pulsar](pulsar.md)               | `pulsar`         | `io.github.mihkels.omb.driver.pulsar.PulsarBenchmarkDriver`               | `pulsar.yaml`, `pulsar-effectively-once.yaml`                         |
+| [Apache BookKeeper](bookkeeper.md)       | `bookkeeper`     | `io.github.mihkels.omb.driver.bookkeeper.DlogBenchmarkDriver`             | `bookkeeper.yaml`                                                     |
+| [Pravega](pravega.md)                    | `pravega`        | `io.github.mihkels.omb.driver.pravega.PravegaBenchmarkDriver`             | `pravega.yaml`, `pravega-exactly-once.yaml`                           |
+| [RabbitMQ](rabbitmq.md)                  | `rabbitmq`       | `io.github.mihkels.omb.driver.rabbitmq.RabbitMqBenchmarkDriver`           | `rabbitmq.yaml`                                                       |
+| [Apache ActiveMQ Artemis](artemis.md)    | `artemis`        | `io.github.mihkels.omb.driver.artemis.ArtemisBenchmarkDriver`             | `artemis.yaml`                                                        |
+| [JMS](jms.md)                            | `jms`            | `io.github.mihkels.omb.driver.jms.JMSBenchmarkDriver`                     | `artemis-jms*.yaml`, `pulsar-jms*.yaml`, `kafka-jms.yaml`             |
+| [NATS JetStream](nats.md)                | `nats`           | `io.github.mihkels.omb.driver.nats.NatsBenchmarkDriver`                   | `nats.yaml`                                                           |
+| [NATS Streaming](nats-streaming.md)      | `nats-streaming` | `io.github.mihkels.omb.driver.natsstreaming.NatsStreamingBenchmarkDriver` | `nats-streaming.yaml`                                                 |
+| [NSQ](nsq.md)                            | `nsq`            | `io.github.mihkels.omb.driver.nsq.NsqBenchmarkDriver`                     | `nsq.yaml`                                                            |
+| [Redis Streams](redis.md)                | `redis`          | `io.github.mihkels.omb.driver.redis.RedisBenchmarkDriver`                 | `redis.yaml`                                                          |
+| [Apache RocketMQ](rocketmq.md)           | `rocketmq`       | `io.github.mihkels.omb.driver.rocketmq.RocketMQBenchmarkDriver`           | `driver-rocketmq/rocketmq.yaml`                                       |
+| [Apache RocketMQ 5 (gRPC)](rocketmq5.md) | `rocketmq5`      | `io.github.mihkels.omb.driver.rocketmq.RocketMQ5BenchmarkDriver`          | `driver-rocketmq5/rocketmq.yaml`                                      |
+| [MQTT 5](mqtt5.md)                       | `mqtt5`          | `io.github.mihkels.omb.driver.mqtt5.MqttBenchmarkDriver`                  | `mqtt5.yaml`                                                          |
 
 Shipped configuration files are in the driver's `driver-<id>/` directory. They are examples: their
 broker addresses, replication settings and cluster names usually need changing for your

@@ -4,6 +4,51 @@ Only the latest release keeps its distribution tarball and `SHA256SUMS`; they ar
 releases. See [Older versions](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/#older-versions)
 for the container images and the build-from-tag command.
 
+## [0.6.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.5.0...v0.6.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* workload files with unknown keys, or that rely on missing topology, rate, duration or size fields defaulting to 0, now fail to load.
+
+### Features
+
+* per-partition skew telemetry and consumer rebalance events, ref: [#36](https://github.com/mihkels/open-messaging-benchmark/issues/36) ([#499](https://github.com/mihkels/open-messaging-benchmark/issues/499)) ([fb309ef](https://github.com/mihkels/open-messaging-benchmark/commit/fb309efb4bd959849a2f34295530e7f2d16a9d3c))
+* serve the worker API over HTTP/2, ref: [#471](https://github.com/mihkels/open-messaging-benchmark/issues/471) ([#473](https://github.com/mihkels/open-messaging-benchmark/issues/473)) ([0d427c0](https://github.com/mihkels/open-messaging-benchmark/commit/0d427c0e51ecfd3f8290e17a442b400d5674df1a))
+* support message headers in BenchmarkProducer ([#492](https://github.com/mihkels/open-messaging-benchmark/issues/492)) ([067aed1](https://github.com/mihkels/open-messaging-benchmark/commit/067aed1eb9ed387cdd8280123e45290b0b440c71))
+* validate workload and driver YAML against generated JSON Schemas, ref: [#228](https://github.com/mihkels/open-messaging-benchmark/issues/228) ([#493](https://github.com/mihkels/open-messaging-benchmark/issues/493)) ([525766c](https://github.com/mihkels/open-messaging-benchmark/commit/525766cbd3c8214e86d40e21fa073dae1ce4d329))
+
+
+### Bug Fixes
+
+* check every module with NullAway in JSpecify mode and drop avoidable nulls, ref: [#484](https://github.com/mihkels/open-messaging-benchmark/issues/484) ([#486](https://github.com/mihkels/open-messaging-benchmark/issues/486)) ([57328c2](https://github.com/mihkels/open-messaging-benchmark/commit/57328c2f3a1ee52bd598dac8198fe36a4b51277c))
+* run e2e against the current-version distribution tarball, ref: [#480](https://github.com/mihkels/open-messaging-benchmark/issues/480) ([#481](https://github.com/mihkels/open-messaging-benchmark/issues/481)) ([97ce9ea](https://github.com/mihkels/open-messaging-benchmark/commit/97ce9ea3089ee37060f6c3ee41e49c65510496a9))
+
+
+### Performance
+
+* run driver consumer poll loops on virtual threads, ref: [#485](https://github.com/mihkels/open-messaging-benchmark/issues/485) ([#489](https://github.com/mihkels/open-messaging-benchmark/issues/489)) ([b32eb3b](https://github.com/mihkels/open-messaging-benchmark/commit/b32eb3bb04d436bf1df2c0f76fecc5fad0ae0107))
+
+
+### Refactoring
+
+* adopt post-Java-8 idioms where they simplify code, ref: [#476](https://github.com/mihkels/open-messaging-benchmark/issues/476) ([#478](https://github.com/mihkels/open-messaging-benchmark/issues/478)) ([63e8822](https://github.com/mihkels/open-messaging-benchmark/commit/63e8822151f34e9681e2b00a483200a27f34d5b9))
+* replace trivial Guava and Commons calls with core Java, ref: [#487](https://github.com/mihkels/open-messaging-benchmark/issues/487) ([#488](https://github.com/mihkels/open-messaging-benchmark/issues/488)) ([f22df19](https://github.com/mihkels/open-messaging-benchmark/commit/f22df1906591092bd033182be27911c01db6e200))
+* simplify duplicated plumbing and dead code, ref: [#490](https://github.com/mihkels/open-messaging-benchmark/issues/490) ([#491](https://github.com/mihkels/open-messaging-benchmark/issues/491)) ([78c7250](https://github.com/mihkels/open-messaging-benchmark/commit/78c7250127cb2adfbcb7061b8c60d3645f8d2552))
+
+
+### Documentation
+
+* add ADR for per-partition skew telemetry, ref: [#36](https://github.com/mihkels/open-messaging-benchmark/issues/36) ([#495](https://github.com/mihkels/open-messaging-benchmark/issues/495)) ([06079f3](https://github.com/mihkels/open-messaging-benchmark/commit/06079f3488594f3895886ac0ef52334d1d5787df))
+* document latest-only tarball policy and older versions, ref: [#113](https://github.com/mihkels/open-messaging-benchmark/issues/113) ([#498](https://github.com/mihkels/open-messaging-benchmark/issues/498)) ([5368e83](https://github.com/mihkels/open-messaging-benchmark/commit/5368e83c239e7822754893be33891d0baadd3d5c))
+* fix stale version references and quickstart/distribution gaps ([#496](https://github.com/mihkels/open-messaging-benchmark/issues/496)) ([188d254](https://github.com/mihkels/open-messaging-benchmark/commit/188d25470433c66232e9f743b4b2f888a97408e4))
+
+
+### Dependencies
+
+* bump micrometer, netty, errorprone and driver clients, ref: [#475](https://github.com/mihkels/open-messaging-benchmark/issues/475) ([#477](https://github.com/mihkels/open-messaging-benchmark/issues/477)) ([e7763cb](https://github.com/mihkels/open-messaging-benchmark/commit/e7763cb5aa25d5c6c1f69b6085fc711bd6c6f03e))
+* pin stale transitive libraries in legacy drivers, ref: [#475](https://github.com/mihkels/open-messaging-benchmark/issues/475) ([#479](https://github.com/mihkels/open-messaging-benchmark/issues/479)) ([6af4ed2](https://github.com/mihkels/open-messaging-benchmark/commit/6af4ed2004292ddf0cafa25fbe256a47acd45c0c))
+
 ## [0.5.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.4.0...v0.5.0) (2026-11-18)
 
 

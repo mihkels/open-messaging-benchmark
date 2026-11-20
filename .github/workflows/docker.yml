@@ -167,12 +167,16 @@ jobs:
           mise exec "trivy@$TRIVY_VERSION" -- trivy image --scanners vuln --ignore-unfixed \
             --severity CRITICAL,HIGH --skip-dirs /benchmark/drivers --exit-code 1 omb-check:all
 
+      # Code scanning tracks alerts per ref and shows main's; recorded under the tag, a release scan
+      # would leave alerts its image fixed open on main until the weekly scan-published run
       - name: Upload scan results
         if: always() && github.event_name == 'push' && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: trivy.sarif
           category: trivy-image
+          ref: refs/heads/main
+          sha: ${{ github.sha }}
 
   publish:
     name: Publish ${{ matrix.variant }}

@@ -133,7 +133,7 @@ class HistogramSerDeTest {
             if (serialBytes.length >= bufSize) {
                 break;
             }
-            samples *= 1.05;
+            samples = (int) (samples * 1.05);
         }
 
         // then walk backwards across the point linearly with increment of 1 to check the boundary

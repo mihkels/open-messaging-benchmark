@@ -33,7 +33,6 @@
         <!--Provide Pravega version for build: mvn clean install  "-DpravegaVersion=0.9.0-2766.2515791-SNAPSHOT" -DskipTests=true -Dlicense.skip=true-->
         <pravegaVersion>0.13.0</pravegaVersion>
         <protobuf.version>4.36.2</protobuf.version>
-        <grpc.version>1.85.1</grpc.version>
 
         <driver.isolated>true</driver.isolated>
     </properties>
@@ -87,11 +86,17 @@
             <groupId>io.pravega</groupId>
             <artifactId>pravega-client</artifactId>
             <version>${pravegaVersion}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.pravega</groupId>
-            <artifactId>pravega-keycloak-client</artifactId>
-            <version>${pravegaVersion}</version>
+            <!--
+                bcprov-ext-jdk15on 1.70 has CVEs and its line has no fixed release; no Pravega class references
+                BouncyCastle. pravega-keycloak-client is not a dependency: it shades Keycloak 19, Jackson 2.13
+                and Guava 28, and is only needed for Keycloak authentication, which the driver does not configure.
+            -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-ext-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>

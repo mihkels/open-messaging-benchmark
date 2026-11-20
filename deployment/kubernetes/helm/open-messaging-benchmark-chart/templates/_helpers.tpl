@@ -138,7 +138,7 @@ Secret holding the worker TLS certificate: workers.tls.existingSecret, or the on
 
 {{/*
 Volumes shared by workers and the coordinator: writable /tmp and /results for the read-only root
-file system, the configuration ConfigMap and user volumes.
+file system, the configuration Secret and user volumes.
 */}}
 {{- define "omb.volumes" -}}
 - name: tmp
@@ -148,8 +148,8 @@ file system, the configuration ConfigMap and user volumes.
     sizeLimit: {{ .Values.resultsSizeLimit }}
 {{- if include "omb.hasConfig" . }}
 - name: config
-  configMap:
-    name: {{ include "omb.fullname" . }}-config
+  secret:
+    secretName: {{ include "omb.fullname" . }}-config
 {{- end }}
 {{- with .Values.extraVolumes }}
 {{ toYaml . }}

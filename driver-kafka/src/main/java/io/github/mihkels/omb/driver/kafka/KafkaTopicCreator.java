@@ -44,7 +44,9 @@ class KafkaTopicCreator {
     private static final int MAX_BATCH_SIZE = 500;
     private static final int MAX_CREATION_ATTEMPTS =
             6; // Number of times to retry entire creation process
-    private static final long ATTEMPT_TIMEOUT_MS = 60_000; // 1 minute per attempt
+    // An attempt fails after a minute without a single created topic; a large topic count that
+    // keeps progressing may take longer
+    private static final long ATTEMPT_TIMEOUT_MS = 60_000;
     private static final long RETRY_BACKOFF_MS = 2000L;
     private static final long PROGRESS_LOG_INTERVAL_MS = 10_000;
     private static final String INTERRUPTED_MESSAGE = "Topic creation interrupted";
@@ -242,12 +244,12 @@ class KafkaTopicCreator {
         List<TopicInfo> batch = new ArrayList<>();
         int succeeded = 0;
 
-        long startTime = clockMillis.getAsLong();
-        long nextProgressLog = startTime + PROGRESS_LOG_INTERVAL_MS;
+        long lastProgress = clockMillis.getAsLong();
+        long nextProgressLog = lastProgress + PROGRESS_LOG_INTERVAL_MS;
 
         while (succeeded < topicInfos.size()) {
             long now = clockMillis.getAsLong();
-            checkAttemptTimeout(now - startTime, succeeded, topicInfos.size());
+            checkAttemptTimeout(now - lastProgress, succeeded, topicInfos.size());
             if (now >= nextProgressLog) {
                 log.info("Created topics {}/{}", succeeded, topicInfos.size());
                 nextProgressLog = now + PROGRESS_LOG_INTERVAL_MS;
@@ -258,7 +260,9 @@ class KafkaTopicCreator {
             int created = createBatch(batch, queue);
             batch.clear();
             succeeded += created;
-            if (created == 0) {
+            if (created > 0) {
+                lastProgress = clockMillis.getAsLong();
+            } else {
                 // The whole batch failed and was re-queued; back off rather than spin on the controller
                 sleepInterruptibly(retryBackoffMs);
             }
@@ -269,7 +273,7 @@ class KafkaTopicCreator {
         if (elapsedMs > ATTEMPT_TIMEOUT_MS) {
             throw new IllegalStateException(
                     String.format(
-                            "Topic creation attempt timed out after %d ms. Created %d/%d topics",
+                            "Topic creation attempt made no progress for %d ms. Created %d/%d topics",
                             ATTEMPT_TIMEOUT_MS, succeeded, total));
         }
     }

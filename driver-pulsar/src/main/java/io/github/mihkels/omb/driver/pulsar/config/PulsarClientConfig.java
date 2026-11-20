@@ -47,7 +47,7 @@ public class PulsarClientConfig {
 
     public boolean tlsAllowInsecureConnection = false;
 
-    public boolean tlsEnableHostnameVerification = false;
+    public boolean tlsEnableHostnameVerification = true;
 
     public @Nullable String tlsTrustCertsFilePath;
 

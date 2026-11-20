@@ -23,6 +23,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.mihkels.omb.driver.BenchmarkDriver.TopicInfo;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +35,7 @@ import java.util.function.LongSupplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +64,30 @@ class KafkaTopicCreatorRetryTest {
 
         verify(admin, never()).createTopics(any());
         verify(admin, times(1)).listTopics();
+    }
+
+    @Test
+    void creationThatKeepsProgressingMayTakeLongerThanTheTimeout() {
+        // 40 s per clock reading: the whole attempt takes minutes, but no gap reaches the timeout
+        AtomicLong now = new AtomicLong();
+        clock = () -> now.getAndAdd(40_000);
+        List<TopicInfo> topics =
+                List.of(new TopicInfo("a", 1), new TopicInfo("b", 1), new TopicInfo("c", 1));
+        when(admin.createTopics(any()))
+                .thenAnswer(invocation -> {
+                    CreateTopicsResult created = mock(CreateTopicsResult.class);
+                    Map<String, KafkaFuture<Void>> values = new HashMap<>();
+                    for (Object topic : (Collection<?>) invocation.getArgument(0)) {
+                        values.put(((NewTopic) topic).name(), KafkaFuture.completedFuture(null));
+                    }
+                    when(created.values()).thenReturn(values);
+                    return created;
+                });
+
+        new KafkaTopicCreator(admin, Map.of(), (short) 1, 1, 1, clock).createWithRetry(topics);
+
+        verify(admin, times(3)).createTopics(any());
+        verify(admin, never()).listTopics();
     }
 
     @Test
@@ -94,7 +121,7 @@ class KafkaTopicCreatorRetryTest {
                 .hasMessageStartingWith("Failed to create topics after 6 attempts")
                 .cause()
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageStartingWith("Topic creation attempt timed out");
+                .hasMessageStartingWith("Topic creation attempt made no progress");
         verify(admin, times(5)).listTopics();
     }
 

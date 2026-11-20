@@ -71,6 +71,9 @@ final class HtmlCommand {
         } catch (JacksonException e) {
             err.println("Cannot read result file: " + e.getOriginalMessage());
             return 1;
+        } catch (IllegalArgumentException e) {
+            err.println(e.getMessage());
+            return 1;
         }
         String rendered = HtmlReport.render(runs);
         Path target = output;

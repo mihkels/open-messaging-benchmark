@@ -186,7 +186,7 @@ All keys are read by `PulsarConfig` and its nested classes. Unknown keys are ign
 | `persistence.ackQuorum`            | int     | `2`          | Namespace persistence policy: bookie acknowledgements required for each entry.                                                             |
 | `persistence.deduplicationEnabled` | boolean | `false`      | Broker-side message deduplication on the benchmark namespace.                                                                              |
 | `tlsAllowInsecureConnection`       | boolean | `false`      | Accept untrusted server certificates (client and admin client).                                                                            |
-| `tlsEnableHostnameVerification`    | boolean | `false`      | Verify the server host name (client and admin client).                                                                                     |
+| `tlsEnableHostnameVerification`    | boolean | `true`       | Verify the server host name (client and admin client); turn off only for test certificates without a matching name.                        |
 | `tlsTrustCertsFilePath`            | string  | none         | Path of the trusted CA certificate file on each worker.                                                                                    |
 | `authentication.plugin`            | string  | none         | Authentication plugin class name, which must implement Pulsar `Authentication`. Applied to the client and the admin client when not empty. |
 | `authentication.data`              | string  | none         | Authentication parameters passed to the plugin. `file:` references are refused; give the token inline (`token:...`).                       |

@@ -39,6 +39,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +50,9 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
     private Connection connection;
     private JetStream jetStream;
     private JetStreamManagement jetStreamManagement;
+    // Each consumer's dispatcher holds an executor thread for its lifetime; virtual threads keep
+    // workloads with tens of thousands of consumers from running out of native threads
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     @Override
     public void initialize(Path configurationFile, MeterRegistry statsLogger)
@@ -67,6 +72,7 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
                                     .reconnectWait(Duration.ofSeconds(1))
                                     .connectionTimeout(Duration.ofSeconds(5))
                                     .pingInterval(Duration.ofSeconds(60))
+                                    .executor(executor)
                                     .errorListener(
                                             new ErrorListener() {
                                                 @Override
@@ -169,8 +175,12 @@ public class NatsBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public void close() throws InterruptedException {
-        if (this.connection != null) {
-            this.connection.close();
+        try {
+            if (this.connection != null) {
+                this.connection.close();
+            }
+        } finally {
+            executor.shutdownNow();
         }
     }
 

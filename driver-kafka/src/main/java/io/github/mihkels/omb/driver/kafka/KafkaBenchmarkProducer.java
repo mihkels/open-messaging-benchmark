@@ -78,7 +78,10 @@ public class KafkaBenchmarkProducer implements BenchmarkProducer {
             return future;
         }
         try {
-            var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload.clone());
+            // No copy: KafkaProducer.send() serializes the value into its own buffer before it returns.
+            // shortcut: a send blocked on metadata keeps the array until send() returns, even if a
+            // concurrent close() already failed its future; copy here if a caller ever reuses arrays
+            var producerRecord = new ProducerRecord<>(topic, key.orElse(null), payload);
             headers.forEach(producerRecord.headers()::add);
             producer.send(
                     producerRecord,

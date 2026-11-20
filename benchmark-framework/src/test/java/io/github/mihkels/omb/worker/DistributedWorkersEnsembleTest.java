@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -316,11 +317,20 @@ class DistributedWorkersEnsembleTest {
         var failure = new IllegalStateException("timed out");
         when(workers.get(0).getPeriodStats()).thenReturn(new PeriodStats());
         when(workers.get(1).getPeriodStats()).thenThrow(failure);
+        // A dead worker's counters call hangs; the failure must not wait for it
+        CountDownLatch release = new CountDownLatch(1);
+        when(workers.get(1).getCountersStats())
+                .thenAnswer(invocation -> {
+                    release.await();
+                    return new CountersStats(0, 0, 0);
+                });
         try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
             assertThat(catchThrowable(ensemble::getPeriodStats)).isSameAs(failure);
             for (Worker worker : workers) {
-                verify(worker).getCountersStats();
+                verify(worker, timeout(5_000)).getCountersStats();
             }
+        } finally {
+            release.countDown();
         }
     }
 

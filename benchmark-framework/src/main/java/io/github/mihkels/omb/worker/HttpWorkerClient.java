@@ -52,7 +52,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
@@ -458,13 +457,19 @@ public final class HttpWorkerClient implements Worker {
         return request.setRequestTimeout(timeout).setReadTimeout(timeout);
     }
 
-    // Rethrows a request's failure without the CompletionException wrapper, so callers see the HTTP
+    // Rethrows a request's failure without the ExecutionException wrapper, so callers see the HTTP
     // or connection failure itself. Timeouts and connection failures name the worker, path and
-    // timeout, since the client's own message does not say which call it was.
+    // timeout, since the client's own message does not say which call it was. Waiting stops on an
+    // interrupt, so a run the watchdog aborts does not sit out the request timeout.
     private <T> T await(String method, String path, Duration timeout, CompletableFuture<T> request) {
+        String call = "HTTP " + method + " " + host + path;
         try {
-            return request.join();
-        } catch (CompletionException e) {
+            return request.get();
+        } catch (InterruptedException e) {
+            request.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(call + " interrupted", e);
+        } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException runtime) {
                 throw runtime;
@@ -472,7 +477,6 @@ public final class HttpWorkerClient implements Worker {
             if (cause instanceof Error error) {
                 throw error;
             }
-            String call = "HTTP " + method + " " + host + path;
             if (cause instanceof TimeoutException) {
                 throw new IllegalStateException(
                         call + " timed out after " + timeout.toMillis() + " ms", cause);

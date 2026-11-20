@@ -4,6 +4,25 @@ Only the latest release keeps its distribution tarball and `SHA256SUMS`; they ar
 releases. See [Older versions](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/#older-versions)
 for the container images and the build-from-tag command.
 
+## [0.7.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.6.0...v0.7.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* Maven coordinates move from io.openmessaging.benchmark to io.github.mihkels.omb. External plugins must update their driver-api dependency.
+
+### Features
+
+* move groupId and packages to io.github.mihkels.omb, prepare Maven Central, ref: [#494](https://github.com/mihkels/open-messaging-benchmark/issues/494) ([#500](https://github.com/mihkels/open-messaging-benchmark/issues/500)) ([5ec7427](https://github.com/mihkels/open-messaging-benchmark/commit/5ec7427fe42274c22627565c179204d53ce3e234))
+
+
+### Bug Fixes
+
+* correct skew, redaction, result names, readiness and pause stalls, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#527](https://github.com/mihkels/open-messaging-benchmark/issues/527)) ([150e0b1](https://github.com/mihkels/open-messaging-benchmark/commit/150e0b1e86bb90086136e4c3bf8aae1a2c6dfa58))
+* count foreign RabbitMQ/JMS messages and escape report JSON, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#529](https://github.com/mihkels/open-messaging-benchmark/issues/529)) ([d4f5d1a](https://github.com/mihkels/open-messaging-benchmark/commit/d4f5d1a0b7d928f3338bfc2b60a960fe743cdcf6))
+* harden worker failure paths, report checks, drivers and Helm config, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#528](https://github.com/mihkels/open-messaging-benchmark/issues/528)) ([9f5a8bf](https://github.com/mihkels/open-messaging-benchmark/commit/9f5a8bfaebb5b99351d9c8cd0faa52655687c9b4))
+* patch vulnerable driver client transitives, ref: [#504](https://github.com/mihkels/open-messaging-benchmark/issues/504) ([#505](https://github.com/mihkels/open-messaging-benchmark/issues/505)) ([08418be](https://github.com/mihkels/open-messaging-benchmark/commit/08418be0331777874ba1c9297ebd617a4245ef06))
+
 ## [0.6.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.5.0...v0.6.0) (2026-11-20)
 
 

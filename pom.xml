@@ -136,7 +136,7 @@
         -->
         <grpc.version>1.85.1</grpc.version>
         <jackson2.core.version>2.23.0</jackson2.core.version>
-        <lz4.version>1.11.4</lz4.version>
+        <lz4.version>1.14.1</lz4.version>
         <opentelemetry.version>1.68.0</opentelemetry.version>
         <snappy.version>1.1.10.12</snappy.version>
         <!-- Empty default so @{argLine} in Surefire resolves when JaCoCo is skipped -->

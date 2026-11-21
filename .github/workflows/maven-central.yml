@@ -91,7 +91,7 @@ jobs:
           TAG: ${{ needs.changes.outputs.tag }}
         run: GITHUB_REF="refs/tags/$TAG" .github/scripts/check-versions.sh
       - name: Install project tools
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           install_args: java http:maven
           cache: false

@@ -35,7 +35,7 @@
         <async.client.version>3.0.14</async.client.version>
         <javalin.version>7.2.4</javalin.version>
         <!-- Keep at the Jetty version Javalin is built against -->
-        <jetty.version>12.1.14</jetty.version>
+        <jetty.version>12.1.15</jetty.version>
         <json.schema.validator.version>3.0.9</json.schema.validator.version>
         <victools.version>5.0.0</victools.version>
     </properties>

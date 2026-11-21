@@ -14,6 +14,7 @@
 package io.github.mihkels.omb.driver.pulsar;
 
 import io.github.mihkels.omb.driver.BenchmarkConsumer;
+import io.github.mihkels.omb.driver.Failures;
 import java.nio.ByteBuffer;
 import java.util.List;
 import org.apache.pulsar.client.api.Consumer;
@@ -36,23 +37,8 @@ public final class PulsarBenchmarkConsumer implements BenchmarkConsumer {
             return;
         }
         closed = true;
-        Exception failure = null;
-        for (Consumer<?> c : consumer) {
-            try {
-                c.close();
-            } catch (Exception error) {
-                if (error instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                if (failure == null) {
-                    failure = error;
-                } else if (failure != error) {
-                    failure.addSuppressed(error);
-                }
-            }
-        }
-        if (failure != null) {
-            throw failure;
-        }
+        Failures failures = new Failures();
+        consumer.forEach(failures::closeRestoringInterruptNow);
+        failures.throwIfAny();
     }
 }

@@ -73,7 +73,6 @@ final class DriverProcess {
     private volatile @Nullable Process process;
     private volatile boolean processStopped;
     private volatile @Nullable HttpWorkerClient client;
-    private volatile boolean crashReported;
 
     DriverProcess(String description) {
         this.description = description;
@@ -248,21 +247,16 @@ final class DriverProcess {
     }
 
     /**
-     * Describes a process that has exited, remembering that its crash has been reported.
+     * Describes a process that has exited.
      *
      * @param cause the failure that revealed the crash, or {@code null}
      * @return the failure to throw
      */
     IllegalStateException crashed(@Nullable Throwable cause) {
-        crashReported = true;
         Process current = process;
         String exitCode = current == null ? "unknown" : String.valueOf(current.exitValue());
         return new IllegalStateException(
                 "Driver process for " + description + " exited with code " + exitCode, cause);
-    }
-
-    boolean crashReported() {
-        return crashReported;
     }
 
     String describeFailure(Throwable e) {

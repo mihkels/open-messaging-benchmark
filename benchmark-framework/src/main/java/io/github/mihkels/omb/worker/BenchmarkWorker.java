@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -185,13 +186,39 @@ public final class BenchmarkWorker {
      * @return the metrics; the supervisor metrics alone when the driver scrape fails
      */
     static String metrics(String supervisor, Supplier<String> driver) {
+        String driverMetrics;
         try {
-            return supervisor + driver.get();
+            driverMetrics = driver.get();
         } catch (RuntimeException e) {
             // Scraped every few seconds; /health reports what went wrong with the driver
             log.debug("Driver metrics unavailable", e);
             return supervisor;
         }
+        return supervisor + withoutRepeatedMetadata(supervisor, driverMetrics);
+    }
+
+    // Both processes export the JVM resource families, told apart by their process label. A
+    // second # HELP or # TYPE line for a family makes strict parsers such as promtool reject the
+    // page, so the driver's copies of the supervisor's lines are dropped.
+    private static String withoutRepeatedMetadata(String supervisor, String driver) {
+        Set<String> declared =
+                supervisor.lines().map(BenchmarkWorker::metadataKey).collect(Collectors.toSet());
+        declared.remove("");
+        StringBuilder out = new StringBuilder(driver.length());
+        driver
+                .lines()
+                .filter(line -> !declared.contains(metadataKey(line)))
+                .forEach(line -> out.append(line).append('\n'));
+        return out.toString();
+    }
+
+    // "# HELP name" or "# TYPE name" for a metadata line, otherwise empty
+    private static String metadataKey(String line) {
+        if (!line.startsWith("# HELP ") && !line.startsWith("# TYPE ")) {
+            return "";
+        }
+        String[] parts = line.split(" ", 4);
+        return parts.length < 3 ? "" : parts[0] + " " + parts[1] + " " + parts[2];
     }
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook

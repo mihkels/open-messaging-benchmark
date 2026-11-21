@@ -83,6 +83,7 @@ public final class HttpWorkerClient implements Worker {
     private static final String CONTENT_TYPE = "Content-Type";
     private static final byte[] EMPTY_BODY = new byte[0];
     private static final int HTTP_OK = 200;
+    private static final int HTTP_UNAVAILABLE = 503;
     private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
     private static final ObjectMapper mapper = ObjectMappers.DEFAULT.mapper();
     private static final ObjectWriter writer = ObjectMappers.DEFAULT.writer();
@@ -318,19 +319,31 @@ public final class HttpWorkerClient implements Worker {
      * @return the response body
      * @throws IllegalStateException if the response status is not 200
      */
-    public String getText(String path, Duration timeout) {
+    String getText(String path, Duration timeout) {
         return await("get", path, timeout, fetchText(path, timeout));
     }
 
     /**
      * Fetches the worker's {@code /health}, within {@link #SCRAPE_TIMEOUT}.
      *
-     * @return the worker's health
-     * @throws IllegalStateException if the worker cannot be reached or is not ready
+     * @return the worker's health; a worker that is up but not ready answers 503 with its health
+     * @throws IllegalStateException if the worker cannot be reached or answers another error
      */
     @Override
     public WorkerHealth health() {
-        return mapper.readValue(getText(WorkerHandler.HEALTH, SCRAPE_TIMEOUT), WorkerHealth.class);
+        String path = WorkerHandler.HEALTH;
+        CompletableFuture<String> request =
+                timed(authorized(httpClient.prepareGet(host + path)), SCRAPE_TIMEOUT)
+                        .execute()
+                        .toCompletableFuture()
+                        .thenApply(response -> {
+                            // The 503 body names the driver state, which says more than a failed check
+                            if (response.getStatusCode() != HTTP_UNAVAILABLE) {
+                                checkResponse("get", path, response);
+                            }
+                            return response.getResponseBody();
+                        });
+        return mapper.readValue(await("get", path, SCRAPE_TIMEOUT, request), WorkerHealth.class);
     }
 
     @Override

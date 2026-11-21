@@ -174,7 +174,10 @@ class AuthenticatedWorkerHttpTest {
         when(worker.health()).thenReturn(new WorkerHealth(false, DriverState.NOT_STARTED, null, null));
         assertThat(send(get(WorkerHandler.HEALTH), null).statusCode()).isEqualTo(503);
         try (HttpWorkerClient client = new HttpWorkerClient(host, TOKEN)) {
-            assertThatThrownBy(client::health).hasMessageContaining("failed with code 503");
+            // The client reads the 503 body, so the watchdog can report the driver state
+            WorkerHealth health = client.health();
+            assertThat(health.ready()).isFalse();
+            assertThat(health.driver()).isEqualTo(DriverState.NOT_STARTED);
         }
     }
 

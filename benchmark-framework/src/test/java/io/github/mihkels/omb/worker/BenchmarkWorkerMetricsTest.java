@@ -25,6 +25,25 @@ class BenchmarkWorkerMetricsTest {
     }
 
     @Test
+    void declaresEachSharedFamilyOnce() {
+        String supervisor =
+                "# HELP omb_resource_cpu CPU\n# TYPE omb_resource_cpu gauge\n"
+                        + "omb_resource_cpu{process=\"supervisor\"} 1.0\n";
+        String driver =
+                "# HELP omb_resource_cpu CPU\n# TYPE omb_resource_cpu gauge\n"
+                        + "omb_resource_cpu{process=\"driver\"} 2.0\n"
+                        + "# HELP messages_sent_total Sent\n# TYPE messages_sent_total counter\n"
+                        + "messages_sent_total 3.0\n";
+
+        assertThat(BenchmarkWorker.metrics(supervisor, () -> driver))
+                .isEqualTo(
+                        supervisor
+                                + "omb_resource_cpu{process=\"driver\"} 2.0\n"
+                                + "# HELP messages_sent_total Sent\n# TYPE messages_sent_total counter\n"
+                                + "messages_sent_total 3.0\n");
+    }
+
+    @Test
     void servesSupervisorMetricsWhenTheDriverCannotBeScraped() {
         assertThat(
                         BenchmarkWorker.metrics(

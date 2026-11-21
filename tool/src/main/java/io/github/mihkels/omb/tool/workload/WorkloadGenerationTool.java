@@ -19,13 +19,18 @@ import com.beust.jcommander.ParameterException;
 import io.github.mihkels.omb.Workload;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
+import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.deser.DeserializationProblemHandler;
 import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Generates a set of {@link Workload} definition files from a {@link WorkloadSetTemplate} file. */
@@ -62,12 +67,42 @@ public class WorkloadGenerationTool {
                 .addArgument(() -> mapper.writeValueAsString(arguments))
                 .log();
 
-        WorkloadSetTemplate template = templateReader.readValue(arguments.templateFile);
+        List<String> ignored = new ArrayList<>();
+        WorkloadSetTemplate template = readTemplate(arguments.templateFile, ignored);
+        ignored.forEach(
+                field -> log.warn("Ignoring unknown template field '{}'; check its spelling", field));
         List<Workload> workloads = new WorkloadSetGenerator(template).generate();
         for (Workload w : workloads) {
             var outputFile = new File(arguments.outputFolder, w.name + ".yaml");
             workloadWriter.writeValue(outputFile, w);
         }
+    }
+
+    /**
+     * Reads a template. Unknown fields are skipped, so templates written for other versions still
+     * load, but each is collected: a misspelt field silently drops that dimension of the sweep.
+     *
+     * @param file the template file
+     * @param ignoredFields receives the name of every unknown field
+     * @return the template
+     */
+    static WorkloadSetTemplate readTemplate(File file, List<String> ignoredFields) {
+        return templateReader
+                .withHandler(
+                        new DeserializationProblemHandler() {
+                            @Override
+                            public boolean handleUnknownProperty(
+                                    DeserializationContext ctxt,
+                                    JsonParser p,
+                                    ValueDeserializer<?> deserializer,
+                                    Object beanOrClass,
+                                    String propertyName) {
+                                ignoredFields.add(propertyName);
+                                p.skipChildren();
+                                return true;
+                            }
+                        })
+                .readValue(file);
     }
 
     static class Arguments {

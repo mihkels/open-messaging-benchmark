@@ -207,7 +207,13 @@ public record RepeatSummary(
         return median(results.stream().mapToDouble(metric).toArray());
     }
 
-    private static double median(double[] values) {
+    /**
+     * The median, the mean of the middle two for an even count.
+     *
+     * @param values the values, not modified; at least one
+     * @return the median
+     */
+    public static double median(double[] values) {
         double[] sorted = values.clone();
         Arrays.sort(sorted);
         int middle = sorted.length / 2;

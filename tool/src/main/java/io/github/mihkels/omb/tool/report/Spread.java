@@ -13,6 +13,9 @@
  */
 package io.github.mihkels.omb.tool.report;
 
+import io.github.mihkels.omb.RepeatSummary;
+import java.util.Arrays;
+import java.util.DoubleSummaryStatistics;
 import java.util.List;
 
 /**
@@ -30,11 +33,9 @@ record Spread(double min, double median, double max, int runs) {
         if (values.isEmpty()) {
             throw new IllegalArgumentException("No values");
         }
-        List<Double> sorted = values.stream().sorted().toList();
-        int n = sorted.size();
-        double median =
-                n % 2 == 1 ? sorted.get(n / 2) : (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2;
-        return new Spread(sorted.getFirst(), median, sorted.getLast(), n);
+        double[] array = values.stream().mapToDouble(Double::doubleValue).toArray();
+        DoubleSummaryStatistics stats = Arrays.stream(array).summaryStatistics();
+        return new Spread(stats.getMin(), RepeatSummary.median(array), stats.getMax(), array.length);
     }
 
     /** Whether the [min, max] ranges of both spreads share at least one value. */

@@ -63,7 +63,7 @@ jobs:
       - name: Check versions
         run: .github/scripts/check-versions.sh
 
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
           install_args: java http:maven
           cache: false
@@ -147,7 +147,7 @@ jobs:
           test "$(docker run --rm omb-check:kafka ls drivers)" = driver-kafka
           test "$(docker run --rm omb-check:all ls drivers | wc -l)" -eq "$(grep -c -v -E '^[[:space:]]*(#|$)' docker/drivers.txt)"
 
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
           install: false
           cache: false
@@ -240,7 +240,7 @@ jobs:
             release.args.VERSION=${{ steps.meta.outputs.version }}
             release.args.REVISION=${{ github.sha }}
 
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
           install: false
           cache: false
@@ -319,7 +319,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
           install: false
           cache: false

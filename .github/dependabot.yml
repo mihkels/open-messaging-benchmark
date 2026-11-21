@@ -22,6 +22,11 @@ updates:
         update-types: ['version-update:semver-major']
       # NATS Streaming is deprecated upstream (support ended June 2023); keep the driver frozen (#332)
       - dependency-name: io.nats:java-nats-streaming
+      # java-nats-streaming gencode targets protobuf 3.x; legacy driver pins stay on the 3.25 line (#538)
+      - dependency-name: com.google.protobuf:protobuf-java
+        update-types: ['version-update:semver-major']
+      - dependency-name: com.google.protobuf:protobuf-java-util
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: deps
 

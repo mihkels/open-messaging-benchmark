@@ -20,6 +20,7 @@ import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
 import io.github.mihkels.omb.utils.distributor.KeyDistribution;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,20 @@ class WorkloadGenerationToolTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void reportsMisspeltTemplateFieldsInsteadOfFailing() throws Exception {
+        Path template =
+                Files.writeString(
+                        tempDir.resolve("template.yaml"),
+                        "topics: [1]\npartitionPerTopic: [1, 16, 64]\npartitionsPerTopic: [1]\n");
+        List<String> ignored = new ArrayList<>();
+
+        WorkloadSetTemplate read = WorkloadGenerationTool.readTemplate(template.toFile(), ignored);
+
+        assertThat(ignored).containsExactly("partitionPerTopic");
+        assertThat(read.partitionsPerTopic()).containsExactly(1);
+    }
 
     @Test
     void generatesZipfianWorkload() throws Exception {

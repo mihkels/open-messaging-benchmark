@@ -65,10 +65,11 @@ A template may set [`stages`](rate-profiles.md). They are copied into every work
 has `producerRate: 0` and `testDurationMinutes: 0`; `${producerRate}` is written as `stages` and
 `${stages}` as the number of stages. A `producerRate` list cannot be combined with `stages`.
 
-Always set `nameFormat`. Without it every workload is written to `null.yaml` and overwrites the
-previous one. Also set `keyDistributor`, `testDurationMinutes` and `warmupDurationMinutes`
-explicitly: if you leave them out, the generated files contain `keyDistributor: null`,
-`testDurationMinutes: 0` (the run never ends) and `warmupDurationMinutes: 0`.
+Fields you leave out get defaults: `nameFormat` is
+`${topics}-topics-${partitionsPerTopic}-partitions-${messageSize}b-${producersPerTopic}p-${consumerPerSubscription}c-${producerRate}`,
+`keyDistributor` is `NO_KEY`, `testDurationMinutes` is 5 and `warmupDurationMinutes` is 1. Unknown
+fields are skipped with a warning, so check the log for misspelt names: a list under a misspelt
+key is not part of the sweep.
 
 Because results are named after the workload file, a descriptive format makes result files easy to
 group later.

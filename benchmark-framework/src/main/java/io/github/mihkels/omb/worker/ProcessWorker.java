@@ -264,7 +264,7 @@ public class ProcessWorker implements Worker {
     public String scrapeMetrics() {
         DriverProcess running = current;
         HttpWorkerClient client = running == null ? null : running.client();
-        // health() and the next driver call report a crash; crashed() here would hide it from stopAll
+        // health() and the next driver call report a crash
         if (running == null || client == null || running.hasExited()) {
             return "";
         }
@@ -374,15 +374,17 @@ public class ProcessWorker implements Worker {
     @Override
     public void stopAll() {
         DriverProcess running;
-        boolean crashAlreadyReported;
+        boolean exited;
         synchronized (this) {
             running = current;
             if (running == null || running.client() == null) {
                 return;
             }
-            crashAlreadyReported = running.hasExited() && running.crashReported();
+            exited = running.hasExited();
         }
-        if (crashAlreadyReported) {
+        // A crashed driver has nothing left to stop. Its crash reaches the coordinator through
+        // health(), lastError and the next driver call, so stopAll succeeds whichever saw it first.
+        if (exited) {
             terminate();
             return;
         }

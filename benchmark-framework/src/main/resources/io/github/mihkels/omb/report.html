@@ -105,7 +105,7 @@
       ["Workload", r.workload], ["Driver", r.driver],
       ["Message size", r.messageSize == null ? null : r.messageSize + " B"],
       ["Topics / partitions", r.topics == null ? null : r.topics + " / " + r.partitions],
-      ["Producers / consumers per topic", r.producersPerTopic == null ? null : r.producersPerTopic + " / " + r.consumersPerTopic],
+      ["Producers per topic / consumers per subscription", r.producersPerTopic == null ? null : r.producersPerTopic + " / " + r.consumersPerTopic],
       ["Target rate", r.summary ? positive(r.summary.targetRate) : null],
       ["Validity", r.validity ? [r.validity.status].concat(r.validity.findings.filter(function (f) { return f.severity !== "info"; })
         .map(function (f) { return f.check + " (" + f.severity + "): " + f.message; })).join("\n") : null],

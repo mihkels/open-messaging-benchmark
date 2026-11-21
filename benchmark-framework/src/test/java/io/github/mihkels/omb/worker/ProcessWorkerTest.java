@@ -86,6 +86,14 @@ class ProcessWorkerTest {
         bundle("beta", "fixture.beta.BetaDriver", "\"beta-v\" + " + isolation(), "", lib2);
         bundle("crash", "fixture.crash.CrashDriver", "\"crash\"", "", lib1);
         bundle(
+                "late-crash",
+                "fixture.latecrash.LateCrashDriver",
+                "\"late-crash\"",
+                "Thread.ofPlatform().start(() -> {"
+                        + " try { Thread.sleep(1000); } catch (InterruptedException e) { return; }"
+                        + " Runtime.getRuntime().halt(43); });",
+                lib1);
+        bundle(
                 "options",
                 "fixture.options.OptionsDriver",
                 "System.getProperty(\"fixture.option\")",
@@ -290,6 +298,25 @@ class ProcessWorkerTest {
         assertThatThrownBy(worker::close).hasMessageContaining("Failed to close ProcessWorker");
         assertThat(worker.pid()).isNull();
         worker.close();
+    }
+
+    @Test
+    @SuppressWarnings("java:S2925") // waits for a crash in another JVM process
+    void stopAllSucceedsAfterACrashNoDriverCallReported() throws Exception {
+        try (ProcessWorker worker = newWorker()) {
+            worker.initializeDriver(config("fixture.latecrash.LateCrashDriver"));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+            while (worker.health().driver() != DriverState.EXITED && System.nanoTime() < deadline) {
+                Thread.sleep(50);
+            }
+            assertThat(worker.health().exitCode()).isEqualTo(43);
+
+            // Only health() saw the crash; stopAll must not fail on it, or the run stops early
+            worker.stopAll();
+            assertThat(worker.pid()).isNull();
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
+        }
     }
 
     @Test

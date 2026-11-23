@@ -934,11 +934,14 @@ public final class LocalWorker implements Worker {
 
         private ConsumerInfo consumerInfo(
                 int index, TopicSubscription subscription, boolean verify, boolean telemetry) {
-            ConsumerCallback recording = telemetry ? callbacks.forTopic(subscription.topic) : callbacks;
             ConsumerCallback callback =
-                    verify
-                            ? verifier.callback(subscription.topic, subscription.subscription, recording)
-                            : recording;
+                    telemetry || verify
+                            ? callbacks.forConsumer(
+                                    telemetry ? subscription.topic : null,
+                                    verify
+                                            ? verifier.subscription(subscription.topic, subscription.subscription)
+                                            : null)
+                            : callbacks;
             return new ConsumerInfo(index, subscription.topic, subscription.subscription, callback);
         }
 

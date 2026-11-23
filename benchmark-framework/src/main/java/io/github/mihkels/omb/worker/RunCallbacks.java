@@ -161,7 +161,7 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     void receive(int size, long publishTimestamp) {
-        receive(size, publishTimestamp, null, UNKNOWN_PARTITION);
+        receive(size, publishTimestamp, null, UNKNOWN_PARTITION, null, null, null);
     }
 
     /**
@@ -172,30 +172,54 @@ final class RunCallbacks implements ConsumerCallback {
      * @return the callback
      */
     ConsumerCallback forTopic(String topic) {
+        return forConsumer(topic, null);
+    }
+
+    /**
+     * A consumer callback gated by this run's lifecycle that optionally records per-partition
+     * telemetry and/or checks delivery stamps inside the seal gate.
+     *
+     * @param topic the consumer's topic when partition telemetry is enabled, or {@code null}
+     * @param delivery the subscription verifier when delivery verification is enabled, or {@code
+     *     null}
+     * @return the consumer callback
+     */
+    ConsumerCallback forConsumer(
+            @Nullable String topic, DeliveryVerifier.@Nullable Subscription delivery) {
         return new ConsumerCallback() {
             @Override
             public void messageReceived(byte[] payload, long publishTimestamp) {
-                receive(payload.length, publishTimestamp, topic, UNKNOWN_PARTITION);
+                receive(
+                        payload.length, publishTimestamp, topic, UNKNOWN_PARTITION, delivery, payload, null);
             }
 
             @Override
             public void messageReceived(ByteBuffer payload, long publishTimestamp) {
-                receive(payload.remaining(), publishTimestamp, topic, UNKNOWN_PARTITION);
+                receive(
+                        payload.remaining(),
+                        publishTimestamp,
+                        topic,
+                        UNKNOWN_PARTITION,
+                        delivery,
+                        null,
+                        payload);
             }
 
             @Override
             public void messageReceived(byte[] payload, long publishTimestamp, int partition) {
-                receive(payload.length, publishTimestamp, topic, partition);
+                receive(payload.length, publishTimestamp, topic, partition, delivery, payload, null);
             }
 
             @Override
             public void messageReceived(ByteBuffer payload, long publishTimestamp, int partition) {
-                receive(payload.remaining(), publishTimestamp, topic, partition);
+                receive(payload.remaining(), publishTimestamp, topic, partition, delivery, null, payload);
             }
 
             @Override
             public void partitionsChanged(RebalanceEvent event) {
-                rebalance(topic, event);
+                if (topic != null) {
+                    rebalance(topic, event);
+                }
             }
         };
     }
@@ -213,7 +237,14 @@ final class RunCallbacks implements ConsumerCallback {
         }
     }
 
-    private void receive(int size, long publishTimestamp, @Nullable String topic, int partition) {
+    private void receive(
+            int size,
+            long publishTimestamp,
+            @Nullable String topic,
+            int partition,
+            DeliveryVerifier.@Nullable Subscription delivery,
+            byte @Nullable [] arrayPayload,
+            @Nullable ByteBuffer bufferPayload) {
         gate.readLock().lock();
         try {
             if (!accepting) {
@@ -227,6 +258,13 @@ final class RunCallbacks implements ConsumerCallback {
                 if (topic != null && partition >= 0) {
                     stats.recordPartitionReceive(topic, partition, latencyMicros);
                 }
+                if (delivery != null) {
+                    if (arrayPayload != null) {
+                        delivery.verify(arrayPayload);
+                    } else if (bufferPayload != null) {
+                        delivery.verify(bufferPayload);
+                    }
+                }
             } catch (Throwable t) {
                 receives.decrementAndGet();
                 signalProgress();
@@ -237,6 +275,10 @@ final class RunCallbacks implements ConsumerCallback {
             gate.readLock().unlock();
         }
 
+        awaitResumeAndExit();
+    }
+
+    private void awaitResumeAndExit() {
         try {
             if (paused) {
                 progress.lock();

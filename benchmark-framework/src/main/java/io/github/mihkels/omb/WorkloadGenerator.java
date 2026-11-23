@@ -536,7 +536,10 @@ public final class WorkloadGenerator implements WorkloadRun {
                                 recordControllerFailure(name, e);
                             }
                         } catch (Throwable t) {
-                            recordControllerFailure(name, t);
+                            // Worker clients wrap interrupts; after the run that is our own cancel
+                            if (!(runCompleted && Thread.currentThread().isInterrupted())) {
+                                recordControllerFailure(name, t);
+                            }
                         } finally {
                             onExit.run();
                         }

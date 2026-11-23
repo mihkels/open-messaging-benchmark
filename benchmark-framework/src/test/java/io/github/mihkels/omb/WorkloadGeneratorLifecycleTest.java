@@ -637,6 +637,36 @@ class WorkloadGeneratorLifecycleTest {
     }
 
     @Test
+    void controllerCancelledDuringWorkerRequestIsNotAFailure() throws Exception {
+        Worker worker = worker();
+        Workload workload = pausedWorkload();
+        workload.verifyDelivery = true;
+        when(worker.getCountersStats()).thenReturn(new CountersStats(10, 0, 10, 10, 10, 0, 0));
+
+        CountDownLatch requestInFlight = new CountDownLatch(1);
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.startController(
+                    "worker request",
+                    () -> {
+                        requestInFlight.countDown();
+                        try {
+                            new CountDownLatch(1).await();
+                        } catch (InterruptedException e) {
+                            // Same as HttpWorkerClient.await
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("get /counters-stats interrupted", e);
+                        }
+                    },
+                    () -> {});
+            assertThat(requestInFlight.await(2, TimeUnit.SECONDS)).isTrue();
+
+            Delivery delivery = generator.drainForDelivery(() -> 0, 20, Long.MAX_VALUE);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 10, 0, 0, 0));
+        }
+    }
+
+    @Test
     void backlogControllerStartsAfterResetStatsAndExcludeWarmUp() throws Exception {
         Worker worker = worker();
         Workload workload = backlogWorkload();

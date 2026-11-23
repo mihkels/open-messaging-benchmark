@@ -153,7 +153,9 @@ with the cause if creation fails:
 - A consumer is usable only after its subscription is ready to receive messages published after its
   creation future completes. Report connection and subscription failures through that future.
 - Every subscription name must behave as an independent subscription that receives every message on
-  the topic. Consumers that share a subscription name split the messages between them.
+  the topic. Consumers that share a subscription name split the messages between them. Drivers whose
+  consumers cannot share a subscription must override `supportsSharedSubscriptions()` to return
+  `false` (see [Shared subscriptions](#shared-subscriptions)).
 - The `consumerCallback` passed in is the benchmark's statistics recorder. Keep the reference and call
   it for every message that the consumer receives.
 
@@ -302,6 +304,19 @@ default; the worker refuses to start a telemetry workload on a driver that retur
   Skip empty changes, which some protocols report on every rebalance.
 
 The Kafka driver is the reference implementation. The additions do not change `DriverApiVersion`.
+
+### Shared subscriptions
+
+`BenchmarkDriver.supportsSharedSubscriptions()` returns `true` by default: multiple consumers with
+the same subscription name split messages between them so each message is counted once per
+subscription.
+
+If the client API or protocol cannot share a subscription across consumers — for example, JMS 1.1
+or a log reader that replays the whole stream for each consumer — override
+`supportsSharedSubscriptions()` to return `false`. The worker rejects consumer creation for any
+workload with `consumerPerSubscription > 1`, even when those consumers are spread across multiple
+workers, so shared-subscription checks do not depend on two consumers landing on the same JVM. The
+addition does not change `DriverApiVersion`.
 
 ## End-to-end publish timestamp
 

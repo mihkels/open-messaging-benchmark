@@ -21,6 +21,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
+import io.github.mihkels.omb.plugin.PluginException;
 import io.javalin.Javalin;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -30,9 +31,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.asynchttpclient.AsyncHttpClient;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.core.JacksonException;
 
 class HttpWorkerClientLifecycleTest {
 
@@ -298,6 +303,83 @@ class HttpWorkerClientLifecycleTest {
             } finally {
                 app.stop();
             }
+        }
+    }
+
+    @Test
+    void mapsPermanentWorkerFailuresTo400AndWorkerRejectedException() throws Exception {
+        Worker worker = mock(Worker.class);
+        JacksonException badYaml =
+                new JacksonException("invalid YAML") {
+                    private static final long serialVersionUID = 1L;
+                };
+        doThrow(new IllegalArgumentException("unsupported option"))
+                .doThrow(new IllegalStateException("wrapper", new IllegalArgumentException("nested arg")))
+                .doThrow(badYaml)
+                .doThrow(new PluginException("missing plugin"))
+                .doThrow(new IllegalStateException("driver crashed"))
+                .when(worker)
+                .probeProducers();
+        try (WorkerHandler handler = new WorkerHandler(worker)) {
+            Javalin app =
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
+            try {
+                app.start("127.0.0.1", 0);
+                String host = "http://127.0.0.1:" + app.port();
+                try (HttpWorkerClient remote = new HttpWorkerClient(host)) {
+                    for (String expected :
+                            List.of("unsupported option", "nested arg", "invalid YAML", "missing plugin")) {
+                        assertThatThrownBy(remote::probeProducers)
+                                .isInstanceOf(WorkerRejectedException.class)
+                                .hasMessageContaining("failed with code 400")
+                                .hasMessageContaining(expected);
+                    }
+                    assertThatThrownBy(remote::probeProducers)
+                            .isInstanceOf(IllegalStateException.class)
+                            .isNotInstanceOf(WorkerRejectedException.class)
+                            .hasMessageContaining("failed with code 500")
+                            .hasMessageContaining("driver crashed");
+                }
+            } finally {
+                app.stop();
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 415})
+    void throwsWorkerRejectedExceptionForPermanent4xxStatuses(int statusCode) throws Exception {
+        AtomicInteger status = new AtomicInteger(statusCode);
+        Javalin app =
+                Javalin.create(config -> {
+                    config.startup.showJavalinBanner = false;
+                    config.routes.post(
+                            WorkerHandler.PROBE_PRODUCERS, ctx -> ctx.status(status.get()).result("rejected"));
+                });
+        try {
+            app.start("127.0.0.1", 0);
+            try (HttpWorkerClient remote = new HttpWorkerClient("http://127.0.0.1:" + app.port())) {
+                assertThatThrownBy(remote::probeProducers)
+                        .isInstanceOf(WorkerRejectedException.class)
+                        .hasMessageContaining("failed with code " + statusCode);
+
+                status.set(408);
+                assertThatThrownBy(remote::probeProducers)
+                        .isInstanceOf(IllegalStateException.class)
+                        .isNotInstanceOf(WorkerRejectedException.class)
+                        .hasMessageContaining("failed with code 408");
+
+                status.set(429);
+                assertThatThrownBy(remote::probeProducers)
+                        .isInstanceOf(IllegalStateException.class)
+                        .isNotInstanceOf(WorkerRejectedException.class)
+                        .hasMessageContaining("failed with code 429");
+            }
+        } finally {
+            app.stop();
         }
     }
 }

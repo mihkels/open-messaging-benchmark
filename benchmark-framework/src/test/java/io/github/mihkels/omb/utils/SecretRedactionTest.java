@@ -126,9 +126,15 @@ class SecretRedactionTest {
                 "authConfig",
                 "auth.config",
                 "AuthConfig",
+                "authParams",
+                "auth.params",
+                "auth_params",
                 "redisPass",
                 "db.pass",
                 "adminPwd",
+                "bkDigestPW",
+                "db.pw",
+                "ADMIN_PW",
                 "REDIS_PASS"
             })
     void flagsSecretKeys(String key) {
@@ -264,6 +270,23 @@ class SecretRedactionTest {
                 "ssl.keystore.key=[REDACTED]\nbasic.auth.user.info=[REDACTED]",
                 SecretRedaction.redactString(
                         "ssl.keystore.key=-----BEGIN PRIVATE KEY-----\nbasic.auth.user.info=user:pw"));
+    }
+
+    @Test
+    void masksBookKeeperDigestPwAndPulsarJmsAuthParams() {
+        String dlogConf = "bkDigestPW=hunter2\noutputBufferSize=0\n";
+        assertEquals(
+                "bkDigestPW=[REDACTED]\noutputBufferSize=0\n", SecretRedaction.redactString(dlogConf));
+
+        String jmsJson =
+                "{\"brokerServiceUrl\":\"pulsar://b:6650\","
+                        + "\"authPlugin\":\"org.apache.pulsar.client.impl.auth.AuthenticationToken\","
+                        + "\"authParams\":\"eyJhbGciOiJIUzI1NiJ9.secret\"}";
+        assertEquals(
+                "{\"brokerServiceUrl\":\"pulsar://b:6650\","
+                        + "\"authPlugin\":\"org.apache.pulsar.client.impl.auth.AuthenticationToken\","
+                        + "\"authParams\":\"[REDACTED]\"}",
+                SecretRedaction.redactString(jmsJson));
     }
 
     @Test

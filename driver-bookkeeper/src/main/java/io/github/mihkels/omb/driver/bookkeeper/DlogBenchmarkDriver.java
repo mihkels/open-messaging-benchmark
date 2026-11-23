@@ -112,6 +112,11 @@ public class DlogBenchmarkDriver implements BenchmarkDriver {
     }
 
     @Override
+    public boolean supportsSharedSubscriptions() {
+        return false;
+    }
+
+    @Override
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
         if (partitions > 1) {
             // Producers and consumers open a single log per topic, so extra partitions would sit unused.

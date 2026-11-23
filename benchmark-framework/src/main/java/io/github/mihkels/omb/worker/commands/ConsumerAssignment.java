@@ -15,7 +15,9 @@ package io.github.mihkels.omb.worker.commands;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ConsumerAssignment {
     public List<TopicSubscription> topicsSubscriptions = new ArrayList<>();
@@ -27,4 +29,31 @@ public class ConsumerAssignment {
     /** Whether consumers report partitions and rebalances; see {@code partitionTelemetry}. */
     @JsonInclude(JsonInclude.Include.NON_DEFAULT)
     public boolean partitionTelemetry;
+
+    /**
+     * Whether the workload assigns more than one consumer to the same subscription, possibly across
+     * different workers; see {@code consumerPerSubscription}.
+     */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    public boolean sharedSubscriptions;
+
+    /**
+     * Returns whether any subscription in this assignment is shared across multiple consumers, either
+     * according to {@link #sharedSubscriptions} or via duplicate entries in {@link
+     * #topicsSubscriptions}.
+     *
+     * @return {@code true} if multiple consumers share a subscription
+     */
+    public boolean hasSharedSubscriptions() {
+        if (sharedSubscriptions) {
+            return true;
+        }
+        Set<List<String>> seen = new HashSet<>(topicsSubscriptions.size());
+        for (TopicSubscription subscription : topicsSubscriptions) {
+            if (!seen.add(List.of(subscription.topic, subscription.subscription))) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

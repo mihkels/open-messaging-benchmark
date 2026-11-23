@@ -52,12 +52,13 @@ public final class SecretRedaction {
                     Pattern.CASE_INSENSITIVE);
     private static final Pattern SECRET_COMPOUND =
             Pattern.compile(
-                    "api.?key|access.?key|private.?key|keystore.?key|sasl.?jaas|auth.?config|user.?info",
+                    "api.?key|access.?key|private.?key|keystore.?key|sasl.?jaas|auth.?config|auth.?params"
+                            + "|user.?info",
                     Pattern.CASE_INSENSITIVE);
-    // Abbreviated password keys such as redisPass or adminPwd. Only as a suffix, so that names like
-    // bypassCache or passive are not masked.
+    // Abbreviated password keys such as redisPass, adminPwd or bkDigestPW. Only as a suffix, so
+    // that names like bypassCache or passive are not masked.
     private static final Pattern SECRET_SUFFIX =
-            Pattern.compile("(?:pass|pwd)$", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(?:pass|pwd|pw)$", Pattern.CASE_INSENSITIVE);
     private static final String SCHEME_SEPARATOR = "://";
     // A URI query or ;-separated parameter: separator, name and value
     private static final Pattern PARAMETER =

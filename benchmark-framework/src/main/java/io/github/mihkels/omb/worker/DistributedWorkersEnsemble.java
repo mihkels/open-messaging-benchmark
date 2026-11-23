@@ -220,6 +220,7 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void createConsumers(ConsumerAssignment overallConsumerAssignment) {
+        boolean sharedSubscriptions = overallConsumerAssignment.hasSharedSubscriptions();
         List<List<TopicSubscription>> subscriptionsPerConsumer =
                 ListPartition.partitionList(
                         overallConsumerAssignment.topicsSubscriptions, consumerWorkers.size());
@@ -230,6 +231,7 @@ public final class DistributedWorkersEnsemble implements Worker {
             individualAssignment.topicsSubscriptions = tsl;
             individualAssignment.verifyDelivery = overallConsumerAssignment.verifyDelivery;
             individualAssignment.partitionTelemetry = overallConsumerAssignment.partitionTelemetry;
+            individualAssignment.sharedSubscriptions = sharedSubscriptions;
             topicsPerWorkerMap.put(consumerWorkers.get(i++), individualAssignment);
         }
         forAll(

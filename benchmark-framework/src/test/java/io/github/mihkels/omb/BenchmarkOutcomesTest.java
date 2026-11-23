@@ -25,8 +25,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.mihkels.omb.worker.BearerTokenAuth;
+import io.github.mihkels.omb.worker.HttpWorkerClient;
 import io.github.mihkels.omb.worker.Worker;
+import io.github.mihkels.omb.worker.WorkerHandler;
+import io.github.mihkels.omb.worker.WorkerRejectedException;
 import io.github.mihkels.omb.worker.WorkerUnhealthyException;
+import io.javalin.Javalin;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -39,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -413,11 +419,84 @@ class BenchmarkOutcomesTest {
         assertThat(Benchmark.isRetryable(new IllegalStateException("stalled"))).isTrue();
         assertThat(Benchmark.isRetryable(new WorkerUnhealthyException("w1", "driver FAILED"))).isTrue();
         assertThat(Benchmark.isRetryable(new IllegalArgumentException("bad workload"))).isFalse();
+        assertThat(Benchmark.isRetryable(new WorkerRejectedException("HTTP post failed with code 400")))
+                .isFalse();
+        assertThat(
+                        Benchmark.isRetryable(
+                                new IllegalStateException(
+                                        "init failed", new WorkerRejectedException("HTTP post failed with code 400"))))
+                .isFalse();
         assertThat(Benchmark.isRetryable(new NullPointerException())).isFalse();
         assertThat(Benchmark.isRetryable(new IllegalStateException(new OutOfMemoryError()))).isFalse();
         IOException withConfigError = new IOException("worker call failed");
         withConfigError.addSuppressed(new IllegalArgumentException("bad config"));
         assertThat(Benchmark.isRetryable(withConfigError)).isFalse();
+    }
+
+    @Test
+    void doesNotRetryPermanentRejectionsOrAuthFailuresOverWorkerHttp() throws Exception {
+        Benchmark.Arguments arguments = arguments();
+        arguments.retries = 3;
+        Worker rejectedWorker = mock(Worker.class);
+        doThrow(new IllegalArgumentException("driver rejected workload"))
+                .when(rejectedWorker)
+                .probeProducers();
+        try (WorkerHandler handler = new WorkerHandler(rejectedWorker)) {
+            Javalin app =
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
+            try {
+                app.start("127.0.0.1", 0);
+                try (HttpWorkerClient client = new HttpWorkerClient("http://127.0.0.1:" + app.port())) {
+                    assertThatThrownBy(() ->
+                                    Benchmark.runWorkloads(
+                                            arguments,
+                                            Map.of("rejected", workload("rejected")),
+                                            client,
+                                            (d, w, worker) -> {
+                                                worker.probeProducers();
+                                                return mock(WorkloadRun.class);
+                                            }))
+                            .hasStackTraceContaining("driver rejected workload");
+                }
+            } finally {
+                app.stop();
+            }
+        }
+        verify(rejectedWorker, times(1)).probeProducers();
+
+        Worker authWorker = mock(Worker.class);
+        BearerTokenAuth auth = new BearerTokenAuth("expected-token", java.util.Set.of());
+        try (WorkerHandler handler = new WorkerHandler(authWorker, auth)) {
+            Javalin app =
+                    Javalin.create(config -> {
+                        config.startup.showJavalinBanner = false;
+                        handler.configure(config);
+                    });
+            try {
+                app.start("127.0.0.1", 0);
+                try (HttpWorkerClient client =
+                        new HttpWorkerClient("http://127.0.0.1:" + app.port(), "wrong-token")) {
+                    AtomicInteger attempts = new AtomicInteger();
+                    assertThatThrownBy(() ->
+                                    Benchmark.runWorkloads(
+                                            arguments,
+                                            Map.of("unauth", workload("unauth")),
+                                            client,
+                                            (d, w, worker) -> {
+                                                attempts.incrementAndGet();
+                                                return mock(WorkloadRun.class);
+                                            }))
+                            .hasStackTraceContaining("failed with code 401");
+                    // Failed in initializeDriver (401), never reached generator or retried
+                    assertThat(attempts.get()).isZero();
+                }
+            } finally {
+                app.stop();
+            }
+        }
     }
 
     @Test

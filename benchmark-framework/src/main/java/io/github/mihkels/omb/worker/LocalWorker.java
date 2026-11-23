@@ -275,6 +275,9 @@ public final class LocalWorker implements Worker {
         if (telemetry) {
             requirePartitionTelemetry(current);
         }
+        if (consumerAssignment.hasSharedSubscriptions()) {
+            requireSharedSubscriptions(current);
+        }
         Function<TopicSubscription, ConsumerInfo> info =
                 c -> current.consumerInfo(index.getAndIncrement(), c, verify, telemetry);
 
@@ -333,7 +336,7 @@ public final class LocalWorker implements Worker {
         List<Map<String, byte[]>> headers = null;
         if (headerConfig != null) {
             if (!current.requireDriver().supportsHeaders()) {
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                         "Driver "
                                 + current.requireDriver().getClass().getName()
                                 + " does not support message headers; remove 'headers' from the workload");
@@ -363,11 +366,21 @@ public final class LocalWorker implements Worker {
     // Refuses telemetry rather than reporting an empty summary for a driver that cannot supply it
     private static void requirePartitionTelemetry(Run current) {
         if (!current.requireDriver().supportsPartitionTelemetry()) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                     "Driver "
                             + current.requireDriver().getClass().getName()
                             + " does not support partition telemetry; remove 'partitionTelemetry' from the"
                             + " workload");
+        }
+    }
+
+    private static void requireSharedSubscriptions(Run current) {
+        if (!current.requireDriver().supportsSharedSubscriptions()) {
+            throw new IllegalArgumentException(
+                    "Driver "
+                            + current.requireDriver().getClass().getName()
+                            + " does not support shared subscriptions; set 'consumerPerSubscription: 1'"
+                            + " in the workload");
         }
     }
 
@@ -934,11 +947,14 @@ public final class LocalWorker implements Worker {
 
         private ConsumerInfo consumerInfo(
                 int index, TopicSubscription subscription, boolean verify, boolean telemetry) {
-            ConsumerCallback recording = telemetry ? callbacks.forTopic(subscription.topic) : callbacks;
             ConsumerCallback callback =
-                    verify
-                            ? verifier.callback(subscription.topic, subscription.subscription, recording)
-                            : recording;
+                    telemetry || verify
+                            ? callbacks.forConsumer(
+                                    telemetry ? subscription.topic : null,
+                                    verify
+                                            ? verifier.subscription(subscription.topic, subscription.subscription)
+                                            : null)
+                            : callbacks;
             return new ConsumerInfo(index, subscription.topic, subscription.subscription, callback);
         }
 

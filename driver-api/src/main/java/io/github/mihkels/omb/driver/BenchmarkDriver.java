@@ -99,6 +99,20 @@ public interface BenchmarkDriver extends AutoCloseable {
     }
 
     /**
+     * Whether multiple consumers may share one subscription so that each message is delivered to at
+     * most one of them. Drivers whose consumers each receive a full copy of the topic return {@code
+     * false}.
+     *
+     * <p>The worker refuses to create consumers for a workload with {@code consumerPerSubscription >
+     * 1} when this returns {@code false}, including when consumers are spread across workers.
+     *
+     * @return {@code true} if consumers can share a subscription
+     */
+    default boolean supportsSharedSubscriptions() {
+        return true;
+    }
+
+    /**
      * Create a new topic with a given number of partitions.
      *
      * @param topic the topic name

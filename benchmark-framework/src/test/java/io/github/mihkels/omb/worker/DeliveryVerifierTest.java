@@ -18,12 +18,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import io.github.mihkels.omb.driver.ConsumerCallback;
+import io.github.mihkels.omb.driver.RebalanceEvent;
 import io.github.mihkels.omb.worker.DeliveryVerifier.Outcome;
 import io.github.mihkels.omb.worker.DeliveryVerifier.SequenceWindow;
 import io.github.mihkels.omb.worker.commands.CountersStats;
+import io.github.mihkels.omb.worker.commands.PartitionPeriod;
+import io.github.mihkels.omb.worker.commands.PeriodStats;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class DeliveryVerifierTest {
@@ -116,5 +123,126 @@ class DeliveryVerifierTest {
         assertThat(stats.toCountersStats()).isEqualTo(new CountersStats(0, 0, 0, 0, 2, 1, 0));
         stats.reset();
         assertThat(stats.toCountersStats()).isEqualTo(new CountersStats());
+    }
+
+    @Test
+    void dropsStampedDeliveriesAfterRunCallbacksAreSealed() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            DeliveryVerifier verifier = new DeliveryVerifier(stats);
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            RunCallbacks callbacks = new RunCallbacks(stats, failure::set);
+            ConsumerCallback callback =
+                    callbacks.forConsumer(null, verifier.subscription("topic", "sub"));
+            DeliveryStamp stamp = new DeliveryStamp(7);
+            byte[] first = stamp.stamp(new byte[32]);
+            byte[] duplicate = first.clone();
+            long now = System.currentTimeMillis();
+
+            callback.messageReceived(first, now);
+            assertThat(stats.toCountersStats()).isEqualTo(new CountersStats(0, 0, 1, 0, 1, 0, 0));
+
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+            stats.reset();
+
+            callback.messageReceived(duplicate, now);
+            callback.messageReceived(ByteBuffer.wrap(duplicate), now);
+            assertThat(stats.toCountersStats()).isEqualTo(new CountersStats());
+            assertThat(failure.get()).isNull();
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
+    void verifiesDeliveryInsideGateBeforePauseBlocks() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            DeliveryVerifier verifier = new DeliveryVerifier(stats);
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            RunCallbacks callbacks = new RunCallbacks(stats, failure::set);
+            ConsumerCallback callback =
+                    callbacks.forConsumer(null, verifier.subscription("topic", "sub"));
+            byte[] message = new DeliveryStamp(9).stamp(new byte[32]);
+            long now = System.currentTimeMillis();
+
+            callbacks.pause();
+            CountDownLatch started = new CountDownLatch(1);
+            CountDownLatch finished = new CountDownLatch(1);
+            Thread delivery =
+                    Thread.ofVirtual()
+                            .start(() -> {
+                                started.countDown();
+                                callback.messageReceived(ByteBuffer.wrap(message), now);
+                                finished.countDown();
+                            });
+
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (stats.toCountersStats().delivered() == 0) {
+                if (System.nanoTime() >= deadline) {
+                    throw new AssertionError("Delivery was not verified before blocking on pause");
+                }
+                Thread.onSpinWait();
+            }
+
+            assertThat(finished.getCount()).isEqualTo(1);
+            assertThat(stats.toCountersStats()).isEqualTo(new CountersStats(0, 0, 1, 0, 1, 0, 0));
+
+            callbacks.resume();
+            assertThat(finished.await(2, TimeUnit.SECONDS)).isTrue();
+            delivery.join(TimeUnit.SECONDS.toMillis(2));
+            assertThat(callbacks.awaitQuiescence(System.nanoTime() + TimeUnit.SECONDS.toNanos(1)))
+                    .isTrue();
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+            assertThat(failure.get()).isNull();
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
+    void combinesDeliveryVerificationWithPartitionTelemetry() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            DeliveryVerifier verifier = new DeliveryVerifier(stats);
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            RunCallbacks callbacks = new RunCallbacks(stats, failure::set);
+            ConsumerCallback first =
+                    callbacks.forConsumer("orders", verifier.subscription("orders", "sub"));
+            ConsumerCallback second =
+                    callbacks.forConsumer("orders", verifier.subscription("orders", "sub"));
+            DeliveryStamp stamp = new DeliveryStamp(11);
+            byte[] msg1 = stamp.stamp(new byte[32]);
+            byte[] msg2 = stamp.stamp(new byte[32]);
+            long now = System.currentTimeMillis();
+
+            first.messageReceived(msg1, now, 3);
+            second.messageReceived(ByteBuffer.wrap(msg1), now, 3);
+            second.messageReceived(ByteBuffer.wrap(msg2), now, 1);
+            first.partitionsChanged(new RebalanceEvent(RebalanceEvent.Kind.ASSIGNED, 5L, List.of(1, 3)));
+
+            PeriodStats period = stats.toPeriodStats();
+            assertThat(stats.toCountersStats()).isEqualTo(new CountersStats(0, 0, 3, 0, 2, 1, 0));
+            assertThat(period.partitions())
+                    .extracting(PartitionPeriod::partition, PartitionPeriod::messagesReceived)
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.groups.Tuple.tuple(3, 2L),
+                            org.assertj.core.groups.Tuple.tuple(1, 1L));
+            assertThat(period.rebalances()).hasSize(1);
+
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+            stats.reset();
+
+            first.messageReceived(msg2, now, 3);
+            assertThat(stats.toCountersStats()).isEqualTo(new CountersStats());
+            assertThat(stats.toPeriodStats().partitions()).isEmpty();
+            assertThat(failure.get()).isNull();
+        } finally {
+            registry.close();
+        }
     }
 }

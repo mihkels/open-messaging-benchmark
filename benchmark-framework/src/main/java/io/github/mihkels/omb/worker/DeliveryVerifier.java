@@ -19,7 +19,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Checks the {@link DeliveryStamp} of every received message against the sequence numbers already
@@ -37,6 +36,20 @@ final class DeliveryVerifier {
     }
 
     /**
+     * Returns the verification handle for one consumer's subscription, sharing sequence state across
+     * all consumers of the same {@code (topic, subscription)} on this worker.
+     *
+     * @param topic the consumer's topic
+     * @param subscription the consumer's subscription
+     * @return the subscription verifier
+     */
+    Subscription subscription(String topic, String subscription) {
+        return new Subscription(
+                this,
+                subscriptions.computeIfAbsent(topic + '\0' + subscription, k -> new ConcurrentHashMap<>()));
+    }
+
+    /**
      * Wraps a consumer's callback so each stamped message it receives is checked after the delegate
      * has recorded it.
      *
@@ -46,34 +59,41 @@ final class DeliveryVerifier {
      * @return the verifying callback
      */
     ConsumerCallback callback(String topic, String subscription, ConsumerCallback delegate) {
-        Map<Long, SequenceWindow> producers =
-                subscriptions.computeIfAbsent(topic + '\0' + subscription, k -> new ConcurrentHashMap<>());
+        Subscription sub = subscription(topic, subscription);
         return new ConsumerCallback() {
             @Override
             public void messageReceived(byte[] payload, long publishTimestamp) {
                 delegate.messageReceived(payload, publishTimestamp);
-                verify(producers, payload);
+                sub.verify(payload);
             }
 
             @Override
             public void messageReceived(byte[] payload, long publishTimestamp, int partition) {
                 delegate.messageReceived(payload, publishTimestamp, partition);
-                verify(producers, payload);
+                sub.verify(payload);
             }
 
             @Override
             public void messageReceived(ByteBuffer payload, long publishTimestamp) {
                 // Read before the delegate, which may consume the buffer
-                long[] stamp = stamp(payload);
+                boolean stamped = DeliveryStamp.isStamped(payload);
+                long producerId = stamped ? DeliveryStamp.producerId(payload) : 0;
+                long sequence = stamped ? DeliveryStamp.sequence(payload) : 0;
                 delegate.messageReceived(payload, publishTimestamp);
-                verify(producers, stamp);
+                if (stamped) {
+                    sub.record(producerId, sequence);
+                }
             }
 
             @Override
             public void messageReceived(ByteBuffer payload, long publishTimestamp, int partition) {
-                long[] stamp = stamp(payload);
+                boolean stamped = DeliveryStamp.isStamped(payload);
+                long producerId = stamped ? DeliveryStamp.producerId(payload) : 0;
+                long sequence = stamped ? DeliveryStamp.sequence(payload) : 0;
                 delegate.messageReceived(payload, publishTimestamp, partition);
-                verify(producers, stamp);
+                if (stamped) {
+                    sub.record(producerId, sequence);
+                }
             }
 
             @Override
@@ -83,22 +103,30 @@ final class DeliveryVerifier {
         };
     }
 
-    private void verify(Map<Long, SequenceWindow> producers, byte[] payload) {
-        if (DeliveryStamp.isStamped(payload)) {
-            record(producers, DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload));
+    /** Per-subscription verification handle invoked directly inside {@link RunCallbacks}. */
+    static final class Subscription {
+        private final DeliveryVerifier verifier;
+        private final Map<Long, SequenceWindow> producers;
+
+        private Subscription(DeliveryVerifier verifier, Map<Long, SequenceWindow> producers) {
+            this.verifier = verifier;
+            this.producers = producers;
         }
-    }
 
-    // The producer id and sequence of a stamped buffer, or null for an unstamped one
-    private static long @Nullable [] stamp(ByteBuffer payload) {
-        return DeliveryStamp.isStamped(payload)
-                ? new long[] {DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload)}
-                : null;
-    }
+        void verify(byte[] payload) {
+            if (DeliveryStamp.isStamped(payload)) {
+                record(DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload));
+            }
+        }
 
-    private void verify(Map<Long, SequenceWindow> producers, long @Nullable [] stamp) {
-        if (stamp != null) {
-            record(producers, stamp[0], stamp[1]);
+        void verify(ByteBuffer payload) {
+            if (DeliveryStamp.isStamped(payload)) {
+                record(DeliveryStamp.producerId(payload), DeliveryStamp.sequence(payload));
+            }
+        }
+
+        private void record(long producerId, long sequence) {
+            verifier.record(producers, producerId, sequence);
         }
     }
 

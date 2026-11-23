@@ -14,6 +14,7 @@
 package io.github.mihkels.omb.driver.jms;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -69,6 +70,20 @@ public class JMSBenchmarkDriverTest {
     @Test
     void supportsHeaders() {
         assertTrue(new JMSBenchmarkDriver().supportsHeaders());
+    }
+
+    @Test
+    void supportsSharedSubscriptionsOnlyWithJms20Api() throws Exception {
+        assertFalse(new JMSBenchmarkDriver().supportsSharedSubscriptions());
+
+        JMSConfig jms20 = new JMSConfig();
+        jms20.use20api = true;
+        JMSBenchmarkDriver driver = consumerDriver(jms20, new ArrayList<>());
+        try {
+            assertTrue(driver.supportsSharedSubscriptions());
+        } finally {
+            driver.close();
+        }
     }
 
     @Test

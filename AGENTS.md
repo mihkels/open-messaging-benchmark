@@ -69,8 +69,8 @@ the ArchUnit tests and the JaCoCo thresholds. Fix findings, do not suppress them
 
 ## Hard constraints
 
-- Publish images and Helm charts only to Docker Hub (`docker.io/mihkels`). Never reference `ghcr.io`,
-  `gcr.io` or `*.pkg.dev`; the workflow lint fails on them.
+- Publish images and Helm charts only to Docker Hub (`docker.io/mihkels`). Never reference the GitHub or
+  Google container registries anywhere in the repository; `workflow-lint.yml` fails on their hostnames.
 - Local Kubernetes uses the project kubeconfig and the `kind-omb` context only, never Docker Desktop
   (`mise run check`).
 - Do not commit secrets, `.env` files or local agent and editor settings.

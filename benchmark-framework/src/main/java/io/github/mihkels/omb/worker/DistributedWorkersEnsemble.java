@@ -220,10 +220,10 @@ public final class DistributedWorkersEnsemble implements Worker {
 
     @Override
     public void createConsumers(ConsumerAssignment overallConsumerAssignment) {
+        boolean sharedSubscriptions = overallConsumerAssignment.hasSharedSubscriptions();
         List<List<TopicSubscription>> subscriptionsPerConsumer =
                 ListPartition.partitionList(
                         overallConsumerAssignment.topicsSubscriptions, consumerWorkers.size());
-        boolean sharedSubscriptions = overallConsumerAssignment.hasSharedSubscriptions();
         Map<Worker, ConsumerAssignment> topicsPerWorkerMap = new LinkedHashMap<>();
         int i = 0;
         for (List<TopicSubscription> tsl : subscriptionsPerConsumer) {

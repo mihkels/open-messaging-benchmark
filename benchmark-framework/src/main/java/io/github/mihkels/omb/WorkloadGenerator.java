@@ -226,20 +226,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             collect(result, workload.warmupDurationMinutes, TimeUnit.MINUTES, false);
         }
 
-        // Set before the backlog controller starts, so it cannot be overwritten by a stale MEASURE
-        enterPhase(workload.consumerBacklogSizeGB > 0 ? RunPhase.BACKLOG_BUILD : RunPhase.MEASURE);
-        if (workload.consumerBacklogSizeGB > 0) {
-            needToWaitForBacklogDraining = true;
-            startController(
-                    "backlog",
-                    () -> buildAndDrainBacklog(workload.testDurationMinutes, System::nanoTime, 1000, 100),
-                    () -> needToWaitForBacklogDraining = false);
-        }
-
-        worker.resetStats();
-        if (workload.warmupDurationMinutes > 0) {
-            excludeWarmUp();
-        }
+        beginMeasuredWindow();
         int measuredMinutes = workload.measuredMinutes();
         log.info("----- Starting benchmark traffic ({}m)------", measuredMinutes);
         if (workload.usesStages()) {
@@ -260,6 +247,24 @@ public final class WorkloadGenerator implements WorkloadRun {
         return result;
     }
 
+    void beginMeasuredWindow() {
+        // Reset and exclude warm-up before starting backlog/stage/pause controllers so early
+        // backlog-build traffic cannot race with warm-up accounting.
+        worker.resetStats();
+        if (workload.warmupDurationMinutes > 0) {
+            excludeWarmUp();
+        }
+        // Set before the backlog controller starts, so it cannot be overwritten by a stale MEASURE
+        enterPhase(workload.consumerBacklogSizeGB > 0 ? RunPhase.BACKLOG_BUILD : RunPhase.MEASURE);
+        if (workload.consumerBacklogSizeGB > 0) {
+            needToWaitForBacklogDraining = true;
+            startController(
+                    "backlog",
+                    () -> buildAndDrainBacklog(workload.testDurationMinutes, System::nanoTime, 1000, 100),
+                    () -> needToWaitForBacklogDraining = false);
+        }
+    }
+
     /**
      * Stops the producers and waits until consumers have received every acknowledged message, or
      * until the counters stop moving for {@code quietNanos}, then counts what was lost.
@@ -270,7 +275,9 @@ public final class WorkloadGenerator implements WorkloadRun {
      * @return the delivery counts
      */
     Delivery drainForDelivery(LongSupplier clock, long tickMillis, long quietNanos)
-            throws InterruptedException {
+            throws IOException, InterruptedException {
+        stopControllers();
+        checkControllerFailure();
         enterPhase(RunPhase.DELIVERY_DRAIN);
         log.info("--- Producers stopped, waiting for consumers to receive what was sent ---");
         CountersStats last = worker.getCountersStats();
@@ -340,7 +347,7 @@ public final class WorkloadGenerator implements WorkloadRun {
      *
      * @param currentRate the publish rate to start the search from
      */
-    private void findMaximumSustainableRate(double currentRate) throws InterruptedException {
+    void findMaximumSustainableRate(double currentRate) throws InterruptedException {
         long lastControlTimestamp = System.nanoTime();
         long probeStart = lastControlTimestamp;
 
@@ -514,7 +521,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     }
 
     // onExit runs after any controller failure has been recorded, so the run cannot finish without it
-    private void startController(String name, Controller controller, Runnable onExit) {
+    void startController(String name, Controller controller, Runnable onExit) {
         synchronized (controllerLock) {
             if (closed) {
                 throw new IllegalStateException("Workload generator is closed");
@@ -529,11 +536,31 @@ public final class WorkloadGenerator implements WorkloadRun {
                                 recordControllerFailure(name, e);
                             }
                         } catch (Throwable t) {
-                            recordControllerFailure(name, t);
+                            // Worker clients wrap interrupts; after the run that is our own cancel
+                            if (!(runCompleted && Thread.currentThread().isInterrupted())) {
+                                recordControllerFailure(name, t);
+                            }
                         } finally {
                             onExit.run();
                         }
                     }));
+        }
+    }
+
+    private void cancelControllers() {
+        List<Future<?>> active;
+        synchronized (controllerLock) {
+            active = List.copyOf(controllers);
+        }
+        active.forEach(controller -> controller.cancel(true));
+        executor.shutdownNow();
+    }
+
+    private void stopControllers() throws IOException, InterruptedException {
+        runCompleted = true;
+        cancelControllers();
+        if (!executor.awaitTermination(shutdownTimeoutNanos, TimeUnit.NANOSECONDS)) {
+            throw new IOException("Workload controllers did not terminate before delivery drain");
         }
     }
 
@@ -566,7 +593,7 @@ public final class WorkloadGenerator implements WorkloadRun {
     }
 
     @FunctionalInterface
-    private interface Controller {
+    interface Controller {
         void run() throws InterruptedException;
     }
 
@@ -581,10 +608,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         if (active != null && active != Thread.currentThread()) {
             active.interrupt();
         }
-        synchronized (controllerLock) {
-            controllers.forEach(controller -> controller.cancel(true));
-        }
-        executor.shutdownNow();
+        cancelControllers();
 
         Failures failures = new Failures();
         failures.deferInterrupt("Interrupted before stopping workload controllers");

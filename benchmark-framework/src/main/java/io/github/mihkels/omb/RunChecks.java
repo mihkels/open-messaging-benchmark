@@ -333,9 +333,15 @@ public class RunChecks {
     }
 
     private void clockOffset(TestResult result, List<Finding> findings) {
+        if (!enabled(CLOCK_OFFSET) || result.metadata == null) {
+            return;
+        }
+        double spread = WorkerClock.spreadMs(result.metadata.clockOffsets());
+        if (spread <= 0) {
+            return;
+        }
         double p50 = result.aggregatedEndToEndLatency50pct;
-        if (enabled(CLOCK_OFFSET) && result.metadata != null && p50 > 0) {
-            double spread = WorkerClock.spreadMs(result.metadata.clockOffsets());
+        if (p50 > 0) {
             double limit = maxClockOffsetFraction * p50;
             if (spread > limit) {
                 findings.add(
@@ -350,7 +356,25 @@ public class RunChecks {
                                 spread,
                                 limit));
             }
+        } else if (hasConsumedMessages(result)) {
+            findings.add(
+                    new Finding(
+                            CLOCK_OFFSET,
+                            Severity.WARNING,
+                            String.format(
+                                    "End-to-end latency is unreliable: producer and consumer worker clocks"
+                                            + " differ by up to %.3f ms while p50 end-to-end latency is 0 ms"
+                                            + " (negative clock skew drops samples)",
+                                    spread),
+                            spread,
+                            0.0));
         }
+    }
+
+    private static boolean hasConsumedMessages(TestResult result) {
+        return result.summary.consumeRateAvg() > 0
+                || result.consumeRate.stream().anyMatch(rate -> rate > 0)
+                || (result.delivery != null && result.delivery.received() > 0);
     }
 
     private void generatorSaturation(TestResult result, List<Finding> findings) {

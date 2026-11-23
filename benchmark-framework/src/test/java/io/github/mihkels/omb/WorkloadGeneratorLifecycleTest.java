@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -527,6 +528,193 @@ class WorkloadGeneratorLifecycleTest {
         }
         verify(worker).setPhase(RunPhase.DELIVERY_DRAIN);
         verify(worker, times(3)).getCountersStats();
+    }
+
+    @Test
+    void sustainableRateControllerStopsBeforeDeliveryDrain() throws Exception {
+        Worker worker = worker();
+        Workload workload = workload();
+        workload.producerRate = 0;
+        workload.subscriptionsPerTopic = 1;
+        workload.verifyDelivery = true;
+
+        CountDownLatch rateAdjusted = new CountDownLatch(1);
+        AtomicBoolean deliveryDrainStarted = new AtomicBoolean();
+        AtomicInteger rateAdjustmentsDuringDrain = new AtomicInteger();
+        doAnswer(
+                        inv -> {
+                            rateAdjusted.countDown();
+                            if (deliveryDrainStarted.get()) {
+                                rateAdjustmentsDuringDrain.incrementAndGet();
+                            }
+                            return null;
+                        })
+                .when(worker)
+                .adjustPublishRate(anyDouble());
+        doAnswer(
+                        inv -> {
+                            if (inv.getArgument(0) == RunPhase.DELIVERY_DRAIN) {
+                                deliveryDrainStarted.set(true);
+                            }
+                            return null;
+                        })
+                .when(worker)
+                .setPhase(any());
+
+        when(worker.getCountersStats())
+                .thenReturn(
+                        new CountersStats(10, 0, 5, 10, 5, 0, 0),
+                        new CountersStats(10, 0, 6, 10, 6, 0, 0),
+                        new CountersStats(10, 0, 7, 10, 7, 0, 0),
+                        new CountersStats(10, 0, 10, 10, 10, 0, 0));
+
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.startController(
+                    "sustainable rate", () -> generator.findMaximumSustainableRate(1000), () -> {});
+            assertThat(rateAdjusted.await(2, TimeUnit.SECONDS)).isTrue();
+
+            Delivery delivery = generator.drainForDelivery(() -> 0, 20, Long.MAX_VALUE);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 10, 0, 0, 0));
+        }
+
+        assertThat(rateAdjustmentsDuringDrain.get()).isZero();
+    }
+
+    @Test
+    void consumerPauseControllerStopsBeforeDeliveryDrain() throws Exception {
+        Worker worker = worker();
+        Workload workload = pausedWorkload();
+        workload.verifyDelivery = true;
+
+        CountDownLatch pauseResumed = new CountDownLatch(1);
+        AtomicBoolean deliveryDrainStarted = new AtomicBoolean();
+        AtomicBoolean measurePhaseSetDuringDrain = new AtomicBoolean();
+        doAnswer(
+                        inv -> {
+                            pauseResumed.countDown();
+                            return null;
+                        })
+                .when(worker)
+                .resumeConsumers();
+        doAnswer(
+                        inv -> {
+                            RunPhase phase = inv.getArgument(0);
+                            if (phase == RunPhase.DELIVERY_DRAIN) {
+                                deliveryDrainStarted.set(true);
+                            } else if (deliveryDrainStarted.get() && phase == RunPhase.MEASURE) {
+                                measurePhaseSetDuringDrain.set(true);
+                            }
+                            return null;
+                        })
+                .when(worker)
+                .setPhase(any());
+
+        when(worker.getCountersStats())
+                .thenAnswer(inv ->
+                        deliveryDrainStarted.get()
+                                ? new CountersStats(10, 0, 10, 10, 10, 0, 0)
+                                : new CountersStats(5_000, 0, 0));
+
+        AtomicLong pauseClock = new AtomicLong();
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.startController(
+                    "consumer pause",
+                    () ->
+                            generator.pauseConsumersMidRun(
+                                    workload.consumerPause,
+                                    () -> TimeUnit.MINUTES.toNanos(pauseClock.getAndIncrement()),
+                                    5),
+                    () -> {});
+            assertThat(pauseResumed.await(2, TimeUnit.SECONDS)).isTrue();
+
+            Delivery delivery = generator.drainForDelivery(() -> 0, 20, Long.MAX_VALUE);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 10, 0, 0, 0));
+        }
+
+        assertThat(measurePhaseSetDuringDrain.get()).isFalse();
+    }
+
+    @Test
+    void controllerCancelledDuringWorkerRequestIsNotAFailure() throws Exception {
+        Worker worker = worker();
+        Workload workload = pausedWorkload();
+        workload.verifyDelivery = true;
+        when(worker.getCountersStats()).thenReturn(new CountersStats(10, 0, 10, 10, 10, 0, 0));
+
+        CountDownLatch requestInFlight = new CountDownLatch(1);
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.startController(
+                    "worker request",
+                    () -> {
+                        requestInFlight.countDown();
+                        try {
+                            new CountDownLatch(1).await();
+                        } catch (InterruptedException e) {
+                            // Same as HttpWorkerClient.await
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("get /counters-stats interrupted", e);
+                        }
+                    },
+                    () -> {});
+            assertThat(requestInFlight.await(2, TimeUnit.SECONDS)).isTrue();
+
+            Delivery delivery = generator.drainForDelivery(() -> 0, 20, Long.MAX_VALUE);
+
+            assertThat(delivery).isEqualTo(new Delivery(10, 10, 0, 0, 0));
+        }
+    }
+
+    @Test
+    void backlogControllerStartsAfterResetStatsAndExcludeWarmUp() throws Exception {
+        Worker worker = worker();
+        Workload workload = backlogWorkload();
+        workload.warmupDurationMinutes = 1;
+
+        List<String> events = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch paused = new CountDownLatch(1);
+        doAnswer(
+                        inv -> {
+                            events.add("resetStats");
+                            return null;
+                        })
+                .when(worker)
+                .resetStats();
+        when(worker.getCountersStats())
+                .thenAnswer(inv -> {
+                    events.add("getCountersStats");
+                    return new CountersStats(100, 0, 0);
+                });
+        doAnswer(
+                        inv -> {
+                            events.add("setPhase:" + inv.getArgument(0));
+                            return null;
+                        })
+                .when(worker)
+                .setPhase(any());
+        doAnswer(
+                        inv -> {
+                            events.add("pauseConsumers");
+                            paused.countDown();
+                            return null;
+                        })
+                .when(worker)
+                .pauseConsumers();
+
+        try (WorkloadGenerator generator = fastGenerator(workload, worker)) {
+            generator.beginMeasuredWindow();
+            assertThat(paused.await(2, TimeUnit.SECONDS)).isTrue();
+        }
+
+        int resetIndex = events.indexOf("resetStats");
+        int excludeWarmUpReadIndex = events.indexOf("getCountersStats");
+        int phaseIndex = events.indexOf("setPhase:" + RunPhase.BACKLOG_BUILD);
+        int pauseIndex = events.indexOf("pauseConsumers");
+        assertThat(resetIndex).isZero();
+        assertThat(excludeWarmUpReadIndex).isGreaterThan(resetIndex);
+        assertThat(phaseIndex).isGreaterThan(excludeWarmUpReadIndex);
+        assertThat(pauseIndex).isGreaterThan(phaseIndex);
     }
 
     @Test

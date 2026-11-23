@@ -222,6 +222,7 @@ public final class Benchmark {
         // Results are written only after the run, so a bad path must fail now, not hours later
         try {
             createResultDirectory(arguments.output, System.getenv(RESULTS_DIR_ENV));
+            createReportDirectory(arguments.reportHtml);
         } catch (IOException e) {
             log.error("Cannot write results: {}", e.toString());
             System.exit(-1);
@@ -535,7 +536,12 @@ public final class Benchmark {
             return;
         }
         log.info("Writing HTML report into {}", reportHtml);
-        Files.writeString(Path.of(reportHtml), HtmlReport.render(written), StandardCharsets.UTF_8);
+        Path reportPath = Path.of(reportHtml);
+        Path parent = reportPath.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(reportPath, HtmlReport.render(written), StandardCharsets.UTF_8);
     }
 
     // Stops anything a previous run left on the worker
@@ -939,12 +945,33 @@ public final class Benchmark {
         } else if (resultsDirectory != null && !resultsDirectory.isEmpty()) {
             directory = Path.of(resultsDirectory);
         }
+        ensureWritableDirectory(directory, "Results directory");
+    }
+
+    // Creates the parent directory for --report-html up front and checks it is writable
+    static void createReportDirectory(@Nullable String reportHtml) throws IOException {
+        if (reportHtml == null || reportHtml.isEmpty()) {
+            return;
+        }
+        Path reportPath = Path.of(reportHtml).toAbsolutePath();
+        if (Files.isDirectory(reportPath)) {
+            throw new IOException("Report path " + reportPath + " is a directory");
+        }
+        ensureWritableDirectory(reportPath.getParent(), "Report directory");
+        // The report is written after the run; fail now instead of after hours of benchmarking
+        if (Files.exists(reportPath) && !Files.isWritable(reportPath)) {
+            throw new IOException("Report file " + reportPath + " is not writable");
+        }
+    }
+
+    private static void ensureWritableDirectory(@Nullable Path directory, String label)
+            throws IOException {
         if (directory == null) {
             return;
         }
         Files.createDirectories(directory);
         if (!Files.isWritable(directory)) {
-            throw new IOException("Results directory " + directory + " is not writable");
+            throw new IOException(label + " " + directory + " is not writable");
         }
     }
 

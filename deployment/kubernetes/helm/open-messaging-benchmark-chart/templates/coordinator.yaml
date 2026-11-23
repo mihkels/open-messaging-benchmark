@@ -71,8 +71,16 @@ spec:
         - |
           set -euo pipefail
           benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED_WORKERS" -o /results/result.json "$@" "$WORKLOAD"
+          if [ -f /results/result.json ]; then
+            result_file=/results/result.json
+          elif [ -f /results/result-summary.json ]; then
+            result_file=/results/result-summary.json
+          else
+            echo "Expected /results/result.json or /results/result-summary.json" >&2
+            exit 1
+          fi
           echo "----- OMB RESULT BEGIN -----"
-          cat /results/result.json
+          cat "$result_file"
           echo
           echo "----- OMB RESULT END -----"
         - benchmark

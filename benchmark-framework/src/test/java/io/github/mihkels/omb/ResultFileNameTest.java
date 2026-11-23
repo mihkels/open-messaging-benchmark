@@ -113,4 +113,49 @@ class ResultFileNameTest {
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("not writable");
     }
+
+    @Test
+    void createsAndValidatesReportDirectories(@TempDir Path temp) throws IOException {
+        Benchmark.createReportDirectory(null);
+        Benchmark.createReportDirectory("");
+
+        Path report = temp.resolve("reports/nested/report.html");
+        Benchmark.createReportDirectory(report.toString());
+        assertThat(report.getParent()).isDirectory();
+
+        Path existingDir = Files.createDirectory(temp.resolve("existing-dir"));
+        assertThatThrownBy(() -> Benchmark.createReportDirectory(existingDir.toString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("is a directory");
+
+        Path blocker = Files.createFile(temp.resolve("blocker"));
+        assertThatThrownBy(() -> Benchmark.createReportDirectory(blocker.resolve("r.html").toString()))
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void rejectsReadOnlyReportDirectory(@TempDir Path temp) throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path readOnly = Files.createDirectory(temp.resolve("read-only-reports"));
+        Files.setPosixFilePermissions(readOnly, PosixFilePermissions.fromString("r-xr-xr-x"));
+        assumeTrue(!Files.isWritable(readOnly));
+
+        assertThatThrownBy(
+                        () -> Benchmark.createReportDirectory(readOnly.resolve("report.html").toString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("not writable");
+    }
+
+    @Test
+    void rejectsExistingReadOnlyReportFile(@TempDir Path temp) throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path report = Files.createFile(temp.resolve("report.html"));
+        Files.setPosixFilePermissions(report, PosixFilePermissions.fromString("r--r--r--"));
+        assumeTrue(!Files.isWritable(report));
+
+        assertThatThrownBy(() -> Benchmark.createReportDirectory(report.toString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("Report file")
+                .hasMessageContaining("not writable");
+    }
 }

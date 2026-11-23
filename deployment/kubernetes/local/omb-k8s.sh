@@ -492,6 +492,7 @@ cmd_lint() {
         --set image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
         --set-file driverConfig="$SUITE_DIR/drivers/kafka.yaml" \
         --set-file workloadConfig="$SUITE_DIR/workloads/contract.yaml" > "$rendered/job.yaml"
+    grep -q 'result-summary.json' "$rendered/job.yaml" || die "job.yaml does not handle result-summary.json for repeated runs"
     helm template "$RELEASE" "$CHART_DIR" --set workers.auth.enabled=true \
         --set workers.auth.protectMetrics=true > "$rendered/auth.yaml"
     helm template "$RELEASE" "$CHART_DIR" --set workers.auth.enabled=true \

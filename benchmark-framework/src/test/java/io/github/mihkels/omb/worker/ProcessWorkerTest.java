@@ -419,6 +419,73 @@ class ProcessWorkerTest {
     }
 
     @Test
+    void isReusableAfterCleanStopAllAndNotWhileRunning() throws Exception {
+        ProcessWorker worker = newWorker();
+        try {
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.canReuseAfterFailure()).isFalse();
+
+            worker.stopAll();
+            assertThat(worker.pid()).isNotNull();
+            assertThat(worker.canReuseAfterFailure()).isTrue();
+
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(worker.canReuseAfterFailure()).isFalse();
+            assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
+        } finally {
+            worker.close();
+        }
+        assertThat(worker.canReuseAfterFailure()).isFalse();
+    }
+
+    @Test
+    void doesNotLeakRunPhaseAcrossRuns() throws Exception {
+        try (ProcessWorker worker = newWorker()) {
+            worker.setRunContext(new RunContext("run-1", "workload-a"));
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            worker.setPhase(RunPhase.MEASURE);
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "measure")).endsWith(" 1.0");
+
+            worker.stopAll();
+            worker.setRunContext(new RunContext("run-2", "workload-b"));
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "measure")).endsWith(" 0.0");
+
+            // A phase set after setRunContext and before initializeDriver applies to the next child,
+            // and the subsequent setRunContext clears it again.
+            worker.stopAll();
+            worker.setRunContext(new RunContext("run-3", "workload-c"));
+            worker.setPhase(RunPhase.WARMUP);
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "warmup")).endsWith(" 1.0");
+
+            worker.stopAll();
+            worker.setRunContext(new RunContext("run-4", "workload-d"));
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "warmup")).endsWith(" 0.0");
+
+            // Even if a prior driver was replaced without stopAll() or setRunContext(), its phase
+            // does not carry over to the next driver process.
+            worker.setPhase(RunPhase.MEASURE);
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "measure")).endsWith(" 1.0");
+            worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
+            assertThat(phaseMetricLine(worker.scrapeMetrics(), "measure")).endsWith(" 0.0");
+        }
+    }
+
+    private static String phaseMetricLine(String metrics, String phase) {
+        return metrics
+                .lines()
+                .filter(line ->
+                        !line.startsWith("#")
+                                && line.contains("benchmark_phase{")
+                                && line.contains("phase=\"" + phase + "\""))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing benchmark_phase gauge for " + phase));
+    }
+
+    @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     void passesQuotedJvmOptionsToDriverProcess() throws Exception {
         String oldOptions = System.getProperty(ProcessWorker.JVM_OPTS_PROPERTY);

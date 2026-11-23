@@ -35,7 +35,8 @@ benchmark --drivers "$DRIVER" --workers "$WORKERS" --expected-workers "$EXPECTED
 ```
 
 Or set `coordinator.mode=job` with `--set-file workloadConfig=my-workload.yaml`; the Job prints the
-result JSON between `OMB RESULT BEGIN/END` markers in its log.
+result JSON (`result-summary.json` when repetitions are configured) between `OMB RESULT BEGIN/END`
+markers in its log.
 
 Security defaults: non-root (uid 10001), read-only root file system, all capabilities dropped,
 `RuntimeDefault` seccomp profile, no service account token, and a NetworkPolicy that only lets the

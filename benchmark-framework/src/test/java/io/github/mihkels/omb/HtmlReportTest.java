@@ -127,4 +127,12 @@ class HtmlReportTest {
         Benchmark.writeHtmlReport(report.toString(), Map.of("r.json", result("A", 1)));
         assertThat(Files.readString(report)).contains("\"r.json\"");
     }
+
+    @Test
+    void createsMissingParentDirectoriesWhenWritingHtmlReport() throws Exception {
+        Path report = directory.resolve("nested/reports/report.html");
+        Benchmark.writeHtmlReport(report.toString(), Map.of("r.json", result("A", 1)));
+        assertThat(report).isRegularFile();
+        assertThat(Files.readString(report)).contains("\"r.json\"");
+    }
 }

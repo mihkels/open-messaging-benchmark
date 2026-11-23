@@ -508,7 +508,7 @@ public final class HttpWorkerClient implements Worker {
                     path,
                     response.getStatusCode(),
                     body);
-            throw new IllegalStateException(
+            String message =
                     "HTTP "
                             + method
                             + " "
@@ -516,7 +516,15 @@ public final class HttpWorkerClient implements Worker {
                             + path
                             + " failed with code "
                             + response.getStatusCode()
-                            + (body == null || body.isBlank() ? "" : ": " + body));
+                            + (body == null || body.isBlank() ? "" : ": " + body);
+            if (isPermanentClientError(response.getStatusCode())) {
+                throw new WorkerRejectedException(message);
+            }
+            throw new IllegalStateException(message);
         }
+    }
+
+    private static boolean isPermanentClientError(int status) {
+        return status >= 400 && status < 500 && status != 408 && status != 429;
     }
 }

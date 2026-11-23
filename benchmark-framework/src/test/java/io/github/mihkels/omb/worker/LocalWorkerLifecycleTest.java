@@ -1218,7 +1218,7 @@ class LocalWorkerLifecycleTest {
             worker.createProducers(List.of("topic"));
             ProducerWorkAssignment assignment = headersAssignment();
             assertThatThrownBy(() -> worker.startLoad(assignment))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("does not support message headers");
             verify(producer, times(0)).sendAsync(any(), any());
             verify(producer, times(0)).sendAsync(any(), any(), any());
@@ -1271,11 +1271,11 @@ class LocalWorkerLifecycleTest {
             worker.createProducers(List.of("topic"));
             ConsumerAssignment consumers = telemetryConsumerAssignment();
             assertThatThrownBy(() -> worker.createConsumers(consumers))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("does not support partition telemetry");
             ProducerWorkAssignment assignment = telemetryAssignment();
             assertThatThrownBy(() -> worker.startLoad(assignment))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("does not support partition telemetry");
             verify(producer, times(0)).sendAsyncWithResult(any(), any(), any());
         }

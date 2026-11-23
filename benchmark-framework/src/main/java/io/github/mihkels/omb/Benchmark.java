@@ -27,6 +27,7 @@ import io.github.mihkels.omb.worker.HttpWorkerClient;
 import io.github.mihkels.omb.worker.ProcessWorker;
 import io.github.mihkels.omb.worker.Worker;
 import io.github.mihkels.omb.worker.WorkerClock;
+import io.github.mihkels.omb.worker.WorkerRejectedException;
 import io.github.mihkels.omb.worker.WorkerWatchdog;
 import io.github.mihkels.omb.worker.commands.RunContext;
 import java.io.File;
@@ -882,7 +883,8 @@ public final class Benchmark {
             }
             if (next instanceof Error
                     || next instanceof IllegalArgumentException
-                    || next instanceof JacksonException) {
+                    || next instanceof JacksonException
+                    || next instanceof WorkerRejectedException) {
                 return false;
             }
             if (next.getCause() != null) {

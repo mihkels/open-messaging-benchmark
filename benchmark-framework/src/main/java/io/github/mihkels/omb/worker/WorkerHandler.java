@@ -13,6 +13,7 @@
  */
 package io.github.mihkels.omb.worker;
 
+import io.github.mihkels.omb.plugin.PluginException;
 import io.github.mihkels.omb.utils.SecureTempFiles;
 import io.github.mihkels.omb.worker.commands.ConsumerAssignment;
 import io.github.mihkels.omb.worker.commands.ProducerWorkAssignment;
@@ -27,7 +28,10 @@ import io.javalin.http.Context;
 import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
 import java.nio.file.Files;
+import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +40,7 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -107,7 +112,8 @@ public class WorkerHandler implements AutoCloseable {
                 Exception.class,
                 (e, ctx) -> {
                     log.error("Request {} {} failed", ctx.method(), ctx.path(), e);
-                    ctx.status(500).result(describe(e));
+                    ctx.status(isClientError(e) ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR)
+                            .result(describe(e));
                 });
         // Runs first so an unauthenticated caller learns nothing, not even the accepted types.
         // Before handlers apply to every path, including routes callers add after these.
@@ -200,6 +206,31 @@ public class WorkerHandler implements AutoCloseable {
         int parameters = contentType.indexOf(';');
         String mediaType = parameters < 0 ? contentType : contentType.substring(0, parameters);
         return mediaType.strip().toLowerCase(Locale.ROOT);
+    }
+
+    // Invalid configuration, plugin resolution errors and unsupported workloads fail the same way on
+    // every retry, so report them as HTTP 400 rather than a 500 server failure.
+    static boolean isClientError(Throwable failure) {
+        Deque<Throwable> pending = new ArrayDeque<>(List.of(failure));
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (!pending.isEmpty()) {
+            Throwable next = pending.pop();
+            if (!seen.add(next)) {
+                continue;
+            }
+            if (next instanceof IllegalArgumentException
+                    || next instanceof JacksonException
+                    || next instanceof PluginException
+                    || next instanceof WorkerRejectedException) {
+                return true;
+            }
+            Throwable cause = next.getCause();
+            if (cause != null) {
+                pending.push(cause);
+            }
+            pending.addAll(Arrays.asList(next.getSuppressed()));
+        }
+        return false;
     }
 
     private static String describe(Throwable e) {

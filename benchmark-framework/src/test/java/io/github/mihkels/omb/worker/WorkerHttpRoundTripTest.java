@@ -306,8 +306,9 @@ class WorkerHttpRoundTripTest {
                 .startLoad(any());
         assertThatThrownBy(() ->
                         remote.startLoad(new ProducerWorkAssignment(List.of(), 10, KeyDistributorType.NO_KEY)))
+                .isInstanceOf(WorkerRejectedException.class)
                 .hasMessageContaining(
-                        "code 500: java.lang.IllegalArgumentException: payload list must not be empty");
+                        "code 400: java.lang.IllegalArgumentException: payload list must not be empty");
         verify(worker).startLoad(any());
     }
 
@@ -377,7 +378,7 @@ class WorkerHttpRoundTripTest {
         assertThat(
                         rawPost(host + WorkerHandler.SET_RUN_ID, "application/json", "{\"workload\":\"w\"}")
                                 .statusCode())
-                .isEqualTo(500);
+                .isEqualTo(400);
         verifyNoMoreInteractions(worker);
     }
 

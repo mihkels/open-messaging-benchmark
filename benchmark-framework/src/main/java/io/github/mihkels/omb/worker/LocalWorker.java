@@ -333,7 +333,7 @@ public final class LocalWorker implements Worker {
         List<Map<String, byte[]>> headers = null;
         if (headerConfig != null) {
             if (!current.requireDriver().supportsHeaders()) {
-                throw new IllegalStateException(
+                throw new IllegalArgumentException(
                         "Driver "
                                 + current.requireDriver().getClass().getName()
                                 + " does not support message headers; remove 'headers' from the workload");
@@ -363,7 +363,7 @@ public final class LocalWorker implements Worker {
     // Refuses telemetry rather than reporting an empty summary for a driver that cannot supply it
     private static void requirePartitionTelemetry(Run current) {
         if (!current.requireDriver().supportsPartitionTelemetry()) {
-            throw new IllegalStateException(
+            throw new IllegalArgumentException(
                     "Driver "
                             + current.requireDriver().getClass().getName()
                             + " does not support partition telemetry; remove 'partitionTelemetry' from the"

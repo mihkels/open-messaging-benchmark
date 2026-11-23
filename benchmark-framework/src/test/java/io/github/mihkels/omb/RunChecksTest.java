@@ -235,6 +235,50 @@ class RunChecksTest {
     }
 
     @Test
+    void flagsClockOffsetWhenNegativeSkewZeroesP50EndToEndLatency() {
+        TestResult result = healthy();
+        result.aggregatedEndToEndLatency50pct = 0;
+        result.metadata =
+                metadata(
+                        new WorkerClock("p", "producer", 5.0, 0.4, 0.0),
+                        new WorkerClock("c", "consumer", 0.0, 0.4, 0.0));
+
+        Finding finding = only(new RunChecks().evaluate(workload(), result));
+
+        assertThat(finding.check()).isEqualTo("clockOffset");
+        assertThat(finding.severity()).isEqualTo(Severity.WARNING);
+        assertThat(finding.value()).isEqualTo(5.0);
+        assertThat(finding.limit()).isZero();
+        assertThat(finding.message()).contains("5.000 ms").contains("0 ms");
+    }
+
+    @Test
+    void zeroP50IsNotFlaggedWithoutBothClockSpreadAndConsumedMessages() {
+        TestResult noSpread = healthy();
+        noSpread.aggregatedEndToEndLatency50pct = 0;
+        noSpread.metadata =
+                metadata(
+                        new WorkerClock("p", "producer", 2.0, 0.4, 0.0),
+                        new WorkerClock("c", "consumer", 2.0, 0.4, 0.0));
+        assertThat(new RunChecks().evaluate(workload(), noSpread)).isEmpty();
+
+        TestResult local = healthy();
+        local.aggregatedEndToEndLatency50pct = 0;
+        local.metadata = metadata(new WorkerClock("local", "local", 0, 0, 0.0));
+        assertThat(new RunChecks().evaluate(workload(), local)).isEmpty();
+
+        TestResult noConsumers = healthy();
+        noConsumers.aggregatedEndToEndLatency50pct = 0;
+        noConsumers.summary = new ResultSummary(1000, 0, 1, 1_000_000, 0, 20, 1000);
+        noConsumers.consumeRate.clear();
+        noConsumers.metadata =
+                metadata(
+                        new WorkerClock("p", "producer", 5.0, 0.4, 0.0),
+                        new WorkerClock("c", "consumer", 0.0, 0.4, 0.0));
+        assertThat(new RunChecks().evaluate(workload(), noConsumers)).isEmpty();
+    }
+
+    @Test
     void clockOffsetsRoundTripAndOldResultsReadWithNone() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         ResultMetadata metadata = metadata(new WorkerClock("p", "producer", 1.5, 0.4, null));

@@ -109,8 +109,9 @@ The coordinator itself never produces or consumes, so only differences between w
 local run records one `local` entry with zeros, since producer and consumer share one clock. A
 worker that cannot be probed, such as one running an older release without the clock in `/health`,
 is left out with a warning in the log. When the largest producer-to-consumer difference, at setup
-or at the end, exceeds a fraction of the p50 end-to-end latency, the run gets a `clockOffset`
-[finding](../guides/results.md#run-checks).
+or at the end, exceeds a fraction of the p50 end-to-end latency — or is non-zero while the p50
+end-to-end latency reads `0 ms` despite consumed messages (because negative skew drops samples) —
+the run gets a `clockOffset` [finding](../guides/results.md#run-checks).
 
 ## Backlog
 

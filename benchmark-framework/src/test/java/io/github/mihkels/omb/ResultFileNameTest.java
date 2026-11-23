@@ -145,4 +145,17 @@ class ResultFileNameTest {
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("not writable");
     }
+
+    @Test
+    void rejectsExistingReadOnlyReportFile(@TempDir Path temp) throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path report = Files.createFile(temp.resolve("report.html"));
+        Files.setPosixFilePermissions(report, PosixFilePermissions.fromString("r--r--r--"));
+        assumeTrue(!Files.isWritable(report));
+
+        assertThatThrownBy(() -> Benchmark.createReportDirectory(report.toString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("Report file")
+                .hasMessageContaining("not writable");
+    }
 }

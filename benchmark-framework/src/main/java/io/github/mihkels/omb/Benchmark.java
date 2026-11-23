@@ -956,6 +956,10 @@ public final class Benchmark {
             throw new IOException("Report path " + reportPath + " is a directory");
         }
         ensureWritableDirectory(reportPath.getParent(), "Report directory");
+        // The report is written after the run; fail now instead of after hours of benchmarking
+        if (Files.exists(reportPath) && !Files.isWritable(reportPath)) {
+            throw new IOException("Report file " + reportPath + " is not writable");
+        }
     }
 
     private static void ensureWritableDirectory(@Nullable Path directory, String label)

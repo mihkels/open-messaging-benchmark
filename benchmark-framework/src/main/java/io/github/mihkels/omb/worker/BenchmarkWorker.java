@@ -26,11 +26,13 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -194,31 +196,94 @@ public final class BenchmarkWorker {
             log.debug("Driver metrics unavailable", e);
             return supervisor;
         }
-        return supervisor + withoutRepeatedMetadata(supervisor, driverMetrics);
+        return mergeMetrics(supervisor, driverMetrics);
     }
 
-    // Both processes export the JVM resource families, told apart by their process label. A
-    // second # HELP or # TYPE line for a family makes strict parsers such as promtool reject the
-    // page, so the driver's copies of the supervisor's lines are dropped.
-    private static String withoutRepeatedMetadata(String supervisor, String driver) {
-        Set<String> declared =
-                supervisor.lines().map(BenchmarkWorker::metadataKey).collect(Collectors.toSet());
-        declared.remove("");
-        StringBuilder out = new StringBuilder(driver.length());
-        driver
-                .lines()
-                .filter(line -> !declared.contains(metadataKey(line)))
-                .forEach(line -> out.append(line).append('\n'));
+    // Both processes export the JVM resource families, told apart by their process label. Strict
+    // Prometheus and OpenMetrics parsers require each family's # HELP/# TYPE block once with all of
+    // its sample lines grouped contiguously after it, so samples from both processes are merged by
+    // family in first-seen order.
+    private static String mergeMetrics(String supervisor, String driver) {
+        Map<String, MetricFamily> families = new LinkedHashMap<>();
+        boolean hasEof = addScrape(supervisor, families);
+        hasEof |= addScrape(driver, families);
+
+        StringBuilder out = new StringBuilder(supervisor.length() + driver.length());
+        for (MetricFamily family : families.values()) {
+            for (String meta : family.metadata.values()) {
+                out.append(meta).append('\n');
+            }
+            for (String sample : family.samples) {
+                out.append(sample).append('\n');
+            }
+        }
+        if (hasEof) {
+            out.append("# EOF\n");
+        }
         return out.toString();
     }
 
-    // "# HELP name" or "# TYPE name" for a metadata line, otherwise empty
-    private static String metadataKey(String line) {
-        if (!line.startsWith("# HELP ") && !line.startsWith("# TYPE ")) {
-            return "";
+    private static boolean addScrape(String scrape, Map<String, MetricFamily> families) {
+        boolean sawEof = false;
+        @Nullable String currentFamily = null;
+        for (String line : scrape.lines().toList()) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.equals("# EOF")) {
+                sawEof = true;
+                continue;
+            }
+            if (line.startsWith("# HELP ") || line.startsWith("# TYPE ") || line.startsWith("# UNIT ")) {
+                String[] parts = line.split(" ", 4);
+                if (parts.length >= 3) {
+                    currentFamily = parts[2];
+                    families
+                            .computeIfAbsent(currentFamily, _ -> new MetricFamily())
+                            .metadata
+                            .putIfAbsent(parts[1], line);
+                }
+                continue;
+            }
+            if (line.startsWith("#")) {
+                continue;
+            }
+            String sample = sampleName(line);
+            if (currentFamily == null || !belongsToFamily(sample, currentFamily)) {
+                currentFamily = sample;
+            }
+            families.computeIfAbsent(currentFamily, _ -> new MetricFamily()).samples.add(line);
         }
-        String[] parts = line.split(" ", 4);
-        return parts.length < 3 ? "" : parts[0] + " " + parts[1] + " " + parts[2];
+        return sawEof;
+    }
+
+    private static String sampleName(String line) {
+        for (int i = 0; i < line.length(); i++) {
+            char ch = line.charAt(i);
+            if (ch == '{' || ch == ' ' || ch == '\t') {
+                return line.substring(0, i);
+            }
+        }
+        return line;
+    }
+
+    private static boolean belongsToFamily(String sampleName, String family) {
+        if (sampleName.equals(family)) {
+            return true;
+        }
+        if (!sampleName.startsWith(family)) {
+            return false;
+        }
+        String suffix = sampleName.substring(family.length());
+        return switch (suffix) {
+            case "_bucket", "_count", "_sum", "_total", "_created", "_info", "_gcount", "_gsum" -> true;
+            default -> false;
+        };
+    }
+
+    private static final class MetricFamily {
+        final Map<String, String> metadata = new LinkedHashMap<>();
+        final List<String> samples = new ArrayList<>();
     }
 
     // WorkerHandler lives for the whole process; closed by the shutdown hook

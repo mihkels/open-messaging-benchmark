@@ -27,6 +27,9 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: com.google.protobuf:protobuf-java-util
         update-types: ['version-update:semver-major']
+      # jetty.version follows the Jetty that Javalin is built against; bump it with Javalin (#559)
+      - dependency-name: org.eclipse.jetty:jetty-alpn-java-server
+      - dependency-name: org.eclipse.jetty.http2:jetty-http2-server
     commit-message:
       prefix: deps
 

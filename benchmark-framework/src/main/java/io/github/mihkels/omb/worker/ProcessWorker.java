@@ -75,6 +75,7 @@ public class ProcessWorker implements Worker {
     private volatile boolean closed;
     private volatile boolean unusable;
     private volatile boolean initializing;
+    private boolean stopped;
     private volatile @Nullable RunContext run;
     private volatile @Nullable RunPhase phase;
     // The last driver failure, reported by health() until the next driver initializes
@@ -157,6 +158,7 @@ public class ProcessWorker implements Worker {
 
         DriverProcess starting = new DriverProcess(description);
         current = starting;
+        stopped = false;
         initializing = true;
         try {
             ensureOpen();
@@ -222,16 +224,31 @@ public class ProcessWorker implements Worker {
     public void setRunContext(RunContext run) {
         // Reaches the meters of the next driver process as a launch tag; a running one keeps its own
         this.run = run;
+        this.phase = null;
     }
 
     @Override
-    public synchronized void setPhase(RunPhase phase) {
-        this.phase = phase;
-        DriverProcess running = current;
-        HttpWorkerClient client = running == null ? null : running.client();
-        if (client != null) {
-            client.setPhase(phase);
+    public void setPhase(RunPhase phase) {
+        DriverProcess running;
+        HttpWorkerClient client;
+        synchronized (this) {
+            this.phase = phase;
+            running = current;
+            client = running == null ? null : running.client();
+            if (running == null || client == null) {
+                return;
+            }
+            if (running.hasExited()) {
+                throw running.crashed(null);
+            }
         }
+        invoke(
+                running,
+                client,
+                c -> {
+                    c.setPhase(phase);
+                    return null;
+                });
     }
 
     private void ensureOpen() {
@@ -285,6 +302,11 @@ public class ProcessWorker implements Worker {
                 throw running.crashed(null);
             }
         }
+        return invoke(running, client, action);
+    }
+
+    private <T extends @Nullable Object> T invoke(
+            DriverProcess running, HttpWorkerClient client, Function<HttpWorkerClient, T> action) {
         try {
             return action.apply(client);
         } catch (RuntimeException e) {
@@ -376,6 +398,8 @@ public class ProcessWorker implements Worker {
         DriverProcess running;
         boolean exited;
         synchronized (this) {
+            phase = null;
+            stopped = false;
             running = current;
             if (running == null || running.client() == null) {
                 return;
@@ -390,6 +414,11 @@ public class ProcessWorker implements Worker {
         }
         try {
             run(HttpWorkerClient::stopAll);
+            synchronized (this) {
+                if (current == running) {
+                    stopped = true;
+                }
+            }
         } catch (RuntimeException e) {
             IllegalStateException failure =
                     new IllegalStateException(
@@ -429,7 +458,7 @@ public class ProcessWorker implements Worker {
 
     @Override
     public synchronized boolean canReuseAfterFailure() {
-        return !closed && !unusable && current == null;
+        return !closed && !unusable && (current == null || stopped);
     }
 
     @Override
@@ -473,10 +502,15 @@ public class ProcessWorker implements Worker {
     }
 
     private synchronized void terminate() {
+        boolean wasStopped = stopped;
+        stopped = false;
         Failures failures = new Failures();
         failures.deferInterrupt("Interrupted before terminating driver process");
         DriverProcess stopping = current;
         if (stopping != null) {
+            if (!wasStopped) {
+                phase = null;
+            }
             stopping.stop(failures);
             // A child that is gone frees the worker even when stopping it failed, for example a
             // driver close that hung and was killed; only a child still running blocks the next run

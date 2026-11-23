@@ -122,6 +122,11 @@ class DlogBenchmarkDriverTest {
     }
 
     @Test
+    void doesNotSupportSharedSubscriptions() {
+        assertThat(new DlogBenchmarkDriver().supportsSharedSubscriptions()).isFalse();
+    }
+
+    @Test
     void createConsumerRejectsASecondConsumerOnTheSameSubscription() throws Exception {
         Namespace namespace = mock(Namespace.class);
         DistributedLogManager manager = mock(DistributedLogManager.class);

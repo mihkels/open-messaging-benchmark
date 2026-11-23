@@ -275,6 +275,9 @@ public final class LocalWorker implements Worker {
         if (telemetry) {
             requirePartitionTelemetry(current);
         }
+        if (consumerAssignment.hasSharedSubscriptions()) {
+            requireSharedSubscriptions(current);
+        }
         Function<TopicSubscription, ConsumerInfo> info =
                 c -> current.consumerInfo(index.getAndIncrement(), c, verify, telemetry);
 
@@ -368,6 +371,16 @@ public final class LocalWorker implements Worker {
                             + current.requireDriver().getClass().getName()
                             + " does not support partition telemetry; remove 'partitionTelemetry' from the"
                             + " workload");
+        }
+    }
+
+    private static void requireSharedSubscriptions(Run current) {
+        if (!current.requireDriver().supportsSharedSubscriptions()) {
+            throw new IllegalArgumentException(
+                    "Driver "
+                            + current.requireDriver().getClass().getName()
+                            + " does not support shared subscriptions; set 'consumerPerSubscription: 1'"
+                            + " in the workload");
         }
     }
 

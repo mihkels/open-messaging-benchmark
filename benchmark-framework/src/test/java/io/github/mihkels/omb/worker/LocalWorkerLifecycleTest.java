@@ -1281,6 +1281,38 @@ class LocalWorkerLifecycleTest {
         }
     }
 
+    @Test
+    void rejectsSharedSubscriptionsWhenTheDriverDoesNotSupportThem() throws Exception {
+        AtomicInteger consumerCreations = new AtomicInteger();
+        Scenario scenario = new Scenario(List.of());
+        scenario.supportsSharedSubscriptions = false;
+        scenario.createConsumers =
+                () -> {
+                    consumerCreations.incrementAndGet();
+                    return CompletableFuture.completedFuture(List.of());
+                };
+        try (LocalWorker worker = worker(scenario, Duration.ofSeconds(2))) {
+            ConsumerAssignment single = assignmentForConsumer();
+            worker.createConsumers(single);
+            assertThat(consumerCreations.get()).isEqualTo(1);
+
+            ConsumerAssignment distributedShared = assignmentForConsumer();
+            distributedShared.sharedSubscriptions = true;
+            assertThatThrownBy(() -> worker.createConsumers(distributedShared))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("does not support shared subscriptions");
+
+            ConsumerAssignment localDuplicates = new ConsumerAssignment();
+            localDuplicates.topicsSubscriptions.add(new TopicSubscription("topic", "subscription"));
+            localDuplicates.topicsSubscriptions.add(new TopicSubscription("topic", "subscription"));
+            assertThatThrownBy(() -> worker.createConsumers(localDuplicates))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("does not support shared subscriptions");
+
+            assertThat(consumerCreations.get()).isEqualTo(1);
+        }
+    }
+
     private static ProducerWorkAssignment telemetryAssignment() {
         return new ProducerWorkAssignment(
                 PayloadTemplates.of(List.of(new byte[32]), null),
@@ -1414,6 +1446,7 @@ class LocalWorkerLifecycleTest {
         private Exception closeFailure;
         private boolean supportsHeaders;
         private boolean supportsPartitionTelemetry;
+        private boolean supportsSharedSubscriptions = true;
 
         private Scenario(List<BenchmarkProducer> producers) {
             createProducers = () -> CompletableFuture.completedFuture(producers);
@@ -1443,6 +1476,11 @@ class LocalWorkerLifecycleTest {
         @Override
         public boolean supportsPartitionTelemetry() {
             return scenario.supportsPartitionTelemetry;
+        }
+
+        @Override
+        public boolean supportsSharedSubscriptions() {
+            return scenario.supportsSharedSubscriptions;
         }
 
         @Override

@@ -645,6 +645,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         Collections.shuffle(consumerAssignment.topicsSubscriptions);
         consumerAssignment.verifyDelivery = workload.verifyDelivery;
         consumerAssignment.partitionTelemetry = workload.partitionTelemetry;
+        consumerAssignment.sharedSubscriptions = workload.consumerPerSubscription > 1;
 
         Timer timer = new Timer();
 

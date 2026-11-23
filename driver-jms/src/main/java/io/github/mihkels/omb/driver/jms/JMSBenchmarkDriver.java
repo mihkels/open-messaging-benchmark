@@ -48,7 +48,7 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
 
     private @Nullable ConnectionFactory connectionFactory;
     private @Nullable Connection connection;
-    private JMSConfig config;
+    private JMSConfig config = new JMSConfig();
     private @Nullable BenchmarkDriver delegateForAdminOperations;
     private final Set<List<String>> subscriptions = ConcurrentHashMap.newKeySet();
 
@@ -151,6 +151,11 @@ public class JMSBenchmarkDriver implements BenchmarkDriver {
     @Override
     public boolean supportsHeaders() {
         return true;
+    }
+
+    @Override
+    public boolean supportsSharedSubscriptions() {
+        return config.use20api;
     }
 
     @Override

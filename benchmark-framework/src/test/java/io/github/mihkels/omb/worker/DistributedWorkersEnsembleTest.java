@@ -123,6 +123,63 @@ class DistributedWorkersEnsembleTest {
     }
 
     @Test
+    void propagatesSharedSubscriptionsAcrossWorkers() throws Exception {
+        List<Worker> workers = workers(4);
+        try (var ensemble = new DistributedWorkersEnsemble(workers, false)) {
+            ConsumerAssignment sharedByFlag = new ConsumerAssignment();
+            sharedByFlag.sharedSubscriptions = true;
+            sharedByFlag.topicsSubscriptions =
+                    List.of(
+                            new TopicSubscription("topic-1", "sub-0"), new TopicSubscription("topic-1", "sub-0"));
+
+            ensemble.createConsumers(sharedByFlag);
+
+            for (int i = 2; i < 4; i++) {
+                ArgumentCaptor<ConsumerAssignment> captured =
+                        ArgumentCaptor.forClass(ConsumerAssignment.class);
+                verify(workers.get(i)).createConsumers(captured.capture());
+                assertThat(captured.getValue().topicsSubscriptions).hasSize(1);
+                assertThat(captured.getValue().sharedSubscriptions).isTrue();
+            }
+        }
+
+        List<Worker> duplicateWorkers = workers(4);
+        try (var ensemble = new DistributedWorkersEnsemble(duplicateWorkers, false)) {
+            ConsumerAssignment sharedByDuplicates = new ConsumerAssignment();
+            sharedByDuplicates.topicsSubscriptions =
+                    List.of(
+                            new TopicSubscription("topic-1", "sub-0"), new TopicSubscription("topic-1", "sub-0"));
+
+            ensemble.createConsumers(sharedByDuplicates);
+
+            for (int i = 2; i < 4; i++) {
+                ArgumentCaptor<ConsumerAssignment> captured =
+                        ArgumentCaptor.forClass(ConsumerAssignment.class);
+                verify(duplicateWorkers.get(i)).createConsumers(captured.capture());
+                assertThat(captured.getValue().topicsSubscriptions).hasSize(1);
+                assertThat(captured.getValue().sharedSubscriptions).isTrue();
+            }
+        }
+
+        List<Worker> distinctWorkers = workers(4);
+        try (var ensemble = new DistributedWorkersEnsemble(distinctWorkers, false)) {
+            ConsumerAssignment distinct = new ConsumerAssignment();
+            distinct.topicsSubscriptions =
+                    List.of(
+                            new TopicSubscription("topic-1", "sub-0"), new TopicSubscription("topic-1", "sub-1"));
+
+            ensemble.createConsumers(distinct);
+
+            for (int i = 2; i < 4; i++) {
+                ArgumentCaptor<ConsumerAssignment> captured =
+                        ArgumentCaptor.forClass(ConsumerAssignment.class);
+                verify(distinctWorkers.get(i)).createConsumers(captured.capture());
+                assertThat(captured.getValue().sharedSubscriptions).isFalse();
+            }
+        }
+    }
+
+    @Test
     void givesEveryProducerTheSameRateWhenWorkersHoldUnevenProducerCounts() throws Exception {
         // Workers 1 and 0 produce; round-robin gives worker 1 two producers and worker 0 one.
         List<Worker> workers = workers(4);

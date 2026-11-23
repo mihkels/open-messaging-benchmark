@@ -223,6 +223,7 @@ public final class DistributedWorkersEnsemble implements Worker {
         List<List<TopicSubscription>> subscriptionsPerConsumer =
                 ListPartition.partitionList(
                         overallConsumerAssignment.topicsSubscriptions, consumerWorkers.size());
+        boolean sharedSubscriptions = overallConsumerAssignment.hasSharedSubscriptions();
         Map<Worker, ConsumerAssignment> topicsPerWorkerMap = new LinkedHashMap<>();
         int i = 0;
         for (List<TopicSubscription> tsl : subscriptionsPerConsumer) {
@@ -230,6 +231,7 @@ public final class DistributedWorkersEnsemble implements Worker {
             individualAssignment.topicsSubscriptions = tsl;
             individualAssignment.verifyDelivery = overallConsumerAssignment.verifyDelivery;
             individualAssignment.partitionTelemetry = overallConsumerAssignment.partitionTelemetry;
+            individualAssignment.sharedSubscriptions = sharedSubscriptions;
             topicsPerWorkerMap.put(consumerWorkers.get(i++), individualAssignment);
         }
         forAll(

@@ -95,7 +95,12 @@ public class ResultsToCsv {
                 lines.add(extractResults(tr));
             }
 
-            try (Writer writer = Files.newBufferedWriter(outputFile.toPath(), UTF_8)) {
+            Path outputPath = outputFile.toPath();
+            Path parent = outputPath.toAbsolutePath().getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            try (Writer writer = Files.newBufferedWriter(outputPath, UTF_8)) {
                 for (String str : lines) {
                     writer.write(str + System.lineSeparator());
                 }

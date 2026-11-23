@@ -15,11 +15,14 @@ package io.github.mihkels.omb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.File;
 import java.io.UncheckedIOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
@@ -98,15 +101,36 @@ class ResultsToCsvTest {
     }
 
     @Test
+    void createsMissingParentDirectoryForCsvOutput() throws Exception {
+        Path results = Files.createDirectory(tempDir.resolve("empty-results"));
+        File csv = ResultsToCsv.outputFile(tempDir.resolve("missing/nested").toString());
+
+        new ResultsToCsv().writeAllResultFiles(results.toString(), csv);
+
+        assertThat(csv).isFile();
+        assertThat(Files.readAllLines(csv.toPath())).hasSize(1);
+    }
+
+    @Test
     void failsWhenTheCsvCannotBeWritten() throws Exception {
         Path results = Files.createDirectory(tempDir.resolve("unwritable"));
-        File csv = tempDir.resolve("missing").resolve("results.csv").toFile();
+        Path fileParent = Files.createFile(tempDir.resolve("blocker"));
+        File blockedCsv = fileParent.resolve("results.csv").toFile();
         ResultsToCsv resultsToCsv = new ResultsToCsv();
         String resultsDirectory = results.toString();
 
-        assertThatThrownBy(() -> resultsToCsv.writeAllResultFiles(resultsDirectory, csv))
+        assertThatThrownBy(() -> resultsToCsv.writeAllResultFiles(resultsDirectory, blockedCsv))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("results.csv");
+
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            Path readOnly = Files.createDirectory(tempDir.resolve("read-only-csv"));
+            Files.setPosixFilePermissions(readOnly, PosixFilePermissions.fromString("r-xr-xr-x"));
+            assumeTrue(!Files.isWritable(readOnly));
+            File readOnlyCsv = ResultsToCsv.outputFile(readOnly.toString());
+            assertThatThrownBy(() -> resultsToCsv.writeAllResultFiles(resultsDirectory, readOnlyCsv))
+                    .isInstanceOf(UncheckedIOException.class);
+        }
     }
 
     @Test

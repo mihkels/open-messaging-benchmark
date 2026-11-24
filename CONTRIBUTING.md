@@ -100,6 +100,12 @@ Preview the documentation site, and build it strictly before opening a pull requ
 "$DOCS_VENV/bin/zensical" build --clean --strict
 ```
 
+CI also generates `llms.txt` from the built site. To check it locally:
+
+```bash
+"$DOCS_VENV/bin/llmstxt-standalone" build
+```
+
 ## Development guides
 
 - [Architecture](https://mihkels.github.io/open-messaging-benchmark/development/architecture/)

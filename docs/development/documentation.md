@@ -64,6 +64,18 @@ Before opening a pull request, build the site the way CI does:
 or a missing anchor. Zensical does not warn about a page in `docs/` that is not in the navigation, so
 check the `nav` by hand when you add a page. The output goes to `site/`.
 
+CI then generates [`llms.txt`](https://llmstxt.org/) for agents and LLM tools with
+[`llmstxt-standalone`](https://pypi.org/project/llmstxt-standalone/), because Zensical cannot run
+MkDocs plugins yet. It reads the built `site/` and writes `llms.txt` (a page index grouped by the
+`nav`), `llms-full.txt` (every page as one Markdown file) and an `index.md` next to each page's
+`index.html`. To check the output locally, run it after the build:
+
+```bash
+"$DOCS_VENV/bin/llmstxt-standalone" build
+```
+
+`zensical serve` does not serve these files.
+
 To add or bump a docs dependency, edit `docs/requirements.in`, then regenerate the lock file with
 Python 3.13 (the version CI uses) and commit both files:
 
@@ -263,7 +275,8 @@ The site is published to <https://mihkels.github.io/open-messaging-benchmark/> b
 workflow `.github/workflows/docs.yml`:
 
 - Pushes to `main` that change `docs/`, `overrides/`, `mkdocs.yml` or the workflow build the site and deploy it to
-  GitHub Pages. The workflow can also be started manually from the Actions tab; only runs on `main`
+  GitHub Pages, together with `llms.txt` at
+  <https://mihkels.github.io/open-messaging-benchmark/llms.txt>. The workflow can also be started manually from the Actions tab; only runs on `main`
   deploy the site.
 - Pull requests to `main` that change those paths only build the site, so broken links and
   navigation errors are reported before a merge, but nothing is deployed.

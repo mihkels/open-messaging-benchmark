@@ -25,7 +25,7 @@ limitations under the License.
 
 External driver authors had to `mvn install` the whole reactor to compile against `driver-api`.
 Publishing it to Maven Central needs a verified namespace. `io.openmessaging` cannot be verified
-from this fork, because that needs the upstream domain, and upstream already publishes
+from this repository, because that needs the upstream domain, and upstream already publishes
 `io.openmessaging:*`. Central's free tier limits file count, release size and release count per
 month; one release is about 20 files and under 1 MB, so the release count is the only limit within
 reach.
@@ -40,7 +40,10 @@ reach.
 
 - **A domain the project owns.** Not chosen; `io.github.mihkels` is verified through GitHub.
 - **Change the groupId and keep the Java packages.** Acceptable at first and implemented that way,
-  then reversed so the packages match the groupId. No further reason was recorded.
+  then reversed. The project started as a fork of upstream OMB and is now detached from the fork
+  network, so its published API should not live in the upstream `io.openmessaging` packages. The
+  packages were renamed to match the new groupId so `driver-api` can be published to Maven Central
+  as the project's own artifact. The maintainer confirmed this reason when this ADR was written.
 - **Publish on every release, or ask Sonatype for higher limits.** Rejected for publishing only when
   `driver-api` changed since the previous tag.
 

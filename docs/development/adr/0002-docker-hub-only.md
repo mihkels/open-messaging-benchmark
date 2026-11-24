@@ -28,6 +28,7 @@ both the image and the chart from, and the repository needed a rule that keeps i
 
 ## Decision drivers
 
+- No hosting cost for an open source project.
 - One registry for images and the OCI Helm chart, so the docs, the chart defaults and the release
   workflow name the same place.
 - Publishing from CI only, with credentials scoped to a protected environment.
@@ -35,9 +36,9 @@ both the image and the chart from, and the repository needed a rule that keeps i
 
 ## Options considered
 
-- **Docker Hub (`docker.io/mihkels`).** Chosen.
-- **GitHub Container Registry, Google Artifact Registry or Container Registry.** Rejected. The reason
-  for preferring Docker Hub over these was not written down when the decision was made.
+- **Docker Hub (`docker.io/mihkels`).** Chosen, because it is free for open source projects.
+- **GitHub Container Registry, Google Artifact Registry or Container Registry.** Rejected in favour
+  of Docker Hub. The cost reason was confirmed by the maintainer when this ADR was written.
 
 ## Decision
 

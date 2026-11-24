@@ -29,12 +29,15 @@ could not overlay runs, zoom or show the full latency tail, and a normal Java ru
 
 - A report straight from the benchmark run, with no second toolchain.
 - Overlay several runs and show the latency tail.
+- Package no third-party libraries with the project.
 
 ## Options considered
 
-- **uPlot, inlined into the page so it works offline.** Preferred in the issue.
-- **Apache ECharts loaded from a CDN, pinned with Subresource Integrity.** Chosen at the
-  maintainer's request. No reason was recorded for preferring it.
+- **uPlot, inlined into the page so it works offline.** Preferred in the issue. Rejected, because
+  inlining means packaging a third-party library with the project.
+- **Apache ECharts loaded from a CDN, pinned with Subresource Integrity.** Chosen: the project ships
+  no third-party chart code, and the integrity hash pins the exact file. The maintainer confirmed
+  this reason when this ADR was written.
 - **Keep `create_charts.py` for one release.** Rejected; it was removed in the same change.
 
 ## Decision

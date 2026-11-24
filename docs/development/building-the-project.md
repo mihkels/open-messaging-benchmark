@@ -49,6 +49,7 @@ The launch and helper scripts (`bin/*`, `setup.sh`, `deployment/kubernetes/local
 
 |                Path                 |                                Contents                                |
 |-------------------------------------|------------------------------------------------------------------------|
+| `architecture-rules/`               | Internal reusable ArchUnit rules (not published)                       |
 | `benchmark-framework/`              | Coordinator, worker and plugin runtime                                 |
 | `driver-api/`                       | Driver SPI that plugins compile against                                |
 | `driver-*/`                         | One driver plugin per messaging system, with example driver YAML files |

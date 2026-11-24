@@ -46,6 +46,7 @@
         </developer>
     </developers>
     <modules>
+        <module>architecture-rules</module>
         <module>benchmark-framework</module>
         <module>driver-api</module>
         <module>metrics-otlp</module>

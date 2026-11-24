@@ -19,6 +19,7 @@ on:
       - 'bin/**'
       - 'benchmark-framework/**'
       - 'driver-*/**'
+      - 'tool/**'
       - 'package/**'
       - 'docker/**'
       - 'docker-bake.hcl'

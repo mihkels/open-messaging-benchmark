@@ -159,6 +159,8 @@ class RabbitMqBenchmarkDriverOptionsTest {
 
     @Test
     void configValidationRejectsEachInvalidSetting() {
+        assertThatThrownBy(() -> config(c -> c.amqpUris = List.of()).validate())
+                .hasMessageContaining("amqpUris");
         assertThatThrownBy(() -> config(c -> c.consumerCreationBatchSize = 0).validate())
                 .hasMessageContaining("batch sizes");
         assertThatThrownBy(() -> config(c -> c.producerCreationBatchSize = 0).validate())
@@ -172,6 +174,7 @@ class RabbitMqBenchmarkDriverOptionsTest {
 
     private static RabbitMqConfig config(java.util.function.Consumer<RabbitMqConfig> change) {
         RabbitMqConfig config = new RabbitMqConfig();
+        config.amqpUris = List.of("amqp://test");
         change.accept(config);
         return config;
     }

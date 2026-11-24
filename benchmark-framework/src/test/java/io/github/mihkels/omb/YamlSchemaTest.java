@@ -88,10 +88,14 @@ class YamlSchemaTest {
                 // fields have nothing to fall back to
                 .withNullableCheck(field -> !field.getType().isPrimitive() && !isRequired(field));
         ObjectNode schema = new SchemaGenerator(builder.build()).generateSchema(Workload.class);
-        // Rules that depend on another field being absent; Workload.validate() covers the rest
+        // Rules that depend on another field being absent or empty; Workload.validate() covers the rest
         ArrayNode allOf = schema.putArray("allOf");
-        allOf.add(requiredUnless("stages", "producerRate", "testDurationMinutes"));
-        allOf.add(requiredUnless("messageSizeDistribution", "messageSize"));
+        allOf.add(
+                requiredUnlessNonEmpty(
+                        "stages", "array", "minItems", "producerRate", "testDurationMinutes"));
+        allOf.add(
+                requiredUnlessNonEmpty(
+                        "messageSizeDistribution", "object", "minProperties", "messageSize"));
         return render(
                 schema,
                 "workload-schema.json",
@@ -133,9 +137,12 @@ class YamlSchemaTest {
                 && names.contains(field.getDeclaredName());
     }
 
-    private static ObjectNode requiredUnless(String absent, String... required) {
+    private static ObjectNode requiredUnlessNonEmpty(
+            String absent, String type, String minKeyword, String... required) {
         ObjectNode rule = JSON.createObjectNode();
-        rule.putObject("if").putObject("not").putArray("required").add(absent);
+        ObjectNode nonEmpty = rule.putObject("if").putObject("not");
+        nonEmpty.putArray("required").add(absent);
+        nonEmpty.putObject("properties").putObject(absent).put("type", type).put(minKeyword, 1);
         ArrayNode then = rule.putObject("then").putArray("required");
         for (String field : required) {
             then.add(field);

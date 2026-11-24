@@ -190,6 +190,57 @@ class PravegaBenchmarkConsumerTest {
     }
 
     @Test
+    void shortEventWithTimestampHeaderEnabledCountsFullPayloadAsUntimestamped() throws Exception {
+        EventStreamClientFactory factory = mock();
+        ReaderGroupManager groups = mock();
+        EventStreamReader<ByteBuffer> reader = mock();
+        EventRead<ByteBuffer> shortEvent = mock();
+        EventRead<ByteBuffer> timestampedEvent = mock();
+        EventRead<ByteBuffer> empty = mock();
+        ConsumerCallback callback = mock();
+        when(factory.<ByteBuffer>createReader(anyString(), eq("subscription"), any(), any()))
+                .thenReturn(reader);
+        ByteBuffer withTimestamp =
+                ByteBuffer.allocate(Long.BYTES + 2).putLong(9876L).put((byte) 7).put((byte) 8).flip();
+        when(reader.readNextEvent(anyLong())).thenReturn(shortEvent, timestampedEvent, empty);
+        when(shortEvent.getEvent()).thenReturn(ByteBuffer.wrap(new byte[] {1, 2, 3}));
+        when(timestampedEvent.getEvent()).thenReturn(withTimestamp);
+
+        CountDownLatch delivered = new CountDownLatch(2);
+        AtomicReference<byte[]> firstBytes = new AtomicReference<>();
+        AtomicReference<byte[]> secondBytes = new AtomicReference<>();
+        doAnswer(
+                        invocation -> {
+                            ByteBuffer buf = invocation.getArgument(0);
+                            byte[] copy = new byte[buf.remaining()];
+                            buf.slice().get(copy);
+                            if (delivered.getCount() == 2) {
+                                firstBytes.set(copy);
+                            } else {
+                                secondBytes.set(copy);
+                            }
+                            delivered.countDown();
+                            return null;
+                        })
+                .when(callback)
+                .messageReceived(any(ByteBuffer.class), anyLong());
+
+        PravegaBenchmarkConsumer consumer =
+                PravegaBenchmarkConsumer.create(
+                        "stream", "scope", "subscription", callback, factory, groups, true);
+        try {
+            assertThat(delivered.await(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            consumer.close();
+        }
+        verify(callback)
+                .messageReceived(any(ByteBuffer.class), eq(ConsumerCallback.NO_PUBLISH_TIMESTAMP));
+        verify(callback).messageReceived(any(ByteBuffer.class), eq(9876L));
+        assertThat(firstBytes.get()).containsExactly(1, 2, 3);
+        assertThat(secondBytes.get()).containsExactly(7, 8);
+    }
+
+    @Test
     void reinitializationStopsTheReaderWithoutDelivering() throws Exception {
         EventStreamClientFactory factory = mock();
         ReaderGroupManager groups = mock();

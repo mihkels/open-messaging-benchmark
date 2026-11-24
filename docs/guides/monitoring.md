@@ -197,12 +197,14 @@ service:
 
 ## Logs
 
-Processes log to the console and to rolling files of up to 100 MB in their working directory:
+Processes log to the console and to rolling files of up to 100 MB in their working directory (or in
+`$OMB_LOG_DIR` when set, as in the container image and Helm chart):
 
-|                                   Process                                    |          File          |
-|------------------------------------------------------------------------------|------------------------|
-| Coordinator (`bin/benchmark`) and worker supervisor (`bin/benchmark-worker`) | `benchmark-worker.log` |
-| Driver process started by either of them                                     | `benchmark-driver.log` |
+|                  Process                   |      Default file      | With `OMB_LOG_DIR` set |
+|--------------------------------------------|------------------------|------------------------|
+| Coordinator (`bin/benchmark`)              | `benchmark-worker.log` | `benchmark.log`        |
+| Worker supervisor (`bin/benchmark-worker`) | `benchmark-worker.log` | `benchmark-worker.log` |
+| Driver process started by either of them   | `benchmark-driver.log` | `benchmark-driver.log` |
 
 Driver process output is also forwarded to the parent's console. Useful messages include
 `Starting driver process for ...`, `All consumers are ready`, `Workers list - producers: ...`,

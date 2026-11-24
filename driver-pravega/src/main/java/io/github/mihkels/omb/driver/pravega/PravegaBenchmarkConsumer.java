@@ -138,7 +138,7 @@ public final class PravegaBenchmarkConsumer implements BenchmarkConsumer {
     }
 
     private static long eventTimestamp(ByteBuffer event, boolean includeTimestampInEvent) {
-        if (includeTimestampInEvent) {
+        if (includeTimestampInEvent && event.remaining() >= Long.BYTES) {
             return event.getLong();
         }
         return ConsumerCallback.NO_PUBLISH_TIMESTAMP;

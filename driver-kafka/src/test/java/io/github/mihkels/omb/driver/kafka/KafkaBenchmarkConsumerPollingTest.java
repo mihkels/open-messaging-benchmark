@@ -31,6 +31,7 @@ import io.github.mihkels.omb.driver.ConsumerCallback;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -39,6 +40,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
 class KafkaBenchmarkConsumerPollingTest {
@@ -53,11 +56,58 @@ class KafkaBenchmarkConsumerPollingTest {
 
         KafkaBenchmarkConsumer consumer =
                 new KafkaBenchmarkConsumer(client, new Properties(), callback);
-        verify(callback, timeout(2000)).messageReceived(new byte[] {1}, -1L, 3);
+        verify(callback, timeout(2000))
+                .messageReceived(new byte[] {1}, ConsumerCallback.NO_PUBLISH_TIMESTAMP, 3);
         verify(client, timeout(2000))
                 .commitAsync(Map.of(new TopicPartition("t", 3), new OffsetAndMetadata(5)), null);
         consumer.close();
         verify(client).close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void passesPositiveTimestampsAndMapsMissingTimestampToNoPublishTimestamp() throws Exception {
+        KafkaConsumer<String, byte[]> client = mock(KafkaConsumer.class);
+        ConsumerRecord<String, byte[]> missingTimestamp =
+                new ConsumerRecord<>(
+                        "t",
+                        3,
+                        4,
+                        ConsumerRecord.NO_TIMESTAMP,
+                        TimestampType.NO_TIMESTAMP_TYPE,
+                        1,
+                        1,
+                        "k",
+                        new byte[] {1},
+                        new RecordHeaders(),
+                        Optional.empty());
+        ConsumerRecord<String, byte[]> validTimestamp =
+                new ConsumerRecord<>(
+                        "t",
+                        3,
+                        5,
+                        12345L,
+                        TimestampType.CREATE_TIME,
+                        1,
+                        1,
+                        "k",
+                        new byte[] {2},
+                        new RecordHeaders(),
+                        Optional.empty());
+        when(client.poll(any(Duration.class)))
+                .thenReturn(
+                        new ConsumerRecords<>(
+                                Map.of(new TopicPartition("t", 3), List.of(missingTimestamp, validTimestamp)),
+                                Map.of()))
+                .thenReturn(ConsumerRecords.empty());
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+
+        KafkaBenchmarkConsumer consumer =
+                new KafkaBenchmarkConsumer(client, new Properties(), callback);
+        verify(callback, timeout(2000))
+                .messageReceived(new byte[] {1}, ConsumerCallback.NO_PUBLISH_TIMESTAMP, 3);
+        verify(callback, timeout(2000)).messageReceived(new byte[] {2}, 12345L, 3);
+        consumer.close();
     }
 
     @Test

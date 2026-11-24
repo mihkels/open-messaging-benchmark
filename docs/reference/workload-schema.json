@@ -219,7 +219,13 @@
   "allOf" : [ {
     "if" : {
       "not" : {
-        "required" : [ "stages" ]
+        "required" : [ "stages" ],
+        "properties" : {
+          "stages" : {
+            "type" : "array",
+            "minItems" : 1
+          }
+        }
       }
     },
     "then" : {
@@ -228,7 +234,13 @@
   }, {
     "if" : {
       "not" : {
-        "required" : [ "messageSizeDistribution" ]
+        "required" : [ "messageSizeDistribution" ],
+        "properties" : {
+          "messageSizeDistribution" : {
+            "type" : "object",
+            "minProperties" : 1
+          }
+        }
       }
     },
     "then" : {

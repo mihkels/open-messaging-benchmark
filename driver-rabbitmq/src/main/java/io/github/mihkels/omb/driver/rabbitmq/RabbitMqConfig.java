@@ -31,6 +31,11 @@ public class RabbitMqConfig {
     public int resourceCreationMaxRetries = 10;
 
     void validate() {
+        if (amqpUris == null
+                || amqpUris.isEmpty()
+                || amqpUris.stream().anyMatch(uri -> uri == null || uri.isBlank())) {
+            throw new IllegalArgumentException("amqpUris must contain at least one non-blank AMQP URI");
+        }
         if (resourceCreationMaxRetries < 0) {
             throw new IllegalArgumentException("resourceCreationMaxRetries must not be negative");
         }

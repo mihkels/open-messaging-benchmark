@@ -21,15 +21,20 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.Location;
 import com.tngtech.archunit.lang.ArchRule;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.ClassForNameFixture;
+import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.ClassForNameReferenceFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.InstanceLoggerFixture;
+import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.Jackson2ModuleFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.JulLoggerFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.MutableLoggerFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.PrintStackTraceFixture;
+import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.PrintStackTraceReferenceFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.PublicLoggerFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.RuntimeExitFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.RuntimeHaltFixture;
+import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.RuntimeHaltReferenceFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.SystemErrFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.SystemExitFixture;
+import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.SystemExitReferenceFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.SystemOutFixture;
 import io.github.mihkels.omb.arch.fixtures.violations.ViolationFixtures.TestLibraryFixture;
 import java.net.URI;
@@ -73,13 +78,25 @@ class CommonArchitectureRulesTest {
     }
 
     @Test
-    void directClassForNameFailsConfiguredClassesRule() {
-        JavaClasses classes = IMPORTER.importClasses(ClassForNameFixture.class);
+    void jackson2TypeOutsideAnnotationsFailsJackson3OnlyRule() {
+        JavaClasses classes = IMPORTER.importClasses(Jackson2ModuleFixture.class);
 
-        assertThatThrownBy(() ->
-                        CommonArchitectureRules.NO_CLASS_FOR_NAME_OUTSIDE_CONFIGURED_CLASSES.check(classes))
+        assertThatThrownBy(() -> CommonArchitectureRules.JACKSON_3_ONLY.check(classes))
                 .isInstanceOf(AssertionError.class)
-                .hasMessageContaining("ConfiguredClasses.load");
+                .hasMessageContaining("com.fasterxml.jackson.module");
+    }
+
+    @Test
+    void classForNameCallOrReferenceFailsConfiguredClassesRule() {
+        for (Class<?> fixture :
+                new Class<?>[] {ClassForNameFixture.class, ClassForNameReferenceFixture.class}) {
+            JavaClasses classes = IMPORTER.importClasses(fixture);
+
+            assertThatThrownBy(() ->
+                            CommonArchitectureRules.NO_CLASS_FOR_NAME_OUTSIDE_CONFIGURED_CLASSES.check(classes))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining("ConfiguredClasses.load");
+        }
     }
 
     @Test
@@ -115,7 +132,10 @@ class CommonArchitectureRulesTest {
                     PrintStackTraceFixture.class,
                     SystemExitFixture.class,
                     RuntimeExitFixture.class,
-                    RuntimeHaltFixture.class
+                    RuntimeHaltFixture.class,
+                    SystemExitReferenceFixture.class,
+                    RuntimeHaltReferenceFixture.class,
+                    PrintStackTraceReferenceFixture.class
                 }) {
             JavaClasses classes = IMPORTER.importClasses(fixture);
             assertThatThrownBy(() -> rule.check(classes)).isInstanceOf(AssertionError.class);

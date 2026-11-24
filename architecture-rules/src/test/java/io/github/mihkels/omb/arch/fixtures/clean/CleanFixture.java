@@ -13,12 +13,23 @@
  */
 package io.github.mihkels.omb.arch.fixtures.clean;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Clean fixture obeying all {@code CommonArchitectureRules}. */
 public final class CleanFixture {
     private static final Logger log = LoggerFactory.getLogger(CleanFixture.class);
+
+    /**
+     * Jackson 2 annotations stay allowed next to Jackson 3.
+     *
+     * @return a fixed name
+     */
+    @JsonProperty("name")
+    public String name() {
+        return "clean";
+    }
 
     public void run() {
         log.info("clean");

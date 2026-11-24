@@ -13,6 +13,9 @@
  */
 package io.github.mihkels.omb.arch.fixtures.violations;
 
+import com.fasterxml.jackson.module.fixture.LegacyJackson2Module;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +114,46 @@ public final class ViolationFixtures {
     public static final class RuntimeHaltFixture {
         public void halt() {
             Runtime.getRuntime().halt(1);
+        }
+    }
+
+    /** Depends on a Jackson 2 type outside core, databind and dataformat. */
+    public static final class Jackson2ModuleFixture {
+        public LegacyJackson2Module module() {
+            return new LegacyJackson2Module();
+        }
+    }
+
+    /** Takes a method reference to Class.forName instead of calling it. */
+    public static final class ClassForNameReferenceFixture {
+        /** Loader shaped like Class.forName. */
+        public interface Loader {
+            Class<?> load(String name) throws ClassNotFoundException;
+        }
+
+        public Loader loader() {
+            return Class::forName;
+        }
+    }
+
+    /** Takes a method reference to System.exit. */
+    public static final class SystemExitReferenceFixture {
+        public IntConsumer terminate() {
+            return System::exit;
+        }
+    }
+
+    /** Takes a method reference to Runtime.halt. */
+    public static final class RuntimeHaltReferenceFixture {
+        public IntConsumer halt() {
+            return Runtime.getRuntime()::halt;
+        }
+    }
+
+    /** Takes a method reference to Throwable.printStackTrace. */
+    public static final class PrintStackTraceReferenceFixture {
+        public Consumer<Throwable> dump() {
+            return Throwable::printStackTrace;
         }
     }
 }

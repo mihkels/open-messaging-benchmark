@@ -15,6 +15,7 @@ package io.github.mihkels.omb.driver;
 
 import static com.tngtech.archunit.core.domain.JavaAccess.Predicates.target;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.type;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -126,7 +127,8 @@ class DriverApiArchitectureTest {
                     .that()
                     .doNotHaveFullyQualifiedName(ConfiguredClasses.class.getName())
                     .should()
-                    .callMethodWhere(target(owner(assignableTo(Class.class))).and(target(name("forName"))))
+                    // accessTargetWhere also matches method references such as Class::forName
+                    .accessTargetWhere(target(owner(type(Class.class))).and(target(name("forName"))))
                     .because(
                             "untrusted class names must be loaded through ConfiguredClasses.load so"
                                     + " static initializers do not run before type checking");
@@ -139,14 +141,14 @@ class DriverApiArchitectureTest {
                     .orShould()
                     .accessField(System.class, "err")
                     .orShould()
-                    .callMethodWhere(
+                    // accessTargetWhere also matches method references such as System::exit
+                    .accessTargetWhere(
                             target(owner(assignableTo(Throwable.class))).and(target(name("printStackTrace"))))
                     .orShould()
-                    .callMethod(System.class, "exit", int.class)
+                    .accessTargetWhere(target(owner(type(System.class))).and(target(name("exit"))))
                     .orShould()
-                    .callMethod(Runtime.class, "exit", int.class)
-                    .orShould()
-                    .callMethod(Runtime.class, "halt", int.class)
+                    .accessTargetWhere(
+                            target(owner(type(Runtime.class))).and(target(name("exit").or(name("halt")))))
                     .because("driver-api must report errors and logs through SLF4J and futures");
 
     @ArchTest
@@ -185,6 +187,9 @@ class DriverApiArchitectureTest {
             @Override
             public void check(JavaClass item, ConditionEvents events) {
                 Set<JavaType> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+                for (JavaType typeParameter : item.getTypeParameters()) {
+                    checkType(item, "type parameter", typeParameter, visited, events);
+                }
                 item.getSuperclass()
                         .ifPresent(superType -> checkType(item, "superclass", superType, visited, events));
                 for (JavaType iface : item.getInterfaces()) {
@@ -199,6 +204,9 @@ class DriverApiArchitectureTest {
                 for (JavaConstructor constructor : item.getConstructors()) {
                     if (isPublicOrProtected(constructor.getModifiers())
                             && !constructor.getModifiers().contains(JavaModifier.SYNTHETIC)) {
+                        for (JavaType typeParameter : constructor.getTypeParameters()) {
+                            checkType(item, "constructor type parameter", typeParameter, visited, events);
+                        }
                         for (JavaType param : constructor.getParameterTypes()) {
                             checkType(item, "constructor parameter", param, visited, events);
                         }
@@ -212,6 +220,9 @@ class DriverApiArchitectureTest {
                             && !method.getModifiers().contains(JavaModifier.SYNTHETIC)
                             && !method.getModifiers().contains(JavaModifier.BRIDGE)) {
                         String location = "method " + method.getName();
+                        for (JavaType typeParameter : method.getTypeParameters()) {
+                            checkType(item, location + " type parameter", typeParameter, visited, events);
+                        }
                         checkType(item, location + " return type", method.getReturnType(), visited, events);
                         for (JavaType param : method.getParameterTypes()) {
                             checkType(item, location + " parameter", param, visited, events);
@@ -281,6 +292,20 @@ class DriverApiArchitectureTest {
         }
     }
 
+    /**
+     * Returns whether external drivers can name the type, which needs every enclosing class public.
+     *
+     * @param javaClass the type exposed in a public signature
+     * @return {@code true} if the type and all its enclosing classes are public
+     */
+    private static boolean isPubliclyAccessible(JavaClass javaClass) {
+        return javaClass.getModifiers().contains(JavaModifier.PUBLIC)
+                && javaClass
+                        .getEnclosingClass()
+                        .map(DriverApiArchitectureTest::isPubliclyAccessible)
+                        .orElse(true);
+    }
+
     private static boolean isAllowedPublicSpiClass(JavaClass base) {
         if (base.isPrimitive()) {
             return true;
@@ -290,7 +315,7 @@ class DriverApiArchitectureTest {
             return true;
         }
         if (DRIVER_API_PACKAGE.equals(packageName)) {
-            return base.getModifiers().contains(JavaModifier.PUBLIC);
+            return isPubliclyAccessible(base);
         }
         String fullName = base.getName();
         return "io.micrometer.core.instrument.MeterRegistry".equals(fullName)

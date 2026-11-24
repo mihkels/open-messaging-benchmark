@@ -13,8 +13,11 @@
  */
 package io.github.mihkels.omb.arch;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaAccess.Predicates.target;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.type;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -78,17 +81,16 @@ public final class CommonArchitectureRules {
                                     + " backend or java.util.logging");
 
     /**
-     * Production code must use Jackson 3 ({@code tools.jackson..}), never Jackson 2 databind/core.
+     * Production code must use Jackson 3 ({@code tools.jackson..}); of Jackson 2 only the shared
+     * {@code com.fasterxml.jackson.annotation..} package is allowed.
      */
     @ArchTest
     public static final ArchRule JACKSON_3_ONLY =
             noClasses()
                     .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage(
-                            "com.fasterxml.jackson.core..",
-                            "com.fasterxml.jackson.databind..",
-                            "com.fasterxml.jackson.dataformat..")
+                    .dependOnClassesThat(
+                            resideInAPackage("com.fasterxml.jackson..")
+                                    .and(not(resideInAPackage("com.fasterxml.jackson.annotation.."))))
                     .because(
                             "the codebase uses Jackson 3 (tools.jackson..); only"
                                     + " com.fasterxml.jackson.annotation.. is shared");
@@ -100,7 +102,8 @@ public final class CommonArchitectureRules {
                     .that()
                     .doNotHaveFullyQualifiedName("io.github.mihkels.omb.driver.ConfiguredClasses")
                     .should()
-                    .callMethodWhere(target(owner(assignableTo(Class.class))).and(target(name("forName"))))
+                    // accessTargetWhere also matches method references such as Class::forName
+                    .accessTargetWhere(target(owner(type(Class.class))).and(target(name("forName"))))
                     .because(
                             "class names from YAML configs must go through ConfiguredClasses.load"
                                     + " so static initializers cannot run before type validation");
@@ -184,14 +187,14 @@ public final class CommonArchitectureRules {
                 .orShould()
                 .accessField(System.class, "err")
                 .orShould()
-                .callMethodWhere(
+                // accessTargetWhere also matches method references such as System::exit
+                .accessTargetWhere(
                         target(owner(assignableTo(Throwable.class))).and(target(name("printStackTrace"))))
                 .orShould()
-                .callMethod(System.class, "exit", int.class)
+                .accessTargetWhere(target(owner(type(System.class))).and(target(name("exit"))))
                 .orShould()
-                .callMethod(Runtime.class, "exit", int.class)
-                .orShould()
-                .callMethod(Runtime.class, "halt", int.class)
+                .accessTargetWhere(
+                        target(owner(type(Runtime.class))).and(target(name("exit").or(name("halt")))))
                 .allowEmptyShould(true)
                 .because(
                         "only CLI and process entry points may write to System.out/err or"

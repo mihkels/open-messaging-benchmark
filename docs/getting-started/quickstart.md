@@ -179,3 +179,22 @@ Run it from `local-test`. The command removes the containers, the network and Ka
   [Compose regression suite](../development/testing-a-driver.md) starts the matching broker for
   each plugin, for example `e2e-tests/compose/run-e2e.sh --stacks redis`.
 
+## Using these docs with an AI assistant
+
+These docs are published as [`llms.txt`](https://mihkels.github.io/open-messaging-benchmark/llms.txt)
+(a page index) and [`llms-full.txt`](https://mihkels.github.io/open-messaging-benchmark/llms-full.txt)
+(every page in one Markdown file). Coding assistants that support the Model Context Protocol can
+search them through the free [GitMCP](https://gitmcp.io/) server for this site. Add it to your
+client's MCP configuration as a remote server:
+
+```json
+{
+  "mcpServers": {
+    "open-messaging-benchmark": {
+      "url": "https://mihkels.gitmcp.io/open-messaging-benchmark"
+    }
+  }
+}
+```
+
+GitMCP is a third-party service and is not maintained by this project.

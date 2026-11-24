@@ -52,7 +52,7 @@ class WorkerClockTest {
         Worker ahead = remote("http://w1", 20_000);
         Worker behind = remote("http://w2", -3_000);
         try (var ensemble = new DistributedWorkersEnsemble(List.of(ahead, behind), false)) {
-            List<WorkerClock> clocks = WorkerClock.probe(ensemble, now::get);
+            List<WorkerClock> clocks = WorkerClockProbe.probe(ensemble, now::get);
 
             assertThat(clocks).hasSize(2);
             WorkerClock first = clocks.get(0);
@@ -73,10 +73,10 @@ class WorkerClockTest {
         Worker local = mock(Worker.class);
         when(local.id()).thenReturn("local-worker");
 
-        List<WorkerClock> clocks = WorkerClock.probe(local);
+        List<WorkerClock> clocks = WorkerClockProbe.probe(local);
 
         assertThat(clocks).containsExactly(new WorkerClock("local-worker", "local", 0, 0, 0.0));
-        assertThat(WorkerClock.spreadMs(WorkerClock.withDrift(clocks, WorkerClock.probe(local))))
+        assertThat(WorkerClock.spreadMs(WorkerClock.withDrift(clocks, WorkerClockProbe.probe(local))))
                 .isZero();
     }
 
@@ -89,7 +89,7 @@ class WorkerClockTest {
         when(down.id()).thenReturn("http://down");
         when(down.health()).thenThrow(new IllegalStateException("Connection refused"));
         try (var ensemble = new DistributedWorkersEnsemble(List.of(old, down), false)) {
-            assertThat(WorkerClock.probe(ensemble, now::get)).isEmpty();
+            assertThat(WorkerClockProbe.probe(ensemble, now::get)).isEmpty();
         }
     }
 

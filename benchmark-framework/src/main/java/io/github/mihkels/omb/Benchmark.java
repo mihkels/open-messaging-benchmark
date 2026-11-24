@@ -27,6 +27,7 @@ import io.github.mihkels.omb.worker.HttpWorkerClient;
 import io.github.mihkels.omb.worker.ProcessWorker;
 import io.github.mihkels.omb.worker.Worker;
 import io.github.mihkels.omb.worker.WorkerClock;
+import io.github.mihkels.omb.worker.WorkerClockProbe;
 import io.github.mihkels.omb.worker.WorkerRejectedException;
 import io.github.mihkels.omb.worker.WorkerWatchdog;
 import io.github.mihkels.omb.worker.commands.RunContext;
@@ -744,7 +745,7 @@ public final class Benchmark {
                 worker.initializeDriver(Path.of(combination.driverConfig()));
                 generator = Objects.requireNonNull(generatorFactory.create(driverName, workload, worker));
                 generator.includeHistograms(arguments.includeHistograms);
-                List<WorkerClock> clocksAtStart = WorkerClock.probe(worker);
+                List<WorkerClock> clocksAtStart = WorkerClockProbe.probe(worker);
                 TestResult result = runWatched(generator, worker);
                 measured = true;
                 result.schemaVersion = 3;
@@ -758,7 +759,7 @@ public final class Benchmark {
                                 worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                                 workload,
                                 driverConfig,
-                                WorkerClock.withDrift(clocksAtStart, WorkerClock.probe(worker)));
+                                WorkerClock.withDrift(clocksAtStart, WorkerClockProbe.probe(worker)));
                 result.findings =
                         Objects.requireNonNullElseGet(workload.checks, RunChecks::new)
                                 .evaluate(workload, result);

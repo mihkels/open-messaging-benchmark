@@ -89,6 +89,7 @@ class FrameworkArchitectureTest {
                     WORKER_PACKAGE + ".PayloadSampler",
                     WORKER_PACKAGE + ".RunCallbacks",
                     WORKER_PACKAGE + ".TrackedTask",
+                    WORKER_PACKAGE + ".WorkerClock",
                     WORKER_PACKAGE + ".Worker",
                     WORKER_PACKAGE + ".WorkerHandler",
                     WORKER_PACKAGE + ".WorkerRejectedException",
@@ -123,6 +124,7 @@ class FrameworkArchitectureTest {
                     WORKER_PACKAGE + ".WorkerTls",
                     WORKER_PACKAGE + ".WorkerWatchdog",
                     WORKER_PACKAGE + ".JvmOptions",
+                    WORKER_PACKAGE + ".WorkerClockProbe",
                     WORKER_PACKAGE + ".WorkerUnhealthyException");
 
     @ArchTest
@@ -170,6 +172,7 @@ class FrameworkArchitectureTest {
                     .resideInAnyPackage(
                             ROOT_PACKAGE,
                             WORKER_PACKAGE,
+                            UTILS_PACKAGE,
                             JACKSON_PACKAGE + "..",
                             PLUGIN_PACKAGE + "..",
                             METRICS_PACKAGE + "..",
@@ -179,7 +182,7 @@ class FrameworkArchitectureTest {
                             "io.netty..")
                     .because(
                             "worker.commands are wire DTOs and must not depend on worker"
-                                    + " implementations, plugins, HTTP servers, or HTTP clients");
+                                    + " implementations, root utils, plugins, HTTP servers, or HTTP clients");
 
     @ArchTest
     static final ArchRule PLUGIN_PACKAGE_DEPENDS_ONLY_ON_PLUGIN_AND_DRIVER_API =
@@ -235,12 +238,7 @@ class FrameworkArchitectureTest {
     @ArchTest
     static final ArchRule DRIVER_JVM_DOES_NOT_DEPEND_ON_EXCLUDED_LIBRARIES =
             noClasses()
-                    .that(
-                            DRIVER_JVM_CLASSES.or(
-                                    areAnyOf(
-                                            "WorkerClock and DistributedWorkersEnsemble",
-                                            WORKER_PACKAGE + ".WorkerClock",
-                                            WORKER_PACKAGE + ".DistributedWorkersEnsemble")))
+                    .that(DRIVER_JVM_CLASSES)
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage(

@@ -210,8 +210,10 @@ public class KafkaBenchmarkConsumer implements BenchmarkConsumer {
                 if (closing) {
                     break;
                 }
+                long timestamp = consumerRecord.timestamp();
+                long publishTimestamp = timestamp < 0 ? ConsumerCallback.NO_PUBLISH_TIMESTAMP : timestamp;
                 callback.messageReceived(
-                        consumerRecord.value(), consumerRecord.timestamp(), consumerRecord.partition());
+                        consumerRecord.value(), publishTimestamp, consumerRecord.partition());
                 offsetMap.put(
                         new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
                         new OffsetAndMetadata(consumerRecord.offset() + 1));

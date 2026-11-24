@@ -140,6 +140,34 @@ class ArtemisBenchmarkConsumerTest {
     }
 
     @Test
+    void messageHandlerTreatsMissingTimestampAsNoPublishTimestamp() throws Exception {
+        Fixture fixture = new Fixture();
+        ConsumerCallback callback = mock(ConsumerCallback.class);
+        ArgumentCaptor<MessageHandler> handler = ArgumentCaptor.forClass(MessageHandler.class);
+        ArtemisBenchmarkConsumer.create("topic", "subscription", fixture.factory, callback);
+        verify(fixture.consumer).setMessageHandler(handler.capture());
+
+        ClientMessage zeroTimestamp = mock(ClientMessage.class);
+        ActiveMQBuffer zeroBuffer = mock(ActiveMQBuffer.class);
+        when(zeroTimestamp.getBodyBuffer()).thenReturn(zeroBuffer);
+        when(zeroBuffer.readableBytes()).thenReturn(3);
+        when(zeroTimestamp.getTimestamp()).thenReturn(0L);
+        handler.getValue().onMessage(zeroTimestamp);
+
+        ClientMessage negativeTimestamp = mock(ClientMessage.class);
+        ActiveMQBuffer negativeBuffer = mock(ActiveMQBuffer.class);
+        when(negativeTimestamp.getBodyBuffer()).thenReturn(negativeBuffer);
+        when(negativeBuffer.readableBytes()).thenReturn(3);
+        when(negativeTimestamp.getTimestamp()).thenReturn(-1L);
+        handler.getValue().onMessage(negativeTimestamp);
+
+        verify(callback, times(2))
+                .messageReceived(any(byte[].class), eq(ConsumerCallback.NO_PUBLISH_TIMESTAMP));
+        verify(zeroTimestamp).acknowledge();
+        verify(negativeTimestamp).acknowledge();
+    }
+
+    @Test
     void failedCreationClosesResourcesWhoseCloseSucceeds() throws Exception {
         Fixture fixture = new Fixture();
         ActiveMQException cause = new ActiveMQException("session start failed");

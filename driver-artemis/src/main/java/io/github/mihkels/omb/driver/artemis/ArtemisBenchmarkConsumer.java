@@ -93,7 +93,9 @@ public final class ArtemisBenchmarkConsumer implements BenchmarkConsumer {
     private static void handleMessage(ClientMessage message, ConsumerCallback callback) {
         byte[] payload = new byte[message.getBodyBuffer().readableBytes()];
         message.getBodyBuffer().readBytes(payload);
-        callback.messageReceived(payload, message.getTimestamp());
+        long timestamp = message.getTimestamp();
+        long publishTimestamp = timestamp <= 0 ? ConsumerCallback.NO_PUBLISH_TIMESTAMP : timestamp;
+        callback.messageReceived(payload, publishTimestamp);
         try {
             message.acknowledge();
         } catch (ActiveMQException e) {

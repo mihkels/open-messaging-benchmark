@@ -261,11 +261,15 @@ class FrameworkArchitectureTest {
                     .that(DRIVER_JVM_CLASSES)
                     .should()
                     .dependOnClassesThat(
-                            SUPERVISOR_ONLY_WORKER_CLASSES.or(
-                                    resideInAPackage(PLUGIN_PACKAGE + "..").and(not(PLUGIN_EXCEPTION))))
+                            SUPERVISOR_ONLY_WORKER_CLASSES
+                                    .or(resideInAPackage(PLUGIN_PACKAGE + "..").and(not(PLUGIN_EXCEPTION)))
+                                    // dependOnClassesThat is direct-only, so block coordinator payload helpers
+                                    // such as CompressiblePayloads, whose calibration needs zstd-jni.
+                                    .or(resideInAPackage(PAYLOAD_PACKAGE).and(not(DRIVER_JVM_PAYLOAD_CLASSES))))
                     .because(
                             "driver-JVM classes must not reach into supervisor-only worker"
-                                    + " orchestration or plugin-loading internals");
+                                    + " orchestration, plugin-loading internals, or coordinator-only"
+                                    + " payload helpers");
 
     // --- Third-party library & process confinement ---
 

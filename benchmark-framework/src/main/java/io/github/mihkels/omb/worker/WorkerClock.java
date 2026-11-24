@@ -15,19 +15,15 @@ package io.github.mihkels.omb.worker;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * One worker's wall-clock offset from the coordinator, estimated NTP-style from the clock reading
- * in the worker's {@code GET /health} response. Each probe makes {@value #ROUND_TRIPS} round trips
- * and keeps the one with the lowest round-trip time; the true offset is within {@code rttMs / 2} of
- * the estimate.
+ * in the worker's {@code GET /health} response. Each probe makes {@value
+ * WorkerClockProbe#ROUND_TRIPS} round trips and keeps the one with the lowest round-trip time; the
+ * true offset is within {@code rttMs / 2} of the estimate.
  *
  * @param worker the worker's id
  * @param role {@code producer}, {@code consumer}, or {@code local} for an in-process run
@@ -42,11 +38,6 @@ public record WorkerClock(
         double offsetMs,
         double rttMs,
         @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Double driftMs) {
-    static final int ROUND_TRIPS = 5;
-    static final String LOCAL = "local";
-
-    private static final Logger log = LoggerFactory.getLogger(WorkerClock.class);
-
     /**
      * The current wall clock in microseconds since the epoch.
      *
@@ -55,67 +46,6 @@ public record WorkerClock(
     public static long nowMicros() {
         Instant now = Instant.now();
         return now.getEpochSecond() * 1_000_000L + now.getNano() / 1_000;
-    }
-
-    /**
-     * Estimates the clock offset of every worker. An in-process worker shares the coordinator's clock
-     * and records zero; a remote worker that cannot be probed is logged and left out.
-     *
-     * @param worker the run's worker
-     * @return one entry per probed worker, with no drift
-     */
-    public static List<WorkerClock> probe(Worker worker) {
-        return probe(worker, WorkerClock::nowMicros);
-    }
-
-    static List<WorkerClock> probe(Worker worker, LongSupplier coordinatorMicros) {
-        if (!(worker instanceof DistributedWorkersEnsemble ensemble)) {
-            return List.of(new WorkerClock(worker.id(), LOCAL, 0, 0, 0.0));
-        }
-        List<WorkerClock> clocks = new ArrayList<>();
-        for (Worker remote : ensemble.workers()) {
-            WorkerClock clock = probeOne(remote, ensemble.role(remote), coordinatorMicros);
-            if (clock != null) {
-                clocks.add(clock);
-            }
-        }
-        return clocks;
-    }
-
-    private static @Nullable WorkerClock probeOne(
-            Worker worker, String role, LongSupplier coordinatorMicros) {
-        long bestRtt = Long.MAX_VALUE;
-        long bestOffset = 0;
-        for (int i = 0; i < ROUND_TRIPS; i++) {
-            long sent = coordinatorMicros.getAsLong();
-            @Nullable Long workerMicros;
-            try {
-                workerMicros = worker.health().clockMicros();
-            } catch (RuntimeException e) {
-                // Probing is best effort: a failure leaves the worker out, never fails the run
-                log.atWarn()
-                        .setMessage("Cannot probe the clock of worker {}: {}")
-                        .addArgument(worker::id)
-                        .addArgument(e::toString)
-                        .log();
-                return null;
-            }
-            long received = coordinatorMicros.getAsLong();
-            if (workerMicros == null) {
-                log.atWarn()
-                        .setMessage("Worker {} does not report its clock; upgrade it to measure clock offset")
-                        .addArgument(worker::id)
-                        .log();
-                return null;
-            }
-            long rtt = received - sent;
-            if (rtt < bestRtt) {
-                bestRtt = rtt;
-                // Assumes the request and the response took equally long
-                bestOffset = workerMicros - (sent + rtt / 2);
-            }
-        }
-        return new WorkerClock(worker.id(), role, bestOffset / 1000.0, bestRtt / 1000.0, null);
     }
 
     /**

@@ -18,6 +18,8 @@ import io.github.mihkels.omb.TestResult;
 import io.github.mihkels.omb.Workload;
 import io.github.mihkels.omb.utils.distributor.KeyDistribution;
 import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
+import io.github.mihkels.omb.utils.payload.MessageHeaders;
+import io.github.mihkels.omb.utils.payload.PayloadGenerator;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -76,6 +78,18 @@ final class RunContext {
             identity.put(
                     "messageSizeDistribution",
                     distribution.isEmpty() ? "none" : new TreeMap<>(distribution).toString());
+            Workload.ConsumerPause pause = workload.consumerPause;
+            identity.put("consumerPause", pause == null ? "none" : pause.toString());
+            MessageHeaders headers = workload.headers;
+            identity.put("headers", headers == null ? "none" : headers.toString());
+            PayloadGenerator generator = workload.payloadGenerator;
+            identity.put("payloadGenerator", generator == null ? "none" : generator.toString());
+            identity.put("useRandomizedPayloads", String.valueOf(workload.useRandomizedPayloads));
+            if (workload.useRandomizedPayloads) {
+                identity.put("randomBytesRatio", String.valueOf(workload.randomBytesRatio));
+            }
+            identity.put("verifyDelivery", String.valueOf(workload.verifyDelivery));
+            identity.put("partitionTelemetry", String.valueOf(workload.partitionTelemetry));
         } else {
             identity.put("name", String.valueOf(result.workload));
             identity.put("messageSize", String.valueOf(result.messageSize));

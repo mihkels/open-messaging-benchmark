@@ -91,11 +91,16 @@ and the header names the source that was used.
 
 ## Mismatched workloads
 
-Runs of different workloads are not comparable. The tool refuses with exit status `1` when the
-workload name, `producerRate`, `messageSize` or `partitionsPerTopic` differ between any two files,
-on either side, and names the files with each value. Pass `--allow-workload-mismatch` to compare
-anyway; the differences are then printed as warnings in the report. Version 1 result files carry no
-workload definition, so only their name, message size and partition count are checked.
+Runs of different workloads are not comparable. The tool refuses with exit status `1` when any
+comparability-affecting workload setting differs between any two files on either side, and names
+the files with each value: `name`, `producerRate`, `stages`, `consumerBacklogSizeGB`,
+`messageSize`, `messageSizeDistribution`, topology (`topics`, `partitionsPerTopic`,
+`producersPerTopic`, `subscriptionsPerTopic`, `consumerPerSubscription`), `keyDistributor` (and
+`keyDistribution` for `ZIPFIAN`), `consumerPause`, `headers`, `payloadGenerator`,
+`useRandomizedPayloads` (and `randomBytesRatio` when randomized payloads are enabled),
+`verifyDelivery` or `partitionTelemetry`. Pass `--allow-workload-mismatch` to compare anyway; the
+differences are then printed as warnings in the report. Version 1 result files carry no workload
+definition, so only their name, message size and partition count are checked.
 
 ## Output formats
 

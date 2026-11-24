@@ -19,6 +19,8 @@ import io.github.mihkels.omb.Workload;
 import io.github.mihkels.omb.tool.report.RunContext.SettingDifference;
 import io.github.mihkels.omb.utils.distributor.KeyDistribution;
 import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
+import io.github.mihkels.omb.utils.payload.MessageHeaders;
+import io.github.mihkels.omb.utils.payload.PayloadGenerator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +77,64 @@ class RunContextTest {
         assertThat(RunContext.workloadMismatches(List.of(baseline, candidate)))
                 .anyMatch(mismatch -> mismatch.startsWith("Workload stages differs"))
                 .anyMatch(mismatch -> mismatch.startsWith("Workload consumerBacklogSizeGB differs"));
+    }
+
+    @Test
+    void reportsMismatchedPauseHeadersPayloadsAndVerificationSettings() {
+        Run baseline = Fixtures.run("baseline-1.json");
+        Run candidate = Fixtures.run("baseline-2.json");
+        Workload candidateWorkload = candidate.result().metadata.workload();
+        candidateWorkload.consumerPause = new Workload.ConsumerPause(5, 2);
+        candidateWorkload.headers = new MessageHeaders(2, 32);
+        candidateWorkload.payloadGenerator =
+                new PayloadGenerator(PayloadGenerator.Type.COMPRESSIBLE, 0.5, 16);
+        candidateWorkload.useRandomizedPayloads = true;
+        candidateWorkload.verifyDelivery = true;
+        candidateWorkload.partitionTelemetry = true;
+
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate)))
+                .containsExactly(
+                        "Workload consumerPause differs: none (baseline-1.json)"
+                                + " vs ConsumerPause[afterMinutes=5, durationMinutes=2] (baseline-2.json)",
+                        "Workload headers differs: none (baseline-1.json)"
+                                + " vs MessageHeaders[count=2, valueSize=32] (baseline-2.json)",
+                        "Workload payloadGenerator differs: none (baseline-1.json)"
+                                + " vs PayloadGenerator[type=COMPRESSIBLE, targetCompressionRatio=0.5,"
+                                + " poolSize=16] (baseline-2.json)",
+                        "Workload useRandomizedPayloads differs: false (baseline-1.json)"
+                                + " vs true (baseline-2.json)",
+                        "Workload verifyDelivery differs: false (baseline-1.json)"
+                                + " vs true (baseline-2.json)",
+                        "Workload partitionTelemetry differs: false (baseline-1.json)"
+                                + " vs true (baseline-2.json)");
+    }
+
+    @Test
+    void comparesRandomBytesRatioOnlyWhenRandomizedPayloadsAreEnabled() {
+        Run baseline = Fixtures.run("baseline-1.json");
+        Run candidate = Fixtures.run("baseline-2.json");
+        candidate.result().metadata.workload().randomBytesRatio = 0.5;
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate))).isEmpty();
+
+        baseline.result().metadata.workload().useRandomizedPayloads = true;
+        baseline.result().metadata.workload().randomBytesRatio = 0.25;
+        candidate.result().metadata.workload().useRandomizedPayloads = true;
+        assertThat(RunContext.workloadMismatches(List.of(baseline, candidate)))
+                .containsExactly(
+                        "Workload randomBytesRatio differs: 0.25 (baseline-1.json) vs 0.5 (baseline-2.json)");
+    }
+
+    @Test
+    void defaultsNewIdentitySettingsForOlderVersion2Results() {
+        Run older = Fixtures.run("baseline-1.json");
+        assertThat(RunContext.workloadIdentity(older))
+                .containsEntry("consumerPause", "none")
+                .containsEntry("headers", "none")
+                .containsEntry("payloadGenerator", "none")
+                .containsEntry("useRandomizedPayloads", "false")
+                .containsEntry("verifyDelivery", "false")
+                .containsEntry("partitionTelemetry", "false")
+                .doesNotContainKey("randomBytesRatio");
     }
 
     @Test

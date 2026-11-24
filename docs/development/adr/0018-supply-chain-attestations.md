@@ -12,7 +12,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# ADR 0018: Attach SBOM and SLSA provenance to every release artifact
+# ADR 0018: Attach SBOM and SLSA provenance to images and provenance to the chart and tarball
 
 - **Status:** Accepted, implemented
 - **Date:** 2026-11-18

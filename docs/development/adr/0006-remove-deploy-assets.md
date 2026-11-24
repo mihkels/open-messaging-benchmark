@@ -42,9 +42,9 @@ Prometheus and Grafana with default credentials in them.
 
 ## Decision
 
-The legacy `deploy/` directories, with their Terraform and Ansible, are removed. The supported way
-to run the benchmark is the Docker images and the Helm chart
-([ADR 0002](0002-docker-hub-only.md)).
+The legacy `deploy/` directories, with their Terraform and Ansible, are removed. The supported ways
+to run the benchmark are the Docker images, the Helm chart ([ADR 0002](0002-docker-hub-only.md))
+and the binary distribution tarball.
 
 ## Consequences
 

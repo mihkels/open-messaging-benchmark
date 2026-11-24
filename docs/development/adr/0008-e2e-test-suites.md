@@ -42,7 +42,8 @@ Every driver has two end-to-end checks:
 - a **Testcontainers contract** in `e2e-tests`: short message exchanges against a broker in a
   container, run with `mvn -pl e2e-tests -am -De2e verify`;
 - a **Compose case**: a one-minute regression workload through a coordinator and two workers, run
-  with `e2e-tests/compose/run-e2e.sh`.
+  with `e2e-tests/compose/run-e2e.sh --build docker --cases <case>` so the distribution is rebuilt
+  with the changed driver.
 
 A new driver adds both.
 

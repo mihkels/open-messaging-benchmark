@@ -49,8 +49,10 @@ consumer counts, `1024` for `messageSize`, and `10000` for `producerRate`.
 
 The other fields are single values copied into every workload. The example produces
 `1 × 1 × 1 × 1 × 3 × 3 × 2 = 18` files. The template does not support `messageSizeDistribution`,
-`backlogDrainRatio`, `consumerPause`, or `thresholds`; add them to the generated files by hand if needed. With a fixed
-`payloadFile`, list only one `messageSize`, because the file length must match it.
+`payloadGenerator`, `headers`, `backlogDrainRatio`, `consumerPause`, `thresholds`, `checks`,
+`repeat`, `verifyDelivery` or `partitionTelemetry`; add them to the generated files by hand if
+needed. With a fixed `payloadFile`, list only one `messageSize`, because the file length must match
+it.
 For hot-key workloads, set `keyDistributor: ZIPFIAN` and optionally add
 `keyDistribution: {keys: 10000, exponent: 0.99}`; the same settings are copied to each workload.
 

@@ -40,14 +40,119 @@ class WorkloadTest {
     }
 
     @Test
-    void verifyDeliveryNeedsProducersAndSubscriptions() {
+    void verifyDeliveryNeedsProducersSubscriptionsAndMinimumPayloadSize(@TempDir Path dir)
+            throws Exception {
         Workload workload = new Workload();
         workload.verifyDelivery = true;
         workload.producersPerTopic = 1;
+        workload.messageSize = 1024;
 
         assertThatThrownBy(workload::validate).hasMessageContaining("verifyDelivery needs");
         workload.subscriptionsPerTopic = 1;
         workload.validate();
+
+        workload.messageSize = 19;
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("verifyDelivery needs payloads of at least 20 bytes, got 19");
+
+        workload.messageSize = 20;
+        workload.validate();
+
+        workload.messageSize = 0;
+        workload.messageSizeDistribution = Map.of("10-10", 1, "100-200", 1);
+        assertThatThrownBy(workload::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("verifyDelivery needs payloads of at least 20 bytes, got 10");
+
+        workload.messageSizeDistribution = Map.of("20-40", 1, "100-200", 1);
+        workload.validate();
+
+        Path shortFile = dir.resolve("short.yaml");
+        Files.writeString(
+                shortFile,
+                "name: short\n"
+                        + WorkloadYaml.COUNTS
+                        + "messageSize: 16\nproducerRate: 1000\ntestDurationMinutes: 1\nverifyDelivery: true\n");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(shortFile.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("verifyDelivery needs payloads of at least 20 bytes, got 16");
+    }
+
+    @Test
+    void rejectsNegativeRatesWarmupBacklogAndOutOfRangeDrainRatio() {
+        Workload valid = new Workload();
+        valid.producerRate = 0;
+        valid.warmupDurationMinutes = 0;
+        valid.consumerBacklogSizeGB = 0;
+        valid.backlogDrainRatio = 0.0;
+        valid.validate();
+        valid.backlogDrainRatio = 1.0;
+        valid.validate();
+
+        Workload negativeRate = new Workload();
+        negativeRate.producerRate = -1;
+        assertThatThrownBy(negativeRate::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("producerRate must not be negative");
+
+        Workload negativeWarmup = new Workload();
+        negativeWarmup.warmupDurationMinutes = -1;
+        assertThatThrownBy(negativeWarmup::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("warmupDurationMinutes must not be negative");
+
+        Workload negativeBacklog = new Workload();
+        negativeBacklog.consumerBacklogSizeGB = -1;
+        assertThatThrownBy(negativeBacklog::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("consumerBacklogSizeGB must not be negative");
+
+        for (double invalidRatio : new double[] {-0.01, 1.01, Double.NaN, Double.POSITIVE_INFINITY}) {
+            Workload badRatio = new Workload();
+            badRatio.backlogDrainRatio = invalidRatio;
+            assertThatThrownBy(badRatio::validate)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("backlogDrainRatio must be between 0.0 and 1.0");
+        }
+    }
+
+    @Test
+    void schemaRejectsEmptyStagesOrSizeDistributionWithoutFallbackFields(@TempDir Path dir)
+            throws Exception {
+        Path emptyStages = dir.resolve("empty-stages.yaml");
+        Files.writeString(
+                emptyStages, "name: empty-stages\n" + WorkloadYaml.COUNTS + "messageSize: 1024\nstages: []\n");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(emptyStages.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'producerRate' not found");
+
+        Path nullStages = dir.resolve("null-stages.yaml");
+        Files.writeString(
+                nullStages, "name: null-stages\n" + WorkloadYaml.COUNTS + "messageSize: 1024\nstages: null\n");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(nullStages.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'producerRate' not found");
+
+        Path emptyDistribution = dir.resolve("empty-dist.yaml");
+        Files.writeString(
+                emptyDistribution,
+                "name: empty-dist\n"
+                        + WorkloadYaml.COUNTS
+                        + "producerRate: 1000\ntestDurationMinutes: 1\nmessageSizeDistribution: {}\n");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(emptyDistribution.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'messageSize' not found");
+
+        Path nullDistribution = dir.resolve("null-dist.yaml");
+        Files.writeString(
+                nullDistribution,
+                "name: null-dist\n"
+                        + WorkloadYaml.COUNTS
+                        + "producerRate: 1000\ntestDurationMinutes: 1\nmessageSizeDistribution: null\n");
+        assertThatThrownBy(() -> Benchmark.readWorkloads(List.of(nullDistribution.toString())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required property 'messageSize' not found");
     }
 
     @Test

@@ -16,6 +16,7 @@ package io.github.mihkels.omb.driver.rabbitmq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -50,14 +51,40 @@ class RabbitMqConfigTest {
     @Test
     void acceptsZeroRetriesAndRejectsNegativeRetries() {
         RabbitMqConfig noRetries =
-                new ObjectMapper().readValue("{\"resourceCreationMaxRetries\":0}", RabbitMqConfig.class);
+                new ObjectMapper()
+                        .readValue(
+                                "{\"amqpUris\":[\"amqp://local\"],\"resourceCreationMaxRetries\":0}",
+                                RabbitMqConfig.class);
         noRetries.validate();
         assertThat(noRetries.resourceCreationMaxRetries).isZero();
 
         RabbitMqConfig invalid =
-                new ObjectMapper().readValue("{\"resourceCreationMaxRetries\":-1}", RabbitMqConfig.class);
+                new ObjectMapper()
+                        .readValue(
+                                "{\"amqpUris\":[\"amqp://local\"],\"resourceCreationMaxRetries\":-1}",
+                                RabbitMqConfig.class);
         assertThatThrownBy(invalid::validate)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("resourceCreationMaxRetries");
+    }
+
+    @Test
+    void rejectsMissingEmptyNullOrBlankAmqpUris() {
+        RabbitMqConfig missing = new RabbitMqConfig();
+        assertThatThrownBy(missing::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("amqpUris");
+
+        RabbitMqConfig nullList =
+                new ObjectMapper().readValue("{\"amqpUris\":null}", RabbitMqConfig.class);
+        assertThatThrownBy(nullList::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("amqpUris");
+
+        RabbitMqConfig blankEntry = new RabbitMqConfig();
+        blankEntry.amqpUris = List.of("  ");
+        assertThatThrownBy(blankEntry::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("amqpUris");
     }
 }

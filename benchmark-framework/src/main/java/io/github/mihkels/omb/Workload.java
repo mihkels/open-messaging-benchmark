@@ -21,6 +21,7 @@ import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
 import io.github.mihkels.omb.utils.payload.MessageHeaders;
 import io.github.mihkels.omb.utils.payload.MessageSizeDistribution;
 import io.github.mihkels.omb.utils.payload.PayloadGenerator;
+import io.github.mihkels.omb.worker.DeliveryStamp;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -184,6 +185,18 @@ public class Workload {
      * @throws IllegalArgumentException if the workload is invalid
      */
     public void validate() {
+        if (producerRate < 0) {
+            throw new IllegalArgumentException("producerRate must not be negative");
+        }
+        if (warmupDurationMinutes < 0) {
+            throw new IllegalArgumentException("warmupDurationMinutes must not be negative");
+        }
+        if (consumerBacklogSizeGB < 0) {
+            throw new IllegalArgumentException("consumerBacklogSizeGB must not be negative");
+        }
+        if (Double.isNaN(backlogDrainRatio) || backlogDrainRatio < 0.0 || backlogDrainRatio > 1.0) {
+            throw new IllegalArgumentException("backlogDrainRatio must be between 0.0 and 1.0");
+        }
         if (repeat != null && repeat < 1) {
             throw new IllegalArgumentException("repeat must be at least 1");
         }
@@ -204,9 +217,34 @@ public class Workload {
         if (consumerBacklogSizeGB > 0) {
             validateBacklog();
         }
-        if (verifyDelivery && (producersPerTopic <= 0 || subscriptionsPerTopic <= 0)) {
+        if (verifyDelivery) {
+            validateVerifyDelivery();
+        }
+    }
+
+    private void validateVerifyDelivery() {
+        if (producersPerTopic <= 0 || subscriptionsPerTopic <= 0) {
             throw new IllegalArgumentException(
                     "verifyDelivery needs at least one producer and one subscription per topic");
+        }
+        if (usesMessageSizeDistribution()) {
+            for (int size : new MessageSizeDistribution(messageSizeDistribution).getBucketSizes()) {
+                if (size < DeliveryStamp.LENGTH) {
+                    throw new IllegalArgumentException(
+                            "verifyDelivery needs payloads of at least "
+                                    + DeliveryStamp.LENGTH
+                                    + " bytes, got "
+                                    + size);
+                }
+            }
+            return;
+        }
+        if (messageSize < DeliveryStamp.LENGTH) {
+            throw new IllegalArgumentException(
+                    "verifyDelivery needs payloads of at least "
+                            + DeliveryStamp.LENGTH
+                            + " bytes, got "
+                            + messageSize);
         }
     }
 

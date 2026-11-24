@@ -121,7 +121,9 @@ summary's medians.
   validation (pool size, size distribution, backlog settings) print a message and exit with a
   non-zero status before any broker resources are created. Payload file errors (missing file, length mismatch) are detected only after topics,
   producers and consumers have been created. `--help` prints usage and exits successfully.
-- **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory.
+- **Logging.** Output goes to the console and to `benchmark-worker.log` in the current directory, or
+  to `$OMB_LOG_DIR/benchmark.log` when `OMB_LOG_DIR` is set (as in the container image and Helm
+  chart).
 
 ### Examples
 

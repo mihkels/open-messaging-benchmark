@@ -9,5 +9,6 @@ Closes #
 - [ ] `mvn verify` passes locally.
 - [ ] Tests cover the behavior change. A new driver also adds a Testcontainers contract and a Compose case.
 - [ ] Documentation is updated, and new pages are in the `mkdocs.yml` nav.
+- [ ] An ADR is added in `docs/development/adr/`, or the change meets none of the triggers in CONTRIBUTING.md.
 
 See [CONTRIBUTING.md](https://github.com/mihkels/open-messaging-benchmark/blob/main/CONTRIBUTING.md) for details.

@@ -29,6 +29,8 @@ content here, link to it.
 4. The pull request title follows the same format (it becomes the squash commit and the changelog
    entry) and the description starts with `Closes #<issue>`. Fill in the template checklist.
 5. Update documentation in the same pull request. New pages go into the `nav` in `mkdocs.yml`.
+6. Add an ADR when a change meets the triggers under "Design decisions" in `CONTRIBUTING.md`. Read
+   the ADRs in `docs/development/adr` before changing what they decide.
 
 ## Layout
 

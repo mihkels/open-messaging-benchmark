@@ -22,7 +22,9 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.Location;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.junit.ArchTests;
 import com.tngtech.archunit.lang.ArchRule;
+import io.github.mihkels.omb.arch.CommonArchitectureRules;
 
 /**
  * Module-boundary rules for {@code benchmark-framework}.
@@ -34,6 +36,7 @@ import com.tngtech.archunit.lang.ArchRule;
         packages = "io.github.mihkels.omb",
         importOptions = {
             ImportOption.DoNotIncludeTests.class,
+            CommonArchitectureRules.DoNotIncludeArchRules.class,
             FrameworkArchitectureTest.DoNotIncludeShaded.class
         })
 class FrameworkArchitectureTest {
@@ -65,4 +68,17 @@ class FrameworkArchitectureTest {
     @ArchTest
     static final ArchRule FRAMEWORK_HAS_NO_PACKAGE_CYCLES =
             slices().matching("io.github.mihkels.(**)").should().beFreeOfCycles();
+
+    @ArchTest static final ArchTests COMMON_RULES = ArchTests.in(CommonArchitectureRules.class);
+
+    @ArchTest
+    static final ArchRule NO_GUAVA_OR_APACHE_COMMONS =
+            CommonArchitectureRules.NO_GUAVA_OR_APACHE_COMMONS;
+
+    @ArchTest
+    static final ArchRule NO_CONSOLE_OR_PROCESS_EXIT_OUTSIDE_CLI =
+            CommonArchitectureRules.noConsoleOrProcessExitOutside(
+                    "io.github.mihkels.omb.Benchmark",
+                    "io.github.mihkels.omb.worker.BenchmarkWorker",
+                    "io.github.mihkels.omb.worker.DriverProcessMain");
 }

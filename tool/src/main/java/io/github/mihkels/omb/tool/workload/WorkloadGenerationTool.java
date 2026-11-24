@@ -35,7 +35,7 @@ import tools.jackson.dataformat.yaml.YAMLFactory;
 
 /** Generates a set of {@link Workload} definition files from a {@link WorkloadSetTemplate} file. */
 public class WorkloadGenerationTool {
-    public static final Logger log = LoggerFactory.getLogger(WorkloadGenerationTool.class);
+    private static final Logger log = LoggerFactory.getLogger(WorkloadGenerationTool.class);
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
     private static final ObjectReader templateReader =
             mapper

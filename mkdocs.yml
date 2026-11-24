@@ -37,6 +37,7 @@ exclude_docs: |
   requirements.in
   requirements.txt
   demo/
+  development/adr/_template.md
 
 extra_css:
   - assets/stylesheets/extra.css
@@ -190,6 +191,26 @@ nav:
         - Releasing: development/releasing.md
         - Documentation: development/documentation.md
         - Design decisions:
+            - development/adr/index.md
             - "ADR 0001: Partition telemetry": development/adr/0001-partition-telemetry.md
+            - "ADR 0002: Docker Hub only": development/adr/0002-docker-hub-only.md
+            - "ADR 0003: Zensical": development/adr/0003-zensical-docs.md
+            - "ADR 0004: Driver plugin bundles": development/adr/0004-driver-plugin-bundles.md
+            - "ADR 0005: Frozen legacy clients": development/adr/0005-frozen-legacy-clients.md
+            - "ADR 0006: Deploy assets removed": development/adr/0006-remove-deploy-assets.md
+            - "ADR 0007: Static analysis gates": development/adr/0007-static-analysis-gates.md
+            - "ADR 0008: e2e test suites": development/adr/0008-e2e-test-suites.md
+            - "ADR 0009: Schedule-corrected latency": development/adr/0009-schedule-corrected-latency.md
+            - "ADR 0010: Run validity verdict": development/adr/0010-run-validity-verdict.md
+            - "ADR 0011: Versioned result format": development/adr/0011-versioned-result-format.md
+            - "ADR 0012: Worker API security": development/adr/0012-worker-api-secure-by-default.md
+            - "ADR 0013: Project namespace": development/adr/0013-project-owned-namespace.md
+            - "ADR 0014: Strict YAML validation": development/adr/0014-strict-yaml-validation.md
+            - "ADR 0015: Images on release tags": development/adr/0015-images-on-release-tags.md
+            - "ADR 0016: Latest-only tarball": development/adr/0016-latest-only-tarball.md
+            - "ADR 0017: Corretto runtime image": development/adr/0017-corretto-runtime-image.md
+            - "ADR 0018: Supply chain attestations": development/adr/0018-supply-chain-attestations.md
+            - "ADR 0019: Accepted-issue gate": development/adr/0019-accepted-issue-gate.md
+            - "ADR 0020: Java HTML report": development/adr/0020-java-html-report.md
   - Blog:
     - blog/index.md

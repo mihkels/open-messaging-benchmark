@@ -137,6 +137,20 @@ CI also generates `llms.txt` from the built site. To check it locally:
   thread-safe object. Fix any other new finding, or mark it in SonarCloud with a justification.
 - **Docs.** Update the documentation in the same pull request. A new page must be added to the `nav`
   in `mkdocs.yml`.
+- **Design decisions.** Record the decision as an
+  [ADR](https://mihkels.github.io/open-messaging-benchmark/development/adr/) in
+  `docs/development/adr/` in the same pull request when it:
+  - changes the `driver-api` contract or bumps `DriverApiVersion`;
+  - adds or drops a runtime dependency or a build tool;
+  - adds a hard constraint, such as a registry, an environment or a supported platform;
+  - removes a component or moves it to another repository;
+  - changes the result format or the measurement method in a way that affects whether results
+    can be compared.
+
+  Start from `docs/development/adr/_template.md`. Use the long form of
+  [ADR 0001](https://mihkels.github.io/open-messaging-benchmark/development/adr/0001-partition-telemetry/)
+  for changes to the `driver-api` contract, the wire format or the result format.
+
 - **Images.** Container images and Helm charts are published only to Docker Hub
   (`docker.io/mihkels`); CI rejects other registries.
 

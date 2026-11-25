@@ -421,6 +421,11 @@
   text-indent: -2ch;
 }
 
+/* `display: block` above would otherwise override the hidden attribute the replay uses. */
+.omb-term__body .l[hidden] {
+  display: none;
+}
+
 .omb-term__body .l + .l:not(.cont):not(.ok) {
   margin-top: var(--omb-space-1);
 }

@@ -30,7 +30,7 @@
   <section class="omb-hero" aria-labelledby="omb-title">
     <div class="omb-wrap">
       <div>
-        <p class="omb-eyebrow">OpenMessaging Benchmark &middot; derived from upstream OMB</p>
+        <p class="omb-eyebrow">OpenMessaging Benchmark &middot; derived from the original OMB</p>
         <h1 id="omb-title">Benchmark any messaging system with <em>the same workload</em></h1>
         <p class="omb-lede">
           OMB drives a workload you define in YAML through Kafka, Pulsar, RabbitMQ and twelve other
@@ -224,7 +224,7 @@
       <ul class="omb-why">
         <li>
           <h3>Current Java and clients</h3>
-          <p>Builds and runs on Java 27 with up-to-date client libraries. Workload files from upstream OMB run unchanged. <a href="{{ 'getting-started/coming-from-upstream/' | url }}">Coming from upstream</a></p>
+          <p>Builds and runs on Java 27 with up-to-date client libraries. Workload files from the original OMB run unchanged. <a href="{{ 'getting-started/coming-from-original-omb/' | url }}">Coming from the original OMB</a></p>
         </li>
         <li>
           <h3>Drivers as isolated plugins</h3>
@@ -244,36 +244,36 @@
 
   <section class="omb-section" aria-labelledby="omb-compare">
     <div class="omb-wrap">
-      <p class="omb-kicker">Compared with upstream</p>
+      <p class="omb-kicker">Compared with the original</p>
       <h2 id="omb-compare">What this project adds to OMB</h2>
       <div class="omb-compare">
         <table>
-          <caption class="omb-sr">Features of this project and upstream OpenMessaging Benchmark</caption>
+          <caption class="omb-sr">Features of this project and the original OpenMessaging Benchmark</caption>
           <thead>
             <tr>
               <th scope="col"><span class="omb-sr">Feature</span></th>
               <th scope="col" class="omb-compare__mark">This project</th>
-              <th scope="col" class="omb-compare__mark">Upstream</th>
+              <th scope="col" class="omb-compare__mark">Original OMB</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Runs upstream workload files</span><span class="omb-compare__detail">The same workload YAML works in both</span></th>
+              <th scope="row"><span class="omb-compare__feature">Runs original OMB workload files</span><span class="omb-compare__detail">The same workload YAML works in both</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Java 27</span><span class="omb-compare__detail">Upstream targets Java 17</span></th>
+              <th scope="row"><span class="omb-compare__feature">Java 27</span><span class="omb-compare__detail">The original OMB targets Java 17</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Isolated driver plugins</span><span class="omb-compare__detail">Each driver runs in its own JVM; upstream drivers share one classpath</span></th>
+              <th scope="row"><span class="omb-compare__feature">Isolated driver plugins</span><span class="omb-compare__detail">Each driver runs in its own JVM; original OMB drivers share one classpath</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Current multi-arch Docker images</span><span class="omb-compare__detail">amd64 and arm64 with single-driver tags on every release; the upstream image was last pushed in 2018, amd64 only</span></th>
+              <th scope="row"><span class="omb-compare__feature">Current multi-arch Docker images</span><span class="omb-compare__detail">amd64 and arm64 with single-driver tags on every release; the original OMB image was last pushed in 2018, amd64 only</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
             </tr>
@@ -283,7 +283,7 @@
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Published Helm chart</span><span class="omb-compare__detail">OCI chart on Docker Hub, versioned and signed with each release; upstream keeps a 0.0.1 chart in its repository</span></th>
+              <th scope="row"><span class="omb-compare__feature">Published Helm chart</span><span class="omb-compare__detail">OCI chart on Docker Hub, versioned and signed with each release; the original OMB keeps a 0.0.1 chart in its repository</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
             </tr>
@@ -315,7 +315,7 @@
         <li><span class="omb-mark omb-mark--partial"></span>Partly</li>
         <li><span class="omb-mark omb-mark--no"></span>No</li>
       </ul>
-      <p class="omb-caption">Upstream is <a href="https://github.com/openmessaging/benchmark">openmessaging/benchmark</a> as of November 2026. <a href="{{ 'getting-started/coming-from-upstream/' | url }}">Coming from upstream OMB</a></p>
+      <p class="omb-caption">The original OMB is <a href="https://github.com/openmessaging/benchmark">openmessaging/benchmark</a> as of November 2026. <a href="{{ 'getting-started/coming-from-original-omb/' | url }}">Coming from the original OMB</a></p>
     </div>
   </section>
 

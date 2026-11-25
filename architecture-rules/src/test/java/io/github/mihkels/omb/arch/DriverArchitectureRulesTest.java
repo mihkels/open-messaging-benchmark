@@ -32,6 +32,8 @@ import io.github.mihkels.omb.driver.testbad.BadDrivers.SiblingDependencyDriver;
 import io.github.mihkels.omb.driver.testbad.NoDefaultCtorDriver;
 import io.github.mihkels.omb.driver.testbad.PrivateCtorDriver;
 import io.github.mihkels.omb.driver.testclean.CleanBenchmarkDriver;
+import io.github.mihkels.omb.driver.testcycle.cyclea.CycleA;
+import io.github.mihkels.omb.driver.testcycle.cycleb.CycleB;
 import java.util.List;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
@@ -75,14 +77,30 @@ class DriverArchitectureRulesTest {
 
         assertThatThrownBy(() ->
                         DriverArchitectureRules.noCrossDriverDependencies(
-                                        "io.github.mihkels.omb.driver.testbad")
+                                        classes, "io.github.mihkels.omb.driver.testbad")
                                 .check(classes))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("allowlisted");
 
         DriverArchitectureRules.noCrossDriverDependencies(
-                        "io.github.mihkels.omb.driver.testbad", "io.github.mihkels.omb.driver.testsibling")
+                        classes,
+                        "io.github.mihkels.omb.driver.testbad",
+                        "io.github.mihkels.omb.driver.testsibling")
                 .check(classes);
+    }
+
+    @Test
+    void sharedPackageClassOutsideModuleFailsCrossDriverRule() {
+        String sharedPackage = "io.github.mihkels.omb.driver.testcycle";
+        JavaClasses onlyA = IMPORTER.importClasses(CycleA.class);
+
+        assertThatThrownBy(() ->
+                        DriverArchitectureRules.noCrossDriverDependencies(onlyA, sharedPackage).check(onlyA))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(CycleB.class.getName());
+
+        JavaClasses both = IMPORTER.importClasses(CycleA.class, CycleB.class);
+        DriverArchitectureRules.noCrossDriverDependencies(both, sharedPackage).check(both);
     }
 
     @Test

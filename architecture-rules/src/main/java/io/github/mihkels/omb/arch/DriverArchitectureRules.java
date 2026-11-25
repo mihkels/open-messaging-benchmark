@@ -183,7 +183,7 @@ public final class DriverArchitectureRules {
                 ruleTest("NO_FRAMEWORK_DEPENDENCY", NO_FRAMEWORK_DEPENDENCY, classes),
                 ruleTest(
                         "NO_CROSS_DRIVER_DEPENDENCIES",
-                        noCrossDriverDependencies(driverPackage, allowedSiblingDriverPackages),
+                        noCrossDriverDependencies(classes, driverPackage, allowedSiblingDriverPackages),
                         classes),
                 ruleTest("RESIDE_IN_DRIVER_PACKAGE", resideInDriverPackage(driverPackage), classes),
                 ruleTest(
@@ -222,18 +222,29 @@ public final class DriverArchitectureRules {
 
     /**
      * Builds a rule forbidding dependencies on sibling driver packages outside {@code driver-api},
-     * {@code driverPackage}, and any explicitly allowlisted sibling packages.
+     * classes of {@code module} itself, and any explicitly allowlisted sibling packages.
      *
+     * <p>Own-package targets count as the driver's only when {@code module} contains them, so {@code
+     * driver-rocketmq} and {@code driver-rocketmq5}, which share a package, cannot depend on each
+     * other.
+     *
+     * @param module imported classes of the driver module under test
      * @param driverPackage base package of the driver under test
      * @param allowedSiblingDriverPackages sibling driver packages explicitly allowed (such as for
      *     KoP)
      * @return the ArchUnit rule
      */
     public static ArchRule noCrossDriverDependencies(
-            String driverPackage, String... allowedSiblingDriverPackages) {
+            JavaClasses module, String driverPackage, String... allowedSiblingDriverPackages) {
         validateDriverPackage(driverPackage);
+        DescribedPredicate<JavaClass> ownModuleClasses =
+                resideInAPackage(driverPackage + "..")
+                        .and(
+                                DescribedPredicate.describe(
+                                        "belong to the driver module",
+                                        c -> module.contain(c.getBaseComponentType().getName())));
         DescribedPredicate<JavaClass> allowedDriverPackages =
-                resideInAPackage(DRIVER_API_PACKAGE).or(resideInAPackage(driverPackage + ".."));
+                resideInAPackage(DRIVER_API_PACKAGE).or(ownModuleClasses);
         for (String sibling : allowedSiblingDriverPackages) {
             validateDriverPackage(sibling);
             allowedDriverPackages = allowedDriverPackages.or(resideInAPackage(sibling + ".."));

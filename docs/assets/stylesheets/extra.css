@@ -952,7 +952,6 @@
 
 .omb-compare {
   --omb-compare-col: color-mix(in srgb, var(--omb-accent) 7%, var(--omb-bg));
-  max-width: 48rem;
   border: 1px solid var(--omb-line);
   border-radius: var(--omb-radius);
   background: var(--omb-surface);
@@ -967,7 +966,7 @@
 }
 
 .omb-compare thead th {
-  padding: var(--omb-space-3) var(--omb-space-3);
+  padding: var(--omb-space-4);
   font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -981,26 +980,31 @@
 }
 
 .omb-compare tbody th {
-  padding: var(--omb-space-3) var(--omb-space-4);
+  padding: var(--omb-space-4) var(--omb-space-5);
   text-align: left;
   font-weight: normal;
 }
 
+.omb-compare__label {
+  display: grid;
+  gap: var(--omb-space-1);
+}
+
 .omb-compare__feature {
   display: block;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--omb-fg);
 }
 
 .omb-compare__detail {
   display: block;
-  margin-top: 0.15rem;
-  font-size: 0.62rem;
+  font-size: 0.65rem;
   color: var(--omb-muted);
 }
 
 .omb-compare__mark {
-  width: 6.5rem;
+  width: 9rem;
   text-align: center;
   vertical-align: middle;
 }
@@ -1053,7 +1057,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--omb-space-4);
-  margin: var(--omb-space-3) 0 0;
+  margin: var(--omb-space-4) 0 0;
   padding: 0;
   list-style: none;
   font-size: 0.62rem;
@@ -1074,6 +1078,19 @@
 .omb-compare__legend .omb-mark::before {
   width: 0.65rem;
   height: 0.65rem;
+}
+
+/* Wide screens give the note its own column instead of a short line under the name. */
+@media (min-width: 1200px) {
+  .omb-compare__label {
+    grid-template-columns: minmax(14rem, 3fr) 5fr;
+    gap: var(--omb-space-5);
+    align-items: baseline;
+  }
+
+  .omb-compare__mark {
+    width: 10rem;
+  }
 }
 
 @media (max-width: 599px) {

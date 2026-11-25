@@ -25,18 +25,21 @@ and artifacts do not. See
 
 ## Compared with upstream OMB
 
-Upstream [openmessaging/benchmark](https://github.com/openmessaging/benchmark) as of November 2026:
+|                Feature                 | This project | Upstream |                                                                            Notes                                                                            |
+|----------------------------------------|:------------:|:--------:|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Runs upstream workload files           |      ✅       |    ✅     | The same workload YAML works in both                                                                                                                        |
+| Java 27                                |      ✅       |    ❌     | Upstream targets Java 17                                                                                                                                    |
+| Isolated driver plugins                |      ✅       |    ❌     | Each driver runs in its own JVM; upstream drivers share one classpath                                                                                       |
+| Current multi-arch Docker images       |      ✅       |    ➖     | `docker.io/mihkels/open-messaging-benchmark`: amd64 and arm64, single-driver tags, every release. The upstream image was last pushed in 2018, amd64 only    |
+| Signed images with SBOM and provenance |      ✅       |    ❌     | cosign signatures, SBOM and SLSA provenance, Trivy-scanned                                                                                                  |
+| Published Helm chart                   |      ✅       |    ➖     | `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`, versioned and signed with each release. Upstream keeps a 0.0.1 chart in its repository |
+| Versioned releases                     |      ✅       |    ❌     | Binary tarball with `SHA256SUMS` for each release                                                                                                           |
+| End-to-end tests for every driver      |      ✅       |    ❌     | Each driver runs against a real broker in CI; both projects have unit tests                                                                                 |
+| Authenticated workers                  |      ✅       |    ❌     | Workers require a shared bearer token (`OMB_WORKER_TOKEN`)                                                                                                  |
+| Schema-validated configuration         |      ✅       |    ❌     | Workload and driver YAML are checked against published JSON Schemas before a run starts                                                                     |
 
-|               |                             Upstream OMB                              |                                                                     This project                                                                      |
-|---------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Java          | 17                                                                    | 27                                                                                                                                                    |
-| Drivers       | All drivers share one classpath                                       | Each driver is a plugin in its own JVM, so client libraries never collide                                                                             |
-| Docker images | `openmessaging/openmessaging-benchmark`, last pushed 2018, amd64 only | `docker.io/mihkels/open-messaging-benchmark` on every release: amd64 and arm64, single-driver tags, cosign-signed, SBOM and provenance, Trivy-scanned |
-| Helm chart    | In-repo chart at 0.0.1, not published                                 | `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`, versioned with each release and cosign-signed                                    |
-| Releases      | No GitHub releases                                                    | Versioned releases with a binary tarball and `SHA256SUMS`                                                                                             |
-| Testing       | Unit tests                                                            | Unit tests plus a Docker Compose suite that runs every driver end to end against a real broker                                                        |
-| Workers       | Unauthenticated HTTP API                                              | Shared bearer token (`OMB_WORKER_TOKEN`) required                                                                                                     |
-| Config checks | No schema validation                                                  | Workload and driver YAML validated against published JSON Schemas                                                                                     |
+✅ yes · ➖ partly · ❌ no. Upstream is [openmessaging/benchmark](https://github.com/openmessaging/benchmark)
+as of November 2026.
 
 Upstream workload files run unchanged; see
 [Coming from upstream OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-upstream/)

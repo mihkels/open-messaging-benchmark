@@ -245,26 +245,77 @@
   <section class="omb-section" aria-labelledby="omb-compare">
     <div class="omb-wrap">
       <p class="omb-kicker">Compared with upstream</p>
-      <h2 id="omb-compare">What changes from upstream OMB</h2>
+      <h2 id="omb-compare">What this project adds to OMB</h2>
       <div class="omb-compare">
         <table>
-          <caption>Upstream openmessaging/benchmark as of November 2026</caption>
+          <caption class="omb-sr">Features of this project and upstream OpenMessaging Benchmark</caption>
           <thead>
-            <tr><th scope="col"></th><th scope="col">Upstream OMB</th><th scope="col">This project</th></tr>
+            <tr>
+              <th scope="col"><span class="omb-sr">Feature</span></th>
+              <th scope="col" class="omb-compare__mark">This project</th>
+              <th scope="col" class="omb-compare__mark">Upstream</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><th scope="row">Java</th><td>17</td><td>27</td></tr>
-            <tr><th scope="row">Drivers</th><td>All drivers share one classpath</td><td>Each driver is a plugin in its own JVM</td></tr>
-            <tr><th scope="row">Docker images</th><td>Last pushed 2018, amd64 only</td><td>Every release: amd64 and arm64, single-driver tags, signed, SBOM and provenance, scanned</td></tr>
-            <tr><th scope="row">Helm chart</th><td>In-repo chart at 0.0.1, not published</td><td>OCI chart on Docker Hub, versioned with each release and signed</td></tr>
-            <tr><th scope="row">Releases</th><td>No GitHub releases</td><td>Versioned releases with a binary tarball and checksums</td></tr>
-            <tr><th scope="row">Testing</th><td>Unit tests</td><td>Plus an end-to-end suite against a real broker for every driver</td></tr>
-            <tr><th scope="row">Workers</th><td>Unauthenticated HTTP API</td><td>Shared bearer token required</td></tr>
-            <tr><th scope="row">Config checks</th><td>No schema validation</td><td>Workload and driver YAML validated against JSON Schemas</td></tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Runs upstream workload files</span><span class="omb-compare__detail">The same workload YAML works in both</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Java 27</span><span class="omb-compare__detail">Upstream targets Java 17</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Isolated driver plugins</span><span class="omb-compare__detail">Each driver runs in its own JVM; upstream drivers share one classpath</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Current multi-arch Docker images</span><span class="omb-compare__detail">amd64 and arm64 with single-driver tags on every release; the upstream image was last pushed in 2018, amd64 only</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Signed images with SBOM and provenance</span><span class="omb-compare__detail">cosign signatures, SBOM and SLSA provenance, Trivy-scanned</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Published Helm chart</span><span class="omb-compare__detail">OCI chart on Docker Hub, versioned and signed with each release; upstream keeps a 0.0.1 chart in its repository</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Versioned releases</span><span class="omb-compare__detail">Binary tarball with checksums for each release</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">End-to-end tests for every driver</span><span class="omb-compare__detail">Each driver runs against a real broker in CI; both projects have unit tests</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Authenticated workers</span><span class="omb-compare__detail">Workers require a shared bearer token</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
+            <tr>
+              <th scope="row"><span class="omb-compare__feature">Schema-validated configuration</span><span class="omb-compare__detail">Workload and driver YAML are checked before a run starts</span></th>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
+              <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
+            </tr>
           </tbody>
         </table>
       </div>
-      <p class="omb-caption">Upstream workload files run unchanged. <a href="{{ 'getting-started/coming-from-upstream/' | url }}">Coming from upstream OMB</a></p>
+      <ul class="omb-compare__legend" aria-hidden="true">
+        <li><span class="omb-mark omb-mark--yes"></span>Yes</li>
+        <li><span class="omb-mark omb-mark--partial"></span>Partly</li>
+        <li><span class="omb-mark omb-mark--no"></span>No</li>
+      </ul>
+      <p class="omb-caption">Upstream is <a href="https://github.com/openmessaging/benchmark">openmessaging/benchmark</a> as of November 2026. <a href="{{ 'getting-started/coming-from-upstream/' | url }}">Coming from upstream OMB</a></p>
     </div>
   </section>
 

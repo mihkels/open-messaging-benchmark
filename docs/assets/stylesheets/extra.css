@@ -203,7 +203,6 @@
 .omb-metrics li,
 .omb-chart,
 .omb-driver,
-.omb-why li,
 .omb-paths a {
   background: var(--omb-surface);
   border: 1px solid var(--omb-line);
@@ -213,7 +212,6 @@
 
 .omb-metrics,
 .omb-drivers,
-.omb-why,
 .omb-paths,
 .omb-facts {
   display: grid;
@@ -523,9 +521,8 @@
   content: " \2192";
 }
 
-/* Card typography shared by metrics, "why" items and path links. */
+/* Card typography shared by metrics and charts. */
 .omb-metrics h3,
-.omb-why h3,
 .omb-chart h3 {
   margin: 0;
   font-size: 0.8rem;
@@ -534,7 +531,6 @@
 }
 
 .omb-metrics p,
-.omb-why p,
 .omb-chart__sub {
   margin: 0;
   font-size: 0.7rem;
@@ -921,24 +917,6 @@
   color: var(--omb-muted);
 }
 
-/* ---------- What it adds ---------- */
-
-.omb-why {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.omb-why li {
-  display: grid;
-  align-content: start;
-  gap: var(--omb-space-2);
-  padding: var(--omb-card-pad);
-  border-top: 2px solid var(--omb-accent);
-}
-
-.omb-why p a {
-  white-space: nowrap;
-}
-
 /* ---------- Compared with upstream ---------- */
 
 .omb-sr {
@@ -1187,7 +1165,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .omb-why,
   .omb-paths {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1241,7 +1218,6 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  .omb-why,
   .omb-paths {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

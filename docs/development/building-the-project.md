@@ -204,6 +204,27 @@ Surefire keeps one fork per module (`forkCount` is not set). Forking per CPU was
 the full reactor build slower: about 4:00 instead of 2:43, because every small module pays for
 extra JVM starts.
 
+## Measurement accuracy test
+
+Driver tests run against real brokers, so a bug in how the framework measures would look like
+broker behaviour. `LoopbackMeasurementTest` in `benchmark-framework` checks the measurement itself.
+It runs the real `LocalWorker` send, receive and stats path against `LoopbackDriver`, a test-only
+in-memory broker whose behaviour is known in advance:
+
+- each send is acknowledged after `ackDelayMillis` and delivered after `deliveryDelayMillis`
+- every `dropEvery`-th send is acknowledged but never delivered
+- every `duplicateEvery`-th delivered send arrives twice
+
+Faults hit fixed sequence numbers, not random ones, so the test asserts the `delivered`,
+`duplicated` and `outOfOrder` counters exactly. Timing can't be exact on a real clock, so the
+latency checks use bounds. The scheduler never fires early, which makes the injected delay a hard
+minimum for publish and end-to-end latency. p50 must be within 2 ms of the delay, p99 within 10 ms,
+and the achieved rate within 3% of the target. The test takes about 5 seconds and runs in
+`mvn verify`.
+
+If the test fails on a quiet machine, look for a measurement regression in the worker. If it fails
+only on loaded CI runners, widen the upper bounds and leave the minimums alone.
+
 ## Mutation testing
 
 JaCoCo shows which lines the tests run, not whether their assertions would catch a bug. PIT measures

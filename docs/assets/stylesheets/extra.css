@@ -916,7 +916,7 @@
   color: var(--omb-muted);
 }
 
-/* ---------- Why this fork ---------- */
+/* ---------- What it adds ---------- */
 
 .omb-why {
   grid-template-columns: minmax(0, 1fr);

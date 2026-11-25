@@ -13,7 +13,7 @@
 #
 
 site_name: OpenMessaging Benchmark
-site_description: Usage, driver, methodology and development documentation for the maintained OpenMessaging Benchmark fork.
+site_description: Usage, driver, methodology and development documentation for OpenMessaging Benchmark, a benchmark framework for messaging systems derived from upstream OMB.
 site_url: https://mihkels.github.io/open-messaging-benchmark/
 repo_url: https://github.com/mihkels/open-messaging-benchmark
 repo_name: mihkels/open-messaging-benchmark
@@ -140,6 +140,7 @@ nav:
         - Using your broker: getting-started/using-your-broker.md
         - Understanding your first run: getting-started/understanding-your-first-run.md
         - Distributed runs: getting-started/distributed-runs.md
+        - Coming from upstream OMB: getting-started/coming-from-upstream.md
     - Running benchmarks:
         - Workloads: guides/workloads.md
         - Rate profiles: guides/rate-profiles.md

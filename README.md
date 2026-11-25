@@ -1,4 +1,4 @@
-# OpenMessaging Benchmark (Fork)
+# OpenMessaging Benchmark
 
 [![Build](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml)
 [![Docs](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/docs.yml/badge.svg)](https://mihkels.github.io/open-messaging-benchmark/)
@@ -8,11 +8,15 @@
 [![SonarCloud Coverage](https://sonarcloud.io/api/project_badges/measure?project=mihkels_open-messaging-benchmark&metric=coverage)](https://sonarcloud.io/summary/new_code?id=mihkels_open-messaging-benchmark)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-A maintained fork of the [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)
-(OMB) framework. OMB runs a workload defined in YAML against a messaging system and records publish
-and consume rate, backlog, and publish, publish-delay and end-to-end latency percentiles. This fork
-runs on Java 27, keeps client libraries current, runs every driver as an isolated plugin, and tests
-each plugin end to end against a real broker.
+A benchmark framework for messaging systems. It runs a workload defined in YAML against a messaging
+system and records publish and consume rate, backlog, and publish, publish-delay and end-to-end
+latency percentiles. It runs on Java 27, keeps client libraries current, runs every driver as an
+isolated plugin, and tests each plugin end to end against a real broker.
+
+The project is derived from [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)
+(OMB) and is developed independently of it. Workload files carry over unchanged; drivers, packages
+and artifacts do not. See
+[Coming from upstream OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-upstream/).
 
 **Documentation: <https://mihkels.github.io/open-messaging-benchmark/>**
 
@@ -88,7 +92,7 @@ JDK 27: `git checkout v<version> && mvn -B package -DskipTests`, which writes th
 The site is built from [`docs/`](docs/); see
 [Documentation](https://mihkels.github.io/open-messaging-benchmark/development/documentation/) to
 preview or change it. The [upstream documentation](http://openmessaging.cloud/docs/benchmarks/)
-describes the original project and does not cover this fork's plugin runtime, drivers or tooling.
+describes the original project and does not cover this project's plugin runtime, drivers or tooling.
 
 ## Building
 
@@ -127,3 +131,5 @@ follows the [code of conduct](CODE_OF_CONDUCT.md).
 ## License
 
 Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+Includes code from [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark), also
+licensed under Apache 2.0.

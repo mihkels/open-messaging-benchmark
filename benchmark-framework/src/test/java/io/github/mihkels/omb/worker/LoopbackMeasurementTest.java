@@ -14,6 +14,7 @@
 package io.github.mihkels.omb.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
@@ -25,9 +26,13 @@ import io.github.mihkels.omb.worker.commands.ProducerWorkAssignment;
 import io.github.mihkels.omb.worker.commands.RunPhase;
 import io.github.mihkels.omb.worker.commands.TopicSubscription;
 import io.github.mihkels.omb.worker.commands.TopicsInfo;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
@@ -110,6 +115,22 @@ class LoopbackMeasurementTest {
             assertThat(drained.duplicated()).isEqualTo(duplicated);
             assertThat(drained.outOfOrder()).isZero();
         }
+    }
+
+    @Test
+    @Timeout(10)
+    void closeFailsUnacknowledgedSends(@TempDir Path directory) throws Exception {
+        Path config = Files.writeString(directory.resolve("slow.yaml"), "ackDelayMillis: 60000\n");
+        LoopbackDriver driver = new LoopbackDriver();
+        driver.initialize(config, new SimpleMeterRegistry());
+        driver.createTopic("t", 1).join();
+        CompletableFuture<Void> send =
+                driver.createProducer("t").join().sendAsync(Optional.empty(), new byte[1]);
+
+        driver.close();
+
+        assertThat(send).isCompletedExceptionally();
+        assertThatThrownBy(send::join).hasCauseInstanceOf(CancellationException.class);
     }
 
     private static void assertMillis(Histogram micros, long expectedMillis) {

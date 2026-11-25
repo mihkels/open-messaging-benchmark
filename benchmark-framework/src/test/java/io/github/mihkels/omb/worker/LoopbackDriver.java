@@ -140,16 +140,12 @@ final class LoopbackDriver implements BenchmarkDriver {
     }
 
     @Override
-    public void close() throws InterruptedException {
-        // Delayed tasks still run after shutdown, so pending sends settle instead of hanging
-        clock.shutdown();
-        if (!clock.awaitTermination(5, TimeUnit.SECONDS)) {
-            clock.shutdownNow();
-            // Dropped ack tasks would otherwise leave their sends pending forever
-            pendingAcks
-                    .values()
-                    .forEach(ack ->
-                            ack.completeExceptionally(new CancellationException("Loopback driver closed")));
-        }
+    public void close() {
+        clock.shutdownNow();
+        // Like a broker connection closing: unacknowledged sends fail instead of hanging forever
+        pendingAcks
+                .values()
+                .forEach(
+                        ack -> ack.completeExceptionally(new CancellationException("Loopback driver closed")));
     }
 }

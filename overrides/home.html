@@ -258,52 +258,52 @@
           </thead>
           <tbody>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Runs original OMB workload files</span><span class="omb-compare__detail">Example workloads load unchanged; files that leave out required fields such as <code>producerRate</code> are rejected</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Runs original OMB workload files</span><span class="omb-compare__detail">Example workloads load unchanged; files that leave out required fields such as <code>producerRate</code> are rejected</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Java 27</span><span class="omb-compare__detail">The original OMB targets Java 17</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Java 27</span><span class="omb-compare__detail">The original OMB targets Java 17</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Isolated driver plugins</span><span class="omb-compare__detail">Each driver runs in its own JVM; original OMB drivers share one classpath</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Isolated driver plugins</span><span class="omb-compare__detail">Each driver runs in its own JVM; original OMB drivers share one classpath</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Current multi-arch Docker images</span><span class="omb-compare__detail">amd64 and arm64 with single-driver tags on every release; the original OMB image was last pushed in 2018, amd64 only</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Current multi-arch Docker images</span><span class="omb-compare__detail">amd64 and arm64 with single-driver tags on every release; the original OMB image was last pushed in 2018, amd64 only</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Signed images with SBOM and provenance</span><span class="omb-compare__detail">cosign signatures, SBOM and SLSA provenance, Trivy-scanned</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Signed images with SBOM and provenance</span><span class="omb-compare__detail">cosign signatures, SBOM and SLSA provenance, Trivy-scanned</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Published Helm chart</span><span class="omb-compare__detail">OCI chart on Docker Hub, versioned and signed with each release; the original OMB keeps a 0.0.1 chart in its repository</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Published Helm chart</span><span class="omb-compare__detail">OCI chart on Docker Hub, versioned and signed with each release; the original OMB keeps a 0.0.1 chart in its repository</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--partial"><span class="omb-sr">Partly</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Versioned releases</span><span class="omb-compare__detail">Binary tarball with checksums for each release</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Versioned releases</span><span class="omb-compare__detail">Binary tarball with checksums for each release</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">End-to-end tests for every driver</span><span class="omb-compare__detail">Each driver runs against a real broker in CI; both projects have unit tests</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">End-to-end tests for every driver</span><span class="omb-compare__detail">Each driver runs against a real broker in CI; both projects have unit tests</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Authenticated workers</span><span class="omb-compare__detail">Workers require a shared bearer token</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Authenticated workers</span><span class="omb-compare__detail">Workers require a shared bearer token</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Schema-validated configuration</span><span class="omb-compare__detail">Workload and driver YAML are checked before a run starts</span></th>
+              <th scope="row"><div class="omb-compare__label"><span class="omb-compare__feature">Schema-validated configuration</span><span class="omb-compare__detail">Workload and driver YAML are checked before a run starts</span></div></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--no"><span class="omb-sr">No</span></span></td>
             </tr>

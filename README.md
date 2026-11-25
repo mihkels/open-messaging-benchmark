@@ -1,4 +1,4 @@
-# OpenMessaging Benchmark (Fork)
+# OpenMessaging Benchmark
 
 [![Build](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml/badge.svg)](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/pr-build-and-test.yml)
 [![Docs](https://github.com/mihkels/open-messaging-benchmark/actions/workflows/docs.yml/badge.svg)](https://mihkels.github.io/open-messaging-benchmark/)
@@ -8,16 +8,42 @@
 [![SonarCloud Coverage](https://sonarcloud.io/api/project_badges/measure?project=mihkels_open-messaging-benchmark&metric=coverage)](https://sonarcloud.io/summary/new_code?id=mihkels_open-messaging-benchmark)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
-A maintained fork of the [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)
-(OMB) framework. OMB runs a workload defined in YAML against a messaging system and records publish
-and consume rate, backlog, and publish, publish-delay and end-to-end latency percentiles. This fork
-runs on Java 27, keeps client libraries current, runs every driver as an isolated plugin, and tests
-each plugin end to end against a real broker.
+A benchmark framework for messaging systems. It runs a workload defined in YAML against a messaging
+system and records publish and consume rate, backlog, and publish, publish-delay and end-to-end
+latency percentiles. It runs on Java 27, keeps client libraries current, runs every driver as an
+isolated plugin, and tests each plugin end to end against a real broker.
+
+The project is derived from [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)
+(OMB) and is developed independently of it. Workload files carry over; drivers, packages
+and artifacts do not. See
+[Coming from the original OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-original-omb/).
 
 **Documentation: <https://mihkels.github.io/open-messaging-benchmark/>**
 
 > The project does not publish benchmark results and does not plan to publish comparisons between
 > systems. Run the benchmark on hardware and configurations that match your own use case.
+
+## Compared with the original OMB
+
+|                Feature                 | This project | Original OMB |                                                                                Notes                                                                                |
+|----------------------------------------|:------------:|:------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Runs original OMB workload files       |      ✅       |      ✅       | Example workloads load unchanged; files that leave out required fields such as `producerRate` are rejected                                                          |
+| Java 27                                |      ✅       |      ❌       | The original OMB targets Java 17                                                                                                                                    |
+| Isolated driver plugins                |      ✅       |      ❌       | Each driver runs in its own JVM; original OMB drivers share one classpath                                                                                           |
+| Current multi-arch Docker images       |      ✅       |      ➖       | `docker.io/mihkels/open-messaging-benchmark`: amd64 and arm64, single-driver tags, every release. The original OMB image was last pushed in 2018, amd64 only        |
+| Signed images with SBOM and provenance |      ✅       |      ❌       | cosign signatures, SBOM and SLSA provenance, Trivy-scanned                                                                                                          |
+| Published Helm chart                   |      ✅       |      ➖       | `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`, versioned and signed with each release. The original OMB keeps a 0.0.1 chart in its repository |
+| Versioned releases                     |      ✅       |      ❌       | Binary tarball with `SHA256SUMS` for each release                                                                                                                   |
+| End-to-end tests for every driver      |      ✅       |      ❌       | Each driver runs against a real broker in CI; both projects have unit tests                                                                                         |
+| Authenticated workers                  |      ✅       |      ❌       | Workers require a shared bearer token (`OMB_WORKER_TOKEN`)                                                                                                          |
+| Schema-validated configuration         |      ✅       |      ❌       | Workload and driver YAML are checked against published JSON Schemas before a run starts                                                                             |
+
+✅ yes · ➖ partly · ❌ no. The original OMB is [openmessaging/benchmark](https://github.com/openmessaging/benchmark)
+as of November 2026.
+
+Workload files from the original OMB run unchanged when they set the required fields; see
+[Coming from the original OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-original-omb/)
+for what else carries over.
 
 ## Supported systems
 
@@ -87,8 +113,8 @@ JDK 27: `git checkout v<version> && mvn -B package -DskipTests`, which writes th
 
 The site is built from [`docs/`](docs/); see
 [Documentation](https://mihkels.github.io/open-messaging-benchmark/development/documentation/) to
-preview or change it. The [upstream documentation](http://openmessaging.cloud/docs/benchmarks/)
-describes the original project and does not cover this fork's plugin runtime, drivers or tooling.
+preview or change it. The [original OMB documentation](http://openmessaging.cloud/docs/benchmarks/)
+describes the original project and does not cover this project's plugin runtime, drivers or tooling.
 
 ## Building
 
@@ -127,3 +153,5 @@ follows the [code of conduct](CODE_OF_CONDUCT.md).
 ## License
 
 Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+Includes code from [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark), also
+licensed under Apache 2.0.

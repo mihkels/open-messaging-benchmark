@@ -15,8 +15,9 @@ limitations under the License.
 
 # OpenMessaging Benchmark
 
-This site documents the maintained fork of the OpenMessaging Benchmark (OMB) framework in
-[mihkels/open-messaging-benchmark](https://github.com/mihkels/open-messaging-benchmark). The fork
+This site documents OpenMessaging Benchmark in
+[mihkels/open-messaging-benchmark](https://github.com/mihkels/open-messaging-benchmark), a benchmark
+framework for messaging systems derived from the original OpenMessaging Benchmark (OMB). The project
 keeps the framework on Java 27, runs every messaging driver as an isolated plugin, and ships a
 Docker Compose regression suite that exercises every plugin against a real broker.
 
@@ -89,10 +90,13 @@ driver child JVM            bin/benchmark-worker supervisors,
 The [driver overview](drivers/index.md) lists configuration files, the regression suite's broker
 versions and registered cases for each plugin.
 
-## Relationship to upstream
+## Relationship to the original OMB
 
-This fork tracks the upstream
-[openmessaging/benchmark](https://github.com/openmessaging/benchmark) project. The historical
-upstream documentation at [openmessaging.cloud](http://openmessaging.cloud/docs/benchmarks/)
+The project started as a fork of
+[openmessaging/benchmark](https://github.com/openmessaging/benchmark) and is now developed
+independently; it does not merge changes from it. Workload files carry over, while driver classes,
+Maven coordinates and worker deployments do not. See
+[Coming from the original OMB](getting-started/coming-from-original-omb.md). The historical
+documentation of the original OMB at [openmessaging.cloud](http://openmessaging.cloud/docs/benchmarks/)
 describes older Java versions, distribution names and deployment scripts. When it disagrees with
 this site, this site describes the behavior of this repository.

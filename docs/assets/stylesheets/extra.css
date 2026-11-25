@@ -421,6 +421,11 @@
   text-indent: -2ch;
 }
 
+/* `display: block` above would otherwise override the hidden attribute the replay uses. */
+.omb-term__body .l[hidden] {
+  display: none;
+}
+
 .omb-term__body .l + .l:not(.cont):not(.ok) {
   margin-top: var(--omb-space-1);
 }
@@ -916,7 +921,7 @@
   color: var(--omb-muted);
 }
 
-/* ---------- Why this fork ---------- */
+/* ---------- What it adds ---------- */
 
 .omb-why {
   grid-template-columns: minmax(0, 1fr);
@@ -932,6 +937,158 @@
 
 .omb-why p a {
   white-space: nowrap;
+}
+
+/* ---------- Compared with upstream ---------- */
+
+.omb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.omb-compare {
+  --omb-compare-col: color-mix(in srgb, var(--omb-accent) 7%, var(--omb-bg));
+  max-width: 48rem;
+  border: 1px solid var(--omb-line);
+  border-radius: var(--omb-radius);
+  background: var(--omb-surface);
+  overflow: hidden;
+}
+
+.omb-compare table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.omb-compare thead th {
+  padding: var(--omb-space-3) var(--omb-space-3);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--omb-muted);
+  border-bottom: 1px solid var(--omb-line);
+}
+
+.omb-compare tbody tr + tr > * {
+  border-top: 1px solid var(--omb-line);
+}
+
+.omb-compare tbody th {
+  padding: var(--omb-space-3) var(--omb-space-4);
+  text-align: left;
+  font-weight: normal;
+}
+
+.omb-compare__feature {
+  display: block;
+  font-weight: 600;
+  color: var(--omb-fg);
+}
+
+.omb-compare__detail {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.62rem;
+  color: var(--omb-muted);
+}
+
+.omb-compare__mark {
+  width: 6.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Highlight this project's column */
+.omb-compare tr > :nth-child(2) {
+  background: var(--omb-compare-col);
+}
+
+.omb-compare thead th:nth-child(2) {
+  color: var(--omb-accent);
+}
+
+.omb-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.omb-mark::before {
+  content: "";
+  width: 0.9rem;
+  height: 0.9rem;
+  background: currentColor;
+  mask: var(--omb-mark-icon) center / contain no-repeat;
+}
+
+.omb-mark--yes {
+  --omb-mark-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  color: var(--omb-bg);
+  background: var(--omb-accent);
+}
+
+.omb-mark--partial {
+  --omb-mark-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12h10' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  color: var(--omb-muted);
+  box-shadow: inset 0 0 0 1.5px var(--omb-muted);
+}
+
+.omb-mark--no {
+  --omb-mark-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7l10 10M17 7L7 17' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  color: var(--omb-muted);
+  background: color-mix(in srgb, var(--omb-fg) 8%, transparent);
+}
+
+.omb-compare__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--omb-space-4);
+  margin: var(--omb-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.62rem;
+  color: var(--omb-muted);
+}
+
+.omb-compare__legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--omb-space-2);
+}
+
+.omb-compare__legend .omb-mark {
+  width: 1rem;
+  height: 1rem;
+}
+
+.omb-compare__legend .omb-mark::before {
+  width: 0.65rem;
+  height: 0.65rem;
+}
+
+@media (max-width: 599px) {
+  .omb-compare tbody th {
+    padding: var(--omb-space-3);
+  }
+
+  .omb-compare__mark {
+    width: 4.25rem;
+  }
+
+  .omb-compare thead th {
+    padding-inline: var(--omb-space-1);
+    letter-spacing: 0.02em;
+  }
 }
 
 /* ---------- Where to start ---------- */

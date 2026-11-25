@@ -281,7 +281,7 @@ workflow `.github/workflows/docs.yml`:
 - Pull requests to `main` that change those paths only build the site, so broken links and
   navigation errors are reported before a merge, but nothing is deployed.
 
-`site_url`, `repo_url` and `edit_uri` in `mkdocs.yml` point at the fork, so the "Edit this page" action
+`site_url`, `repo_url` and `edit_uri` in `mkdocs.yml` point at this repository, so the "Edit this page" action
 opens the page on the `main` branch.
 
 Deployment requires GitHub Pages to be enabled once for the repository with **Settings > Pages >

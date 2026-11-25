@@ -14,5 +14,5 @@ limitations under the License.
 
 # Blog
 
-News about the OpenMessaging Benchmark fork: releases, new drivers, methodology notes and changes to
+News about OpenMessaging Benchmark: releases, new drivers, methodology notes and changes to
 how benchmarks run.

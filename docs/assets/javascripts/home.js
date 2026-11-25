@@ -45,8 +45,17 @@
     body.appendChild(caret);
   }
 
-  function scrollDown() {
-    body.scrollTop = body.scrollHeight;
+  // Follow new output only while the reader is at the bottom, so scrolling up is not undone.
+  function atBottom() {
+    return body.scrollHeight - body.scrollTop - body.clientHeight < 24;
+  }
+
+  function reveal(update) {
+    var follow = atBottom();
+    update();
+    if (follow) {
+      body.scrollTop = body.scrollHeight;
+    }
   }
 
   function play() {
@@ -57,23 +66,25 @@
 
     function next() {
       if (i >= lines.length) {
-        body.appendChild(caret);
-        scrollDown();
+        reveal(function () { body.appendChild(caret); });
         return;
       }
       var line = lines[i];
       var text = texts[i];
       var delay = parseInt(line.getAttribute("data-d") || "120", 10);
-      line.hidden = false;
       if (line.classList.contains("cmd")) {
         var n = 0;
-        line.textContent = "";
-        line.appendChild(caret);
+        reveal(function () {
+          line.textContent = "";
+          line.appendChild(caret);
+          line.hidden = false;
+        });
         (function type() {
           n += 1;
-          line.textContent = text.slice(0, n);
-          line.appendChild(caret);
-          scrollDown();
+          reveal(function () {
+            line.textContent = text.slice(0, n);
+            line.appendChild(caret);
+          });
           if (n < text.length) {
             timer = setTimeout(type, 22);
           } else {
@@ -83,8 +94,10 @@
           }
         })();
       } else {
-        line.textContent = text;
-        scrollDown();
+        reveal(function () {
+          line.textContent = text;
+          line.hidden = false;
+        });
         i += 1;
         timer = setTimeout(next, delay);
       }

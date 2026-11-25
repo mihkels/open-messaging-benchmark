@@ -934,6 +934,44 @@
   white-space: nowrap;
 }
 
+/* ---------- Compared with upstream ---------- */
+
+.omb-compare {
+  overflow-x: auto;
+}
+
+.omb-compare table {
+  width: 100%;
+  min-width: 32rem;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.omb-compare caption {
+  caption-side: bottom;
+  padding-top: var(--omb-space-2);
+  text-align: left;
+  color: var(--omb-muted);
+}
+
+.omb-compare th,
+.omb-compare td {
+  padding: var(--omb-space-2) var(--omb-space-3) var(--omb-space-2) 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--omb-line);
+}
+
+.omb-compare tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.omb-compare td:first-of-type {
+  color: var(--omb-muted);
+}
+
 /* ---------- Where to start ---------- */
 
 .omb-paths {

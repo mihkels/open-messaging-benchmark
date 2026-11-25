@@ -23,6 +23,25 @@ and artifacts do not. See
 > The project does not publish benchmark results and does not plan to publish comparisons between
 > systems. Run the benchmark on hardware and configurations that match your own use case.
 
+## Compared with upstream OMB
+
+Upstream [openmessaging/benchmark](https://github.com/openmessaging/benchmark) as of November 2026:
+
+|               |                             Upstream OMB                              |                                                                     This project                                                                      |
+|---------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Java          | 17                                                                    | 27                                                                                                                                                    |
+| Drivers       | All drivers share one classpath                                       | Each driver is a plugin in its own JVM, so client libraries never collide                                                                             |
+| Docker images | `openmessaging/openmessaging-benchmark`, last pushed 2018, amd64 only | `docker.io/mihkels/open-messaging-benchmark` on every release: amd64 and arm64, single-driver tags, cosign-signed, SBOM and provenance, Trivy-scanned |
+| Helm chart    | In-repo chart at 0.0.1, not published                                 | `oci://registry-1.docker.io/mihkels/open-messaging-benchmark-chart`, versioned with each release and cosign-signed                                    |
+| Releases      | No GitHub releases                                                    | Versioned releases with a binary tarball and `SHA256SUMS`                                                                                             |
+| Testing       | Unit tests                                                            | Unit tests plus a Docker Compose suite that runs every driver end to end against a real broker                                                        |
+| Workers       | Unauthenticated HTTP API                                              | Shared bearer token (`OMB_WORKER_TOKEN`) required                                                                                                     |
+| Config checks | No schema validation                                                  | Workload and driver YAML validated against published JSON Schemas                                                                                     |
+
+Upstream workload files run unchanged; see
+[Coming from upstream OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-upstream/)
+for what else carries over.
+
 ## Supported systems
 
 Apache ActiveMQ Artemis, Apache BookKeeper, Apache Kafka, Kafka-on-Pulsar, MQTT 5, generic JMS, NATS

@@ -294,31 +294,6 @@
     </div>
   </section>
 
-  <section class="omb-section" aria-labelledby="omb-fork">
-    <div class="omb-wrap">
-      <p class="omb-kicker">What it adds</p>
-      <h2 id="omb-fork">Kept current, tested against real brokers</h2>
-      <ul class="omb-why">
-        <li>
-          <h3>Current Java and clients</h3>
-          <p>Builds and runs on Java 27 with up-to-date client libraries. Workload files from the original OMB run unchanged when they set the required fields. <a href="{{ 'getting-started/coming-from-original-omb/' | url }}">Coming from the original OMB</a></p>
-        </li>
-        <li>
-          <h3>Drivers as isolated plugins</h3>
-          <p>Every driver ships as a plugin bundle and runs in its own JVM, so independent drivers never share client libraries. <a href="{{ 'reference/runtime-and-plugins/' | url }}">Runtime and plugins</a></p>
-        </li>
-        <li>
-          <h3>Regression suite per plugin</h3>
-          <p>A Docker Compose suite runs every plugin end to end against its broker and writes HTML and JUnit reports. <a href="{{ 'development/testing-a-driver/' | url }}">Testing a driver</a></p>
-        </li>
-        <li>
-          <h3>Bring your own driver</h3>
-          <p>Build a plugin outside this repository against the driver API and drop it on the plugin path. <a href="{{ 'development/implementing-a-driver/' | url }}">Implementing a driver</a></p>
-        </li>
-      </ul>
-    </div>
-  </section>
-
   <section class="omb-section" aria-labelledby="omb-start">
     <div class="omb-wrap">
       <p class="omb-kicker">Where to start</p>

@@ -14,7 +14,7 @@ latency percentiles. It runs on Java 27, keeps client libraries current, runs ev
 isolated plugin, and tests each plugin end to end against a real broker.
 
 The project is derived from [OpenMessaging Benchmark](https://github.com/openmessaging/benchmark)
-(OMB) and is developed independently of it. Workload files carry over unchanged; drivers, packages
+(OMB) and is developed independently of it. Workload files carry over; drivers, packages
 and artifacts do not. See
 [Coming from the original OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-original-omb/).
 
@@ -27,7 +27,7 @@ and artifacts do not. See
 
 |                Feature                 | This project | Original OMB |                                                                                Notes                                                                                |
 |----------------------------------------|:------------:|:------------:|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Runs original OMB workload files       |      ✅       |      ✅       | The same workload YAML works in both                                                                                                                                |
+| Runs original OMB workload files       |      ✅       |      ✅       | Example workloads load unchanged; files that leave out required fields such as `producerRate` are rejected                                                          |
 | Java 27                                |      ✅       |      ❌       | The original OMB targets Java 17                                                                                                                                    |
 | Isolated driver plugins                |      ✅       |      ❌       | Each driver runs in its own JVM; original OMB drivers share one classpath                                                                                           |
 | Current multi-arch Docker images       |      ✅       |      ➖       | `docker.io/mihkels/open-messaging-benchmark`: amd64 and arm64, single-driver tags, every release. The original OMB image was last pushed in 2018, amd64 only        |
@@ -41,7 +41,7 @@ and artifacts do not. See
 ✅ yes · ➖ partly · ❌ no. The original OMB is [openmessaging/benchmark](https://github.com/openmessaging/benchmark)
 as of November 2026.
 
-Workload files from the original OMB run unchanged; see
+Workload files from the original OMB run unchanged when they set the required fields; see
 [Coming from the original OMB](https://mihkels.github.io/open-messaging-benchmark/getting-started/coming-from-original-omb/)
 for what else carries over.
 

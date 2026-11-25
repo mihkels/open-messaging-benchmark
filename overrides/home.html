@@ -224,11 +224,11 @@
       <ul class="omb-why">
         <li>
           <h3>Current Java and clients</h3>
-          <p>Builds and runs on Java 27 with up-to-date client libraries. Workload files from the original OMB run unchanged. <a href="{{ 'getting-started/coming-from-original-omb/' | url }}">Coming from the original OMB</a></p>
+          <p>Builds and runs on Java 27 with up-to-date client libraries. Workload files from the original OMB run unchanged when they set the required fields. <a href="{{ 'getting-started/coming-from-original-omb/' | url }}">Coming from the original OMB</a></p>
         </li>
         <li>
           <h3>Drivers as isolated plugins</h3>
-          <p>Every driver ships as a plugin bundle and runs in its own JVM, so client libraries never collide. <a href="{{ 'reference/runtime-and-plugins/' | url }}">Runtime and plugins</a></p>
+          <p>Every driver ships as a plugin bundle and runs in its own JVM, so independent drivers never share client libraries. <a href="{{ 'reference/runtime-and-plugins/' | url }}">Runtime and plugins</a></p>
         </li>
         <li>
           <h3>Regression suite per plugin</h3>
@@ -258,7 +258,7 @@
           </thead>
           <tbody>
             <tr>
-              <th scope="row"><span class="omb-compare__feature">Runs original OMB workload files</span><span class="omb-compare__detail">The same workload YAML works in both</span></th>
+              <th scope="row"><span class="omb-compare__feature">Runs original OMB workload files</span><span class="omb-compare__detail">Example workloads load unchanged; files that leave out required fields such as <code>producerRate</code> are rejected</span></th>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
               <td class="omb-compare__mark"><span class="omb-mark omb-mark--yes"><span class="omb-sr">Yes</span></span></td>
             </tr>

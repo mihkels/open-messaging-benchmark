@@ -32,9 +32,9 @@ You will:
 - Git, to clone the repository.
 - No JDK or Maven is required on the host.
 
-> **Note:** The project does not currently publish a Java 27 benchmark image. Older tags on Docker Hub
-> predate the plugin runtime and do not work with the configurations in this repository. The first
-> step therefore builds the image locally.
+> **Note:** Release images are published to `docker.io/mihkels/open-messaging-benchmark`. The first
+> step builds the image locally so that it matches the configurations in your checkout; to use a
+> release image instead, set `OMB_IMAGE` as shown below.
 
 ## 1. Build the benchmark image
 

@@ -119,12 +119,19 @@ class LoopbackMeasurementTest {
         assertThat(micros.getValueAtPercentile(99)).isLessThan(expected + 10_000);
     }
 
+    // Equal reads alone could catch a delivery still waiting in the driver, so also wait for the
+    // counts the faults predict; on timeout the assertions report the mismatch
     private static CountersStats awaitSettled(LocalWorker worker) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         CountersStats last = worker.getCountersStats();
         while (true) {
             TimeUnit.MILLISECONDS.sleep(200);
             CountersStats now = worker.getCountersStats();
-            if (now.equals(last)) {
+            long sent = now.verifiedSent();
+            boolean complete =
+                    now.delivered() == sent - sent / DROP_EVERY
+                            && now.duplicated() == sent / DUPLICATE_EVERY - sent / DROP_EVERY;
+            if ((complete && now.equals(last)) || System.nanoTime() - deadline > 0) {
                 return now;
             }
             last = now;

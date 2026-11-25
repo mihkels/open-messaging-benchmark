@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -55,6 +56,8 @@ final class LoopbackDriver implements BenchmarkDriver {
     // topic -> subscription -> consumers sharing it
     private final Map<String, Map<String, List<ConsumerCallback>>> topics = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
+    // send sequence -> acknowledgement not yet completed
+    private final Map<Long, CompletableFuture<Void>> pendingAcks = new ConcurrentHashMap<>();
     private Config config = new Config(0, 0, 0, 0);
 
     @Override
@@ -103,13 +106,17 @@ final class LoopbackDriver implements BenchmarkDriver {
     private CompletableFuture<Void> send(String topic, byte[] payload) {
         long n = sequence.incrementAndGet();
         long publishTimestamp = System.currentTimeMillis();
+        // The caller may reuse its array once the send completes, and delivery comes later
+        byte[] owned = payload.clone();
         CompletableFuture<Void> ack = new CompletableFuture<>();
+        pendingAcks.put(n, ack);
+        ack.whenComplete((v, t) -> pendingAcks.remove(n));
         clock.schedule(() -> ack.complete(null), config.ackDelayMillis(), TimeUnit.MILLISECONDS);
         if (!hits(n, config.dropEvery())) {
             int copies = hits(n, config.duplicateEvery()) ? 2 : 1;
             for (int i = 0; i < copies; i++) {
                 clock.schedule(
-                        () -> deliver(topic, payload, publishTimestamp, n),
+                        () -> deliver(topic, owned, publishTimestamp, n),
                         config.deliveryDelayMillis(),
                         TimeUnit.MILLISECONDS);
             }
@@ -119,9 +126,11 @@ final class LoopbackDriver implements BenchmarkDriver {
 
     private void deliver(String topic, byte[] payload, long publishTimestamp, long n) {
         for (List<ConsumerCallback> shared : topics.getOrDefault(topic, Map.of()).values()) {
-            if (!shared.isEmpty()) {
+            // One snapshot, so a consumer closing mid-delivery cannot shift the index
+            ConsumerCallback[] consumers = shared.toArray(ConsumerCallback[]::new);
+            if (consumers.length > 0) {
                 // Round-robin within a shared subscription
-                shared.get((int) (n % shared.size())).messageReceived(payload, publishTimestamp);
+                consumers[(int) (n % consumers.length)].messageReceived(payload, publishTimestamp);
             }
         }
     }
@@ -136,6 +145,11 @@ final class LoopbackDriver implements BenchmarkDriver {
         clock.shutdown();
         if (!clock.awaitTermination(5, TimeUnit.SECONDS)) {
             clock.shutdownNow();
+            // Dropped ack tasks would otherwise leave their sends pending forever
+            pendingAcks
+                    .values()
+                    .forEach(ack ->
+                            ack.completeExceptionally(new CancellationException("Loopback driver closed")));
         }
     }
 }

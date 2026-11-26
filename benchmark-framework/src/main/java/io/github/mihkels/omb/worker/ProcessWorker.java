@@ -34,6 +34,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -164,7 +167,9 @@ public class ProcessWorker implements Worker {
             ensureOpen();
             starting.start(classpath.entries(), metricTags, () -> closed);
             HttpWorkerClient client =
-                    Objects.requireNonNull(starting.client(), "driver client after start");
+                    starting
+                            .client()
+                            .orElseThrow(() -> new IllegalStateException("No driver client after start"));
             RunPhase currentPhase = phase;
             if (currentPhase != null) {
                 client.setPhase(currentPhase);
@@ -205,10 +210,10 @@ public class ProcessWorker implements Worker {
 
     // Stops and terminates a driver process that failed to start, recording cleanup failures on it.
     private void cleanUpFailedStart(DriverProcess starting, Exception failure) {
-        HttpWorkerClient client = starting.client();
-        if (client != null && starting.isRunning() && !closed) {
+        Optional<HttpWorkerClient> client = starting.client();
+        if (client.isPresent() && starting.isRunning() && !closed) {
             try {
-                client.stopAll();
+                client.get().stopAll();
             } catch (Throwable cleanup) {
                 Failures.append(failure, cleanup);
             }
@@ -234,10 +239,11 @@ public class ProcessWorker implements Worker {
         synchronized (this) {
             this.phase = phase;
             running = current;
-            client = running == null ? null : running.client();
-            if (running == null || client == null) {
+            Optional<HttpWorkerClient> started = running == null ? Optional.empty() : running.client();
+            if (running == null || started.isEmpty()) {
                 return;
             }
+            client = started.get();
             if (running.hasExited()) {
                 throw running.crashed(null);
             }
@@ -263,11 +269,11 @@ public class ProcessWorker implements Worker {
     /**
      * The pid of the running driver process.
      *
-     * @return the pid, or {@code null} if no driver process is running
+     * @return the pid, or empty if no driver process is running
      */
-    public synchronized @Nullable Long pid() {
+    public synchronized OptionalLong pid() {
         DriverProcess running = current;
-        return running == null ? null : running.pid();
+        return running == null ? OptionalLong.empty() : running.pid();
     }
 
     /**
@@ -280,12 +286,11 @@ public class ProcessWorker implements Worker {
      */
     public String scrapeMetrics() {
         DriverProcess running = current;
-        HttpWorkerClient client = running == null ? null : running.client();
         // health() and the next driver call report a crash
-        if (running == null || client == null || running.hasExited()) {
+        if (running == null || running.hasExited()) {
             return "";
         }
-        return client.scrapeMetrics();
+        return running.client().map(HttpWorkerClient::scrapeMetrics).orElse("");
     }
 
     // Forwards a call to the driver process and reports a crash instead of the failed call.
@@ -294,10 +299,11 @@ public class ProcessWorker implements Worker {
         HttpWorkerClient client;
         synchronized (this) {
             running = current;
-            client = running == null ? null : running.client();
-            if (running == null || client == null) {
+            Optional<HttpWorkerClient> started = running == null ? Optional.empty() : running.client();
+            if (running == null || started.isEmpty()) {
                 throw new IllegalStateException("No driver process is running; initialize a driver first");
             }
+            client = started.get();
             if (running.hasExited()) {
                 throw running.crashed(null);
             }
@@ -401,7 +407,7 @@ public class ProcessWorker implements Worker {
             phase = null;
             stopped = false;
             running = current;
-            if (running == null || running.client() == null) {
+            if (running == null || running.client().isEmpty()) {
                 return;
             }
             exited = running.hasExited();
@@ -442,12 +448,12 @@ public class ProcessWorker implements Worker {
         if (running == null) {
             return new WorkerHealth(ready, DriverState.NOT_STARTED, null, error);
         }
-        Integer exitCode = running.exitCode();
-        if (exitCode != null) {
-            return new WorkerHealth(ready, DriverState.EXITED, exitCode, error);
+        OptionalInt exitCode = running.exitCode();
+        if (exitCode.isPresent()) {
+            return new WorkerHealth(ready, DriverState.EXITED, exitCode.getAsInt(), error);
         }
         DriverState state =
-                initializing || running.client() == null ? DriverState.INITIALIZING : DriverState.RUNNING;
+                initializing || running.client().isEmpty() ? DriverState.INITIALIZING : DriverState.RUNNING;
         return new WorkerHealth(ready, state, null, error);
     }
 
@@ -466,7 +472,7 @@ public class ProcessWorker implements Worker {
         closed = true;
         Failures failures = new Failures();
         DriverProcess running = current;
-        if (!initializing && running != null && running.client() != null) {
+        if (!initializing && running != null && running.client().isPresent()) {
             try {
                 stopAll();
             } catch (Throwable t) {

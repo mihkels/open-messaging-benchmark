@@ -119,7 +119,7 @@ class HtmlReportTest {
     @Test
     void writesNothingWithoutAReportPathOrResults() throws Exception {
         Path report = directory.resolve("report.html");
-        Benchmark.writeHtmlReport(null, Map.of("r.json", result("A", 1)));
+        Benchmark.writeHtmlReport("", Map.of("r.json", result("A", 1)));
         Benchmark.writeHtmlReport("", Map.of("r.json", result("A", 1)));
         Benchmark.writeHtmlReport(report.toString(), Map.of());
         assertThat(report).doesNotExist();

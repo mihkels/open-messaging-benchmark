@@ -222,16 +222,9 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         if (null != this.rmqClientConfig.vipChannelEnabled) {
             producer.setVipChannelEnabled(this.rmqClientConfig.vipChannelEnabled);
         }
-        if (null != this.rmqClientConfig.maxMessageSize) {
-            producer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
-        }
-        if (null != this.rmqClientConfig.compressMsgBodyOverHowmuch) {
-            producer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
-        }
-
-        if (null != this.rmqClientConfig.autoBatch) {
-            producer.setAutoBatch(this.rmqClientConfig.autoBatch);
-        }
+        producer.setMaxMessageSize(this.rmqClientConfig.maxMessageSize);
+        producer.setCompressMsgBodyOverHowmuch(this.rmqClientConfig.compressMsgBodyOverHowmuch);
+        producer.setAutoBatch(this.rmqClientConfig.autoBatch);
         if (null != this.rmqClientConfig.batchMaxBytes) {
             producer.batchMaxBytes(this.rmqClientConfig.batchMaxBytes);
         }
@@ -241,9 +234,7 @@ public class RocketMQBenchmarkDriver implements BenchmarkDriver {
         if (null != this.rmqClientConfig.totalBatchMaxBytes) {
             producer.totalBatchMaxBytes(this.rmqClientConfig.totalBatchMaxBytes);
         }
-        if (null != this.rmqClientConfig.enableBackpressure) {
-            producer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
-        }
+        producer.setEnableBackpressureForAsyncMode(this.rmqClientConfig.enableBackpressure);
         if (null != this.rmqClientConfig.backpressureConcurrency) {
             producer.setBackPressureForAsyncSendNum(this.rmqClientConfig.backpressureConcurrency);
         }

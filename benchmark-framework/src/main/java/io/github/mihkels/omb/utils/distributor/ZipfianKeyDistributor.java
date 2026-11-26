@@ -13,6 +13,7 @@
  */
 package io.github.mihkels.omb.utils.distributor;
 
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 /** Immutable alias table shared by producers on a worker. */
@@ -64,9 +65,9 @@ public final class ZipfianKeyDistributor extends KeyDistributor {
     }
 
     @Override
-    public String next() {
+    public Optional<String> next() {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         int column = random.nextInt(keys.length);
-        return keys[random.nextDouble() < probability[column] ? column : alias[column]];
+        return Optional.of(keys[random.nextDouble() < probability[column] ? column : alias[column]]);
     }
 }

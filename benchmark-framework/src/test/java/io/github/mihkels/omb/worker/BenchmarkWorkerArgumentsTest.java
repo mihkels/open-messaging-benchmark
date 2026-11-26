@@ -48,19 +48,20 @@ class BenchmarkWorkerArgumentsTest {
 
     @Test
     void acceptsInsecureNoAuth() throws Exception {
-        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--insecure-no-auth"), null)).isNull();
+        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--insecure-no-auth"), null)).isEmpty();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"127.0.0.1", "localhost", "::1"})
     void allowsNoTokenOnLoopback(String bind) throws Exception {
-        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--bind", bind), null)).isNull();
+        assertThat(BenchmarkWorker.refuseUnauthenticated(parse("--bind", bind), null)).isEmpty();
     }
 
     @Test
     void refusesNoTokenOnAllInterfaces() throws Exception {
         assertThat(BenchmarkWorker.refuseUnauthenticated(parse(), null))
-                .contains("OMB_WORKER_TOKEN", "--token-file", "--insecure-no-auth");
+                .hasValueSatisfying(value ->
+                        assertThat(value).contains("OMB_WORKER_TOKEN", "--token-file", "--insecure-no-auth"));
     }
 
     @Test
@@ -70,6 +71,6 @@ class BenchmarkWorkerArgumentsTest {
                 BenchmarkWorker.authFor(arguments, Map.of(BearerTokenAuth.TOKEN_ENV, "secret"));
 
         assertThat(auth).isNotNull();
-        assertThat(BenchmarkWorker.refuseUnauthenticated(arguments, auth)).isNull();
+        assertThat(BenchmarkWorker.refuseUnauthenticated(arguments, auth)).isEmpty();
     }
 }

@@ -13,13 +13,14 @@
  */
 package io.github.mihkels.omb.utils.distributor;
 
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class RandomNano extends KeyDistributor {
 
     @Override
-    public String next() {
+    public Optional<String> next() {
         // nanoTime ticks are coarse on some hosts, so its low bits hit only a few hundred keys
-        return get(ThreadLocalRandom.current().nextInt(getLength()));
+        return Optional.of(get(ThreadLocalRandom.current().nextInt(getLength())));
     }
 }

@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -149,35 +150,36 @@ public final class BenchmarkWorker {
      * @param arguments the parsed command line
      * @param auth the authenticator from {@link #authFor}, or {@code null} when no token is
      *     configured
-     * @return {@code null} when the worker may start, otherwise the reason it may not
+     * @return empty when the worker may start, otherwise the reason it may not
      * @throws UnknownHostException when the bind address does not resolve
      */
-    static @Nullable String refuseUnauthenticated(Arguments arguments, @Nullable BearerTokenAuth auth)
+    static Optional<String> refuseUnauthenticated(Arguments arguments, @Nullable BearerTokenAuth auth)
             throws UnknownHostException {
         if (auth != null
                 || arguments.insecureNoAuth
                 || InetAddress.getByName(arguments.bindAddress).isLoopbackAddress()) {
-            return null;
+            return Optional.empty();
         }
-        return "No worker token configured and --bind "
-                + arguments.bindAddress
-                + " is not a loopback address. Set "
-                + BearerTokenAuth.TOKEN_ENV
-                + " or --token-file, bind to 127.0.0.1, or pass --insecure-no-auth to run the API"
-                + " unauthenticated";
+        return Optional.of(
+                "No worker token configured and --bind "
+                        + arguments.bindAddress
+                        + " is not a loopback address. Set "
+                        + BearerTokenAuth.TOKEN_ENV
+                        + " or --token-file, bind to 127.0.0.1, or pass --insecure-no-auth to run the"
+                        + " API unauthenticated");
     }
 
     /**
      * Checks that TLS is either fully configured or not at all.
      *
      * @param arguments the parsed command line
-     * @return {@code null} when the TLS options are consistent, otherwise the reason they are not
+     * @return empty when the TLS options are consistent, otherwise the reason they are not
      */
-    static @Nullable String refuseIncompleteTls(Arguments arguments) {
+    static Optional<String> refuseIncompleteTls(Arguments arguments) {
         if ((arguments.tlsCert == null) != (arguments.tlsKey == null)) {
-            return "--tls-cert and --tls-key must be given together";
+            return Optional.of("--tls-cert and --tls-key must be given together");
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -317,12 +319,12 @@ public final class BenchmarkWorker {
         new JvmResourceMetrics().bindTo(registry, "supervisor");
 
         BearerTokenAuth auth = authFor(arguments, System.getenv());
-        String refusal = refuseIncompleteTls(arguments);
-        if (refusal == null) {
+        Optional<String> refusal = refuseIncompleteTls(arguments);
+        if (refusal.isEmpty()) {
             refusal = refuseUnauthenticated(arguments, auth);
         }
-        if (refusal != null) {
-            System.err.println(refusal);
+        if (refusal.isPresent()) {
+            System.err.println(refusal.get());
             System.exit(-1);
         }
         if (auth == null) {

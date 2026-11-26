@@ -132,12 +132,6 @@ class MessageSizeDistributionTest {
     }
 
     @Test
-    void throwsOnNullConfig() {
-        assertThatThrownBy(() -> new MessageSizeDistribution(null))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void throwsOnInvalidRangeFormat() {
         Map<String, Integer> config = new HashMap<>();
         config.put("invalid", 100);

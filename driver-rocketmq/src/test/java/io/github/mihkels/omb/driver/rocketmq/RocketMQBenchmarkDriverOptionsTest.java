@@ -102,7 +102,8 @@ class RocketMQBenchmarkDriverOptionsTest {
     }
 
     @Test
-    void skipsUnsetProducerSettingsAndAclWithoutCredentials() throws Exception {
+    void appliesClientDefaultsForUnsetProducerSettingsAndSkipsAclWithoutCredentials()
+            throws Exception {
         TestDriver driver = new TestDriver();
         driver.initialize(
                 config("clusterName: c1\nnamesrvAddr: 127.0.0.1:9876\naccessKey: ' '\n"), null);
@@ -113,8 +114,12 @@ class RocketMQBenchmarkDriverOptionsTest {
         driver.producer = producer;
         driver.createProducer("topic").join();
         verify(producer, never()).setVipChannelEnabled(any(Boolean.class));
-        verify(producer, never()).setMaxMessageSize(any(Integer.class));
-        verify(producer, never()).setAutoBatch(any(Boolean.class));
+        verify(producer).setMaxMessageSize(4 * 1024 * 1024);
+        verify(producer).setCompressMsgBodyOverHowmuch(4 * 1024);
+        verify(producer).setAutoBatch(false);
+        verify(producer).setEnableBackpressureForAsyncMode(false);
+        verify(producer, never()).batchMaxBytes(any(Long.class));
+        verify(producer, never()).setBackPressureForAsyncSendNum(any(Integer.class));
         driver.createConsumer("topic", "group", mock(ConsumerCallback.class)).join();
         verify(driver.consumer, never()).setVipChannelEnabled(any(Boolean.class));
         driver.close();

@@ -20,17 +20,21 @@ public class RocketMQClientConfig {
     public @Nullable String namesrvAddr;
     // Required; the driver checks it in initialize.
     public @Nullable String clusterName;
-    // Unset options keep the RocketMQ client defaults.
+    // Unset options keep the RocketMQ client defaults. The client reads this one from a system
+    // property, so it stays unset rather than copying a default.
     public @Nullable Boolean vipChannelEnabled;
-    public @Nullable Integer maxMessageSize;
-    public @Nullable Integer compressMsgBodyOverHowmuch;
+    // The defaults of the pinned RocketMQ client 5.5.1 (DefaultMQProducer)
+    public int maxMessageSize = 4 * 1024 * 1024;
+    public int compressMsgBodyOverHowmuch = 4 * 1024;
     public boolean batchCQ;
-    public @Nullable Boolean autoBatch;
+    public boolean autoBatch;
+    // Unset batch limits defer to the client's batch accumulator, which has its own defaults
     public @Nullable Integer batchMaxBytes;
     public @Nullable Integer batchMaxDelayMs;
     public @Nullable Integer totalBatchMaxBytes;
 
-    public @Nullable Boolean enableBackpressure;
+    public boolean enableBackpressure;
+    // Setting it resizes the client's send semaphore, so unset leaves the client untouched
     public @Nullable Integer backpressureConcurrency;
     // Blank keys disable ACL.
     public String accessKey = "";

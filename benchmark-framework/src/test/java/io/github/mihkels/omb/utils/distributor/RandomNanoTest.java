@@ -25,7 +25,7 @@ class RandomNanoTest {
         KeyDistributor distributor = KeyDistributor.build(KeyDistributorType.RANDOM_NANO);
         Set<String> keys = new HashSet<>();
         for (int i = 0; i < 100_000; i++) {
-            keys.add(distributor.next());
+            keys.add(distributor.next().orElseThrow());
         }
         // 100k uniform draws over 10,000 keys leave almost none unused
         assertThat(keys).hasSizeGreaterThan(9_900);

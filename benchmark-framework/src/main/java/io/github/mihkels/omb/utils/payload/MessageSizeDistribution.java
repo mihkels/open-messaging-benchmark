@@ -57,7 +57,7 @@ public class MessageSizeDistribution {
         }
     }
 
-    public MessageSizeDistribution(@Nullable Map<String, Integer> config) {
+    public MessageSizeDistribution(Map<String, Integer> config) {
         this(parse(config));
     }
 
@@ -66,9 +66,9 @@ public class MessageSizeDistribution {
         this.totalWeight = parsed.totalWeight();
     }
 
-    private static ParsedDistribution parse(@Nullable Map<String, Integer> config) {
-        if (config == null || config.isEmpty()) {
-            throw new IllegalArgumentException("Distribution config cannot be null or empty");
+    private static ParsedDistribution parse(Map<String, Integer> config) {
+        if (config.isEmpty()) {
+            throw new IllegalArgumentException("Distribution config cannot be empty");
         }
 
         List<Bucket> parsed = new ArrayList<>();

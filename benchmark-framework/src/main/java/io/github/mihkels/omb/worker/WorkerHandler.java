@@ -35,6 +35,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -191,18 +192,19 @@ public class WorkerHandler implements AutoCloseable {
         if (ctx.method() != HandlerType.POST) {
             return;
         }
-        String mediaType = mediaType(ctx.contentType());
-        if (mediaType == null || !ACCEPTED_POST_TYPES.contains(mediaType)) {
+        boolean accepted =
+                Optional.ofNullable(ctx.contentType())
+                        .map(WorkerHandler::mediaType)
+                        .filter(ACCEPTED_POST_TYPES::contains)
+                        .isPresent();
+        if (!accepted) {
             ctx.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                     .result("POST requests must use Content-Type application/json or application/yaml");
             ctx.skipRemainingHandlers();
         }
     }
 
-    private static @Nullable String mediaType(@Nullable String contentType) {
-        if (contentType == null) {
-            return null;
-        }
+    private static String mediaType(String contentType) {
         int parameters = contentType.indexOf(';');
         String mediaType = parameters < 0 ? contentType : contentType.substring(0, parameters);
         return mediaType.strip().toLowerCase(Locale.ROOT);

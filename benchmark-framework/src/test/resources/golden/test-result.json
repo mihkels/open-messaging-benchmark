@@ -39,6 +39,7 @@
     "75.0" : 3.0,
     "100.0" : 40.001
   },
+  "attempts" : 1,
   "backlog" : [ 20 ],
   "phase" : [ "MEASURE" ],
   "consumersPerTopic" : 2,

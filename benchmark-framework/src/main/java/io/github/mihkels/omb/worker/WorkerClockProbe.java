@@ -15,6 +15,7 @@ package io.github.mihkels.omb.worker;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -49,15 +50,12 @@ public final class WorkerClockProbe {
         }
         List<WorkerClock> clocks = new ArrayList<>();
         for (Worker remote : ensemble.workers()) {
-            WorkerClock clock = probeOne(remote, ensemble.role(remote), coordinatorMicros);
-            if (clock != null) {
-                clocks.add(clock);
-            }
+            probeOne(remote, ensemble.role(remote), coordinatorMicros).ifPresent(clocks::add);
         }
         return clocks;
     }
 
-    private static @Nullable WorkerClock probeOne(
+    private static Optional<WorkerClock> probeOne(
             Worker worker, String role, LongSupplier coordinatorMicros) {
         long bestRtt = Long.MAX_VALUE;
         long bestOffset = 0;
@@ -73,7 +71,7 @@ public final class WorkerClockProbe {
                         .addArgument(worker::id)
                         .addArgument(e::toString)
                         .log();
-                return null;
+                return Optional.empty();
             }
             long received = coordinatorMicros.getAsLong();
             if (workerMicros == null) {
@@ -81,7 +79,7 @@ public final class WorkerClockProbe {
                         .setMessage("Worker {} does not report its clock; upgrade it to measure clock offset")
                         .addArgument(worker::id)
                         .log();
-                return null;
+                return Optional.empty();
             }
             long rtt = received - sent;
             if (rtt < bestRtt) {
@@ -90,6 +88,7 @@ public final class WorkerClockProbe {
                 bestOffset = workerMicros - (sent + rtt / 2);
             }
         }
-        return new WorkerClock(worker.id(), role, bestOffset / 1000.0, bestRtt / 1000.0, null);
+        return Optional.of(
+                new WorkerClock(worker.id(), role, bestOffset / 1000.0, bestRtt / 1000.0, null));
     }
 }

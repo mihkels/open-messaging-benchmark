@@ -280,7 +280,7 @@ public class RunChecks {
     }
 
     private void retried(TestResult result, List<Finding> findings) {
-        if (enabled(RETRIED) && result.attempts != null && result.attempts > 1) {
+        if (enabled(RETRIED) && result.attempts > 1) {
             findings.add(
                     new Finding(
                             RETRIED,

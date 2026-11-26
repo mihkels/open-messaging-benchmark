@@ -42,10 +42,21 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     private PravegaConfig config;
     private String scopeName;
-    // Cleared on close, and on a failed initialize.
-    private @Nullable StreamManager streamManager;
-    private @Nullable ReaderGroupManager readerGroupManager;
-    private @Nullable EventStreamClientFactory clientFactory;
+
+    /**
+     * The clients {@link #initialize} creates; published together once all of them exist.
+     *
+     * @param streamManager creates, seals and deletes streams
+     * @param readerGroupManager creates the reader groups of consumers
+     * @param clientFactory creates writers and readers
+     */
+    record Clients(
+            StreamManager streamManager,
+            ReaderGroupManager readerGroupManager,
+            EventStreamClientFactory clientFactory) {}
+
+    // Cleared on close
+    private @Nullable Clients clients;
     private final List<String> createdTopics = new ArrayList<>();
     private int activeTopicCreations;
     private boolean closing;
@@ -62,15 +73,22 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         ClientConfig clientConfig =
                 ClientConfig.builder().controllerURI(URI.create(config.client().controllerURI())).build();
         scopeName = config.client().scopeName();
+        StreamManager streamManager = null;
+        ReaderGroupManager readerGroupManager = null;
+        EventStreamClientFactory clientFactory = null;
         try {
             streamManager = StreamManager.create(clientConfig);
             readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
             clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
+            // A close that ran first published nothing, so it cannot close these
+            synchronized (this) {
+                if (closing) {
+                    throw new IllegalStateException("Driver was closed during initialization");
+                }
+                clients = new Clients(streamManager, readerGroupManager, clientFactory);
+            }
         } catch (Exception failure) {
             Failures.closeAfterFailure(failure, clientFactory, readerGroupManager, streamManager);
-            clientFactory = null;
-            readerGroupManager = null;
-            streamManager = null;
             if (failure instanceof InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 throw interrupted;
@@ -102,10 +120,11 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     public CompletableFuture<Void> createTopic(String topic, int partitions) {
         StreamManager streamManager;
         synchronized (this) {
-            streamManager = this.streamManager;
-            if (closing || streamManager == null) {
+            Clients current = clients;
+            if (closing || current == null) {
                 return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
             }
+            streamManager = current.streamManager();
             activeTopicCreations++;
         }
         try {
@@ -143,10 +162,11 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
 
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
-        EventStreamClientFactory clientFactory = this.clientFactory;
-        if (clientFactory == null) {
+        Clients current = clients;
+        if (current == null) {
             return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
         }
+        EventStreamClientFactory clientFactory = current.clientFactory();
         try {
             topic = cleanName(topic);
             BenchmarkProducer producer;
@@ -175,11 +195,12 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkConsumer> createConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        EventStreamClientFactory clientFactory = this.clientFactory;
-        ReaderGroupManager readerGroupManager = this.readerGroupManager;
-        if (clientFactory == null || readerGroupManager == null) {
+        Clients current = clients;
+        if (current == null) {
             return CompletableFuture.failedFuture(new IllegalStateException("Driver is closed"));
         }
+        EventStreamClientFactory clientFactory = current.clientFactory();
+        ReaderGroupManager readerGroupManager = current.readerGroupManager();
         try {
             topic = cleanName(topic);
             subscriptionName = cleanName(subscriptionName);
@@ -201,20 +222,14 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
     @Override
     public void close() throws Exception {
         log.info("close: Pravega driver is closing");
-        EventStreamClientFactory factoryToClose;
-        ReaderGroupManager readerManagerToClose;
-        StreamManager streamManagerToClose;
+        Clients toClose;
         List<String> topics;
         InterruptedException interrupted;
         synchronized (this) {
             closing = true;
             interrupted = awaitActiveTopicCreations();
-            factoryToClose = clientFactory;
-            readerManagerToClose = readerGroupManager;
-            streamManagerToClose = streamManager;
-            clientFactory = null;
-            readerGroupManager = null;
-            streamManager = null;
+            toClose = clients;
+            clients = null;
             topics = List.copyOf(createdTopics);
             createdTopics.clear();
         }
@@ -222,12 +237,12 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
         if (interrupted != null) {
             failures.addInterruption(interrupted);
         }
-        failures.closeRestoringInterruptNow(factoryToClose);
-        failures.closeRestoringInterruptNow(readerManagerToClose);
-        if (streamManagerToClose != null) {
-            sealAndDeleteTopics(streamManagerToClose, topics, failures);
+        if (toClose != null) {
+            failures.closeRestoringInterruptNow(toClose.clientFactory());
+            failures.closeRestoringInterruptNow(toClose.readerGroupManager());
+            sealAndDeleteTopics(toClose.streamManager(), topics, failures);
+            failures.closeRestoringInterruptNow(toClose.streamManager());
         }
-        failures.closeRestoringInterruptNow(streamManagerToClose);
         failures.throwIfAny();
     }
 

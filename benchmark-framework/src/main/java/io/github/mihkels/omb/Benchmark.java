@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeoutException;
@@ -83,7 +84,7 @@ public final class Benchmark {
         @Parameter(
                 names = {"-c", "--csv"},
                 description = "Print results from this directory to a csv file")
-        @Nullable String resultsDir;
+        String resultsDir = "";
 
         @Parameter(
                 names = {"-h", "--help"},
@@ -158,7 +159,7 @@ public final class Benchmark {
                 names = {"-o", "--output"},
                 description = "Output",
                 required = false)
-        public @Nullable String output;
+        public String output = "";
 
         @Parameter(
                 names = "--include-histograms",
@@ -168,7 +169,7 @@ public final class Benchmark {
         @Parameter(
                 names = "--report-html",
                 description = "Also write an HTML report with charts of all runs to this file")
-        public @Nullable String reportHtml;
+        public String reportHtml = "";
 
         @Parameter(
                 names = "--retries",
@@ -222,7 +223,7 @@ public final class Benchmark {
         final Arguments arguments = parseArguments(args);
         // Results are written only after the run, so a bad path must fail now, not hours later
         try {
-            createResultDirectory(arguments.output, System.getenv(RESULTS_DIR_ENV));
+            createResultDirectory(arguments.output, resultsDirectory());
             createReportDirectory(arguments.reportHtml);
         } catch (IOException e) {
             log.error("Cannot write results: {}", e.toString());
@@ -266,16 +267,13 @@ public final class Benchmark {
             System.exit(0);
         }
 
-        if (arguments.resultsDir != null) {
+        if (!arguments.resultsDir.isEmpty()) {
             ResultsToCsv r = new ResultsToCsv();
             r.writeAllResultFiles(arguments.resultsDir);
             System.exit(0);
         }
 
-        String usageError = usageError(arguments);
-        if (usageError != null) {
-            exitWithUsage(jc, usageError);
-        }
+        usageError(arguments).ifPresent(message -> exitWithUsage(jc, message));
         if (!arguments.workers.isEmpty() && arguments.workersFile != null) {
             log.error("Only one between --workers and --workers-file can be specified");
             System.exit(-1);
@@ -283,33 +281,35 @@ public final class Benchmark {
         return arguments;
     }
 
-    // Checks JCommander cannot express; null when the arguments are usable
-    static @Nullable String usageError(Arguments arguments) {
+    // Checks JCommander cannot express; empty when the arguments are usable
+    static Optional<String> usageError(Arguments arguments) {
         // Not required by JCommander because --csv needs neither
         if (arguments.workloads.isEmpty()) {
-            return "At least one workload file is required";
+            return Optional.of("At least one workload file is required");
         }
         if (arguments.drivers.isEmpty()) {
-            return "At least one driver must be given with --drivers";
+            return Optional.of("At least one driver must be given with --drivers");
         }
         int combinations = arguments.workloads.size() * arguments.drivers.size();
-        if (arguments.output != null && !arguments.output.isEmpty() && combinations > 1) {
-            return "--output can only be used with a single workload and driver, but "
-                    + combinations
-                    + " combinations would overwrite it; omit --output or set "
-                    + RESULTS_DIR_ENV
-                    + " to choose the results directory";
+        if (!arguments.output.isEmpty() && combinations > 1) {
+            return Optional.of(
+                    "--output can only be used with a single workload and driver, but "
+                            + combinations
+                            + " combinations would overwrite it; omit --output or set "
+                            + RESULTS_DIR_ENV
+                            + " to choose the results directory");
         }
         if (arguments.expectedWorkers < 2) {
-            return "--expected-workers must be at least 2, the minimum for a distributed run";
+            return Optional.of(
+                    "--expected-workers must be at least 2, the minimum for a distributed run");
         }
         if (arguments.retries < 0) {
-            return "--retries must be 0 or more";
+            return Optional.of("--retries must be 0 or more");
         }
         if (arguments.repeat != null && arguments.repeat < 1) {
-            return "--repeat must be at least 1";
+            return Optional.of("--repeat must be at least 1");
         }
-        return null;
+        return Optional.empty();
     }
 
     private static void exitWithUsage(JCommander jc, @Nullable String message) {
@@ -401,14 +401,15 @@ public final class Benchmark {
     }
 
     // Workers use self-signed certificates, so an https:// worker needs the certificate to trust
-    static @Nullable String missingWorkerCa(List<String> workers, @Nullable Path caFile) {
+    static Optional<String> missingWorkerCa(List<String> workers, @Nullable Path caFile) {
         if (caFile == null
                 && workers.stream().anyMatch(w -> w.regionMatches(true, 0, "https://", 0, 8))) {
-            return "https:// workers need --worker-ca-file or "
-                    + HttpWorkerClient.CA_FILE_ENV
-                    + " naming the certificate they present";
+            return Optional.of(
+                    "https:// workers need --worker-ca-file or "
+                            + HttpWorkerClient.CA_FILE_ENV
+                            + " naming the certificate they present");
         }
-        return null;
+        return Optional.empty();
     }
 
     private static Worker createWorker(Arguments arguments) {
@@ -416,10 +417,10 @@ public final class Benchmark {
             String token =
                     BearerTokenAuth.resolveToken(System.getenv(), arguments.workerTokenFile).orElse(null);
             Path caFile = workerCaFile(arguments, System.getenv());
-            String tlsError = missingWorkerCa(arguments.workers, caFile);
-            if (tlsError != null) {
-                throw new IllegalArgumentException(tlsError);
-            }
+            missingWorkerCa(arguments.workers, caFile)
+                    .ifPresent(error -> {
+                        throw new IllegalArgumentException(error);
+                    });
             List<Worker> workers =
                     arguments.workers.stream()
                             .map(host -> (Worker) HttpWorkerClient.forRemoteWorker(host, token, caFile))
@@ -531,9 +532,9 @@ public final class Benchmark {
     }
 
     // Writes the HTML report of the results written so far, when --report-html is given
-    static void writeHtmlReport(@Nullable String reportHtml, Map<String, TestResult> written)
+    static void writeHtmlReport(String reportHtml, Map<String, TestResult> written)
             throws IOException {
-        if (reportHtml == null || reportHtml.isEmpty() || written.isEmpty()) {
+        if (reportHtml.isEmpty() || written.isEmpty()) {
             return;
         }
         log.info("Writing HTML report into {}", reportHtml);
@@ -822,7 +823,7 @@ public final class Benchmark {
                             arguments.output,
                             combination.workloadFileName(),
                             driverName,
-                            System.getenv(RESULTS_DIR_ENV),
+                            resultsDirectory(),
                             suffix);
             log.info("Writing {} into {}", description, fileName);
             File file = new File(fileName);
@@ -915,13 +916,13 @@ public final class Benchmark {
     // directory the generated name is relative to the working directory. A suffix, such as the
     // repetition number, goes before the extension: result.json becomes result-2.json.
     static String resultFileName(
-            @Nullable String output,
+            String output,
             String workloadFileName,
             String driverName,
-            @Nullable String resultsDirectory,
+            String resultsDirectory,
             @Nullable String suffix) {
         String tail = suffix == null ? "" : "-" + suffix;
-        if (output != null && !output.isEmpty()) {
+        if (!output.isEmpty()) {
             int dot = output.lastIndexOf('.');
             boolean hasExtension = dot > output.lastIndexOf(File.separatorChar) + 1;
             return hasExtension ? output.substring(0, dot) + tail + output.substring(dot) : output + tail;
@@ -931,27 +932,26 @@ public final class Benchmark {
         String safeDriver = driverName.replaceAll("[^\\w .-]", "_");
         String fileName =
                 String.format("%s-%s-%s%s.json", workloadFileName, safeDriver, timestamp, tail);
-        if (resultsDirectory == null || resultsDirectory.isEmpty()) {
+        if (resultsDirectory.isEmpty()) {
             return fileName;
         }
         return Path.of(resultsDirectory, fileName).toString();
     }
 
     // Creates the directory resultFileName writes into and checks it is writable
-    static void createResultDirectory(@Nullable String output, @Nullable String resultsDirectory)
-            throws IOException {
+    static void createResultDirectory(String output, String resultsDirectory) throws IOException {
         Path directory = null;
-        if (output != null && !output.isEmpty()) {
+        if (!output.isEmpty()) {
             directory = Path.of(output).toAbsolutePath().getParent();
-        } else if (resultsDirectory != null && !resultsDirectory.isEmpty()) {
+        } else if (!resultsDirectory.isEmpty()) {
             directory = Path.of(resultsDirectory);
         }
         ensureWritableDirectory(directory, "Results directory");
     }
 
     // Creates the parent directory for --report-html up front and checks it is writable
-    static void createReportDirectory(@Nullable String reportHtml) throws IOException {
-        if (reportHtml == null || reportHtml.isEmpty()) {
+    static void createReportDirectory(String reportHtml) throws IOException {
+        if (reportHtml.isEmpty()) {
             return;
         }
         Path reportPath = Path.of(reportHtml).toAbsolutePath();
@@ -1022,4 +1022,8 @@ public final class Benchmark {
 
     // Directory for result files written without --output, for example in a read-only container
     static final String RESULTS_DIR_ENV = "OMB_RESULTS_DIR";
+
+    private static String resultsDirectory() {
+        return System.getenv().getOrDefault(RESULTS_DIR_ENV, "");
+    }
 }

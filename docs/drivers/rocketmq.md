@@ -136,7 +136,9 @@ For several worker hosts, see [Distributed runs](../getting-started/distributed-
 ## Configuration reference
 
 All keys are optional in the configuration class and unknown keys are ignored. A key that is not set
-leaves the client default unchanged. `namesrvAddr` and `clusterName` are needed in practice.
+keeps the client default; the driver sets `maxMessageSize`, `compressMsgBodyOverHowmuch`, `autoBatch`
+and `enableBackpressure` to the defaults of the RocketMQ client it pins. `namesrvAddr` and
+`clusterName` are needed in practice.
 
 |             Key              |  Type   |  Shipped value   |                                                                     Description                                                                     |
 |------------------------------|---------|------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|

@@ -26,6 +26,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -186,8 +189,8 @@ final class DriverProcess {
         return Long.getLong(ProcessWorker.STARTUP_TIMEOUT_PROPERTY, 120);
     }
 
-    @Nullable HttpWorkerClient client() {
-        return client;
+    Optional<HttpWorkerClient> client() {
+        return Optional.ofNullable(client);
     }
 
     /**
@@ -202,9 +205,9 @@ final class DriverProcess {
                 Objects.requireNonNull(workDir, "driver work directory after start"), driverConfigFile);
     }
 
-    @Nullable Long pid() {
+    OptionalLong pid() {
         Process current = owned();
-        return current == null ? null : current.pid();
+        return current == null ? OptionalLong.empty() : OptionalLong.of(current.pid());
     }
 
     boolean isRunning() {
@@ -220,11 +223,13 @@ final class DriverProcess {
     /**
      * The exit code of a process that has exited.
      *
-     * @return the exit code, or {@code null} while the process runs or before it starts
+     * @return the exit code, or empty while the process runs or before it starts
      */
-    @Nullable Integer exitCode() {
+    OptionalInt exitCode() {
         Process current = process;
-        return current == null || current.isAlive() ? null : current.exitValue();
+        return current == null || current.isAlive()
+                ? OptionalInt.empty()
+                : OptionalInt.of(current.exitValue());
     }
 
     /**

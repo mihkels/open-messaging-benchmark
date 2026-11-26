@@ -191,10 +191,11 @@ class WorkerTlsTest {
     @Test
     void certificateAndKeyMustBeGivenTogether() {
         BenchmarkWorker.Arguments onlyCert = parse("--tls-cert", "a.crt");
-        assertThat(BenchmarkWorker.refuseIncompleteTls(onlyCert)).contains("together");
+        assertThat(BenchmarkWorker.refuseIncompleteTls(onlyCert))
+                .hasValueSatisfying(value -> assertThat(value).contains("together"));
         assertThat(BenchmarkWorker.refuseIncompleteTls(parse("--tls-cert", "a", "--tls-key", "b")))
-                .isNull();
-        assertThat(BenchmarkWorker.refuseIncompleteTls(parse())).isNull();
+                .isEmpty();
+        assertThat(BenchmarkWorker.refuseIncompleteTls(parse())).isEmpty();
     }
 
     @Test

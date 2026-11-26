@@ -35,15 +35,13 @@ class ResultFileNameTest {
 
     @Test
     void generatedNameIsRelativeWithoutResultsDirectory() {
-        assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null, null))
-                .matches("workload-Kafka-\\d{4}(-\\d{2}){5}\\.json");
         assertThat(Benchmark.resultFileName("", "workload", "Kafka", "", null))
                 .matches("workload-Kafka-\\d{4}(-\\d{2}){5}\\.json");
     }
 
     @Test
     void generatedNameIsPlacedInResultsDirectory() {
-        Path file = Path.of(Benchmark.resultFileName(null, "workload", "Kafka", "/results", null));
+        Path file = Path.of(Benchmark.resultFileName("", "workload", "Kafka", "/results", null));
 
         assertThat(file).hasParentRaw(Path.of("/results"));
         assertThat(file.getFileName().toString()).startsWith("workload-Kafka-").endsWith(".json");
@@ -51,23 +49,23 @@ class ResultFileNameTest {
 
     @Test
     void driverNameCannotLeaveTheResultsDirectory() {
-        Path file = Path.of(Benchmark.resultFileName(null, "w", "../Kafka/KRaft", "/results", null));
+        Path file = Path.of(Benchmark.resultFileName("", "w", "../Kafka/KRaft", "/results", null));
 
         assertThat(file).hasParentRaw(Path.of("/results"));
         assertThat(file.getFileName().toString()).startsWith("w-.._Kafka_KRaft-");
-        assertThat(Benchmark.resultFileName(null, "w", "Nats Streaming", null, null))
+        assertThat(Benchmark.resultFileName("", "w", "Nats Streaming", "", null))
                 .startsWith("w-Nats Streaming-");
     }
 
     @Test
     void suffixGoesBeforeTheExtension() {
-        assertThat(Benchmark.resultFileName("out/result.json", "w", "Kafka", null, "2"))
+        assertThat(Benchmark.resultFileName("out/result.json", "w", "Kafka", "", "2"))
                 .isEqualTo("out/result-2.json");
-        assertThat(Benchmark.resultFileName("result", "w", "Kafka", null, "summary"))
+        assertThat(Benchmark.resultFileName("result", "w", "Kafka", "", "summary"))
                 .isEqualTo("result-summary");
-        assertThat(Benchmark.resultFileName("out.d/result", "w", "Kafka", null, "1"))
+        assertThat(Benchmark.resultFileName("out.d/result", "w", "Kafka", "", "1"))
                 .isEqualTo("out.d/result-1");
-        assertThat(Benchmark.resultFileName(null, "workload", "Kafka", null, "3"))
+        assertThat(Benchmark.resultFileName("", "workload", "Kafka", "", "3"))
                 .matches("workload-Kafka-\\d{4}(-\\d{2}){5}-3\\.json");
     }
 
@@ -78,7 +76,7 @@ class ResultFileNameTest {
         assertThat(output.getParent()).isDirectory();
 
         Path results = temp.resolve("results/nested");
-        Benchmark.createResultDirectory(null, results.toString());
+        Benchmark.createResultDirectory("", results.toString());
         assertThat(results).isDirectory();
     }
 
@@ -87,7 +85,7 @@ class ResultFileNameTest {
         Path file = Files.createFile(temp.resolve("taken"));
 
         assertThatThrownBy(
-                        () -> Benchmark.createResultDirectory(file.resolve("run.json").toString(), null))
+                        () -> Benchmark.createResultDirectory(file.resolve("run.json").toString(), ""))
                 .isInstanceOf(IOException.class);
     }
 
@@ -109,14 +107,14 @@ class ResultFileNameTest {
         // Root can write anyway
         assumeTrue(!Files.isWritable(readOnly));
 
-        assertThatThrownBy(() -> Benchmark.createResultDirectory(null, readOnly.toString()))
+        assertThatThrownBy(() -> Benchmark.createResultDirectory("", readOnly.toString()))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("not writable");
     }
 
     @Test
     void createsAndValidatesReportDirectories(@TempDir Path temp) throws IOException {
-        Benchmark.createReportDirectory(null);
+        Benchmark.createReportDirectory("");
         Benchmark.createReportDirectory("");
 
         Path report = temp.resolve("reports/nested/report.html");

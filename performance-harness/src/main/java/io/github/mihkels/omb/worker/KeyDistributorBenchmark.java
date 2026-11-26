@@ -15,8 +15,8 @@ package io.github.mihkels.omb.worker;
 
 import io.github.mihkels.omb.utils.distributor.KeyDistributor;
 import io.github.mihkels.omb.utils.distributor.KeyDistributorType;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import org.jspecify.annotations.Nullable;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -47,7 +47,7 @@ public class KeyDistributorBenchmark {
     }
 
     @Benchmark
-    public @Nullable String next() {
+    public Optional<String> next() {
         return distributor.next();
     }
 }

@@ -535,7 +535,7 @@ class PluginRegistryTest {
         bundle("jms", List.of(JMS), "classReferenceProperties:\n  - delegate\n");
         PluginRegistry registry = discover();
 
-        assertThat(registry.resolve(JMS, null).bundles())
+        assertThat(registry.resolve(JMS, Map.of()).bundles())
                 .extracting(PluginBundle::id)
                 .containsExactly("jms");
         assertThat(registry.resolve(JMS, Map.of("delegate", " ")).bundles())

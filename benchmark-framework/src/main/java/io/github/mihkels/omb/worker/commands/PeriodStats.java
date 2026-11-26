@@ -62,11 +62,11 @@ public record PeriodStats(
             long totalMessagesSent,
             long totalMessageSendErrors,
             long totalMessagesReceived,
-            @Nullable Histogram publishLatency,
-            @Nullable Histogram publishDelayLatency,
-            @Nullable Histogram endToEndLatency,
-            @Nullable Histogram publishScheduleLatency,
-            @Nullable Map<String, String> sendErrorReasons,
+            Histogram publishLatency,
+            Histogram publishDelayLatency,
+            Histogram endToEndLatency,
+            Histogram publishScheduleLatency,
+            Map<String, String> sendErrorReasons,
             @Nullable WorkerLoad load) {
         this(
                 messagesSent,
@@ -83,12 +83,12 @@ public record PeriodStats(
                 publishScheduleLatency,
                 sendErrorReasons,
                 load,
-                null,
-                null,
+                List.of(),
+                List.of(),
                 0);
     }
 
-    // Defensive copy constructor
+    // Defensive copy constructor; null values, as older workers send them, become empty
     @SuppressWarnings("checkstyle:ParameterNumber")
     public PeriodStats(
             long messagesSent,
@@ -130,7 +130,7 @@ public record PeriodStats(
     }
 
     public PeriodStats() {
-        this(0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null, null, null);
+        this(0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null, null, null, null, null, 0);
     }
 
     // Return defensive copies in getters

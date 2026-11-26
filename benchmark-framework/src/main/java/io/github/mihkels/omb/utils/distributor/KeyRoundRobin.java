@@ -13,15 +13,17 @@
  */
 package io.github.mihkels.omb.utils.distributor;
 
+import java.util.Optional;
+
 public class KeyRoundRobin extends KeyDistributor {
 
     private int currentIndex = 0;
 
     @Override
-    public String next() {
+    public Optional<String> next() {
         if (++currentIndex >= getLength()) {
             currentIndex = 0;
         }
-        return get(currentIndex);
+        return Optional.of(get(currentIndex));
     }
 }

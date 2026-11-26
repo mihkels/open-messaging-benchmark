@@ -37,9 +37,10 @@ class BenchmarkArgumentsTest {
     @Test
     void httpsWorkersNeedTheirCertificate() {
         List<String> https = List.of("http://w1:8080", "HTTPS://w2:8080");
-        assertThat(Benchmark.missingWorkerCa(https, null)).contains("--worker-ca-file");
-        assertThat(Benchmark.missingWorkerCa(https, Path.of("ca.crt"))).isNull();
-        assertThat(Benchmark.missingWorkerCa(List.of("http://w1:8080"), null)).isNull();
+        assertThat(Benchmark.missingWorkerCa(https, null))
+                .hasValueSatisfying(value -> assertThat(value).contains("--worker-ca-file"));
+        assertThat(Benchmark.missingWorkerCa(https, Path.of("ca.crt"))).isEmpty();
+        assertThat(Benchmark.missingWorkerCa(List.of("http://w1:8080"), null)).isEmpty();
     }
 
     @Test
@@ -56,24 +57,26 @@ class BenchmarkArgumentsTest {
         arguments.workloads = List.of("w1.yaml");
         arguments.drivers = List.of("a.yaml");
         arguments.output = "r.json";
-        assertThat(Benchmark.usageError(arguments)).isNull();
+        assertThat(Benchmark.usageError(arguments)).isEmpty();
 
         arguments.drivers = List.of("a.yaml", "b.yaml");
         assertThat(Benchmark.usageError(arguments))
-                .startsWith("--output can only be used with a single workload and driver");
+                .hasValueSatisfying(value ->
+                        assertThat(value)
+                                .startsWith("--output can only be used with a single workload and driver"));
 
-        arguments.output = null;
-        assertThat(Benchmark.usageError(arguments)).isNull();
+        arguments.output = "";
+        assertThat(Benchmark.usageError(arguments)).isEmpty();
     }
 
     @Test
     void requiresWorkloadsAndDrivers() {
         Benchmark.Arguments arguments = new Benchmark.Arguments();
-        assertThat(Benchmark.usageError(arguments)).isEqualTo("At least one workload file is required");
+        assertThat(Benchmark.usageError(arguments)).contains("At least one workload file is required");
 
         arguments.workloads = List.of("w1.yaml");
         assertThat(Benchmark.usageError(arguments))
-                .isEqualTo("At least one driver must be given with --drivers");
+                .contains("At least one driver must be given with --drivers");
     }
 
     @Test
@@ -82,7 +85,9 @@ class BenchmarkArgumentsTest {
         arguments.workloads = List.of("w1.yaml");
         arguments.drivers = List.of("a.yaml");
         arguments.expectedWorkers = 1;
-        assertThat(Benchmark.usageError(arguments)).startsWith("--expected-workers must be at least 2");
+        assertThat(Benchmark.usageError(arguments))
+                .hasValueSatisfying(
+                        value -> assertThat(value).startsWith("--expected-workers must be at least 2"));
     }
 
     @Test
@@ -92,7 +97,7 @@ class BenchmarkArgumentsTest {
         arguments.drivers = List.of("a.yaml");
         assertThat(arguments.retries).isEqualTo(3);
         arguments.retries = -1;
-        assertThat(Benchmark.usageError(arguments)).isEqualTo("--retries must be 0 or more");
+        assertThat(Benchmark.usageError(arguments)).contains("--retries must be 0 or more");
     }
 
     @Test
@@ -101,8 +106,8 @@ class BenchmarkArgumentsTest {
         arguments.workloads = List.of("w1.yaml");
         arguments.drivers = List.of("a.yaml");
         arguments.repeat = 1;
-        assertThat(Benchmark.usageError(arguments)).isNull();
+        assertThat(Benchmark.usageError(arguments)).isEmpty();
         arguments.repeat = 0;
-        assertThat(Benchmark.usageError(arguments)).isEqualTo("--repeat must be at least 1");
+        assertThat(Benchmark.usageError(arguments)).contains("--repeat must be at least 1");
     }
 }

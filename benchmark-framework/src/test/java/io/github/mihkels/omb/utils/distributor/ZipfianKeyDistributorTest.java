@@ -30,7 +30,7 @@ class ZipfianKeyDistributorTest {
                 KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(keys, exponent));
         int[] counts = new int[keys];
         for (int i = 0; i < samples; i++) {
-            String key = distributor.next();
+            String key = distributor.next().orElseThrow();
             int rank = Integer.parseInt(key.substring("zipf-".length()));
             assertThat(rank).isBetween(0, keys - 1);
             counts[rank]++;
@@ -54,12 +54,12 @@ class ZipfianKeyDistributorTest {
     void supportsUniformAndSingleKeyDistributions() {
         KeyDistributor single =
                 KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(1, 1));
-        assertThat(single.next()).isEqualTo("zipf-0");
+        assertThat(single.next()).contains("zipf-0");
         KeyDistributor uniform =
                 KeyDistributor.build(KeyDistributorType.ZIPFIAN, new KeyDistribution(2, 0));
         int first = 0;
         for (int i = 0; i < 100_000; i++) {
-            if (uniform.next().equals("zipf-0")) {
+            if (uniform.next().orElseThrow().equals("zipf-0")) {
                 first++;
             }
         }

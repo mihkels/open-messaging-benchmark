@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Discovers driver plugin bundles and maps driver classes to the bundles that provide them.
@@ -233,7 +232,7 @@ public final class PluginRegistry {
      * @param driverConfig the parsed driver configuration
      * @return the bundles to load, primary bundle first
      */
-    public ResolvedDriver resolve(String driverClass, @Nullable Map<String, Object> driverConfig) {
+    public ResolvedDriver resolve(String driverClass, Map<String, Object> driverConfig) {
         failOnDriverErrors(driverClass);
         PluginBundle primary = byDriverClass.get(driverClass);
         if (primary == null) {
@@ -260,18 +259,17 @@ public final class PluginRegistry {
      * @return the bundles to load, primary bundle first
      */
     public ResolvedDriver resolveOverride(
-            String driverClass, @Nullable Map<String, Object> driverConfig, Path location) {
+            String driverClass, Map<String, Object> driverConfig, Path location) {
         return new ResolvedDriver(
                 driverClass, withReferences(legacyBundle(driverClass, location), driverConfig));
     }
 
-    private List<PluginBundle> withReferences(
-            PluginBundle primary, @Nullable Map<String, Object> config) {
+    private List<PluginBundle> withReferences(PluginBundle primary, Map<String, Object> config) {
         List<PluginBundle> result = new ArrayList<>();
         result.add(primary);
         for (int i = 0; i < result.size(); i++) {
             for (String property : result.get(i).descriptor().classReferenceProperties()) {
-                Object value = config == null ? null : config.get(property);
+                Object value = config.get(property);
                 if (value != null && !value.toString().isBlank()) {
                     PluginBundle referenced = referencedBundle(property, value.toString().trim());
                     if (!result.contains(referenced)) {

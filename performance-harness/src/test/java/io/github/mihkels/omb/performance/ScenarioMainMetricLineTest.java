@@ -15,13 +15,13 @@ package io.github.mihkels.omb.performance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,11 +73,11 @@ class ScenarioMainMetricLineTest {
 
     @Test
     void ignoresLinesThatAreNotRoleLabelledResourceGauges() {
-        assertNull(ScenarioMain.parseResource("omb_resource_threads{area=\"heap\"} 1"));
-        assertNull(ScenarioMain.parseResource("omb_resource_threads 1"));
-        assertNull(ScenarioMain.parseResource("omb_resource_threads{role=\"\"} 1"));
-        assertNull(ScenarioMain.parseResource("# HELP omb_resource_threads live threads"));
-        assertNull(ScenarioMain.parseResource("omb_resource_threads{role=\"driver\"}1"));
+        assertTrue(ScenarioMain.parseResource("omb_resource_threads{area=\"heap\"} 1").isEmpty());
+        assertTrue(ScenarioMain.parseResource("omb_resource_threads 1").isEmpty());
+        assertTrue(ScenarioMain.parseResource("omb_resource_threads{role=\"\"} 1").isEmpty());
+        assertTrue(ScenarioMain.parseResource("# HELP omb_resource_threads live threads").isEmpty());
+        assertTrue(ScenarioMain.parseResource("omb_resource_threads{role=\"driver\"}1").isEmpty());
     }
 
     @Test
@@ -107,14 +107,14 @@ class ScenarioMainMetricLineTest {
     void agreesWithFormerPatterns() {
         for (String line : LINES) {
             Matcher former = FORMER_RESOURCE.matcher(line);
-            ScenarioMain.ResourceSample sample = ScenarioMain.parseResource(line);
+            Optional<ScenarioMain.ResourceSample> sample = ScenarioMain.parseResource(line);
             if (former.matches()) {
-                assertNotNull(sample, line);
-                assertEquals(former.group(1), sample.name(), line);
-                assertEquals(former.group(2), sample.role(), line);
-                assertEquals(Double.parseDouble(former.group(3)), sample.value(), line);
+                ScenarioMain.ResourceSample expected =
+                        new ScenarioMain.ResourceSample(
+                                former.group(1), former.group(2), Double.parseDouble(former.group(3)));
+                assertEquals(Optional.of(expected), sample, line);
             } else {
-                assertNull(sample, line);
+                assertTrue(sample.isEmpty(), line);
             }
             Matcher formerErrors = FORMER_RECEIVE_ERRORS.matcher(line);
             OptionalDouble errors = ScenarioMain.parseReceiveErrors(line);
@@ -131,7 +131,7 @@ class ScenarioMainMetricLineTest {
         assertTimeoutPreemptively(
                 Duration.ofSeconds(2),
                 () -> {
-                    assertNull(ScenarioMain.parseResource("omb_resource_threads{" + labels + " 1"));
+                    assertTrue(ScenarioMain.parseResource("omb_resource_threads{" + labels + " 1").isEmpty());
                     assertFalse(
                             ScenarioMain.parseReceiveErrors("synthetic_receive_errors_total{" + labels + " 1")
                                     .isPresent());
@@ -143,8 +143,9 @@ class ScenarioMainMetricLineTest {
     }
 
     private static void assertResource(String name, String role, double value, String line) {
-        ScenarioMain.ResourceSample sample = ScenarioMain.parseResource(line);
-        assertNotNull(sample, line);
-        assertEquals(new ScenarioMain.ResourceSample(name, role, value), sample);
+        assertEquals(
+                Optional.of(new ScenarioMain.ResourceSample(name, role, value)),
+                ScenarioMain.parseResource(line),
+                line);
     }
 }

@@ -15,9 +15,12 @@ package io.github.mihkels.omb.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.mihkels.omb.driver.RebalanceEvent;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -78,6 +81,105 @@ class RunCallbacksTest {
 
             // A lost wakeup would leave the waiter parked until its one-minute deadline.
             assertThat(quiesced.get(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
+    void gateSealWaitsForACallbackOnAnotherThreadToLeave() throws Exception {
+        RunCallbacks.Gate gate = new RunCallbacks.Gate();
+        CompletableFuture<Void> inside = new CompletableFuture<>();
+        CompletableFuture<Void> leave = new CompletableFuture<>();
+        Thread callback =
+                Thread.ofPlatform()
+                        .start(() -> {
+                            int slot = gate.enter();
+                            inside.complete(null);
+                            leave.join();
+                            gate.exit(slot);
+                        });
+        inside.get(5, TimeUnit.SECONDS);
+
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(50))).isFalse();
+        leave.complete(null);
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.SECONDS.toNanos(5))).isTrue();
+        callback.join();
+    }
+
+    @Test
+    void gateIsReentrantAndEmptyOnlyOnceEveryEntryLeft() throws Exception {
+        RunCallbacks.Gate gate = new RunCallbacks.Gate();
+        int outer = gate.enter();
+        int inner = gate.enter();
+
+        gate.exit(inner);
+        assertThat(gate.awaitEmpty(System.nanoTime())).isFalse();
+        gate.exit(outer);
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+    }
+
+    @Test
+    void sealedCallbacksRecordNothing() throws Exception {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            RunCallbacks callbacks =
+                    new RunCallbacks(
+                            stats,
+                            failure -> {
+                                throw new AssertionError(failure);
+                            });
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+
+            assertThat(callbacks.beginSend()).isFalse();
+            callbacks.receive(16, System.currentTimeMillis());
+
+            assertThat(stats.toCountersStats().messagesReceived()).isZero();
+            assertThat(callbacks.awaitQuiescence(System.nanoTime() + TimeUnit.SECONDS.toNanos(1)))
+                    .isTrue();
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
+    void callbacksRejectedAfterSealNeverEnterTheGate() throws Exception {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            AtomicInteger entries = new AtomicInteger();
+            RunCallbacks.Gate gate =
+                    new RunCallbacks.Gate() {
+                        @Override
+                        int enter() {
+                            entries.incrementAndGet();
+                            return super.enter();
+                        }
+                    };
+            RunCallbacks callbacks =
+                    new RunCallbacks(
+                            new WorkerStats(registry),
+                            failure -> {
+                                throw new AssertionError(failure);
+                            },
+                            gate);
+            assertThat(callbacks.beginSend()).isTrue();
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+            entries.set(0);
+
+            // A rejected caller that held a slot could keep a later seal waiting forever
+            assertThat(callbacks.beginSend()).isFalse();
+            callbacks.receive(16, System.currentTimeMillis());
+            callbacks
+                    .forTopic("topic")
+                    .partitionsChanged(
+                            new RebalanceEvent(
+                                    RebalanceEvent.Kind.ASSIGNED, System.currentTimeMillis(), List.of(0)));
+            callbacks.completeSend(16, 0, 0, System::nanoTime, null);
+
+            assertThat(entries).hasValue(0);
+            assertThat(callbacks.awaitQuiescence(System.nanoTime() + TimeUnit.SECONDS.toNanos(1)))
+                    .isTrue();
         } finally {
             registry.close();
         }

@@ -16,6 +16,8 @@ package io.github.mihkels.omb.worker;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
+import java.util.List;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 
@@ -65,5 +67,32 @@ class LatencyMetricTest {
         metric.reset();
         assertThat(metric.takeInterval().getTotalCount()).isZero();
         assertThat(metric.takeCumulative().getTotalCount()).isZero();
+    }
+
+    @Test
+    void valuesFromManyThreadsReachBothTheIntervalAndTheCumulativeHistogram() throws Exception {
+        LatencyMetric metric = LatencyMetric.clamped(1_000, "threads", "test", registry);
+        int threads = 8;
+        int perThread = 10_000;
+        List<Thread> recorders = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            recorders.add(
+                    Thread.ofPlatform()
+                            .start(() -> {
+                                for (int i = 0; i < perThread; i++) {
+                                    metric.record(i % 100);
+                                }
+                            }));
+        }
+        Histogram interval = metric.takeInterval();
+        for (Thread recorder : recorders) {
+            recorder.join();
+        }
+        interval.add(metric.takeInterval());
+
+        assertThat(interval.getTotalCount()).isEqualTo((long) threads * perThread);
+        assertThat(interval.getCountAtValue(42)).isEqualTo((long) threads * perThread / 100);
+        assertThat(metric.takeCumulative().getTotalCount()).isEqualTo((long) threads * perThread);
+        assertThat(metric.takeInterval().getTotalCount()).isZero();
     }
 }

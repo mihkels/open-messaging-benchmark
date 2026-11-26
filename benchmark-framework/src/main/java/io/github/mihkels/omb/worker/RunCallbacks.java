@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 final class RunCallbacks implements ConsumerCallback {
     private final WorkerStats stats;
     private final Consumer<Throwable> unexpectedFailure;
-    private final Gate gate = new Gate();
+    private final Gate gate;
     // Striped because every send and receive updates them; only read after seal(), when no
     // callback can increment them any more, so a sum of zero means none is in flight.
     private final LongAdder sends = new LongAdder();
@@ -45,11 +45,20 @@ final class RunCallbacks implements ConsumerCallback {
     private volatile boolean paused;
 
     RunCallbacks(WorkerStats stats, Consumer<Throwable> unexpectedFailure) {
+        this(stats, unexpectedFailure, new Gate());
+    }
+
+    RunCallbacks(WorkerStats stats, Consumer<Throwable> unexpectedFailure, Gate gate) {
         this.stats = stats;
         this.unexpectedFailure = unexpectedFailure;
+        this.gate = gate;
     }
 
     boolean beginSend() {
+        // Rejected callers skip the gate, so after seal() they cannot keep a slot busy
+        if (!accepting) {
+            return false;
+        }
         int slot = gate.enter();
         try {
             if (!accepting) {
@@ -101,6 +110,9 @@ final class RunCallbacks implements ConsumerCallback {
             @Nullable String topic,
             int partition) {
         try {
+            if (!accepting) {
+                return;
+            }
             int slot = gate.enter();
             try {
                 if (accepting) {
@@ -133,6 +145,9 @@ final class RunCallbacks implements ConsumerCallback {
 
     void completeProbe(@Nullable Throwable failure) {
         try {
+            if (!accepting) {
+                return;
+            }
             int slot = gate.enter();
             try {
                 if (accepting && failure == null) {
@@ -228,6 +243,9 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     private void rebalance(String topic, RebalanceEvent event) {
+        if (!accepting) {
+            return;
+        }
         int slot = gate.enter();
         try {
             if (accepting) {
@@ -248,6 +266,9 @@ final class RunCallbacks implements ConsumerCallback {
             DeliveryVerifier.@Nullable Subscription delivery,
             byte @Nullable [] arrayPayload,
             @Nullable ByteBuffer bufferPayload) {
+        if (!accepting) {
+            return;
+        }
         int slot = gate.enter();
         try {
             if (!accepting) {
@@ -356,9 +377,11 @@ final class RunCallbacks implements ConsumerCallback {
      * Lets {@link #seal(long)} wait for callbacks that saw {@code accepting} still true. A callback
      * increments its thread's slot before it reads {@code accepting} and decrements the same slot
      * when done; seal clears {@code accepting} before it waits for every slot to drain. Unlike a read
-     * lock, threads in different slots share no cache line, so concurrent callbacks scale.
+     * lock, threads in different slots share no cache line, so concurrent callbacks scale. Callers
+     * check {@code accepting} once before entering too, so callbacks rejected after seal never hold a
+     * slot and cannot keep seal waiting.
      */
-    static final class Gate {
+    static class Gate {
         private static final int SLOTS = 16;
         // 16 longs are 128 bytes, the largest common cache line, so slots never share one
         private static final int SPACING = 16;

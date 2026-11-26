@@ -17,10 +17,11 @@ import io.github.mihkels.omb.driver.ConsumerCallback;
 import io.github.mihkels.omb.driver.RebalanceEvent;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
@@ -31,9 +32,11 @@ import org.slf4j.LoggerFactory;
 final class RunCallbacks implements ConsumerCallback {
     private final WorkerStats stats;
     private final Consumer<Throwable> unexpectedFailure;
-    private final ReentrantReadWriteLock gate = new ReentrantReadWriteLock();
-    private final AtomicInteger sends = new AtomicInteger();
-    private final AtomicInteger receives = new AtomicInteger();
+    private final Gate gate = new Gate();
+    // Striped because every send and receive updates them; only read after seal(), when no
+    // callback can increment them any more, so a sum of zero means none is in flight.
+    private final LongAdder sends = new LongAdder();
+    private final LongAdder receives = new LongAdder();
     // State is atomic or volatile and written before signalling; waiters re-check it under this
     // lock, so a signal is only needed once a waiter can exist: while paused or after seal().
     private final ReentrantLock progress = new ReentrantLock();
@@ -47,15 +50,15 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     boolean beginSend() {
-        gate.readLock().lock();
+        int slot = gate.enter();
         try {
             if (!accepting) {
                 return false;
             }
-            sends.incrementAndGet();
+            sends.increment();
             return true;
         } finally {
-            gate.readLock().unlock();
+            gate.exit(slot);
         }
     }
 
@@ -98,7 +101,7 @@ final class RunCallbacks implements ConsumerCallback {
             @Nullable String topic,
             int partition) {
         try {
-            gate.readLock().lock();
+            int slot = gate.enter();
             try {
                 if (accepting) {
                     if (failure == null) {
@@ -116,7 +119,7 @@ final class RunCallbacks implements ConsumerCallback {
                     }
                 }
             } finally {
-                gate.readLock().unlock();
+                gate.exit(slot);
             }
             if (failure != null && accepting) {
                 log.debug("Write error on message", failure);
@@ -130,13 +133,13 @@ final class RunCallbacks implements ConsumerCallback {
 
     void completeProbe(@Nullable Throwable failure) {
         try {
-            gate.readLock().lock();
+            int slot = gate.enter();
             try {
                 if (accepting && failure == null) {
                     stats.recordMessageSent();
                 }
             } finally {
-                gate.readLock().unlock();
+                gate.exit(slot);
             }
         } catch (Throwable t) {
             unexpectedFailure.accept(t);
@@ -146,7 +149,7 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     void abortSend() {
-        sends.decrementAndGet();
+        sends.decrement();
         signalIfObserved();
     }
 
@@ -225,7 +228,7 @@ final class RunCallbacks implements ConsumerCallback {
     }
 
     private void rebalance(String topic, RebalanceEvent event) {
-        gate.readLock().lock();
+        int slot = gate.enter();
         try {
             if (accepting) {
                 stats.recordRebalance(topic, event);
@@ -233,7 +236,7 @@ final class RunCallbacks implements ConsumerCallback {
         } catch (Throwable t) {
             unexpectedFailure.accept(t);
         } finally {
-            gate.readLock().unlock();
+            gate.exit(slot);
         }
     }
 
@@ -245,12 +248,12 @@ final class RunCallbacks implements ConsumerCallback {
             DeliveryVerifier.@Nullable Subscription delivery,
             byte @Nullable [] arrayPayload,
             @Nullable ByteBuffer bufferPayload) {
-        gate.readLock().lock();
+        int slot = gate.enter();
         try {
             if (!accepting) {
                 return;
             }
-            receives.incrementAndGet();
+            receives.increment();
             try {
                 long latencyMicros =
                         TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis() - publishTimestamp);
@@ -266,13 +269,13 @@ final class RunCallbacks implements ConsumerCallback {
                     }
                 }
             } catch (Throwable t) {
-                receives.decrementAndGet();
+                receives.decrement();
                 signalProgress();
                 unexpectedFailure.accept(t);
                 throw t;
             }
         } finally {
-            gate.readLock().unlock();
+            gate.exit(slot);
         }
 
         awaitResumeAndExit();
@@ -293,7 +296,7 @@ final class RunCallbacks implements ConsumerCallback {
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } finally {
-            receives.decrementAndGet();
+            receives.decrement();
             signalIfObserved();
         }
     }
@@ -312,21 +315,14 @@ final class RunCallbacks implements ConsumerCallback {
         paused = false;
         signalProgress();
         long remaining = deadlineNanos - System.nanoTime();
-        if (remaining <= 0 || !gate.writeLock().tryLock(remaining, TimeUnit.NANOSECONDS)) {
-            return false;
-        }
-        try {
-            return true;
-        } finally {
-            gate.writeLock().unlock();
-        }
+        return remaining > 0 && gate.awaitEmpty(deadlineNanos);
     }
 
     boolean awaitQuiescence(long deadlineNanos) throws InterruptedException {
         progress.lockInterruptibly();
         try {
             long remaining = deadlineNanos - System.nanoTime();
-            while (sends.get() != 0 || receives.get() != 0) {
+            while (sends.sum() != 0 || receives.sum() != 0) {
                 if (remaining <= 0) {
                     return false;
                 }
@@ -353,6 +349,46 @@ final class RunCallbacks implements ConsumerCallback {
             progressChanged.signalAll();
         } finally {
             progress.unlock();
+        }
+    }
+
+    /**
+     * Lets {@link #seal(long)} wait for callbacks that saw {@code accepting} still true. A callback
+     * increments its thread's slot before it reads {@code accepting} and decrements the same slot
+     * when done; seal clears {@code accepting} before it waits for every slot to drain. Unlike a read
+     * lock, threads in different slots share no cache line, so concurrent callbacks scale.
+     */
+    static final class Gate {
+        private static final int SLOTS = 16;
+        // 16 longs are 128 bytes, the largest common cache line, so slots never share one
+        private static final int SPACING = 16;
+        private static final long POLL_NANOS = 10_000;
+
+        private final AtomicLongArray active = new AtomicLongArray(SLOTS * SPACING);
+
+        int enter() {
+            int slot = ((int) Thread.currentThread().threadId() & (SLOTS - 1)) * SPACING;
+            active.getAndIncrement(slot);
+            return slot;
+        }
+
+        void exit(int slot) {
+            active.getAndDecrement(slot);
+        }
+
+        boolean awaitEmpty(long deadlineNanos) throws InterruptedException {
+            for (int slot = 0; slot < SLOTS * SPACING; slot += SPACING) {
+                while (active.get(slot) != 0) {
+                    if (Thread.interrupted()) {
+                        throw new InterruptedException("Interrupted while sealing the callback gate");
+                    }
+                    if (deadlineNanos - System.nanoTime() <= 0) {
+                        return false;
+                    }
+                    LockSupport.parkNanos(POLL_NANOS);
+                }
+            }
+            return true;
         }
     }
 

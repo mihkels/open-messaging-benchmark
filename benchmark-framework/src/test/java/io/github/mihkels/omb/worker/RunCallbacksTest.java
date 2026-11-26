@@ -82,4 +82,61 @@ class RunCallbacksTest {
             registry.close();
         }
     }
+
+    @Test
+    void gateSealWaitsForACallbackOnAnotherThreadToLeave() throws Exception {
+        RunCallbacks.Gate gate = new RunCallbacks.Gate();
+        CompletableFuture<Void> inside = new CompletableFuture<>();
+        CompletableFuture<Void> leave = new CompletableFuture<>();
+        Thread callback =
+                Thread.ofPlatform()
+                        .start(() -> {
+                            int slot = gate.enter();
+                            inside.complete(null);
+                            leave.join();
+                            gate.exit(slot);
+                        });
+        inside.get(5, TimeUnit.SECONDS);
+
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(50))).isFalse();
+        leave.complete(null);
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.SECONDS.toNanos(5))).isTrue();
+        callback.join();
+    }
+
+    @Test
+    void gateIsReentrantAndEmptyOnlyOnceEveryEntryLeft() throws Exception {
+        RunCallbacks.Gate gate = new RunCallbacks.Gate();
+        int outer = gate.enter();
+        int inner = gate.enter();
+
+        gate.exit(inner);
+        assertThat(gate.awaitEmpty(System.nanoTime())).isFalse();
+        gate.exit(outer);
+        assertThat(gate.awaitEmpty(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+    }
+
+    @Test
+    void sealedCallbacksRecordNothing() throws Exception {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(key -> null);
+        try {
+            WorkerStats stats = new WorkerStats(registry);
+            RunCallbacks callbacks =
+                    new RunCallbacks(
+                            stats,
+                            failure -> {
+                                throw new AssertionError(failure);
+                            });
+            assertThat(callbacks.seal(System.nanoTime() + TimeUnit.SECONDS.toNanos(1))).isTrue();
+
+            assertThat(callbacks.beginSend()).isFalse();
+            callbacks.receive(16, System.currentTimeMillis());
+
+            assertThat(stats.toCountersStats().messagesReceived()).isZero();
+            assertThat(callbacks.awaitQuiescence(System.nanoTime() + TimeUnit.SECONDS.toNanos(1)))
+                    .isTrue();
+        } finally {
+            registry.close();
+        }
+    }
 }

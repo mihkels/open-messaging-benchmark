@@ -56,11 +56,7 @@ final class MetricExtractor {
      */
     static LatencySource latencySource(Collection<Run> runs) {
         boolean allHaveHistograms =
-                runs.stream()
-                        .allMatch(run -> {
-                            Map<String, String> histograms = run.result().histograms;
-                            return histograms != null && histograms.keySet().containsAll(HISTOGRAMS);
-                        });
+                runs.stream().allMatch(run -> run.result().histograms.keySet().containsAll(HISTOGRAMS));
         return allHaveHistograms ? LatencySource.HISTOGRAMS : LatencySource.AGGREGATED;
     }
 
@@ -114,8 +110,7 @@ final class MetricExtractor {
      * @throws IllegalArgumentException if the run has no such histogram or it cannot be decoded
      */
     private static Histogram decode(Run run, String key) {
-        Map<String, String> histograms = run.result().histograms;
-        String encoded = histograms == null ? null : histograms.get(key);
+        String encoded = run.result().histograms.get(key);
         if (encoded == null) {
             throw new IllegalArgumentException(run.name() + " has no " + key + " histogram");
         }

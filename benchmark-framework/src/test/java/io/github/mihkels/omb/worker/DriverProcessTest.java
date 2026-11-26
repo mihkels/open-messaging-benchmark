@@ -51,7 +51,7 @@ class DriverProcessTest {
         Failures stopFailures = new Failures();
         driverProcess.stop(stopFailures);
         assertThat(driverProcess.isStopped()).isTrue();
-        assertThat(driverProcess.pid()).isNull();
+        assertThat(driverProcess.pid()).isEmpty();
 
         IllegalStateException callFailure = new IllegalStateException("connection refused");
         assertThat(driverProcess.awaitExit(Duration.ofMillis(10))).isTrue();

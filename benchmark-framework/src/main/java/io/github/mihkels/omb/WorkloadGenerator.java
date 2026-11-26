@@ -840,7 +840,7 @@ public final class WorkloadGenerator implements WorkloadRun {
 
     TestResult newResult() {
         TestResult result = new TestResult();
-        result.workload = workload.name;
+        result.workload = Objects.requireNonNullElse(workload.name, "");
         result.driver = driverName;
         result.topics = workload.topics;
         result.partitions = workload.partitionsPerTopic;
@@ -855,11 +855,8 @@ public final class WorkloadGenerator implements WorkloadRun {
     // Appends the period's skew summary and rebalances, indexed like the per-period series
     private void recordPartitionTelemetry(TestResult result, PeriodStats stats) {
         int period = result.publishRate.size() - 1;
-        PartitionSkew skew =
-                PartitionSkew.of(period, stats.partitions(), workload.topics * workload.partitionsPerTopic);
-        if (skew != null) {
-            result.partitionSkew.add(skew);
-        }
+        PartitionSkew.of(period, stats.partitions(), workload.topics * workload.partitionsPerTopic)
+                .ifPresent(result.partitionSkew::add);
         stats.rebalances().forEach(r -> result.rebalanceEvents.add(r.withPeriod(period)));
         result.droppedRebalanceEvents += stats.droppedRebalances();
     }

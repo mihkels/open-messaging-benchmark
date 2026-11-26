@@ -166,11 +166,11 @@ class DriverProcessServerTest {
         Files.createSymbolicLink(link, outside);
         DriverProcessServer.authorizeConfig(workDir, config);
 
-        assertThat(server.allowedConfig(json(link))).isNull();
+        assertThat(server.allowedConfig(json(link))).isEmpty();
 
         DriverProcessServer.authorizeConfig(workDir, link);
-        assertThat(server.allowedConfig(json(link))).isEqualTo(link);
-        assertThat(server.allowedConfig(json(outside))).isEqualTo(outside);
+        assertThat(server.allowedConfig(json(link))).contains(link);
+        assertThat(server.allowedConfig(json(outside))).contains(outside);
     }
 
     @Test
@@ -178,7 +178,7 @@ class DriverProcessServerTest {
         Path directory = Files.createDirectory(tempDir.resolve("dir"));
         DriverProcessServer.authorizeConfig(workDir, directory);
 
-        assertThat(server.allowedConfig(json(directory))).isNull();
+        assertThat(server.allowedConfig(json(directory))).isEmpty();
     }
 
     @Test

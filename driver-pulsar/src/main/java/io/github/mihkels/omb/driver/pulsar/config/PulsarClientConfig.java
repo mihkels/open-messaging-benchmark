@@ -17,9 +17,9 @@ import org.apache.pulsar.common.naming.TopicDomain;
 import org.jspecify.annotations.Nullable;
 
 public class PulsarClientConfig {
-    public @Nullable String serviceUrl;
+    public String serviceUrl = "";
 
-    public @Nullable String httpUrl;
+    public String httpUrl = "";
 
     public long clientMemoryLimitMB = 256;
 
@@ -29,9 +29,9 @@ public class PulsarClientConfig {
 
     public int maxConcurrentLookupRequests = 1000;
 
-    public @Nullable String namespacePrefix;
+    public String namespacePrefix = "";
 
-    public @Nullable String clusterName;
+    public String clusterName = "";
 
     public TopicDomain topicType = TopicDomain.persistent;
 
@@ -49,7 +49,7 @@ public class PulsarClientConfig {
 
     public boolean tlsEnableHostnameVerification = true;
 
-    public @Nullable String tlsTrustCertsFilePath;
+    public String tlsTrustCertsFilePath = "";
 
     public AuthenticationConfiguration authentication = new AuthenticationConfiguration();
 

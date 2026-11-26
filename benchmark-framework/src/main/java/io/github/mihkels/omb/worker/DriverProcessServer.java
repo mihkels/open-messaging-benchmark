@@ -26,9 +26,9 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -149,13 +149,13 @@ final class DriverProcessServer implements AutoCloseable {
     }
 
     private void initializeFromLocalPath(Context ctx) throws Exception {
-        Path config = allowedConfig(ctx.body());
-        if (config == null) {
+        Optional<Path> config = allowedConfig(ctx.body());
+        if (config.isEmpty()) {
             ctx.status(HttpStatus.BAD_REQUEST)
                     .result("Driver configuration path was not authorized by the supervisor");
             return;
         }
-        worker.initializeDriver(config);
+        worker.initializeDriver(config.get());
     }
 
     /**
@@ -164,20 +164,22 @@ final class DriverProcessServer implements AutoCloseable {
      * the supervisor recorded with {@link #authorizeConfig}.
      *
      * @param body the JSON string holding the path
-     * @return the absolute path, or {@code null} if it is not the authorized configuration
+     * @return the absolute path, or empty if it is not the authorized configuration
      */
-    @Nullable Path allowedConfig(String body) {
+    Optional<Path> allowedConfig(String body) {
         try {
             String requested = MAPPER.readValue(body, String.class);
             if (requested == null) {
-                return null;
+                return Optional.empty();
             }
             Path path = Path.of(requested).toAbsolutePath();
             Path real = path.toRealPath();
             Path authorized = Path.of(Files.readString(configPathFile, StandardCharsets.UTF_8));
-            return real.equals(authorized) && Files.isRegularFile(real) ? path : null;
+            return real.equals(authorized) && Files.isRegularFile(real)
+                    ? Optional.of(path)
+                    : Optional.empty();
         } catch (JacksonException | InvalidPathException | IOException _) {
-            return null;
+            return Optional.empty();
         }
     }
 }

@@ -45,7 +45,6 @@ class ListPartitionTest {
     void returnsNoPartitionsForEmptyOrInvalidInput() {
         assertThat(ListPartition.partitionList(List.of(), 3)).isEmpty();
         assertThat(ListPartition.partitionList(List.of(1), 0)).isEmpty();
-        assertThat(ListPartition.partitionList(null, 3)).isEmpty();
     }
 
     @Test

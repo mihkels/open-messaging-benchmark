@@ -171,7 +171,7 @@ class ProcessWorkerTest {
             worker.setPhase(RunPhase.WARMUP);
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
             worker.setRunContext(new RunContext("run-beta", "workload-beta"));
-            long alphaPid = worker.pid();
+            long alphaPid = worker.pid().orElseThrow();
             assertThat(worker.createTopics(new TopicsInfo(1, 1)))
                     .singleElement()
                     .asString()
@@ -187,10 +187,10 @@ class ProcessWorkerTest {
                             "messages_sent_total\\{[^}]*driver=\"test\"[^}]*run_id=\"run-before-start\""
                                     + "[^}]*workload=\"workload-alpha\"");
             worker.stopAll();
-            assertThat(worker.pid()).isEqualTo(alphaPid);
+            assertThat(worker.pid()).hasValue(alphaPid);
 
             worker.initializeDriver(config("fixture.beta.BetaDriver"));
-            long betaPid = worker.pid();
+            long betaPid = worker.pid().orElseThrow();
             assertThat(betaPid).isNotEqualTo(alphaPid);
             assertThat(isAlive(alphaPid)).isFalse();
             assertThat(worker.createTopics(new TopicsInfo(1, 1)))
@@ -204,7 +204,7 @@ class ProcessWorkerTest {
                     .doesNotContain("run-before-start");
 
             worker.close();
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
             assertThat(isAlive(betaPid)).isFalse();
         }
         assertThatThrownBy(() -> Class.forName(LIB)).isInstanceOf(ClassNotFoundException.class);
@@ -216,7 +216,7 @@ class ProcessWorkerTest {
             assertThatThrownBy(() -> worker.initializeDriver(config("fixture.broken.BrokenDriver")))
                     .hasMessageContaining("fixture.broken.BrokenDriver")
                     .hasMessageContaining("broken driver configuration");
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
 
             assertThatThrownBy(() -> worker.initializeDriver(config("fixture.missing.MissingDriver")))
                     .hasMessageContaining("fixture.missing.MissingDriver")
@@ -235,7 +235,7 @@ class ProcessWorkerTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Failed to initialize driver")
                     .hasMessageContaining("exited during startup");
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
             assertThat(worker.canReuseAfterFailure()).isTrue();
 
             System.clearProperty(ProcessWorker.JVM_OPTS_PROPERTY);
@@ -257,7 +257,7 @@ class ProcessWorkerTest {
                             () -> worker.initializeDriver(config("fixture.brokenclose.BrokenCloseDriver")))
                     .hasMessageContaining("fixture initialization failure")
                     .hasStackTraceContaining("fixture initialization cleanup failure");
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
         }
     }
 
@@ -265,9 +265,9 @@ class ProcessWorkerTest {
     void reportsStopFailureAndCanReplaceTheTerminatedDriverProcess() throws Exception {
         try (ProcessWorker worker = newWorker()) {
             worker.initializeDriver(config("fixture.failingclose.FailingCloseDriver"));
-            long failedPid = worker.pid();
+            long failedPid = worker.pid().orElseThrow();
             assertThatThrownBy(worker::stopAll).hasMessageContaining("fixture close failure");
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
             assertThat(isAlive(failedPid)).isFalse();
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
             assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
@@ -278,7 +278,7 @@ class ProcessWorkerTest {
     void killedDriverWithHungCloseLeavesTheWorkerReusable() throws Exception {
         try (ProcessWorker worker = newWorker()) {
             worker.initializeDriver(config("fixture.slowclose.SlowCloseDriver"));
-            long hungPid = worker.pid();
+            long hungPid = worker.pid().orElseThrow();
             Path alpha = config("fixture.alpha.AlphaDriver");
 
             // Replacing the driver reports the forced stop, but the killed child frees the worker
@@ -296,7 +296,7 @@ class ProcessWorkerTest {
         ProcessWorker worker = newWorker();
         worker.initializeDriver(config("fixture.failingclose.FailingCloseDriver"));
         assertThatThrownBy(worker::close).hasMessageContaining("Failed to close ProcessWorker");
-        assertThat(worker.pid()).isNull();
+        assertThat(worker.pid()).isEmpty();
         worker.close();
     }
 
@@ -313,7 +313,7 @@ class ProcessWorkerTest {
 
             // Only health() saw the crash; stopAll must not fail on it, or the run stops early
             worker.stopAll();
-            assertThat(worker.pid()).isNull();
+            assertThat(worker.pid()).isEmpty();
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));
             assertThat(worker.createTopics(new TopicsInfo(1, 1))).hasSize(1);
         }
@@ -359,7 +359,7 @@ class ProcessWorkerTest {
                 Thread.currentThread().interrupt();
                 assertThatThrownBy(() -> worker.initializeDriver(driverConfig))
                         .isInstanceOf(InterruptedException.class);
-                assertThat(worker.pid()).isNull();
+                assertThat(worker.pid()).isEmpty();
             } finally {
                 Thread.interrupted();
             }
@@ -427,7 +427,7 @@ class ProcessWorkerTest {
             assertThat(worker.canReuseAfterFailure()).isFalse();
 
             worker.stopAll();
-            assertThat(worker.pid()).isNotNull();
+            assertThat(worker.pid()).isPresent();
             assertThat(worker.canReuseAfterFailure()).isTrue();
 
             worker.initializeDriver(config("fixture.alpha.AlphaDriver"));

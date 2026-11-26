@@ -333,7 +333,7 @@ public final class LocalWorker implements Worker {
             }
         }
         MessageHeaders headerConfig = producerWorkAssignment.headers();
-        List<Map<String, byte[]>> headers = null;
+        List<Map<String, byte[]>> headers = List.of();
         if (headerConfig != null) {
             if (!current.requireDriver().supportsHeaders()) {
                 throw new IllegalArgumentException(
@@ -458,9 +458,8 @@ public final class LocalWorker implements Worker {
     }
 
     // Cycles through the pre-generated header sets; floorMod keeps the index valid after overflow
-    private static @Nullable Map<String, byte[]> headersFor(
-            @Nullable List<Map<String, byte[]>> headers, int sent) {
-        return headers == null ? null : headers.get(Math.floorMod(sent, headers.size()));
+    private static Map<String, byte[]> headersFor(List<Map<String, byte[]>> headers, int sent) {
+        return headers.isEmpty() ? Map.of() : headers.get(Math.floorMod(sent, headers.size()));
     }
 
     // Sends messages from one producer on its own task until the worker stops.
@@ -470,7 +469,7 @@ public final class LocalWorker implements Worker {
             KeyDistributor keyDistributor,
             PayloadSampler payloads,
             @Nullable DeliveryStamp stamp,
-            @Nullable List<Map<String, byte[]>> headers,
+            List<Map<String, byte[]>> headers,
             @Nullable String telemetryTopic) {
         submit(
                 current,
@@ -481,7 +480,7 @@ public final class LocalWorker implements Worker {
                         MessageProducer messageProducer = current.messageProducer;
                         int sent = 0;
                         while (!current.stopping && !current.sendsStopped) {
-                            Optional<String> key = Optional.ofNullable(keyDistributor.next());
+                            Optional<String> key = keyDistributor.next();
                             byte[] payload = payloads.next(random);
                             messageProducer.sendMessage(
                                     producer,

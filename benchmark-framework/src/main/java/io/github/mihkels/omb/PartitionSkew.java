@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import org.HdrHistogram.Histogram;
-import org.jspecify.annotations.Nullable;
 
 /**
  * How unevenly one period's traffic and latency spread over partitions, from the per-partition
@@ -70,12 +70,12 @@ public record PartitionSkew(
      * @param period index of the period
      * @param partitions the merged per-partition traffic of all workers
      * @param totalPartitions the partitions the workload created; those without traffic count as zero
-     * @return the summary, or {@code null} when no partition reported traffic
+     * @return the summary, or empty when no partition reported traffic
      */
-    static @Nullable PartitionSkew of(
+    static Optional<PartitionSkew> of(
             int period, List<PartitionPeriod> partitions, int totalPartitions) {
         if (partitions.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         // Idle partitions are skew too, so they join the ratios as zeros
         int n = Math.max(totalPartitions, partitions.size());
@@ -85,15 +85,16 @@ public record PartitionSkew(
             sent[i] = partitions.get(i).messagesSent();
             received[i] = partitions.get(i).messagesReceived();
         }
-        return new PartitionSkew(
-                period,
-                partitions.size(),
-                maxMeanRatio(sent),
-                maxMeanRatio(received),
-                gini(sent),
-                gini(received),
-                top(partitions, PartitionPeriod::publishLatency),
-                top(partitions, PartitionPeriod::endToEndLatency));
+        return Optional.of(
+                new PartitionSkew(
+                        period,
+                        partitions.size(),
+                        maxMeanRatio(sent),
+                        maxMeanRatio(received),
+                        gini(sent),
+                        gini(received),
+                        top(partitions, PartitionPeriod::publishLatency),
+                        top(partitions, PartitionPeriod::endToEndLatency)));
     }
 
     // 0 when nothing was counted, so the result never holds NaN

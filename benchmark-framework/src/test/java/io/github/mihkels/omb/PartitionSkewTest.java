@@ -49,7 +49,7 @@ class PartitionSkewTest {
     void noTrafficGivesZeroRatherThanNaN() {
         assertThat(PartitionSkew.gini(new long[] {0, 0})).isZero();
         assertThat(PartitionSkew.maxMeanRatio(new long[] {0, 0})).isZero();
-        assertThat(PartitionSkew.of(0, List.of(), 4)).isNull();
+        assertThat(PartitionSkew.of(0, List.of(), 4)).isEmpty();
     }
 
     @Test
@@ -60,9 +60,8 @@ class PartitionSkewTest {
                                 i -> new PartitionPeriod("t", i, 10, 0, latency((i + 1) * 1000L), new Histogram(1)))
                         .toList();
 
-        PartitionSkew skew = PartitionSkew.of(3, partitions, 8);
+        PartitionSkew skew = PartitionSkew.of(3, partitions, 8).orElseThrow();
 
-        assertThat(skew).isNotNull();
         assertThat(skew.period()).isEqualTo(3);
         assertThat(skew.partitions()).isEqualTo(8);
         assertThat(skew.topPublishP99())
@@ -80,9 +79,8 @@ class PartitionSkewTest {
         List<PartitionPeriod> partitions =
                 List.of(new PartitionPeriod("t", 3, 100, 100, new Histogram(1), new Histogram(1)));
 
-        PartitionSkew skew = PartitionSkew.of(0, partitions, 10);
+        PartitionSkew skew = PartitionSkew.of(0, partitions, 10).orElseThrow();
 
-        assertThat(skew).isNotNull();
         assertThat(skew.partitions()).isEqualTo(1);
         assertThat(skew.publishGini()).isCloseTo(0.9, within(1e-9));
         assertThat(skew.consumeGini()).isCloseTo(0.9, within(1e-9));

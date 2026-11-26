@@ -58,13 +58,20 @@ import tools.jackson.databind.ObjectWriter;
 @SuppressWarnings("unused")
 public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
-    private volatile @Nullable PulsarClient client;
-    private volatile @Nullable PulsarAdmin adminClient;
+    /**
+     * The clients {@link #initialize} creates; published together once all of them exist.
+     *
+     * @param client the Pulsar client
+     * @param admin the Pulsar admin client
+     * @param producerBuilder the producer template cloned for every producer
+     */
+    record Clients(PulsarClient client, PulsarAdmin admin, ProducerBuilder<byte[]> producerBuilder) {}
+
+    private volatile @Nullable Clients clients;
 
     private PulsarConfig config;
 
     private String namespace;
-    private volatile @Nullable ProducerBuilder<byte[]> producerBuilder;
 
     // A file: URI anywhere a value starts, as in "file:///etc/shadow" or "privateKey":"file:/x"
     private static final Pattern FILE_REFERENCE = Pattern.compile("(?i)(?<![a-z0-9])file:");
@@ -110,19 +117,24 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                         .operationTimeout(10, TimeUnit.MINUTES)
                         .listenerThreads(Runtime.getRuntime().availableProcessors());
 
+        String trustCerts = config.client.tlsTrustCertsFilePath;
         if (serviceUrl.startsWith("pulsar+ssl")) {
             clientBuilder
                     .allowTlsInsecureConnection(config.client.tlsAllowInsecureConnection)
-                    .enableTlsHostnameVerification(config.client.tlsEnableHostnameVerification)
-                    .tlsTrustCertsFilePath(config.client.tlsTrustCertsFilePath);
+                    .enableTlsHostnameVerification(config.client.tlsEnableHostnameVerification);
+            if (!trustCerts.isEmpty()) {
+                clientBuilder.tlsTrustCertsFilePath(trustCerts);
+            }
         }
 
         PulsarAdminBuilder pulsarAdminBuilder = PulsarAdmin.builder().serviceHttpUrl(httpUrl);
         if (httpUrl.startsWith("https")) {
             pulsarAdminBuilder
                     .allowTlsInsecureConnection(config.client.tlsAllowInsecureConnection)
-                    .enableTlsHostnameVerification(config.client.tlsEnableHostnameVerification)
-                    .tlsTrustCertsFilePath(config.client.tlsTrustCertsFilePath);
+                    .enableTlsHostnameVerification(config.client.tlsEnableHostnameVerification);
+            if (!trustCerts.isEmpty()) {
+                pulsarAdminBuilder.tlsTrustCertsFilePath(trustCerts);
+            }
         }
 
         if (!config.client.authentication.plugin.isEmpty()) {
@@ -133,17 +145,18 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                     config.client.authentication.plugin, config.client.authentication.data);
         }
 
+        PulsarClient client = null;
+        PulsarAdmin admin = null;
         try {
             client = clientBuilder.build();
 
             log.info("Created Pulsar client");
 
-            PulsarAdmin admin = pulsarAdminBuilder.build();
-            adminClient = admin;
+            admin = pulsarAdminBuilder.build();
 
             log.info("Created Pulsar admin client");
 
-            producerBuilder =
+            ProducerBuilder<byte[]> producerBuilder =
                     configureProducer(
                             client.newProducer(),
                             config.producer.batchingEnabled,
@@ -154,10 +167,12 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
             namespace =
                     createNamespace(admin, required(config.client.namespacePrefix, "client.namespacePrefix"));
+            clients = new Clients(client, admin, producerBuilder);
         } catch (IOException | RuntimeException failure) {
             Failures failures = new Failures();
             failures.add(failure);
-            closeClients(failures);
+            failures.closeRestoringInterruptNow(client);
+            failures.closeRestoringInterruptNow(admin);
             throw failure;
         }
     }
@@ -225,11 +240,12 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
         }
     }
 
-    private static void ensureTenant(PulsarAdmin adminClient, String tenant, @Nullable String cluster)
+    private static void ensureTenant(PulsarAdmin adminClient, String tenant, String cluster)
             throws PulsarAdminException {
         if (adminClient.tenants().getTenants().contains(tenant)) {
             return;
         }
+        required(cluster, "client.clusterName to create tenant " + tenant);
         try {
             adminClient
                     .tenants()
@@ -264,7 +280,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
                 // No-op
                 return CompletableFuture.completedFuture(null);
             }
-            return requireOpen(adminClient).topics().createPartitionedTopicAsync(topic, partitions);
+            return requireOpen().admin().topics().createPartitionedTopicAsync(topic, partitions);
         } catch (RuntimeException failure) {
             return CompletableFuture.failedFuture(failure);
         }
@@ -273,7 +289,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     @Override
     public CompletableFuture<BenchmarkProducer> createProducer(String topic) {
         try {
-            ProducerBuilder<byte[]> producerBuilder = requireOpen(this.producerBuilder);
+            ProducerBuilder<byte[]> producerBuilder = requireOpen().producerBuilder();
             return ResourceCreator.<String, Producer<byte[]>, BenchmarkProducer>compose(
                     CompletableFuture.completedFuture(List.of(topic)),
                     name -> producerBuilder.clone().topic(name).createAsync(),
@@ -288,7 +304,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
         try {
             return ResourceCreator.<String, Consumer<ByteBuffer>, BenchmarkConsumer>compose(
-                    requireOpen(client).getPartitionsForTopic(topic, true),
+                    requireOpen().client().getPartitionsForTopic(topic, true),
                     partition -> createInternalConsumer(partition, subscriptionName, consumerCallback),
                     PulsarBenchmarkConsumer::new);
         } catch (RuntimeException failure) {
@@ -298,7 +314,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
     CompletableFuture<Consumer<ByteBuffer>> createInternalConsumer(
             String topic, String subscriptionName, ConsumerCallback consumerCallback) {
-        return requireOpen(client)
+        return requireOpen()
+                .client()
                 .newConsumer(Schema.BYTEBUFFER)
                 .priorityLevel(0)
                 .subscriptionType(config.consumer.subscriptionType)
@@ -330,32 +347,31 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     }
 
     private void closeClients(Failures failures) {
-        PulsarClient clientToClose;
-        PulsarAdmin adminToClose;
+        Clients toClose;
         synchronized (this) {
-            clientToClose = client;
-            adminToClose = adminClient;
-            client = null;
-            adminClient = null;
-            producerBuilder = null;
+            toClose = clients;
+            clients = null;
         }
-        failures.closeRestoringInterruptNow(clientToClose);
-        failures.closeRestoringInterruptNow(adminToClose);
+        if (toClose != null) {
+            failures.closeRestoringInterruptNow(toClose.client());
+            failures.closeRestoringInterruptNow(toClose.admin());
+        }
     }
 
-    private static String required(@Nullable String value, String key) {
-        if (value == null) {
+    private static String required(String value, String key) {
+        if (value.isBlank()) {
             throw new IllegalArgumentException("Pulsar driver config needs " + key);
         }
         return value;
     }
 
-    private static <T> T requireOpen(@Nullable T resource) {
-        if (resource == null) {
+    private Clients requireOpen() {
+        Clients current = clients;
+        if (current == null) {
             throw new IllegalStateException(
                     "Pulsar benchmark driver is not initialized or already closed");
         }
-        return resource;
+        return current;
     }
 
     private static PulsarConfig readConfig(Path configurationFile) throws IOException {

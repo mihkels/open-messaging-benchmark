@@ -13,12 +13,12 @@
  */
 package io.github.mihkels.omb.utils.distributor;
 
-import org.jspecify.annotations.Nullable;
+import java.util.Optional;
 
 public class NoKeyDistributor extends KeyDistributor {
 
     @Override
-    public @Nullable String next() {
-        return null;
+    public Optional<String> next() {
+        return Optional.empty();
     }
 }

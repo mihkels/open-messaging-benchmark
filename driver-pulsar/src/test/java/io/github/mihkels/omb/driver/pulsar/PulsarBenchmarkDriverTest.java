@@ -119,7 +119,7 @@ class PulsarBenchmarkDriverTest {
         when(builder.subscribeAsync()).thenReturn(CompletableFuture.completedFuture(consumer));
         when(message.getValue()).thenReturn(payload);
         when(message.getPublishTime()).thenReturn(123L);
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
         ConsumerCallback callback = mock(ConsumerCallback.class);
 
@@ -149,7 +149,7 @@ class PulsarBenchmarkDriverTest {
         IllegalStateException failure = new IllegalStateException("callback failed");
         ConsumerCallback callback = mock(ConsumerCallback.class);
         doThrow(failure).when(callback).messageReceived(any(ByteBuffer.class), anyLong());
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
         CompletableFuture<Consumer<ByteBuffer>> created =
                 driver.createInternalConsumer("topic", "subscription", callback);
@@ -175,7 +175,7 @@ class PulsarBenchmarkDriverTest {
         when(template.clone()).thenReturn(firstBuilder, secondBuilder);
         when(firstBuilder.createAsync()).thenReturn(CompletableFuture.completedFuture(first));
         when(secondBuilder.createAsync()).thenReturn(CompletableFuture.completedFuture(second));
-        set(driver, "producerBuilder", template);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(mock(), mock(), template));
 
         BenchmarkProducer firstHandle = driver.createProducer("first").join();
         BenchmarkProducer secondHandle = driver.createProducer("second").join();
@@ -197,7 +197,7 @@ class PulsarBenchmarkDriverTest {
         Producer<byte[]> producer = mock();
         when(template.clone()).thenReturn(builder);
         when(builder.createAsync()).thenReturn(pending);
-        set(driver, "producerBuilder", template);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(mock(), mock(), template));
 
         CompletableFuture<BenchmarkProducer> result = driver.createProducer("topic");
         assertThat(result.cancel(true)).isTrue();
@@ -224,7 +224,7 @@ class PulsarBenchmarkDriverTest {
         when(firstBuilder.subscribeAsync()).thenReturn(first);
         when(secondBuilder.subscribeAsync()).thenReturn(second);
         when(thirdBuilder.subscribeAsync()).thenReturn(third);
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
 
         CompletableFuture<BenchmarkConsumer> result =
@@ -247,7 +247,7 @@ class PulsarBenchmarkDriverTest {
         PulsarClient client = mock();
         CompletableFuture<List<String>> discovery = new CompletableFuture<>();
         when(client.getPartitionsForTopic("topic", true)).thenReturn(discovery);
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
 
         CompletableFuture<BenchmarkConsumer> result =
@@ -263,7 +263,7 @@ class PulsarBenchmarkDriverTest {
         PulsarClient client = mock();
         when(client.getPartitionsForTopic("topic", true))
                 .thenReturn(CompletableFuture.completedFuture(List.of()));
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
 
         CompletableFuture<BenchmarkConsumer> result =
@@ -288,7 +288,7 @@ class PulsarBenchmarkDriverTest {
         when(client.newConsumer(Schema.BYTEBUFFER)).thenReturn(firstBuilder, secondBuilder);
         when(firstBuilder.subscribeAsync()).thenReturn(first);
         when(secondBuilder.subscribeAsync()).thenReturn(second);
-        set(driver, "client", client);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, mock(), mock()));
         set(driver, "config", new PulsarConfig());
 
         CompletableFuture<BenchmarkConsumer> result =
@@ -361,8 +361,7 @@ class PulsarBenchmarkDriverTest {
         RuntimeException adminFailure = new RuntimeException("admin close failed");
         doThrow(clientFailure).when(client).close();
         doThrow(adminFailure).when(admin).close();
-        set(driver, "client", client);
-        set(driver, "adminClient", admin);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, admin, mock()));
 
         assertThatThrownBy(driver::close).isSameAs(clientFailure);
         assertThat(clientFailure.getSuppressed()).containsExactly(adminFailure);
@@ -416,6 +415,25 @@ class PulsarBenchmarkDriverTest {
         verify(clientBuilder)
                 .authentication("org.apache.pulsar.client.impl.auth.AuthenticationToken", "secret");
         verify(admin.tenants()).createTenant(org.mockito.ArgumentMatchers.eq("benchmark"), any());
+    }
+
+    @Test
+    void tlsWithoutTrustCertsKeepsTheClientDefault(@TempDir Path temp) throws Exception {
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of("benchmark"));
+        ClientBuilder clientBuilder =
+                initialize(
+                        Files.createTempFile(temp, "pulsar", ".yaml"),
+                        admin,
+                        """
+                        client:
+                          serviceUrl: pulsar+ssl://localhost:6651
+                          httpUrl: https://localhost:8443
+                          namespacePrefix: benchmark/ns
+                        """);
+
+        verify(clientBuilder).enableTlsHostnameVerification(true);
+        verify(clientBuilder, never()).tlsTrustCertsFilePath(any());
     }
 
     @Test
@@ -481,7 +499,7 @@ class PulsarBenchmarkDriverTest {
         PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         when(admin.topics().createPartitionedTopicAsync("topic", 4))
                 .thenReturn(CompletableFuture.completedFuture(null));
-        set(driver, "adminClient", admin);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(mock(), admin, mock()));
 
         assertThat(driver.createTopic("topic", 1).join()).isNull();
         assertThat(driver.createTopic("topic", 4).join()).isNull();
@@ -496,8 +514,7 @@ class PulsarBenchmarkDriverTest {
         RuntimeException shared = new RuntimeException("shared");
         doThrow(shared).when(client).close();
         doThrow(shared).when(admin).close();
-        set(driver, "client", client);
-        set(driver, "adminClient", admin);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(client, admin, mock()));
         assertThatThrownBy(driver::close).isSameAs(shared);
         assertThat(shared.getSuppressed()).isEmpty();
 
@@ -509,13 +526,47 @@ class PulsarBenchmarkDriverTest {
                         })
                 .when(interrupted)
                 .close();
-        set(driver, "client", interrupted);
+        set(driver, "clients", new PulsarBenchmarkDriver.Clients(interrupted, mock(), mock()));
         try {
             assertThatThrownBy(driver::close).isSameAs(interruption);
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    void missingClusterNameFailsOnlyWhenTheTenantMustBeCreated(@TempDir Path temp)
+            throws Exception {
+        Path configuration = Files.createTempFile(temp, "pulsar", ".yaml");
+        Files.writeString(
+                configuration,
+                """
+                client:
+                  serviceUrl: pulsar://localhost:6650
+                  httpUrl: http://localhost:8080
+                  namespacePrefix: benchmark/ns
+                """);
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of());
+        ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
+        PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
+        PulsarClient client = mock();
+        when(clientBuilder.build()).thenReturn(client);
+        when(adminBuilder.build()).thenReturn(admin);
+        when(client.newProducer()).thenReturn(mock(ProducerBuilder.class, RETURNS_SELF));
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        try (var clients = mockStatic(PulsarClient.class);
+                var admins = mockStatic(PulsarAdmin.class)) {
+            clients.when(PulsarClient::builder).thenReturn(clientBuilder);
+            admins.when(PulsarAdmin::builder).thenReturn(adminBuilder);
+            assertThatThrownBy(() -> driver.initialize(configuration, mock(MeterRegistry.class)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("client.clusterName");
+        }
+        verify(client).close();
+        verify(admin).close();
+        verify(admin.tenants(), never()).createTenant(any(), any());
     }
 
     private static ClientBuilder initialize(Path temp, PulsarAdmin admin, boolean secure)
@@ -543,7 +594,12 @@ class PulsarBenchmarkDriverTest {
                   authentication:
                     plugin: ""
                 """;
-        Files.writeString(configuration, secure ? secureConfiguration : plainConfiguration);
+        return initialize(configuration, admin, secure ? secureConfiguration : plainConfiguration);
+    }
+
+    private static ClientBuilder initialize(Path configuration, PulsarAdmin admin, String yaml)
+            throws Exception {
+        Files.writeString(configuration, yaml);
         ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
         PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
         PulsarClient client = mock();

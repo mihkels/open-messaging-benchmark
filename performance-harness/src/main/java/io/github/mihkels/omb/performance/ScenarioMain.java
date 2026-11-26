@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -445,13 +446,12 @@ public final class ScenarioMain {
      * Parses an {@code omb_resource_<name>{...role="<role>"...} <value>} line.
      *
      * @param line one line of a Prometheus scrape
-     * @return the sample, or {@code null} if the line is not a resource gauge with a {@code role}
-     *     label
+     * @return the sample, or empty if the line is not a resource gauge with a {@code role} label
      */
-    static @Nullable ResourceSample parseResource(String line) {
+    static Optional<ResourceSample> parseResource(String line) {
         Matcher matcher = RESOURCE.matcher(line);
         if (!matcher.matches()) {
-            return null;
+            return Optional.empty();
         }
         // The last role label wins, as with the former single greedy pattern.
         Matcher role = ROLE_LABEL.matcher(matcher.group(2));
@@ -460,8 +460,9 @@ public final class ScenarioMain {
             value = role.group(1);
         }
         return value == null
-                ? null
-                : new ResourceSample(matcher.group(1), value, Double.parseDouble(matcher.group(3)));
+                ? Optional.empty()
+                : Optional.of(
+                        new ResourceSample(matcher.group(1), value, Double.parseDouble(matcher.group(3))));
     }
 
     /**
@@ -527,13 +528,15 @@ public final class ScenarioMain {
             resources.put("coordinator", coordinator.snapshot());
             int index = 0;
             for (Supplier<String> scrape : scrapes) {
+                int worker = index;
                 for (String line : scrape.get().split("\n")) {
-                    ResourceSample sample = parseResource(line);
-                    if (sample != null) {
-                        resources
-                                .computeIfAbsent(sample.role() + "-" + index, k -> new LinkedHashMap<>())
-                                .put(sample.name(), Double.isFinite(sample.value()) ? sample.value() : null);
-                    }
+                    parseResource(line)
+                            .ifPresent(sample -> {
+                                Double value = Double.isFinite(sample.value()) ? sample.value() : null;
+                                resources
+                                        .computeIfAbsent(sample.role() + "-" + worker, k -> new LinkedHashMap<>())
+                                        .put(sample.name(), value);
+                            });
                     OptionalDouble errors = parseReceiveErrors(line);
                     if (errors.isPresent()) {
                         fixtureErrors.put(index, errors.getAsDouble());

@@ -52,7 +52,7 @@ public class MessageProducer {
 
     public void sendMessage(BenchmarkProducer producer, Optional<String> key, byte[] payload)
             throws InterruptedException {
-        sendMessage(producer, key, payload, false, null);
+        sendMessage(producer, key, payload, false, Map.of());
     }
 
     /**
@@ -63,7 +63,7 @@ public class MessageProducer {
      * @param payload the payload
      * @param stamped whether the payload carries a {@link DeliveryStamp}, so its acknowledgement
      *     counts towards the verified sends
-     * @param headers the message headers, or {@code null} to send without headers
+     * @param headers the message headers, empty to send without headers
      * @throws InterruptedException if interrupted while waiting for the send slot
      */
     public void sendMessage(
@@ -71,7 +71,7 @@ public class MessageProducer {
             Optional<String> key,
             byte[] payload,
             boolean stamped,
-            @Nullable Map<String, byte[]> headers)
+            Map<String, byte[]> headers)
             throws InterruptedException {
         sendMessage(producer, key, payload, stamped, headers, null);
     }
@@ -84,7 +84,7 @@ public class MessageProducer {
      * @param key the message key
      * @param payload the payload
      * @param stamped whether the payload carries a {@link DeliveryStamp}
-     * @param headers the message headers, or {@code null} to send without headers
+     * @param headers the message headers, empty to send without headers
      * @param telemetryTopic the producer's topic when partition telemetry is on, else {@code null}
      * @throws InterruptedException if interrupted while waiting for the send slot
      */
@@ -93,7 +93,7 @@ public class MessageProducer {
             Optional<String> key,
             byte[] payload,
             boolean stamped,
-            @Nullable Map<String, byte[]> headers,
+            Map<String, byte[]> headers,
             @Nullable String telemetryTopic)
             throws InterruptedException {
         final long intendedSendTime = rateLimiter.acquire();
@@ -105,7 +105,8 @@ public class MessageProducer {
             final long sendTime = nanoClock.getAsLong();
             if (telemetryTopic != null) {
                 Objects.requireNonNull(
-                                producer.sendAsyncWithResult(key, payload, headers),
+                                // The driver API takes null, not an empty map, for no headers
+                                producer.sendAsyncWithResult(key, payload, headers.isEmpty() ? null : headers),
                                 "sendAsyncWithResult returned null")
                         .whenComplete((result, failure) ->
                                 callbacks.completeSend(
@@ -121,7 +122,7 @@ public class MessageProducer {
             }
             CompletableFuture<Void> send =
                     Objects.requireNonNull(
-                            headers == null
+                            headers.isEmpty()
                                     ? producer.sendAsync(key, payload)
                                     : producer.sendAsync(key, payload, headers),
                             "sendAsync returned null");

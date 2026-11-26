@@ -27,6 +27,7 @@
 package io.github.mihkels.omb.utils.distributor;
 
 import java.util.Base64;
+import java.util.Optional;
 import java.util.Random;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -56,7 +57,7 @@ public abstract class KeyDistributor {
         return UNIQUE_COUNT;
     }
 
-    public abstract @Nullable String next();
+    public abstract Optional<String> next();
 
     public static KeyDistributor build(KeyDistributorType keyType) {
         return build(keyType, null);

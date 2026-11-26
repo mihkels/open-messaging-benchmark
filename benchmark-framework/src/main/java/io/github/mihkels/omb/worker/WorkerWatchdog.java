@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -173,9 +174,9 @@ public final class WorkerWatchdog implements AutoCloseable {
                     workers.stream().map(worker -> executor.submit(worker::health)).toList();
             for (int i = 0; i < workers.size(); i++) {
                 Worker worker = workers.get(i);
-                String reason = unhealthyReason(worker, checks.get(i));
-                if (reason != null) {
-                    fail(worker.id(), reason);
+                Optional<String> reason = unhealthyReason(worker, checks.get(i));
+                if (reason.isPresent()) {
+                    fail(worker.id(), reason.get());
                     return false;
                 }
             }
@@ -183,7 +184,7 @@ public final class WorkerWatchdog implements AutoCloseable {
         return true;
     }
 
-    private @Nullable String unhealthyReason(Worker worker, Future<WorkerHealth> check)
+    private Optional<String> unhealthyReason(Worker worker, Future<WorkerHealth> check)
             throws InterruptedException {
         WorkerHealth health;
         try {
@@ -194,12 +195,12 @@ public final class WorkerWatchdog implements AutoCloseable {
             log.warn(
                     "Health check {} of {} failed for worker {}: {}", missed, MAX_MISSES, worker.id(), cause);
             return missed >= MAX_MISSES
-                    ? "unreachable after " + missed + " health checks: " + cause
-                    : null;
+                    ? Optional.of("unreachable after " + missed + " health checks: " + cause)
+                    : Optional.empty();
         }
         misses.remove(worker);
         if (health.driver() == DriverState.RUNNING) {
-            return null;
+            return Optional.empty();
         }
         StringBuilder reason = new StringBuilder("driver process is ").append(health.driver());
         if (health.exitCode() != null) {
@@ -208,7 +209,7 @@ public final class WorkerWatchdog implements AutoCloseable {
         if (health.lastError() != null) {
             reason.append(": ").append(health.lastError());
         }
-        return reason.toString();
+        return Optional.of(reason.toString());
     }
 
     private void fail(String workerId, String reason) {

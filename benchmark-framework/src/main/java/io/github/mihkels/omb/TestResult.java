@@ -15,6 +15,8 @@ package io.github.mihkels.omb;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import io.github.mihkels.omb.worker.commands.CountersStats;
 import io.github.mihkels.omb.worker.commands.CumulativeLatencies;
 import io.github.mihkels.omb.worker.commands.RebalanceRecord;
@@ -57,8 +59,10 @@ public class TestResult {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public Thresholds.@Nullable Result thresholds;
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public @Nullable Map<String, String> histograms;
+    /** Compressed latency histograms; only with {@code --include-histograms}. */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    public Map<String, String> histograms = Map.of();
 
     /** What the built-in run checks found; absent when they found nothing or in older files. */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -71,16 +75,20 @@ public class TestResult {
     /** The last send failure reason per worker id in the measured window; not written. */
     @JsonIgnore Map<String, String> sendErrorReasons = new TreeMap<>();
 
-    /** How many attempts the run took, the last one being this result; absent in older files. */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public @Nullable Integer attempts;
+    /** How many attempts the run took, the last one being this result; 1 for older files. */
+    @JsonSetter(nulls = Nulls.SKIP)
+    public int attempts = 1;
 
     /** The reason each failed attempt before this result was retried, oldest first. */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public List<String> failedAttempts = new ArrayList<>();
 
-    public @Nullable String workload;
-    public @Nullable String driver;
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    public String workload = "";
+
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    public String driver = "";
+
     public long messageSize;
 
     /**

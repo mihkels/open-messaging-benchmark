@@ -304,9 +304,7 @@ class PravegaBenchmarkDriverTest {
         private Fixture() throws ReflectiveOperationException {
             setField(driver, "config", new PravegaConfig());
             setField(driver, "scopeName", "scope");
-            setField(driver, "streamManager", streams);
-            setField(driver, "readerGroupManager", groups);
-            setField(driver, "clientFactory", factory);
+            setField(driver, "clients", new PravegaBenchmarkDriver.Clients(streams, groups, factory));
         }
     }
 

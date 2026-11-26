@@ -231,6 +231,14 @@ class RunChecksTest {
         discovery.producerRate = 0;
         assertThat(new RunChecks().evaluate(discovery, result)).isEmpty();
 
+        // Staged workloads also set producerRate to 0 but keep a schedule
+        Workload staged = workload();
+        staged.producerRate = 0;
+        staged.stages = List.of(new Workload.Stage(15, 1000));
+        assertThat(new RunChecks().evaluate(staged, result))
+                .extracting(Finding::check)
+                .containsExactly("publishDelay");
+
         RunChecks checks = new RunChecks();
         checks.disabled = List.of("publishDelay");
         assertThat(checks.evaluate(workload(), result)).isEmpty();

@@ -52,7 +52,8 @@ must not be shown there.
 
 The `publishDelay` check reports an `invalid` finding when the aggregate publish delay p99 of the
 measured window exceeds `checks.maxPublishDelayMs`, 100 ms by default. It runs for fixed-rate and
-staged workloads and is skipped for rate discovery (`producerRate: 0`). Workloads can raise the limit
+staged workloads and is skipped for rate discovery (`producerRate: 0` without `stages`; staged workloads also set
+`producerRate: 0` but are checked). Workloads can raise the limit
 or disable the check like any other. The framework performance harness applies the same 100 ms
 limit to its own run validity, since its verdict is computed separately.
 

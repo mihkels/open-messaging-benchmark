@@ -43,7 +43,8 @@ prove the broker is saturated: inspect worker CPU, GC, errors and backlog too. T
 `publishDelay`, `publishDelayGrowth` and `rateShortfall` [findings](../guides/results.md#run-checks) for these cases. A producer that falls behind and then replays its late sends can still meet the target rate, so
 `publishDelay` judges the schedule lag itself: the run is `invalid` when the publish delay p99 of
 the measured window exceeds `checks.maxPublishDelayMs` (100 ms by default). The check does not run
-for rate discovery (`producerRate: 0`) or when it is disabled
+for rate discovery (`producerRate: 0` without `stages`) or when it is disabled; staged workloads
+also set `producerRate: 0` but are checked
 ([ADR 0022](../development/adr/0022-invalid-on-schedule-lag.md)).
 
 ## Schedule-corrected publish latency

@@ -26,6 +26,9 @@
         "maxPublishDelayGrowthMs" : {
           "type" : "number"
         },
+        "maxPublishDelayMs" : {
+          "type" : "number"
+        },
         "maxRateShortfall" : {
           "type" : "number"
         },

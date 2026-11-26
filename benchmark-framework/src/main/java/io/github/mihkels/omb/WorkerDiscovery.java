@@ -20,6 +20,7 @@ import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.TreeSet;
 import java.util.function.LongSupplier;
 import org.slf4j.Logger;
@@ -82,8 +83,13 @@ final class WorkerDiscovery {
             if (clock.getAsLong() >= deadline) {
                 throw new IllegalStateException(
                         String.format(
+                                Locale.ROOT,
                                 "Found %d of %d expected workers at %s after %s: %s",
-                                urls.size(), expected, worker, timeout, urls));
+                                urls.size(),
+                                expected,
+                                worker,
+                                timeout,
+                                urls));
             }
             log.info("Found {} of {} expected workers at {}, retrying", urls.size(), expected, worker);
             sleeper.sleep(POLL_MILLIS);

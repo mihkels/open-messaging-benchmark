@@ -50,6 +50,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -236,8 +237,11 @@ public final class LocalWorker implements Worker {
 
     private String generateTopicName(Run current, int i) {
         return String.format(
+                Locale.ROOT,
                 "%s-%07d-%s",
-                current.requireDriver().getTopicNamePrefix(), i, RandomGenerator.getRandomString());
+                current.requireDriver().getTopicNamePrefix(),
+                i,
+                RandomGenerator.getRandomString());
     }
 
     @Override

@@ -125,8 +125,11 @@ boundary (`snapshotBoundarySeconds`). This matters especially for short smoke wi
 cannot be used as performance baselines. Exact fixture accounting
 and histogram ownership are covered by correctness tests. The default required achieved-rate
 ratio is 0.98; `--min-rate-ratio` changes it explicitly and becomes part of comparison compatibility.
-Send failures, substantial histogram-count mismatch, lost loopback deliveries, or missed fixed
-load make the run invalid. Distributed independent receives are not checked against producer totals.
+Send failures, substantial histogram-count mismatch, lost loopback deliveries, missed fixed
+load, or a publish delay (schedule lag) p99 above 100 ms make the run invalid. The delay limit
+matches the framework's `publishDelay` run check
+([ADR 0022](adr/0022-invalid-on-schedule-lag.md)): a run that falls behind and replays its late
+sends can still meet the rate. Distributed independent receives are not checked against producer totals.
 
 ## Baseline/candidate procedure
 

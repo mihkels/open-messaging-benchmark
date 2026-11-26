@@ -22,6 +22,7 @@ import io.github.mihkels.omb.driver.Failures;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -178,8 +179,10 @@ class KafkaTopicCreator {
                 if (attempt == MAX_CREATION_ATTEMPTS) {
                     throw new RuntimeException(
                             String.format(
+                                    Locale.ROOT,
                                     "Failed to create topics after %d attempts. Last error: %s",
-                                    MAX_CREATION_ATTEMPTS, e.getMessage()),
+                                    MAX_CREATION_ATTEMPTS,
+                                    e.getMessage()),
                             e);
                 }
                 // Before retrying, check if topics were actually created
@@ -273,8 +276,11 @@ class KafkaTopicCreator {
         if (elapsedMs > ATTEMPT_TIMEOUT_MS) {
             throw new IllegalStateException(
                     String.format(
+                            Locale.ROOT,
                             "Topic creation attempt made no progress for %d ms. Created %d/%d topics",
-                            ATTEMPT_TIMEOUT_MS, succeeded, total));
+                            ATTEMPT_TIMEOUT_MS,
+                            succeeded,
+                            total));
         }
     }
 

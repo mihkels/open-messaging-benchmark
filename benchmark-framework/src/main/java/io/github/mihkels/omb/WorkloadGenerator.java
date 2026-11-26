@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -658,7 +659,7 @@ public final class WorkloadGenerator implements WorkloadRun {
         for (String topic : topics) {
             for (int i = 0; i < workload.subscriptionsPerTopic; i++) {
                 String subscriptionName =
-                        String.format("sub-%03d-%s", i, RandomGenerator.getRandomString());
+                        String.format(Locale.ROOT, "sub-%03d-%s", i, RandomGenerator.getRandomString());
                 for (int j = 0; j < workload.consumerPerSubscription; j++) {
                     consumerAssignment.topicsSubscriptions.add(
                             new TopicSubscription(topic, subscriptionName));
@@ -777,6 +778,7 @@ public final class WorkloadGenerator implements WorkloadRun {
             } else if (now - movedAt >= stallTimeoutNanos) {
                 String message =
                         String.format(
+                                Locale.ROOT,
                                 "%s stalled: %s has not moved for %d s (%s; sent %d, received %d); set %s or %s"
                                         + " to change the stall window",
                                 waitName,

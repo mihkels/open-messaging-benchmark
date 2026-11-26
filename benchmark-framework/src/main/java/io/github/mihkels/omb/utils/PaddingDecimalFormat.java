@@ -14,7 +14,9 @@
 package io.github.mihkels.omb.utils;
 
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.FieldPosition;
+import java.util.Locale;
 import java.util.Objects;
 
 public class PaddingDecimalFormat extends DecimalFormat {
@@ -28,7 +30,8 @@ public class PaddingDecimalFormat extends DecimalFormat {
      * @param minLength the minimum length of the formatted number
      */
     public PaddingDecimalFormat(String pattern, int minLength) {
-        super(pattern);
+        // log output reads the same in every locale
+        super(pattern, DecimalFormatSymbols.getInstance(Locale.ROOT));
         minimumLength = minLength;
     }
 

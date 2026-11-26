@@ -15,6 +15,7 @@ package io.github.mihkels.omb.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 class PaddingDecimalFormatTest {
@@ -25,6 +26,19 @@ class PaddingDecimalFormatTest {
         assertThat(format.format(1L)).isEqualTo("    1.0");
         assertThat(format.format(1000L)).isEqualTo(" 1000.0");
         assertThat(format.format(10000000L)).isEqualTo("10000000.0");
+    }
+
+    @Test
+    void ignoresTheDefaultLocale() {
+        Locale original = Locale.getDefault();
+        try {
+            for (String tag : new String[] {"de-DE", "ar-EG"}) {
+                Locale.setDefault(Locale.forLanguageTag(tag));
+                assertThat(new PaddingDecimalFormat("0.0", 7).format(6000.0)).isEqualTo(" 6000.0");
+            }
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 
     @Test

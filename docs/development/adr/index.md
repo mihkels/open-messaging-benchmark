@@ -41,6 +41,7 @@ supersedes the old one.
 | [0019](0019-accepted-issue-gate.md)           | Close outside pull requests that do not link an accepted issue                    | Accepted, implemented |
 | [0020](0020-java-html-report.md)              | Render reports as interactive HTML from Java                                      | Accepted, implemented |
 | [0021](0021-rust-worker-behind-worker-api.md) | Add an optional Rust worker behind the existing worker API                        | Proposed              |
+| [0022](0022-invalid-on-schedule-lag.md)       | Mark runs that fall behind their schedule as invalid                              | Accepted, implemented |
 
 ADRs 0002 to 0020 were written after the fact from the issues, pull requests and git history named
 in each record. Where no reason was written down at the time, the ADR says so.

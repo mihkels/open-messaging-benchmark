@@ -60,6 +60,15 @@ class HarnessTest(unittest.TestCase):
         result["achievedRate"] = 900
         self.assertIn("Missed requested fixed load", harness.summarize(result)["invalidReasons"])
 
+    def test_schedule_lag_is_invalid_even_when_rate_is_met(self):
+        result = self.result()
+        result["achievedRate"] = 1050
+        result["delayP99Micros"] = 6_000_000
+        self.assertIn("Fell behind the send schedule (publish delay p99 above 100 ms)",
+                      harness.summarize(result)["invalidReasons"])
+        result["delayP99Micros"] = 900
+        self.assertTrue(harness.summarize(result)["valid"])
+
     def test_histogram_loss_and_send_failure_are_visible(self):
         result = self.result()
         result["publishHistogramSamples"] = 500

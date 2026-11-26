@@ -201,6 +201,46 @@ class RunChecksTest {
     }
 
     @Test
+    void flagsRunThatFellBehindScheduleAndCaughtUpAsInvalid() {
+        // Saturated run from #590: rate above target after replaying a 6 s backlog
+        TestResult result = healthy();
+        result.summary = summary(1_680_000, 1_000_000_000, 0);
+        result.aggregatedPublishDelayLatency99pct = 6_000_000; // µs
+
+        Workload workload = workload();
+        workload.producerRate = 1_600_000;
+        List<Finding> findings = new RunChecks().evaluate(workload, result);
+        Finding finding = only(findings);
+
+        assertThat(finding.check()).isEqualTo("publishDelay");
+        assertThat(finding.severity()).isEqualTo(Severity.INVALID);
+        assertThat(finding.value()).isEqualTo(6000.0);
+        assertThat(finding.limit()).isEqualTo(100.0);
+        assertThat(finding.message()).contains("6000.0 ms", "fell behind");
+        assertThat(Validity.of(findings).status()).isEqualTo(Validity.Status.INVALID);
+    }
+
+    @Test
+    void acceptsSmallPublishDelayAndSkipsRateDiscovery() {
+        TestResult result = healthy();
+        result.aggregatedPublishDelayLatency99pct = 900; // 0.9 ms, a healthy run
+        assertThat(new RunChecks().evaluate(workload(), result)).isEmpty();
+
+        result.aggregatedPublishDelayLatency99pct = 6_000_000;
+        Workload discovery = workload();
+        discovery.producerRate = 0;
+        assertThat(new RunChecks().evaluate(discovery, result)).isEmpty();
+
+        RunChecks checks = new RunChecks();
+        checks.disabled = List.of("publishDelay");
+        assertThat(checks.evaluate(workload(), result)).isEmpty();
+
+        checks = new RunChecks();
+        checks.maxPublishDelayMs = 10_000;
+        assertThat(checks.evaluate(workload(), result)).isEmpty();
+    }
+
+    @Test
     void flagsClockOffsetSpreadAboveTheFractionOfP50EndToEnd() {
         TestResult result = healthy();
         result.aggregatedEndToEndLatency50pct = 5;

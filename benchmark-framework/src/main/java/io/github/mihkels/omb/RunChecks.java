@@ -36,6 +36,7 @@ public class RunChecks {
     static final String TAIL_SAMPLES = "tailSamples";
     static final String SEND_ERRORS = "sendErrors";
     static final String PUBLISH_DELAY_GROWTH = "publishDelayGrowth";
+    static final String PUBLISH_DELAY = "publishDelay";
     static final String RETRIED = "retried";
     static final String CLOCK_OFFSET = "clockOffset";
     static final String RUN_TO_RUN_VARIANCE = "runToRunVariance";
@@ -49,6 +50,7 @@ public class RunChecks {
                     TAIL_SAMPLES,
                     SEND_ERRORS,
                     PUBLISH_DELAY_GROWTH,
+                    PUBLISH_DELAY,
                     RETRIED,
                     CLOCK_OFFSET,
                     RUN_TO_RUN_VARIANCE,
@@ -82,6 +84,9 @@ public class RunChecks {
     /** Largest tolerated rise in average publish delay from the first to the second half, in ms. */
     public double maxPublishDelayGrowthMs = 10;
 
+    /** Largest tolerated p99 publish delay (schedule lag) over the measured window, in ms. */
+    public double maxPublishDelayMs = 100;
+
     /**
      * Largest tolerated clock-offset spread between producer and consumer workers, as a fraction of
      * the p50 end-to-end latency.
@@ -107,6 +112,7 @@ public class RunChecks {
         if (!(maxRateShortfall >= 0
                         && maxBacklogGrowthSeconds >= 0
                         && maxPublishDelayGrowthMs >= 0
+                        && maxPublishDelayMs >= 0
                         && maxClockOffsetFraction >= 0
                         && maxRunToRunCv >= 0
                         && maxWorkerCpu >= 0
@@ -115,6 +121,7 @@ public class RunChecks {
                         maxRateShortfall
                                 + maxBacklogGrowthSeconds
                                 + maxPublishDelayGrowthMs
+                                + maxPublishDelayMs
                                 + maxClockOffsetFraction
                                 + maxRunToRunCv
                                 + maxWorkerCpu
@@ -142,6 +149,7 @@ public class RunChecks {
         tailSamples(summary, findings);
         sendErrors(summary, result.sendErrorReasons, findings);
         publishDelayGrowth(result, findings);
+        publishDelay(workload, result, findings);
         retried(result, findings);
         clockOffset(result, findings);
         generatorSaturation(result, findings);
@@ -275,6 +283,27 @@ public class RunChecks {
                                     growthMs,
                                     maxPublishDelayGrowthMs));
                 }
+            }
+        }
+    }
+
+    private void publishDelay(Workload workload, TestResult result, List<Finding> findings) {
+        // Rate discovery runs without a schedule to keep
+        if (enabled(PUBLISH_DELAY) && (workload.producerRate > 0 || workload.usesStages())) {
+            double p99Ms = result.aggregatedPublishDelayLatency99pct / 1000.0;
+            if (p99Ms > maxPublishDelayMs) {
+                findings.add(
+                        new Finding(
+                                PUBLISH_DELAY,
+                                // late sends replayed as a burst can still meet the target rate
+                                Severity.INVALID,
+                                String.format(
+                                        "Publish delay p99 of %.1f ms is above %.1f ms; producers fell behind"
+                                                + " their schedule, so the measured rate and latency do not reflect"
+                                                + " the target load",
+                                        p99Ms, maxPublishDelayMs),
+                                p99Ms,
+                                maxPublishDelayMs));
             }
         }
     }

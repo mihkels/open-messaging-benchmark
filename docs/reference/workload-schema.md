@@ -243,6 +243,7 @@ checks:
   minTailSamples: 10            # tailSamples: samples beyond each reported percentile
   maxSendErrors: 0              # sendErrors
   maxPublishDelayGrowthMs: 10   # publishDelayGrowth
+  maxPublishDelayMs: 100        # publishDelay: p99 schedule lag of fixed-rate runs
   maxClockOffsetFraction: 0.1   # clockOffset: worker clock spread as a fraction of p50 end-to-end
   maxRunToRunCv: 0.1            # runToRunVariance: coefficient of variation across --repeat runs
   maxWorkerCpu: 0.85            # generatorSaturation: worker CPU as a fraction of its cores

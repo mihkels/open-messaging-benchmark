@@ -214,5 +214,6 @@ nav:
             - "ADR 0019: Accepted-issue gate": development/adr/0019-accepted-issue-gate.md
             - "ADR 0020: Java HTML report": development/adr/0020-java-html-report.md
             - "ADR 0021: Rust worker": development/adr/0021-rust-worker-behind-worker-api.md
+            - "ADR 0022: Invalid on schedule lag": development/adr/0022-invalid-on-schedule-lag.md
   - Blog:
     - blog/index.md

@@ -225,6 +225,9 @@ def execute_scenario(args, scenario, directory, cp):
     return result
 
 
+MAX_DELAY_P99_MICROS = 100_000
+
+
 def summarize(result, min_rate_ratio=0.98):
     completed = result["completed"]
     reasons = []
@@ -242,6 +245,9 @@ def summarize(result, min_rate_ratio=0.98):
         reasons.append("Synthetic receive callbacks failed")
     if result["achievedRate"] < scenario["rate"] * min_rate_ratio:
         reasons.append("Missed requested fixed load")
+    # Same limit as the framework's publishDelay run check (ADR 0022): a replayed backlog can meet the rate
+    if (result.get("delayP99Micros") or 0) > MAX_DELAY_P99_MICROS:
+        reasons.append("Fell behind the send schedule (publish delay p99 above 100 ms)")
     # Snapshot/counter boundaries are sequential RPCs, not an atomic distributed barrier.
     tolerance = max(
         scenario["producers"] * scenario["topics"] * 2,

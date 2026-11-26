@@ -18,6 +18,7 @@ import io.github.mihkels.omb.worker.WorkerClock;
 import io.github.mihkels.omb.worker.commands.WorkerLoad;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -298,10 +299,12 @@ public class RunChecks {
                                 // late sends replayed as a burst can still meet the target rate
                                 Severity.INVALID,
                                 String.format(
+                                        Locale.ROOT,
                                         "Publish delay p99 of %.1f ms is above %.1f ms; producers fell behind"
                                                 + " their schedule, so the measured rate and latency do not reflect"
                                                 + " the target load",
-                                        p99Ms, maxPublishDelayMs),
+                                        p99Ms,
+                                        maxPublishDelayMs),
                                 p99Ms,
                                 maxPublishDelayMs));
             }

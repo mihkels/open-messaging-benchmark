@@ -80,7 +80,13 @@ public class PravegaBenchmarkDriver implements BenchmarkDriver {
             streamManager = StreamManager.create(clientConfig);
             readerGroupManager = ReaderGroupManager.withScope(scopeName, clientConfig);
             clientFactory = EventStreamClientFactory.withScope(scopeName, clientConfig);
-            clients = new Clients(streamManager, readerGroupManager, clientFactory);
+            // A close that ran first published nothing, so it cannot close these
+            synchronized (this) {
+                if (closing) {
+                    throw new IllegalStateException("Driver was closed during initialization");
+                }
+                clients = new Clients(streamManager, readerGroupManager, clientFactory);
+            }
         } catch (Exception failure) {
             Failures.closeAfterFailure(failure, clientFactory, readerGroupManager, streamManager);
             if (failure instanceof InterruptedException interrupted) {

@@ -244,6 +244,37 @@ class PravegaBenchmarkDriverTest {
     }
 
     @Test
+    void initializationAfterCloseClosesItsClients(@TempDir Path temp) throws Exception {
+        PravegaBenchmarkDriver driver = new PravegaBenchmarkDriver();
+        driver.close();
+        StreamManager streams = mock(StreamManager.class);
+        ReaderGroupManager groups = mock(ReaderGroupManager.class);
+        EventStreamClientFactory factory = mock(EventStreamClientFactory.class);
+        Path configuration = temp.resolve("pravega.yaml");
+        Files.writeString(
+                configuration, "client:\n  controllerURI: tcp://localhost:9090\n  scopeName: scope\n");
+
+        try (var streamManagers = mockStatic(StreamManager.class);
+                var readerManagers = mockStatic(ReaderGroupManager.class);
+                var factories = mockStatic(EventStreamClientFactory.class)) {
+            streamManagers.when(() -> StreamManager.create(any(ClientConfig.class))).thenReturn(streams);
+            readerManagers
+                    .when(() -> ReaderGroupManager.withScope(eq("scope"), any(ClientConfig.class)))
+                    .thenReturn(groups);
+            factories
+                    .when(() -> EventStreamClientFactory.withScope(eq("scope"), any(ClientConfig.class)))
+                    .thenReturn(factory);
+
+            assertThatThrownBy(() -> driver.initialize(configuration, mock(MeterRegistry.class)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("closed during initialization");
+        }
+        verify(factory).close();
+        verify(groups).close();
+        verify(streams).close();
+    }
+
+    @Test
     void initializationPreservesUndeclaredInterruption(@TempDir Path temp) throws Exception {
         PravegaBenchmarkDriver driver = new PravegaBenchmarkDriver();
         StreamManager streams = mock(StreamManager.class);

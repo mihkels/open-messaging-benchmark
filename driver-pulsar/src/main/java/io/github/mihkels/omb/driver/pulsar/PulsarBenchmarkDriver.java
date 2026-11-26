@@ -68,6 +68,8 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     record Clients(PulsarClient client, PulsarAdmin admin, ProducerBuilder<byte[]> producerBuilder) {}
 
     private volatile @Nullable Clients clients;
+    // Guarded by this; once set, initialize no longer publishes clients
+    private boolean closing;
 
     private PulsarConfig config;
 
@@ -167,7 +169,14 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
 
             namespace =
                     createNamespace(admin, required(config.client.namespacePrefix, "client.namespacePrefix"));
-            clients = new Clients(client, admin, producerBuilder);
+            // A close that ran first published nothing, so it cannot close these
+            synchronized (this) {
+                if (closing) {
+                    throw new IllegalStateException(
+                            "Pulsar benchmark driver was closed during initialization");
+                }
+                clients = new Clients(client, admin, producerBuilder);
+            }
         } catch (IOException | RuntimeException failure) {
             Failures failures = new Failures();
             failures.add(failure);
@@ -349,6 +358,7 @@ public class PulsarBenchmarkDriver implements BenchmarkDriver {
     private void closeClients(Failures failures) {
         Clients toClose;
         synchronized (this) {
+            closing = true;
             toClose = clients;
             clients = null;
         }

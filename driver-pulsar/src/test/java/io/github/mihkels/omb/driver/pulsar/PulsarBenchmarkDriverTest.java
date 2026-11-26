@@ -418,6 +418,39 @@ class PulsarBenchmarkDriverTest {
     }
 
     @Test
+    void initializationAfterCloseClosesItsClients(@TempDir Path temp) throws Exception {
+        Path configuration = Files.createTempFile(temp, "pulsar", ".yaml");
+        Files.writeString(
+                configuration,
+                """
+                client:
+                  serviceUrl: pulsar://localhost:6650
+                  httpUrl: http://localhost:8080
+                  namespacePrefix: benchmark/ns
+                """);
+        PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(admin.tenants().getTenants()).thenReturn(List.of("benchmark"));
+        ClientBuilder clientBuilder = mock(ClientBuilder.class, RETURNS_SELF);
+        PulsarAdminBuilder adminBuilder = mock(PulsarAdminBuilder.class, RETURNS_SELF);
+        PulsarClient client = mock();
+        when(clientBuilder.build()).thenReturn(client);
+        when(adminBuilder.build()).thenReturn(admin);
+        when(client.newProducer()).thenReturn(mock(ProducerBuilder.class, RETURNS_SELF));
+        PulsarBenchmarkDriver driver = new PulsarBenchmarkDriver();
+        driver.close();
+        try (var clients = mockStatic(PulsarClient.class);
+                var admins = mockStatic(PulsarAdmin.class)) {
+            clients.when(PulsarClient::builder).thenReturn(clientBuilder);
+            admins.when(PulsarAdmin::builder).thenReturn(adminBuilder);
+            assertThatThrownBy(() -> driver.initialize(configuration, mock(MeterRegistry.class)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("closed during initialization");
+        }
+        verify(client).close();
+        verify(admin).close();
+    }
+
+    @Test
     void tlsWithoutTrustCertsKeepsTheClientDefault(@TempDir Path temp) throws Exception {
         PulsarAdmin admin = mock(PulsarAdmin.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         when(admin.tenants().getTenants()).thenReturn(List.of("benchmark"));

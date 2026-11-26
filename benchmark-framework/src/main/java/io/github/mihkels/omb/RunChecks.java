@@ -171,8 +171,11 @@ public class RunChecks {
                                 // the run did not measure the load it was asked to
                                 Severity.INVALID,
                                 String.format(
+                                        Locale.ROOT,
                                         "Average publish rate %.1f msg/s is %.1f%% below the target %.1f msg/s",
-                                        summary.publishRateAvg(), shortfall * 100, summary.targetRate()),
+                                        summary.publishRateAvg(),
+                                        shortfall * 100,
+                                        summary.targetRate()),
                                 shortfall,
                                 maxRateShortfall));
             }
@@ -197,9 +200,11 @@ public class RunChecks {
                                     BACKLOG_GROWTH,
                                     Severity.WARNING,
                                     String.format(
+                                            Locale.ROOT,
                                             "Backlog grew by %d messages (%.1f s of publishing) during the measured"
                                                     + " window; consumers did not keep up",
-                                            growth, seconds),
+                                            growth,
+                                            seconds),
                                     seconds,
                                     maxBacklogGrowthSeconds));
                 }
@@ -215,7 +220,10 @@ public class RunChecks {
                             SHORT_WINDOW,
                             Severity.WARNING,
                             String.format(
-                                    "Measured window of %d min is shorter than %d min", minutes, minMeasuredMinutes),
+                                    Locale.ROOT,
+                                    "Measured window of %d min is shorter than %d min",
+                                    minutes,
+                                    minMeasuredMinutes),
                             (double) minutes,
                             (double) minMeasuredMinutes));
         }
@@ -234,8 +242,11 @@ public class RunChecks {
                                     // p99.99 alone is rarely the headline number
                                     "p99.99".equals(percentile) ? Severity.INFO : Severity.WARNING,
                                     String.format(
+                                            Locale.ROOT,
                                             "%d samples are too few for %s and above; it needs %d",
-                                            samples, percentile, required),
+                                            samples,
+                                            percentile,
+                                            required),
                                     (double) samples,
                                     (double) required));
                     break;
@@ -278,6 +289,7 @@ public class RunChecks {
                                     PUBLISH_DELAY_GROWTH,
                                     Severity.WARNING,
                                     String.format(
+                                            Locale.ROOT,
                                             "Average publish delay rose by %.1f ms from the first to the second half"
                                                     + " of the measured window; producers fell behind their schedule",
                                             growthMs),
@@ -381,10 +393,13 @@ public class RunChecks {
                                 CLOCK_OFFSET,
                                 Severity.WARNING,
                                 String.format(
+                                        Locale.ROOT,
                                         "End-to-end latency is unreliable: producer and consumer worker clocks"
                                                 + " differ by up to %.3f ms, %.0f%% of the p50 end-to-end latency of"
                                                 + " %.3f ms",
-                                        spread, spread / p50 * 100, p50),
+                                        spread,
+                                        spread / p50 * 100,
+                                        p50),
                                 spread,
                                 limit));
             }
@@ -394,6 +409,7 @@ public class RunChecks {
                             CLOCK_OFFSET,
                             Severity.WARNING,
                             String.format(
+                                    Locale.ROOT,
                                     "End-to-end latency is unreliable: producer and consumer worker clocks"
                                             + " differ by up to %.3f ms while p50 end-to-end latency is 0 ms"
                                             + " (negative clock skew drops samples)",
@@ -428,9 +444,12 @@ public class RunChecks {
                 GENERATOR_SATURATION,
                 Severity.WARNING,
                 String.format(
+                        Locale.ROOT,
                         "Worker %s reached %.0f%% in the measured window, above %.0f%%; results may be"
                                 + " limited by the load generator, add workers",
-                        what, value * 100, limit * 100),
+                        what,
+                        value * 100,
+                        limit * 100),
                 value,
                 limit);
     }
@@ -452,9 +471,13 @@ public class RunChecks {
                                     RUN_TO_RUN_VARIANCE,
                                     Severity.WARNING,
                                     String.format(
+                                            Locale.ROOT,
                                             "%s varies by %.1f%% between repetitions (min %.2f, max %.2f); the run is"
                                                     + " too noisy to compare",
-                                            name, cv * 100, stats.min(), stats.max()),
+                                            name,
+                                            cv * 100,
+                                            stats.min(),
+                                            stats.max()),
                                     cv,
                                     maxRunToRunCv));
                 }

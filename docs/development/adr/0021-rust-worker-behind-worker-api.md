@@ -14,9 +14,10 @@ limitations under the License.
 
 # ADR 0021: Add an optional Rust worker behind the existing worker API
 
-- **Status:** Proposed
-- **Date:** 2026-11-25
-- **Issue:** [#588](https://github.com/mihkels/open-messaging-benchmark/issues/588)
+- **Status:** Accepted
+- **Date:** 2026-11-25, accepted 2026-11-27
+- **Issue:** [#588](https://github.com/mihkels/open-messaging-benchmark/issues/588); gate measured in
+  [#590](https://github.com/mihkels/open-messaging-benchmark/issues/590)
 - **Scope:** new `worker-rs` directory, `benchmark-framework` (`worker` package, `ResultMetadata`),
   `performance-harness`, `docker`, `deployment`, `e2e-tests/compose`
 
@@ -71,6 +72,26 @@ the result rather than hiding them.
    `ResultMetadata`, as an additive field. Reports and run checks treat a comparison across client
    stacks as a separate stack, never as a regression or an improvement.
 
+## Gate result
+
+[#590](https://github.com/mihkels/open-messaging-benchmark/issues/590) ran step 1 with the
+synthetic driver on one laptop (Apple M1 Max). The agreed rule was GO if one worker cannot hold 2x
+the 2M msg/s per-worker rate of the sample workloads (4M), or if GC adds more than 10% to
+publish-delay p99.9.
+
+- GC was ruled out: a run with no GC at all (Epsilon) matched G1 within noise.
+- Java fixes found along the way raised the per-worker ceiling about 2x with 1 producer:
+  [#595](https://github.com/mihkels/open-messaging-benchmark/pull/595),
+  [#601](https://github.com/mihkels/open-messaging-benchmark/pull/601) and, in the test driver,
+  [#602](https://github.com/mihkels/open-messaging-benchmark/pull/602).
+- After them, one Java worker holds 4.0M msg/s with 1 producer in only 2 of 3 runs, and 3.2M with 4
+  producers. It does not clear the bar.
+- A standalone Rust spike of the same send loop held 6.4M with 1 producer and 8.0M with 4. The
+  spike leaves out per-send work the Java worker does, among it the `CompletableFuture` that the
+  `driver-api` requires, so how much of the gap comes from the language is not measured.
+
+The rule says GO, and the worker goes ahead under steps 2 to 5.
+
 ## Consequences
 
 - Users get both a Java-client and a Rust-client number for the same broker and can see the
@@ -86,6 +107,7 @@ the result rather than hiding them.
 - Kafka through librdkafka is a different client from the Java client, so its numbers describe a
   different stack. Docs must say this wherever Rust results appear.
 - A full rewrite and a Rust plugin SPI are ruled out unless a later ADR supersedes this one.
-- **Enforced by:** the overhead measurement in step 1 (gate), the cross-worker contract test, the
-  `ResultMetadata` tests and the Compose cases for each Rust driver. None exist yet.
+- **Enforced by:** the overhead measurement in step 1 (passed, see Gate result), the cross-worker
+  contract test, the `ResultMetadata` tests and the Compose cases for each Rust driver. The last
+  three do not exist yet.
 

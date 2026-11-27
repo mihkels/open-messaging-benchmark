@@ -4,6 +4,61 @@ Only the latest release keeps its distribution tarball and `SHA256SUMS`; they ar
 releases. See [Older versions](https://mihkels.github.io/open-messaging-benchmark/development/building-the-project/#older-versions)
 for the container images and the build-from-tag command.
 
+## [0.7.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.6.0...v0.7.0) (2026-11-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Maven coordinates move from io.openmessaging.benchmark to io.github.mihkels.omb. External plugins must update their driver-api dependency.
+
+### Features
+
+* move groupId and packages to io.github.mihkels.omb, prepare Maven Central, ref: [#494](https://github.com/mihkels/open-messaging-benchmark/issues/494) ([#500](https://github.com/mihkels/open-messaging-benchmark/issues/500)) ([5ec7427](https://github.com/mihkels/open-messaging-benchmark/commit/5ec7427fe42274c22627565c179204d53ce3e234))
+
+
+### Bug Fixes
+
+* correct skew, redaction, result names, readiness and pause stalls, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#527](https://github.com/mihkels/open-messaging-benchmark/issues/527)) ([150e0b1](https://github.com/mihkels/open-messaging-benchmark/commit/150e0b1e86bb90086136e4c3bf8aae1a2c6dfa58))
+* count foreign RabbitMQ/JMS messages and escape report JSON, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#529](https://github.com/mihkels/open-messaging-benchmark/issues/529)) ([d4f5d1a](https://github.com/mihkels/open-messaging-benchmark/commit/d4f5d1a0b7d928f3338bfc2b60a960fe743cdcf6))
+* expand report diff comparability, normalize missing timestamps, and tighten validation and docs, ref: [#544](https://github.com/mihkels/open-messaging-benchmark/issues/544) ([#565](https://github.com/mihkels/open-messaging-benchmark/issues/565)) ([df8ca6f](https://github.com/mihkels/open-messaging-benchmark/commit/df8ca6f55d7e53c2b694e76ed751a239096c6f00))
+* harden ProcessWorker reuse, controller shutdown, output dirs, Helm repeat jobs and clock checks, ref: [#544](https://github.com/mihkels/open-messaging-benchmark/issues/544) ([#561](https://github.com/mihkels/open-messaging-benchmark/issues/561)) ([8da930c](https://github.com/mihkels/open-messaging-benchmark/commit/8da930cb541726772afd334f299e93834a15a24d))
+* harden worker failure paths, report checks, drivers and Helm config, ref: [#506](https://github.com/mihkels/open-messaging-benchmark/issues/506) ([#528](https://github.com/mihkels/open-messaging-benchmark/issues/528)) ([9f5a8bf](https://github.com/mihkels/open-messaging-benchmark/commit/9f5a8bfaebb5b99351d9c8cd0faa52655687c9b4))
+* harden worker rejections, redaction, delivery sealing, subscriptions and metrics, ref: [#544](https://github.com/mihkels/open-messaging-benchmark/issues/544) ([#558](https://github.com/mihkels/open-messaging-benchmark/issues/558)) ([1637373](https://github.com/mihkels/open-messaging-benchmark/commit/1637373dc1877d40f913726c0e70eb7d2a09a226))
+* mark runs that fall behind their send schedule as invalid, ref: [#598](https://github.com/mihkels/open-messaging-benchmark/issues/598) ([#599](https://github.com/mihkels/open-messaging-benchmark/issues/599)) ([977c9de](https://github.com/mihkels/open-messaging-benchmark/commit/977c9dee83af4287d0ee2b56e98b5f99b382fbc9))
+* patch vulnerable driver client transitives, ref: [#504](https://github.com/mihkels/open-messaging-benchmark/issues/504) ([#505](https://github.com/mihkels/open-messaging-benchmark/issues/505)) ([08418be](https://github.com/mihkels/open-messaging-benchmark/commit/08418be0331777874ba1c9297ebd617a4245ef06))
+* smaller audit findings in worker health, metrics, templates and reports, ref: [#530](https://github.com/mihkels/open-messaging-benchmark/issues/530) ([#541](https://github.com/mihkels/open-messaging-benchmark/issues/541)) ([cafbc1a](https://github.com/mihkels/open-messaging-benchmark/commit/cafbc1a36c1adb14510cdea4f6f58f8390336a5b))
+* stripe latency recorders and the callback gate across producer threads, ref: [#593](https://github.com/mihkels/open-messaging-benchmark/issues/593) ([#595](https://github.com/mihkels/open-messaging-benchmark/issues/595)) ([bffb2c3](https://github.com/mihkels/open-messaging-benchmark/commit/bffb2c39e44ad11591a3e4574fb26a198d7ac635))
+
+
+### Performance
+
+* feed the micrometer latency timers off the send path, ref: [#597](https://github.com/mihkels/open-messaging-benchmark/issues/597) ([#601](https://github.com/mihkels/open-messaging-benchmark/issues/601)) ([a373397](https://github.com/mihkels/open-messaging-benchmark/commit/a373397ada153f8d3b508bc3b6927383146a2325))
+* make the synthetic fixture send path share nothing and add a --consumers harness flag, ref: [#600](https://github.com/mihkels/open-messaging-benchmark/issues/600) ([#602](https://github.com/mihkels/open-messaging-benchmark/issues/602)) ([759d1da](https://github.com/mihkels/open-messaging-benchmark/commit/759d1da5bffdea0094295e188f3c8233706d4203))
+
+
+### Refactoring
+
+* reduce nullable values in main code, ref: [#594](https://github.com/mihkels/open-messaging-benchmark/issues/594) ([#596](https://github.com/mihkels/open-messaging-benchmark/issues/596)) ([4126311](https://github.com/mihkels/open-messaging-benchmark/commit/41263113552cc8c69ea087d4c840256febb9803d))
+
+
+### Documentation
+
+* add a tool-neutral AGENTS.md for coding agents, ref: [#542](https://github.com/mihkels/open-messaging-benchmark/issues/542) ([#543](https://github.com/mihkels/open-messaging-benchmark/issues/543)) ([84a33b7](https://github.com/mihkels/open-messaging-benchmark/commit/84a33b791c4d554156e411d8db3c603324e4fdb7))
+* Bump zensical in /docs in the docs-tooling group ([#534](https://github.com/mihkels/open-messaging-benchmark/issues/534)) ([d5346d3](https://github.com/mihkels/open-messaging-benchmark/commit/d5346d36bf9be5cbf7383e0a07523ebed1030173))
+* Bump zensical in /docs in the docs-tooling group ([#562](https://github.com/mihkels/open-messaging-benchmark/issues/562)) ([9256e7d](https://github.com/mihkels/open-messaging-benchmark/commit/9256e7d6d80e4df5d228216adf9d3762e050b603))
+* define the adr process and backfill adrs for existing decisions, ref: [#577](https://github.com/mihkels/open-messaging-benchmark/issues/577) ([#580](https://github.com/mihkels/open-messaging-benchmark/issues/580)) ([74fad3b](https://github.com/mihkels/open-messaging-benchmark/commit/74fad3bc63983f77b6b4a95e1d7fb56f480f1c28))
+* generate llms.txt for the documentation site, ref: [#566](https://github.com/mihkels/open-messaging-benchmark/issues/566) ([#567](https://github.com/mihkels/open-messaging-benchmark/issues/567)) ([6931e02](https://github.com/mihkels/open-messaging-benchmark/commit/6931e0282f06a92c048c944cc03560d57f57a937))
+* let the home page comparison fill the section, ref: [#586](https://github.com/mihkels/open-messaging-benchmark/issues/586) ([#587](https://github.com/mihkels/open-messaging-benchmark/issues/587)) ([83732d4](https://github.com/mihkels/open-messaging-benchmark/commit/83732d4aa802c31f87393e7f03ebcf95e68f5099))
+* present the project as derived from OMB, not a fork, ref: [#584](https://github.com/mihkels/open-messaging-benchmark/issues/584) ([#585](https://github.com/mihkels/open-messaging-benchmark/issues/585)) ([dc432d2](https://github.com/mihkels/open-messaging-benchmark/commit/dc432d2a57d8bc503178ec6093341c1e84e7bf62))
+* propose adr 0021 for an optional rust worker behind the worker api, ref: [#588](https://github.com/mihkels/open-messaging-benchmark/issues/588) ([#589](https://github.com/mihkels/open-messaging-benchmark/issues/589)) ([24750d0](https://github.com/mihkels/open-messaging-benchmark/commit/24750d0a1ae4273bf849ef51c309bcce58c9a499))
+* show the comparison under the home page hero, ref: [#591](https://github.com/mihkels/open-messaging-benchmark/issues/591) ([#592](https://github.com/mihkels/open-messaging-benchmark/issues/592)) ([3c80bd4](https://github.com/mihkels/open-messaging-benchmark/commit/3c80bd42277ccb8cdf330a9e6da343de159024ed))
+
+
+### Dependencies
+
+* Bump at.yawk.lz4:lz4-java from 1.11.4 to 1.14.1 ([#536](https://github.com/mihkels/open-messaging-benchmark/issues/536)) ([3a41d20](https://github.com/mihkels/open-messaging-benchmark/commit/3a41d20c4c9616c9e853bd1a81d8a311a5f6410e))
+* Bump org.apache.maven:maven-artifact from 3.10.1 to 3.10.2 ([#563](https://github.com/mihkels/open-messaging-benchmark/issues/563)) ([7033d9e](https://github.com/mihkels/open-messaging-benchmark/commit/7033d9e07610ba800667a032bed2273c868117cc))
+
 ## [0.6.0](https://github.com/mihkels/open-messaging-benchmark/compare/v0.5.0...v0.6.0) (2026-11-20)
 
 

@@ -80,6 +80,24 @@ class LocalWorkerLifecycleTest {
     }
 
     @Test
+    @Timeout(10)
+    void latencyTimersUpdateWithoutAStatsPoll() throws Exception {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        WorkerStats stats = new WorkerStats(registry);
+        try (LocalWorker ignored =
+                new LocalWorker(stats, Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ofSeconds(5))) {
+            stats.recordProducerSuccess(128, 0, 1_000, 2_000);
+            var timer = registry.get("produce_latency").timer();
+            while (timer.count() == 0) {
+                Thread.sleep(50);
+            }
+            assertThat(timer.count()).isEqualTo(1);
+        } finally {
+            registry.close();
+        }
+    }
+
+    @Test
     void interruptsRateWaitAndWaitsForOutstandingCompletion() throws Exception {
         BenchmarkProducer producer = mock(BenchmarkProducer.class);
         CompletableFuture<Void> send = new CompletableFuture<>();

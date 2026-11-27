@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
 import org.junit.jupiter.api.Test;
 
@@ -94,5 +95,55 @@ class LatencyMetricTest {
         assertThat(interval.getCountAtValue(42)).isEqualTo((long) threads * perThread / 100);
         assertThat(metric.takeCumulative().getTotalCount()).isEqualTo((long) threads * perThread);
         assertThat(metric.takeInterval().getTotalCount()).isZero();
+    }
+
+    @Test
+    void timerIsFedFromTheDrainNotFromTheRecordingThread() {
+        LatencyMetric metric = LatencyMetric.clamped(60_000_000, "drained", "test", registry);
+        metric.record(250);
+        metric.record(1_500);
+
+        var timer = registry.get("drained").timer();
+        assertThat(timer.count()).isZero();
+
+        metric.flush();
+        assertThat(timer.count()).isEqualTo(2);
+        assertThat(timer.totalTime(TimeUnit.MICROSECONDS)).isEqualTo(1_750);
+        assertThat(timer.max(TimeUnit.MICROSECONDS)).isEqualTo(1_500);
+        // Flushing does not take the values from the benchmark histograms
+        assertThat(metric.takeInterval().getTotalCount()).isEqualTo(2);
+        assertThat(metric.takeCumulative().getTotalCount()).isEqualTo(2);
+    }
+
+    @Test
+    void everyValueReachesTheTimerOnceWhicheverReadDrainsIt() {
+        LatencyMetric metric = LatencyMetric.clamped(1_000, "once", "test", registry);
+        metric.record(1);
+        metric.flush();
+        metric.record(2);
+        metric.takeInterval();
+        metric.record(3);
+        metric.takeCumulative();
+        metric.record(4);
+        metric.reset();
+        metric.flush();
+
+        var timer = registry.get("once").timer();
+        assertThat(timer.count()).isEqualTo(4);
+        assertThat(timer.totalTime(TimeUnit.MICROSECONDS)).isEqualTo(10);
+    }
+
+    @Test
+    void valuesBeyondHistogramPrecisionAreNotOverstated() {
+        LatencyMetric metric = LatencyMetric.clamped(60_000_000, "coarse", "test", registry);
+        long micros = 12_345_678;
+        metric.record(micros);
+        Histogram interval = metric.takeInterval();
+
+        double replayed = registry.get("coarse").timer().max(TimeUnit.MICROSECONDS);
+        assertThat(replayed)
+                .isEqualTo(interval.lowestEquivalentValue(micros))
+                .isLessThanOrEqualTo(micros);
+        assertThat(micros - replayed).isLessThan(micros / 10_000.0);
     }
 }

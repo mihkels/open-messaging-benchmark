@@ -240,6 +240,14 @@ public class WorkerStats {
         }
     }
 
+    /** Feeds the latencies recorded so far into their Micrometer timers. */
+    void flushLatencyTimers() {
+        publishLatency.flush();
+        publishDelayLatency.flush();
+        publishScheduleLatency.flush();
+        endToEndLatency.flush();
+    }
+
     public void resetLatencies() {
         publishLatency.reset();
         publishDelayLatency.reset();

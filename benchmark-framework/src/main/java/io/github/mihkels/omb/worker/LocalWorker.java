@@ -85,6 +85,7 @@ public final class LocalWorker implements Worker {
     private static final Duration DEFAULT_RESOURCE_CLOSE_TIMEOUT = Duration.ofSeconds(45);
     private static final Duration DEFAULT_PROBE_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration DEFAULT_RESET_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration LATENCY_TIMER_FLUSH_INTERVAL = Duration.ofSeconds(1);
 
     private final Object lifecycleLock = new Object();
     private final Object stopLock = new Object();
@@ -137,6 +138,20 @@ public final class LocalWorker implements Worker {
                 || probeTimeoutNanos <= 0
                 || resetTimeoutNanos <= 0) {
             throw new IllegalArgumentException("Lifecycle timeouts must be positive");
+        }
+        // close() interrupts it through shutdownNow
+        executor.execute(() -> flushLatencyTimers(stats));
+    }
+
+    // Keeps the Micrometer latency timers current without recording into them on the send path
+    private static void flushLatencyTimers(WorkerStats stats) {
+        try {
+            while (true) {
+                Thread.sleep(LATENCY_TIMER_FLUSH_INTERVAL);
+                stats.flushLatencyTimers();
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
         }
     }
 

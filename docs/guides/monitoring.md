@@ -108,6 +108,16 @@ latency of a run:
 histogram_quantile(0.99, sum by (le) (rate(produce_latency_seconds_bucket{run_id="<runId>"}[1m])))
 ```
 
+The send path records each latency only into the worker's HdrHistograms. The worker feeds the
+Micrometer timers from those histograms about once a second and whenever the coordinator polls it,
+so:
+
+- a timer trails the sends by up to about one second;
+- `_max` is the largest value fed within Micrometer's decaying window (two minutes by default), so
+  that window also runs up to a second behind the sends;
+- each value is fed at HdrHistogram precision: exact below 32,768 µs, and above that rounded down by
+  less than 0.01%, which can move a value that sits right at a bucket boundary into the bucket below.
+
 The JSON result keeps exact percentiles. A minimal Prometheus scrape configuration:
 
 ```yaml

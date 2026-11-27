@@ -391,7 +391,10 @@ def compare(args):
     if base["scenario"]["smoke"] or candidate["scenario"]["smoke"]:
         raise ValueError("Smoke checks are not performance baselines")
     mismatches = []
-    for key in ("scenario", "profiled", "minRateRatio"):
+    # Manifests from before --consumers have no "consumers" key; those runs used one consumer.
+    if {"consumers": 1, **base["scenario"]} != {"consumers": 1, **candidate["scenario"]}:
+        mismatches.append("scenario")
+    for key in ("profiled", "minRateRatio"):
         if base[key] != candidate[key]:
             mismatches.append(key)
     for key in ("os", "osRelease", "arch", "host", "processors", "jdk"):

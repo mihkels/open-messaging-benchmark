@@ -193,6 +193,7 @@ class SyntheticDriverTest {
                 .join();
         BenchmarkProducer producer = driver.createProducer("topic").join();
         CountDownLatch started = new CountDownLatch(4);
+        CountDownLatch firstSend = new CountDownLatch(1);
         List<Thread> senders = new ArrayList<>();
         for (int t = 0; t < 4; t++) {
             senders.add(
@@ -203,6 +204,7 @@ class SyntheticDriverTest {
                                     try {
                                         producer.sendAsync(Optional.empty(), new byte[1]).join();
                                         succeeded.incrementAndGet();
+                                        firstSend.countDown();
                                     } catch (CompletionException error) {
                                         if (!(error.getCause() instanceof IllegalStateException)) {
                                             unexpected.set(error);
@@ -213,7 +215,7 @@ class SyntheticDriverTest {
                             }));
         }
         started.await();
-        Thread.sleep(20);
+        firstSend.await();
         driver.close();
         closeReturned.set(true);
         for (Thread sender : senders) {

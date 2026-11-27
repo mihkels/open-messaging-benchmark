@@ -18,6 +18,7 @@ import contextlib
 import copy
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -164,6 +165,31 @@ class HarnessTest(unittest.TestCase):
                 harness.write_json(after / "manifest.json", altered)
                 with self.assertRaises(ValueError):
                     harness.compare(argparse.Namespace(baseline=before, candidate=after, output=None))
+
+    def set_scenario(self, directory, manifest, change):
+        change(manifest["scenario"])
+        harness.write_json(directory / "manifest.json", manifest)
+        for path in directory.glob("run-*/result.json"):
+            result = json.loads(path.read_text())
+            change(result["scenario"])
+            result["summary"] = harness.summarize(result)
+            harness.write_json(path, result)
+
+    def test_missing_consumers_compares_as_one_consumer(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            before, legacy = self.make_experiment(root, "before")
+            after, manifest = self.make_experiment(root, "after")
+            self.set_scenario(before, legacy, lambda s: s.pop("consumers", None))
+            args = argparse.Namespace(baseline=before, candidate=after, output=None)
+            for consumers, compatible in ((1, True), (4, False)):
+                self.set_scenario(after, manifest, lambda s, c=consumers: s.update(consumers=c))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    if compatible:
+                        harness.compare(args)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "scenario"):
+                            harness.compare(args)
 
     def test_jmh_comparison_checks_settings_and_reports_allocation(self):
         with tempfile.TemporaryDirectory() as temporary:

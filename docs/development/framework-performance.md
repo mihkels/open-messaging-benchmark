@@ -222,6 +222,39 @@ without profiling to validate a proposed win. JFR allocation events are sampled 
 not exact bytes/op or a complete view of virtual-thread allocations. Use JMH allocation profiling
 for isolated allocation questions and JFR for locating CPU/lock/allocation hotspots.
 
+Producers run on virtual threads. A virtual thread blocked on a contended monitor unmounts instead
+of pinning its carrier, so lock contention barely shows as `jdk.JavaMonitorEnter` or
+`jdk.VirtualThreadPinned` events. It shows as `jdk.ThreadPark` events of idle `ForkJoinPool`
+carriers and as execution samples in the locked method. To lower the event thresholds, add a second
+recording to the driver, for example
+`--driver-jvm-opts="-XX:StartFlightRecording=filename=<dir>/locks-%p.jfr,settings=profile,jdk.JavaMonitorEnter#threshold=20us,jdk.ThreadPark#threshold=20us"`.
+
+### Consumer ceilings and the 4M msg/s target
+
+In sync mode every producer thread runs the consumer callback inline, under that consumer's
+monitor. With one consumer, all producers queue on one lock, so the consumer path caps throughput.
+Measured with 4 producers, 128-byte payloads, sync sends and the `process` topology on an M1 Max
+(the highest valid rate in 0.2M to 0.4M steps; issue #600):
+
+|                              Fixture                              | 1 consumer | 4 consumers |
+|-------------------------------------------------------------------|------------|-------------|
+| Before #600 (shared monitor, `Phaser`, per-message map snapshots) | 1.2M       | 1.6M        |
+| After #600 (share-nothing send path)                              | 1.4M       | 2.8M        |
+
+JFR at a 1.6M target with one consumer: the Micrometer timer (`TimeWindowMax.record`) has 48 to 58%
+of the samples, and the one consumer's `deliver` monitor has 15% once the fixture's own shared state
+is gone.
+
+What a 4M msg/s per worker target means:
+
+- **Through one consumer**, the consumer callback path must fit in about 250 ns per message,
+  because nothing runs it in parallel. It costs about 700 ns today (1.4M). Removing the
+  Micrometer timer is the largest single lever, but halving the path still leaves it above
+  250 ns.
+- **Across several consumers**, 4M is a CPU budget question. At 2.8M the process tree used
+  about 1.6 µs of CPU per message (4.5 cores), so 4M needs about 6.5 cores at today's cost per
+  message.
+
 Investigate callback synchronization, histogram ownership/copying/aggregation, completion
 allocation, statistics duplication, and producer scheduling. Preserve callback isolation,
 bounded shutdown, interruption, reset/pause behavior, histogram precision, and latency semantics.

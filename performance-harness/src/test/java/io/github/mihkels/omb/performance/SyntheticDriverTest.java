@@ -168,7 +168,7 @@ class SyntheticDriverTest {
             max = Math.max(max, count.get());
         }
         assertEquals(threads * sends, total);
-        // Each producer stripe round-robins on its own, so the spread is at most one per stripe in use.
+        // Each producer round-robins on its own cursor, so the spread is at most one per producer.
         int spread = max - min;
         assertTrue(spread <= threads, () -> "uneven spread " + spread);
     }

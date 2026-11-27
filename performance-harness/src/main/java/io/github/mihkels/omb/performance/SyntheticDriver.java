@@ -70,6 +70,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
     private final Object lifecycle = new Object();
     private final Map<String, Topic> topics = new ConcurrentHashMap<>();
     private final AtomicLong receiveCursor = new AtomicLong();
+    private final AtomicLong producerIds = new AtomicLong();
     // Sends register here before they check closed; close sets closed and then waits for every
     // stripe.
     private final AtomicLongArray inFlight = new AtomicLongArray(STRIPES * PAD);
@@ -182,11 +183,14 @@ public final class SyntheticDriver implements BenchmarkDriver {
                 return unavailable();
             }
             Topic target = topics.computeIfAbsent(topic, ignored -> new Topic());
+            // Each producer round-robins on its own cursor; distinct starts keep producers on different
+            // consumers.
+            AtomicLong cursor = new AtomicLong(producerIds.getAndIncrement());
             return CompletableFuture.completedFuture(
                     new BenchmarkProducer() {
                         @Override
                         public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-                            return send(target, payload);
+                            return send(target, cursor, payload);
                         }
 
                         @Override
@@ -234,14 +238,15 @@ public final class SyntheticDriver implements BenchmarkDriver {
         return (int) (Thread.currentThread().threadId() & (STRIPES - 1)) * PAD;
     }
 
-    private CompletableFuture<Void> send(Topic topic, byte[] payload) {
+    private CompletableFuture<Void> send(Topic topic, AtomicLong cursor, byte[] payload) {
         int stripe = stripe();
         inFlight.getAndIncrement(stripe);
         if (!available()) {
             inFlight.getAndDecrement(stripe);
             return unavailable();
         }
-        Send task = new Send(topic, stripe, payload, System.currentTimeMillis());
+        Send task =
+                new Send(topic, stripe, cursor.getAndIncrement(), payload, System.currentTimeMillis());
         if (executor == null) {
             task.run();
         } else {
@@ -258,6 +263,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
     private final class Send implements Runnable {
         private final Topic topic;
         private final int stripe;
+        private final long sequence;
         // Swapped in once the send settles so the retained future no longer pins the caller's payload
         private static final byte[] RELEASED = new byte[0];
         private byte[] payload;
@@ -271,9 +277,10 @@ public final class SyntheticDriver implements BenchmarkDriver {
                     }
                 };
 
-        Send(Topic topic, int stripe, byte[] payload, long timestamp) {
+        Send(Topic topic, int stripe, long sequence, byte[] payload, long timestamp) {
             this.topic = topic;
             this.stripe = stripe;
+            this.sequence = sequence;
             this.payload = payload;
             this.timestamp = timestamp;
         }
@@ -283,7 +290,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
             try {
                 if (deliver) {
                     for (Subscription subscription : topic.subscriptions) {
-                        subscription.deliver(stripe, payload, timestamp);
+                        subscription.deliver(sequence, payload, timestamp);
                     }
                 }
                 sent.increment();
@@ -312,15 +319,13 @@ public final class SyntheticDriver implements BenchmarkDriver {
 
     private static final class Subscription {
         private volatile Consumer[] members = new Consumer[0];
-        // Each producer stripe round-robins on its own cursor.
-        private final AtomicLongArray cursors = new AtomicLongArray(STRIPES * PAD);
 
-        void deliver(int stripe, byte[] payload, long timestamp) {
+        void deliver(long sequence, byte[] payload, long timestamp) {
             Consumer[] snapshot = members;
             if (snapshot.length == 0) {
                 return;
             }
-            int start = (int) Math.floorMod(cursors.getAndIncrement(stripe), (long) snapshot.length);
+            int start = (int) Math.floorMod(sequence, (long) snapshot.length);
             for (int i = 0; i < snapshot.length; i++) {
                 if (snapshot[(start + i) % snapshot.length].deliver(payload, timestamp)) {
                     return;

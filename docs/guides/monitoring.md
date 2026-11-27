@@ -112,9 +112,13 @@ The send path records each latency only into the worker's HdrHistograms. The wor
 Micrometer timers from those histograms about once a second and whenever the coordinator polls it,
 so:
 
-- a timer trails the sends by up to about one second;
-- `_max` is the largest value fed within Micrometer's decaying window (two minutes by default), so
-  that window also runs up to a second behind the sends;
+- a timer trails the sends by up to about one second. The flush runs on a virtual thread, like the
+  producers, and virtual threads are not time-sliced, so while runnable producers occupy every
+  carrier thread the timers can update later than that. The HdrHistogram results are not affected;
+- `_max` is the largest value fed within Micrometer's decaying window. The registry sets that
+  window: the Prometheus registry rotates it every `step` (one minute by default) and keeps three
+  rotations, so a maximum stays visible for two to three minutes. The window also runs up to a
+  second behind the sends;
 - each value is fed at HdrHistogram precision: exact below 32,768 µs, and above that rounded down by
   less than 0.01%, which can move a value that sits right at a bucket boundary into the bucket below.
 

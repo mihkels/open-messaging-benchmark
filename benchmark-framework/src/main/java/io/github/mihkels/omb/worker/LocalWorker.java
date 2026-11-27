@@ -146,7 +146,7 @@ public final class LocalWorker implements Worker {
     // Keeps the Micrometer latency timers current without recording into them on the send path
     private static void flushLatencyTimers(WorkerStats stats) {
         try {
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
                 Thread.sleep(LATENCY_TIMER_FLUSH_INTERVAL);
                 stats.flushLatencyTimers();
             }

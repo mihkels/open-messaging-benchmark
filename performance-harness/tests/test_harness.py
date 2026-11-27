@@ -193,6 +193,14 @@ class HarnessTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "settings"):
                 harness.compare(args)
 
+    def test_consumer_count_reaches_the_scenario(self):
+        args = harness.parser().parse_args(["run", "--output", "x", "--consumers", "4"])
+        self.assertEqual(harness.scenario_from(args)["consumers"], 4)
+        defaults = harness.parser().parse_args(["run", "--output", "x"])
+        self.assertEqual(harness.scenario_from(defaults)["consumers"], 1)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            harness.parser().parse_args(["run", "--output", "x", "--consumers", "0"])
+
     def test_fixture_callback_failures_are_invalid(self):
         result = self.result()
         result["fixtureReceiveErrors"] = 1

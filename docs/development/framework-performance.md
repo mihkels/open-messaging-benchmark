@@ -69,6 +69,9 @@ the launcher never overwrites an existing baseline.
 Queue rejection is a failed send, not a dropped message disguised as success.
 `--mode send-only --smoke` isolates producer work without consumers; the full workload controller
 requires consumer readiness and therefore does not support this mode.
+`--consumers` sets the consumers on the one subscription per topic (default 1). The fixture
+round-robins each message to one of them, so more consumers spread the receive callbacks without
+changing how many messages arrive.
 
 The fixture routes within a JVM only. Distributed scenarios deliberately use **independent
 synthetic consumer streams**, not a transport between producer and consumer processes.

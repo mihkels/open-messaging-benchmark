@@ -36,6 +36,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -131,6 +132,98 @@ class SyntheticDriverTest {
         assertEquals(9, broadcast.get());
         assertEquals(9, registry.get("synthetic.sends").counter().count());
         assertEquals(18, registry.get("synthetic.receives").counter().count());
+    }
+
+    @Test
+    void concurrentProducersSpreadEvenlyAcrossConsumers() throws Exception {
+        initialize("mode: sync\n");
+        int threads = 8;
+        int sends = 1000;
+        AtomicInteger[] counts = new AtomicInteger[4];
+        for (int i = 0; i < counts.length; i++) {
+            AtomicInteger count = new AtomicInteger();
+            counts[i] = count;
+            createConsumer("topic", "sub", (data, timestamp) -> count.incrementAndGet()).join();
+        }
+        List<Thread> senders = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            BenchmarkProducer producer = driver.createProducer("topic").join();
+            senders.add(
+                    Thread.ofPlatform()
+                            .start(() -> {
+                                for (int i = 0; i < sends; i++) {
+                                    producer.sendAsync(Optional.empty(), new byte[1]).join();
+                                }
+                            }));
+        }
+        for (Thread sender : senders) {
+            sender.join();
+        }
+        int total = 0;
+        int min = Integer.MAX_VALUE;
+        int max = 0;
+        for (AtomicInteger count : counts) {
+            total += count.get();
+            min = Math.min(min, count.get());
+            max = Math.max(max, count.get());
+        }
+        assertEquals(threads * sends, total);
+        // Each producer stripe round-robins on its own, so the spread is at most one per stripe in use.
+        int spread = max - min;
+        assertTrue(spread <= threads, () -> "uneven spread " + spread);
+    }
+
+    @Test
+    void closeWaitsForConcurrentSendsAndRejectsLaterOnes() throws Exception {
+        initialize("mode: sync\n");
+        AtomicInteger delivered = new AtomicInteger();
+        AtomicInteger lateDeliveries = new AtomicInteger();
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicReference<Throwable> unexpected = new AtomicReference<>();
+        AtomicBoolean closeReturned = new AtomicBoolean();
+        createConsumer(
+                        "topic",
+                        "sub",
+                        (data, timestamp) -> {
+                            if (closeReturned.get()) {
+                                lateDeliveries.incrementAndGet();
+                            }
+                            delivered.incrementAndGet();
+                        })
+                .join();
+        BenchmarkProducer producer = driver.createProducer("topic").join();
+        CountDownLatch started = new CountDownLatch(4);
+        List<Thread> senders = new ArrayList<>();
+        for (int t = 0; t < 4; t++) {
+            senders.add(
+                    Thread.ofPlatform()
+                            .start(() -> {
+                                started.countDown();
+                                while (true) {
+                                    try {
+                                        producer.sendAsync(Optional.empty(), new byte[1]).join();
+                                        succeeded.incrementAndGet();
+                                    } catch (CompletionException error) {
+                                        if (!(error.getCause() instanceof IllegalStateException)) {
+                                            unexpected.set(error);
+                                        }
+                                        return;
+                                    }
+                                }
+                            }));
+        }
+        started.await();
+        Thread.sleep(20);
+        driver.close();
+        closeReturned.set(true);
+        for (Thread sender : senders) {
+            sender.join(2000);
+            assertFalse(sender.isAlive());
+        }
+        assertEquals(null, unexpected.get());
+        assertEquals(0, lateDeliveries.get());
+        assertEquals(succeeded.get(), delivered.get());
+        assertTrue(succeeded.get() > 0);
     }
 
     @Test

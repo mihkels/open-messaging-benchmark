@@ -21,14 +21,14 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Phaser;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -36,6 +36,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.dataformat.yaml.YAMLMapper;
@@ -60,13 +61,22 @@ public final class SyntheticDriver implements BenchmarkDriver {
         public long closeTimeoutMillis = 5000;
     }
 
+    // One counter per 128-byte line, so concurrent producers never write the same cache line.
+    private static final int PAD = 16;
+    // A power of two of at least twice the processors, so stripe() can mask the thread id.
+    private static final int STRIPES =
+            Integer.highestOneBit(Runtime.getRuntime().availableProcessors() * 2 - 1) << 1;
+
     private final Object lifecycle = new Object();
-    private final Map<String, Map<String, Subscription>> topics = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<Consumer> consumers = new CopyOnWriteArrayList<>();
+    private final Map<String, Topic> topics = new ConcurrentHashMap<>();
     private final AtomicLong receiveCursor = new AtomicLong();
-    private final Phaser sends = new Phaser(1);
+    // Sends register here before they check closed; close sets closed and then waits for every
+    // stripe.
+    private final AtomicLongArray inFlight = new AtomicLongArray(STRIPES * PAD);
+    private volatile Consumer[] consumers = new Consumer[0];
     private volatile boolean initialized;
     private volatile boolean closed;
+    private boolean deliver;
     private Configuration configuration;
     private @Nullable ThreadPoolExecutor executor;
     private @Nullable ScheduledThreadPoolExecutor receiver;
@@ -99,6 +109,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
                 throw new IllegalStateException("Driver already initialized or closed");
             }
             configuration = config;
+            deliver = !"send-only".equals(config.mode);
             sent = registry.counter("synthetic.sends");
             received = registry.counter("synthetic.receives");
             rejected = registry.counter("synthetic.rejections");
@@ -159,7 +170,7 @@ public final class SyntheticDriver implements BenchmarkDriver {
                 return CompletableFuture.failedFuture(
                         new IllegalArgumentException("partitions must be positive"));
             }
-            topics.computeIfAbsent(topic, ignored -> new ConcurrentHashMap<>());
+            topics.computeIfAbsent(topic, ignored -> new Topic());
             return CompletableFuture.completedFuture(null);
         }
     }
@@ -170,13 +181,12 @@ public final class SyntheticDriver implements BenchmarkDriver {
             if (!available()) {
                 return unavailable();
             }
-            Map<String, Subscription> subscriptions =
-                    topics.computeIfAbsent(topic, ignored -> new ConcurrentHashMap<>());
+            Topic target = topics.computeIfAbsent(topic, ignored -> new Topic());
             return CompletableFuture.completedFuture(
                     new BenchmarkProducer() {
                         @Override
                         public CompletableFuture<Void> sendAsync(Optional<String> key, byte[] payload) {
-                            return send(subscriptions, payload);
+                            return send(target, payload);
                         }
 
                         @Override
@@ -194,25 +204,44 @@ public final class SyntheticDriver implements BenchmarkDriver {
             if (!available()) {
                 return unavailable();
             }
-            Subscription subscription =
-                    topics
-                            .computeIfAbsent(topic, ignored -> new ConcurrentHashMap<>())
-                            .computeIfAbsent(subscriptionName, ignored -> new Subscription());
+            Topic target = topics.computeIfAbsent(topic, ignored -> new Topic());
+            Subscription subscription = target.byName.get(subscriptionName);
+            if (subscription == null) {
+                subscription = new Subscription();
+                target.byName.put(subscriptionName, subscription);
+                target.subscriptions = with(target.subscriptions, subscription);
+            }
             Consumer consumer = new Consumer(subscription, callback);
-            subscription.members.add(consumer);
-            consumers.add(consumer);
+            subscription.members = with(subscription.members, consumer);
+            consumers = with(consumers, consumer);
             return CompletableFuture.completedFuture(consumer);
         }
     }
 
-    private CompletableFuture<Void> send(Map<String, Subscription> subscriptions, byte[] payload) {
-        synchronized (lifecycle) {
-            if (!available()) {
-                return unavailable();
-            }
-            sends.register();
+    private static <T> T[] with(T[] array, T element) {
+        T[] copy = Arrays.copyOf(array, array.length + 1);
+        copy[array.length] = element;
+        return copy;
+    }
+
+    private static <T> T[] without(T[] array, T element) {
+        return Arrays.stream(array)
+                .filter(member -> member != element)
+                .toArray(length -> Arrays.copyOf(array, length));
+    }
+
+    private static int stripe() {
+        return (int) (Thread.currentThread().threadId() & (STRIPES - 1)) * PAD;
+    }
+
+    private CompletableFuture<Void> send(Topic topic, byte[] payload) {
+        int stripe = stripe();
+        inFlight.getAndIncrement(stripe);
+        if (!available()) {
+            inFlight.getAndDecrement(stripe);
+            return unavailable();
         }
-        Send task = new Send(subscriptions, payload, System.currentTimeMillis());
+        Send task = new Send(topic, stripe, payload, System.currentTimeMillis());
         if (executor == null) {
             task.run();
         } else {
@@ -227,7 +256,8 @@ public final class SyntheticDriver implements BenchmarkDriver {
     }
 
     private final class Send implements Runnable {
-        private final Map<String, Subscription> subscriptions;
+        private final Topic topic;
+        private final int stripe;
         // Swapped in once the send settles so the retained future no longer pins the caller's payload
         private static final byte[] RELEASED = new byte[0];
         private byte[] payload;
@@ -241,8 +271,9 @@ public final class SyntheticDriver implements BenchmarkDriver {
                     }
                 };
 
-        Send(Map<String, Subscription> subscriptions, byte[] payload, long timestamp) {
-            this.subscriptions = subscriptions;
+        Send(Topic topic, int stripe, byte[] payload, long timestamp) {
+            this.topic = topic;
+            this.stripe = stripe;
             this.payload = payload;
             this.timestamp = timestamp;
         }
@@ -250,9 +281,9 @@ public final class SyntheticDriver implements BenchmarkDriver {
         @Override
         public void run() {
             try {
-                if (!"send-only".equals(configuration.mode)) {
-                    for (Subscription subscription : subscriptions.values()) {
-                        subscription.deliver(payload, timestamp);
+                if (deliver) {
+                    for (Subscription subscription : topic.subscriptions) {
+                        subscription.deliver(stripe, payload, timestamp);
                     }
                 }
                 sent.increment();
@@ -262,29 +293,36 @@ public final class SyntheticDriver implements BenchmarkDriver {
                 payload = RELEASED;
                 completion.completeExceptionally(failure);
             } finally {
-                sends.arriveAndDeregister();
+                inFlight.getAndDecrement(stripe);
             }
         }
 
         void fail(Throwable failure) {
             payload = RELEASED;
             completion.completeExceptionally(failure);
-            sends.arriveAndDeregister();
+            inFlight.getAndDecrement(stripe);
         }
     }
 
-    private final class Subscription {
-        private final CopyOnWriteArrayList<Consumer> members = new CopyOnWriteArrayList<>();
-        private final AtomicLong cursor = new AtomicLong();
+    private static final class Topic {
+        // Written under lifecycle; the send path only reads the published arrays.
+        private final Map<String, Subscription> byName = new HashMap<>();
+        private volatile Subscription[] subscriptions = new Subscription[0];
+    }
 
-        void deliver(byte[] payload, long timestamp) {
-            Object[] snapshot = members.toArray();
+    private static final class Subscription {
+        private volatile Consumer[] members = new Consumer[0];
+        // Each producer stripe round-robins on its own cursor.
+        private final AtomicLongArray cursors = new AtomicLongArray(STRIPES * PAD);
+
+        void deliver(int stripe, byte[] payload, long timestamp) {
+            Consumer[] snapshot = members;
             if (snapshot.length == 0) {
                 return;
             }
-            int start = (int) Math.floorMod(cursor.getAndIncrement(), (long) snapshot.length);
+            int start = (int) Math.floorMod(cursors.getAndIncrement(stripe), (long) snapshot.length);
             for (int i = 0; i < snapshot.length; i++) {
-                if (((Consumer) snapshot[(start + i) % snapshot.length]).deliver(payload, timestamp)) {
+                if (snapshot[(start + i) % snapshot.length].deliver(payload, timestamp)) {
                     return;
                 }
             }
@@ -313,19 +351,21 @@ public final class SyntheticDriver implements BenchmarkDriver {
         @Override
         public synchronized void close() {
             stopped = true;
-            subscription.members.remove(this);
-            consumers.remove(this);
+            synchronized (lifecycle) {
+                subscription.members = without(subscription.members, this);
+                consumers = without(consumers, this);
+            }
         }
     }
 
     private void independentReceive(byte[] payload) {
-        Object[] snapshot = consumers.toArray();
+        Consumer[] snapshot = consumers;
         if (snapshot.length == 0) {
             return;
         }
         int index = (int) Math.floorMod(receiveCursor.getAndIncrement(), (long) snapshot.length);
         try {
-            ((Consumer) snapshot[index]).deliver(payload, System.currentTimeMillis());
+            snapshot[index].deliver(payload, System.currentTimeMillis());
         } catch (Throwable _) {
             receiveErrors.increment();
         }
@@ -350,10 +390,8 @@ public final class SyntheticDriver implements BenchmarkDriver {
         if (executor != null) {
             executor.shutdown();
         }
-        int phase = sends.arriveAndDeregister();
         try {
-            sends.awaitAdvanceInterruptibly(
-                    phase, Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            awaitSends(deadline);
             if (executor != null
                     && !executor.awaitTermination(
                             Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)) {
@@ -377,8 +415,22 @@ public final class SyntheticDriver implements BenchmarkDriver {
             // Running callbacks retain their send future/payload until they return, even after timeout.
             throw new IOException("Synthetic driver did not drain before its close deadline", failure);
         } finally {
-            consumers.clear();
+            synchronized (lifecycle) {
+                consumers = new Consumer[0];
+            }
             topics.clear();
+        }
+    }
+
+    // A stripe seen at zero after closed is set stays zero: a later send sees closed and backs out.
+    private void awaitSends(long deadline) throws InterruptedException, TimeoutException {
+        for (int stripe = 0; stripe < STRIPES * PAD; stripe += PAD) {
+            while (inFlight.get(stripe) != 0) {
+                if (deadline - System.nanoTime() <= 0) {
+                    throw new TimeoutException("Sends still in flight");
+                }
+                Thread.sleep(1);
+            }
         }
     }
 }

@@ -293,7 +293,8 @@ def summarize(result, min_rate_ratio=0.98):
 def scenario_from(args):
     return {
         "topology": args.topology, "mode": args.mode, "rate": args.rate,
-        "topics": args.topics, "producers": args.producers, "payloadBytes": args.payload_bytes,
+        "topics": args.topics, "producers": args.producers, "consumers": args.consumers,
+        "payloadBytes": args.payload_bytes,
         "workers": args.workers, "queueCapacity": args.queue_capacity, "threads": args.threads,
         "warmupSeconds": args.warmup_seconds, "measureSeconds": args.measure_seconds,
         "warmupMinutes": args.warmup_minutes, "measureMinutes": args.measure_minutes,
@@ -390,7 +391,10 @@ def compare(args):
     if base["scenario"]["smoke"] or candidate["scenario"]["smoke"]:
         raise ValueError("Smoke checks are not performance baselines")
     mismatches = []
-    for key in ("scenario", "profiled", "minRateRatio"):
+    # Manifests from before --consumers have no "consumers" key; those runs used one consumer.
+    if {"consumers": 1, **base["scenario"]} != {"consumers": 1, **candidate["scenario"]}:
+        mismatches.append("scenario")
+    for key in ("profiled", "minRateRatio"):
         if base[key] != candidate[key]:
             mismatches.append(key)
     for key in ("os", "osRelease", "arch", "host", "processors", "jdk"):
@@ -532,7 +536,7 @@ def parser():
     runner.add_argument("--mode", choices=["sync", "async", "send-only"], default="sync")
     runner.add_argument("--collector", choices=["g1", "parallel", "zgc"], default="g1")
     for flag, default in [
-        ("rate", 10000), ("topics", 1), ("producers", 1), ("payload-bytes", 1024),
+        ("rate", 10000), ("topics", 1), ("producers", 1), ("consumers", 1), ("payload-bytes", 1024),
         ("workers", 2), ("queue-capacity", 4096), ("threads", 1), ("warmup-seconds", 2),
         ("measure-seconds", 3), ("warmup-minutes", 1), ("measure-minutes", 1), ("repetitions", 3),
     ]:

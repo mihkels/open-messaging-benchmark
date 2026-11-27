@@ -44,6 +44,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +76,7 @@ public final class ScenarioMain {
             int rate,
             int topics,
             int producers,
+            int consumers,
             int payloadBytes,
             int workers,
             int queueCapacity,
@@ -92,6 +94,7 @@ public final class ScenarioMain {
                     || rate < 1
                     || topics < 1
                     || producers < 1
+                    || consumers < 1
                     || payloadBytes < 1
                     || workers < 2
                     || queueCapacity < 1
@@ -298,7 +301,11 @@ public final class ScenarioMain {
         if (!"send-only".equals(s.mode())) {
             var assignment = new ConsumerAssignment();
             assignment.topicsSubscriptions =
-                    topics.stream().map(t -> new TopicSubscription(t, "subscription")).toList();
+                    topics.stream()
+                            .flatMap(t ->
+                                    Collections.nCopies(s.consumers(), new TopicSubscription(t, "subscription"))
+                                            .stream())
+                            .toList();
             worker.createConsumers(assignment);
         }
         List<String> producerTopics = new ArrayList<>();
@@ -352,7 +359,7 @@ public final class ScenarioMain {
         workload.topics = s.topics();
         workload.partitionsPerTopic = 1;
         workload.producersPerTopic = s.producers();
-        workload.consumerPerSubscription = 1;
+        workload.consumerPerSubscription = s.consumers();
         workload.subscriptionsPerTopic = 1;
         workload.producerRate = s.rate();
         workload.messageSize = s.payloadBytes();

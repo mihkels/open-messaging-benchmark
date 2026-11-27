@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
 import org.HdrHistogram.Histogram;
+import org.HdrHistogram.HistogramIterationValue;
 import org.HdrHistogram.PackedHistogram;
 import org.HdrHistogram.Recorder;
 
@@ -29,6 +30,10 @@ import org.HdrHistogram.Recorder;
  * <p>Recording threads write to one of a few striped recorders chosen by thread, so producers and
  * callbacks on different threads do not contend on one histogram. Readers drain every stripe into
  * both the interval and the cumulative view, so each value is recorded once on the hot path.
+ *
+ * <p>The Micrometer timer is fed from the drained values, not on the hot path: each drain replays
+ * them into the timer at their HdrHistogram precision. The timer therefore trails the recording
+ * threads by up to one drain; {@link #flush()} drains without taking a view.
  */
 final class LatencyMetric {
     private static final int SIGNIFICANT_DIGITS = 4;
@@ -105,7 +110,11 @@ final class LatencyMetric {
         }
         long value = Math.min(highestTrackableMicros, micros);
         stripes[(int) Thread.currentThread().threadId() & (STRIPES - 1)].recordValue(value);
-        timer.record(value, TimeUnit.MICROSECONDS);
+    }
+
+    /** Moves the values recorded so far into the pending views and the Micrometer timer. */
+    synchronized void flush() {
+        drain();
     }
 
     /**
@@ -146,6 +155,17 @@ final class LatencyMetric {
             Histogram drained = stripe.getIntervalHistogram();
             pendingInterval.add(drained);
             pendingCumulative.add(drained);
+            replayIntoTimer(drained);
+        }
+    }
+
+    private void replayIntoTimer(Histogram drained) {
+        for (HistogramIterationValue bucket : drained.recordedValues()) {
+            // The lowest equivalent value keeps exact values exact and never overstates the max
+            long micros = drained.lowestEquivalentValue(bucket.getValueIteratedTo());
+            for (long i = bucket.getCountAtValueIteratedTo(); i > 0; i--) {
+                timer.record(micros, TimeUnit.MICROSECONDS);
+            }
         }
     }
 }

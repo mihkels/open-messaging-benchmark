@@ -529,7 +529,8 @@ class RunChecksTest {
                 2,
                 new Workload(),
                 Map.of(),
-                List.of(clocks));
+                List.of(clocks),
+                null);
     }
 
     private static Workload workload() {

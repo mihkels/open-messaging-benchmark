@@ -258,7 +258,8 @@ class TestResultJsonTest {
                                 1,
                                 new Workload(),
                                 config,
-                                List.of())
+                                List.of(),
+                                null)
                         .driverConfig();
 
         assertThat(redacted)
@@ -291,7 +292,18 @@ class TestResultJsonTest {
                         "redis://:redis-secret@redis:6379");
         ResultMetadata metadata =
                 new ResultMetadata(
-                        "run", "start", "end", "1.2.3", "abc", "25", "", 1, new Workload(), config, List.of());
+                        "run",
+                        "start",
+                        "end",
+                        "1.2.3",
+                        "abc",
+                        "25",
+                        "",
+                        1,
+                        new Workload(),
+                        config,
+                        List.of(),
+                        null);
 
         String json = mapper.writeValueAsString(metadata);
 
@@ -392,7 +404,8 @@ class TestResultJsonTest {
                             1,
                             workload,
                             Map.of("name", "driver"),
-                            List.of());
+                            List.of(),
+                            "java");
             return result;
         }
     }

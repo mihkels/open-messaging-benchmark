@@ -1,0 +1,90 @@
+name: Rust worker
+
+# worker-rs (ADR 0021) has its own gates, so the Java build never needs Rust
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'worker-rs/**'
+      - 'benchmark-framework/src/main/java/io/github/mihkels/omb/worker/**'
+      - 'performance-harness/**'
+      - '.github/workflows/worker-rs.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'worker-rs/**'
+      - 'benchmark-framework/src/main/java/io/github/mihkels/omb/worker/**'
+      - 'performance-harness/**'
+      - '.github/workflows/worker-rs.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_DENY_VERSION: 0.22.1
+  CARGO_AUDIT_VERSION: 0.23.0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: worker-rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+        with:
+          install: false
+      # rust-toolchain.toml pins the toolchain; rustup installs it on first use
+      - name: rustfmt
+        run: cargo fmt --check
+      - name: clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Unit tests
+        run: cargo test --locked
+      - name: cargo-deny
+        env:
+          MISE_GITHUB_TOKEN: ${{ github.token }}
+        run: mise exec "cargo-deny@$CARGO_DENY_VERSION" -- cargo-deny --locked check
+      - name: cargo-audit
+        run: |
+          cargo install --locked --version "$CARGO_AUDIT_VERSION" cargo-audit
+          cargo audit --deny warnings
+
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+        with:
+          install_args: java http:maven
+          cache_save: false
+          cache_key_prefix: mise-v1-jvm
+      - name: Restore Maven repository
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
+      - name: Build worker-rs
+        working-directory: worker-rs
+        run: cargo build --locked --release
+      # The same loopback workload against the Java worker and worker-rs
+      - name: Cross-worker contract test
+        run: >-
+          mvn --no-transfer-progress --batch-mode -Pperformance -pl performance-harness -am install
+          -Djacoco.skip=true -Dtest=CrossWorkerContractTest -Dsurefire.failIfNoSpecifiedTests=false
+          -Domb.workerRs="$GITHUB_WORKSPACE/worker-rs/target/release/worker-rs"

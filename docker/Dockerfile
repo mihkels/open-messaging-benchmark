@@ -27,7 +27,7 @@
 ARG DIST_SOURCE=builder
 
 # Build the distribution. Checks (tests, license, formatting, static analysis) run in CI, not here.
-FROM maven:3.10.0-eclipse-temurin-27@sha256:a6cd0d45e565ec76bf1969702bcbdb800d3461c8338012728e891b8681374575 AS builder
+FROM maven:3-eclipse-temurin-27@sha256:3d8de45e72f62c97735db13bbae86445966001d5c05c2c8a137d062c5e8379b2 AS builder
 WORKDIR /src
 COPY . .
 ARG DRIVERS=all
@@ -41,7 +41,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM ${DIST_SOURCE} AS dist
 
 # Unpack, keep only the selected drivers and make everything read-only.
-FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c AS extract
+FROM amazoncorretto:27-al2023-headless@sha256:50eb062ff2ecbaad147774908765c75bf33480dd80b6955b7b70b13a9457eff2 AS extract
 COPY docker/select-drivers.sh docker/drivers.txt /tools/
 COPY --from=dist /dist.tar.gz /tmp/dist.tar.gz
 ARG DRIVERS=all
@@ -53,7 +53,7 @@ RUN set -eu; \
     if [ -d /benchmark/drivers/driver-jms ]; then mkdir -p /benchmark/drivers/driver-jms/ext; fi; \
     chmod -R a-w,a+rX /benchmark
 
-FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c AS runtime
+FROM amazoncorretto:27-al2023-headless@sha256:50eb062ff2ecbaad147774908765c75bf33480dd80b6955b7b70b13a9457eff2 AS runtime
 ARG DRIVERS=all
 ARG VERSION=dev
 ARG REVISION=unknown

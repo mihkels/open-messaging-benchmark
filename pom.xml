@@ -102,7 +102,7 @@
         <!-- central profile: true skips the upload; javadoc, sources and signing still run -->
         <central.skipPublishing>false</central.skipPublishing>
         <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
-        <spotless.plugin.version>3.11.0</spotless.plugin.version>
+        <spotless.plugin.version>3.12.0</spotless.plugin.version>
         <!-- Not tracked by Dependabot (it is not a dependency coordinate): bump by hand alongside Spotless -->
         <google-java-format.version>2.0.0</google-java-format.version>
         <sonar.plugin.version>5.9.0.7382</sonar.plugin.version>

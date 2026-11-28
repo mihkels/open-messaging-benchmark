@@ -151,6 +151,7 @@ nav:
         - HTML report: guides/html-report.md
         - CI performance gates: guides/ci-gating.md
         - Comparing runs: guides/comparing-runs.md
+        - Rust worker: guides/rust-worker.md
         - Monitoring: guides/monitoring.md
         - Containers and Kubernetes: guides/containers-and-kubernetes.md
         - Local Kubernetes: guides/kubernetes-local.md

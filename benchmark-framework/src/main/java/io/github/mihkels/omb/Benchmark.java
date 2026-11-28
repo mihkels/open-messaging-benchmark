@@ -757,7 +757,7 @@ public final class Benchmark {
                                 runId,
                                 startedAt,
                                 Instant.now(),
-                                worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
+                                worker,
                                 workload,
                                 driverConfig,
                                 WorkerClock.withDrift(clocksAtStart, WorkerClockProbe.probe(worker)));

@@ -39,6 +39,7 @@ content here, link to it.
 | `driver-api`                      | Public driver SPI. Changes here affect every driver and external one |
 | `benchmark-framework`             | Coordinator, workers, workload generation, reports, plugin loading   |
 | `driver-*`                        | One driver plugin per broker                                         |
+| `worker-rs`                       | Optional Rust worker behind the worker HTTP API (ADR 0021), cargo    |
 | `e2e-tests`                       | Testcontainers contracts and the Docker Compose regression suite     |
 | `metrics-otlp`, `package`, `tool` | OTLP metrics, distribution tarball, CLI tools                        |
 | `deployment`, `docker`            | Helm chart, local kind setup, image build                            |

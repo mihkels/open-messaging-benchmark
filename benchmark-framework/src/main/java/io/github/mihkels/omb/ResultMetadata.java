@@ -15,7 +15,10 @@ package io.github.mihkels.omb;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.mihkels.omb.utils.SecretRedaction;
+import io.github.mihkels.omb.worker.DistributedWorkersEnsemble;
+import io.github.mihkels.omb.worker.Worker;
 import io.github.mihkels.omb.worker.WorkerClock;
+import io.github.mihkels.omb.worker.WorkerRuntimes;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
@@ -40,7 +43,9 @@ public record ResultMetadata(
         int workerCount,
         Workload workload,
         Map<String, Object> driverConfig,
-        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<WorkerClock> clockOffsets) {
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<WorkerClock> clockOffsets,
+        // Worker implementations, such as "java" or "java,rust"; absent in older results
+        @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String workerRuntime) {
     /** Masks credentials in the driver configuration once, into an unmodifiable map. */
     public ResultMetadata {
         driverConfig = Collections.unmodifiableMap(SecretRedaction.redactMap(driverConfig));
@@ -57,7 +62,7 @@ public record ResultMetadata(
             String runId,
             Instant startedAt,
             Instant finishedAt,
-            int workerCount,
+            Worker worker,
             Workload workload,
             Map<String, Object> driverConfig,
             List<WorkerClock> clockOffsets) {
@@ -81,10 +86,11 @@ public record ResultMetadata(
                 GitCommit.VALUE,
                 System.getProperty("java.version"),
                 jvmOptions,
-                workerCount,
+                worker instanceof DistributedWorkersEnsemble ensemble ? ensemble.workerCount() : 1,
                 workload,
                 driverConfig,
-                clockOffsets);
+                clockOffsets,
+                WorkerRuntimes.of(worker));
     }
 
     /** The commit of this JVM's run, resolved on first use and then reused for every result. */

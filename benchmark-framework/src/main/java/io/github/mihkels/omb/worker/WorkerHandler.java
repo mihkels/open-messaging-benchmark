@@ -341,7 +341,8 @@ public class WorkerHandler implements AutoCloseable {
         // Sampled first, so the coordinator's clock-offset probe sees as little handling time as
         // possible
         long clockMicros = WorkerClock.nowMicros();
-        WorkerHealth health = worker.health().withClockMicros(clockMicros);
+        WorkerHealth health =
+                worker.health().withClockMicros(clockMicros).withRuntime(WorkerHealth.JAVA_RUNTIME);
         // The error text can name brokers and configuration, so only token holders see it
         if (auth != null && !auth.matches(ctx.header(BearerTokenAuth.AUTHORIZATION))) {
             health = health.withoutError();

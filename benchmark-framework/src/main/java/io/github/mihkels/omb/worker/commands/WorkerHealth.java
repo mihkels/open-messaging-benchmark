@@ -26,6 +26,8 @@ import org.jspecify.annotations.Nullable;
  * @param lastError the last driver failure, or {@code null}; only sent to callers with the token
  * @param clockMicros the worker's wall clock in microseconds since the epoch, sampled while
  *     answering the request, or {@code null} when not reported (in-process or older workers)
+ * @param runtime the worker implementation, {@value #JAVA_RUNTIME} or {@code rust}, or {@code null}
+ *     when not reported (in-process and older Java workers)
  */
 public record WorkerHealth(
         @JsonProperty("ready") boolean ready,
@@ -33,12 +35,26 @@ public record WorkerHealth(
         @JsonProperty("exitCode") @Nullable Integer exitCode,
         @JsonProperty("lastError") @Nullable String lastError,
         @JsonProperty("clockMicros") @JsonInclude(JsonInclude.Include.NON_NULL)
-                @Nullable Long clockMicros) {
+                @Nullable Long clockMicros,
+        @JsonProperty("runtime") @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String runtime) {
+
+    /** The {@link #runtime()} of the Java worker. */
+    public static final String JAVA_RUNTIME = "java";
 
     /** Health without a clock reading. */
     public WorkerHealth(
             boolean ready, DriverState driver, @Nullable Integer exitCode, @Nullable String lastError) {
         this(ready, driver, exitCode, lastError, null);
+    }
+
+    /** Health without a runtime. */
+    public WorkerHealth(
+            boolean ready,
+            DriverState driver,
+            @Nullable Integer exitCode,
+            @Nullable String lastError,
+            @Nullable Long clockMicros) {
+        this(ready, driver, exitCode, lastError, clockMicros, null);
     }
 
     /** Health of a worker whose driver runs in-process and is always available. */
@@ -59,7 +75,7 @@ public record WorkerHealth(
      * @return the redacted health
      */
     public WorkerHealth withoutError() {
-        return new WorkerHealth(ready, driver, exitCode, null, clockMicros);
+        return new WorkerHealth(ready, driver, exitCode, null, clockMicros, runtime);
     }
 
     /**
@@ -69,6 +85,16 @@ public record WorkerHealth(
      * @return the health with {@link #clockMicros()} set
      */
     public WorkerHealth withClockMicros(long micros) {
-        return new WorkerHealth(ready, driver, exitCode, lastError, micros);
+        return new WorkerHealth(ready, driver, exitCode, lastError, micros, runtime);
+    }
+
+    /**
+     * This health with the given runtime.
+     *
+     * @param name the worker implementation
+     * @return the health with {@link #runtime()} set
+     */
+    public WorkerHealth withRuntime(String name) {
+        return new WorkerHealth(ready, driver, exitCode, lastError, clockMicros, name);
     }
 }

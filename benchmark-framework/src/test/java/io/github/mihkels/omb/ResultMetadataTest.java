@@ -88,7 +88,18 @@ class ResultMetadataTest {
 
         ResultMetadata metadata =
                 new ResultMetadata(
-                        "run", "start", "end", "1.2.3", "abc", "25", "", 1, new Workload(), config, List.of());
+                        "run",
+                        "start",
+                        "end",
+                        "1.2.3",
+                        "abc",
+                        "25",
+                        "",
+                        1,
+                        new Workload(),
+                        config,
+                        List.of(),
+                        null);
 
         assertThat(metadata.driverConfig())
                 .containsExactly(

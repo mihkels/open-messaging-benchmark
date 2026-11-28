@@ -85,6 +85,10 @@
             },
             "additionalProperties": false
           }
+        },
+        "workerRuntime": {
+          "description": "Worker implementations of the run, sorted and comma-separated, such as java or java,rust. Absent in older results.",
+          "type": "string"
         }
       },
       "additionalProperties": false

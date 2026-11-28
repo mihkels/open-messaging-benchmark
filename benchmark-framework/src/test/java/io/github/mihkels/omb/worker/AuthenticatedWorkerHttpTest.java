@@ -164,7 +164,12 @@ class AuthenticatedWorkerHttpTest {
             assertThat(health)
                     .isEqualTo(
                             new WorkerHealth(
-                                    true, DriverState.EXITED, 42, "broker-1:9092 refused", health.clockMicros()));
+                                    true,
+                                    DriverState.EXITED,
+                                    42,
+                                    "broker-1:9092 refused",
+                                    health.clockMicros(),
+                                    WorkerHealth.JAVA_RUNTIME));
         }
     }
 

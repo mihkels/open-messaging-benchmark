@@ -65,6 +65,7 @@
     "runId" : "018f0000-0000-7000-8000-000000000001",
     "startedAtUtc" : "2026-01-01T00:00:00Z",
     "workerCount" : 1,
+    "workerRuntime" : "java",
     "workload" : {
       "backlogDrainRatio" : 1.0,
       "consumerBacklogSizeGB" : 0,

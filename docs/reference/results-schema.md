@@ -38,6 +38,7 @@ and version 1 files, which also have no `schemaVersion`, `metadata`, or `summary
 | `metadata.workload`      | object  | Resolved workload configuration                                                                                                                  |
 | `metadata.driverConfig`  | object  | Driver YAML parsed as JSON; password-, token- and secret-like keys are replaced with `[REDACTED]`                                                |
 | `metadata.clockOffsets`  | array   | Optional. Per-worker `worker`, `role`, `offsetMs`, `rttMs` and `driftMs`; see [Clock offset](../methodology/latency-and-backlog.md#clock-offset) |
+| `metadata.workerRuntime` | string  | Optional. Worker implementations, sorted and comma-separated: `java`, `rust` or `java,rust`; see [Rust worker](../guides/rust-worker.md)         |
 
 Set the `omb.gitCommit` system property, `GIT_COMMIT` environment variable or `GITHUB_SHA`
 environment variable to preserve the source commit in result files.

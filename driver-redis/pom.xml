@@ -31,7 +31,7 @@
         <jacoco.min.method>0.88</jacoco.min.method>
         <jacoco.min.line>0.91</jacoco.min.line>
         <jacoco.min.branch>0.91</jacoco.min.branch>
-        <redis.version>8.0.2</redis.version>
+        <redis.version>8.1.0</redis.version>
     </properties>
 
     <dependencies>

@@ -14,7 +14,7 @@
 
 # Java 27 image used by the regression suite for the coordinator and both benchmark workers.
 # The build context only contains the distribution tarball produced by the `package` module.
-FROM amazoncorretto:27-al2023-headless@sha256:8d3d9a96a23daaa38148d56e513cc81fa4543c064e83e5e6393b29dd0774fd7c
+FROM amazoncorretto:27-al2023-headless@sha256:50eb062ff2ecbaad147774908765c75bf33480dd80b6955b7b70b13a9457eff2
 
 # curl ships with the image; shadow-utils provides groupadd and useradd.
 RUN dnf install -y --setopt=install_weak_deps=False shadow-utils \

@@ -126,7 +126,7 @@
         <pitest.threads>4</pitest.threads>
         <micrometer.version>1.18.0</micrometer.version>
         <prometheus.metrics.version>1.10.0</prometheus.metrics.version>
-        <zstd.version>1.5.7-28</zstd.version>
+        <zstd.version>1.6.0-1</zstd.version>
         <!--
             Driver client libraries (Kafka, Pulsar, RocketMQ, Pravega) pull these in at versions with known CVEs;
             each is managed at an API-compatible patched release (#504)

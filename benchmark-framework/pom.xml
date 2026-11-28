@@ -33,7 +33,7 @@
         <jacoco.min.branch>0.81</jacoco.min.branch>
         <hdrhistogram.version>2.2.2</hdrhistogram.version>
         <async.client.version>3.0.14</async.client.version>
-        <javalin.version>7.2.4</javalin.version>
+        <javalin.version>7.3.0</javalin.version>
         <!-- Keep at the Jetty version Javalin is built against -->
         <jetty.version>12.1.14</jetty.version>
         <json.schema.validator.version>3.0.9</json.schema.validator.version>

@@ -131,7 +131,7 @@
             Driver client libraries (Kafka, Pulsar, RocketMQ, Pravega) pull these in at versions with known CVEs;
             each is managed at an API-compatible patched release (#504)
         -->
-        <grpc.version>1.85.1</grpc.version>
+        <grpc.version>1.86.0</grpc.version>
         <jackson2.core.version>2.23.0</jackson2.core.version>
         <lz4.version>1.14.1</lz4.version>
         <opentelemetry.version>1.68.0</opentelemetry.version>

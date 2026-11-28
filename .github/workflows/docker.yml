@@ -64,7 +64,7 @@ jobs:
       - name: Check versions
         run: .github/scripts/check-versions.sh
 
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
           install_args: java http:maven
           cache: false
@@ -148,7 +148,7 @@ jobs:
           test "$(docker run --rm omb-check:kafka ls drivers)" = driver-kafka
           test "$(docker run --rm omb-check:all ls drivers | wc -l)" -eq "$(grep -c -v -E '^[[:space:]]*(#|$)' docker/drivers.txt)"
 
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
           install: false
           cache: false
@@ -172,7 +172,7 @@ jobs:
       # would leave alerts its image fixed open on main until the weekly scan-published run
       - name: Upload scan results
         if: always() && github.event_name == 'push' && hashFiles('trivy.sarif') != ''
-        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
         with:
           sarif_file: trivy.sarif
           category: trivy-image
@@ -241,7 +241,7 @@ jobs:
             release.args.VERSION=${{ steps.meta.outputs.version }}
             release.args.REVISION=${{ github.sha }}
 
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
           install: false
           cache: false
@@ -320,7 +320,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
           install: false
           cache: false
@@ -335,7 +335,7 @@ jobs:
 
       - name: Upload scan results
         if: always() && hashFiles('trivy.sarif') != ''
-        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
         with:
           sarif_file: trivy.sarif
           category: trivy-image
